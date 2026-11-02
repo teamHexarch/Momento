@@ -18,7 +18,7 @@ Momento/
       config/              env.js (settings from .env), database.js
       routes/              URLs and their middleware only (authRoutes, albumRoutes, photoRoutes)
       controllers/         what each URL does (authController, albumController, photoController)
-      services/            emailService (Graph), emailTemplates, emailTokenService (one-time links),
+      services/            emailService (+ email/resendEmail, email/graphEmail), emailTemplates, emailTokenService (one-time links),
                            verificationService, passwordResetService,
                            storageService (photo files) with storage/diskStorage and storage/r2Storage
       models/              Mongoose models: User, Album, Membership, Photo, EmailToken
@@ -87,7 +87,20 @@ You need a paid Apple Developer account, and Apple only accepts **HTTPS on a rea
 
 No private key (`.p8`) is needed: the server checks Apple's signed ID token against Apple's public keys. Apple only shares the person's name the first time they sign in, so it is saved then. People may choose "Hide my email", in which case Apple gives a relay address.
 
-## 5. Email (Microsoft Graph)
+## 5. Email
+
+Momento sends its emails (confirm, reset, password changed) through **Resend** when `RESEND_API_KEY` and `EMAIL_FROM` are set, otherwise through **Microsoft Graph** from `SENDER_EMAIL`'s mailbox. Replies go to `EMAIL_REPLY_TO`, or `SENDER_EMAIL` if that's empty. The server logs which one it uses at startup (`Email: resend, from …`).
+
+**Why Resend:** our GoDaddy-provided Microsoft 365 account sends normally from Outlook, but Microsoft refuses mail sent through the Graph API to outside addresses (`550 5.7.708`), and GoDaddy can't lift that. Resend is free up to 3,000 emails a month (100 a day).
+
+### Resend
+
+1. Sign up at https://resend.com, then **Domains > Add Domain** `hexarch.org`.
+2. Add the records it shows in GoDaddy DNS (an MX and TXT named `send`, a TXT named `resend._domainkey`), then **Verify**. They don't affect Microsoft 365 mail.
+3. **API Keys > Create API Key** with **Sending access**, limited to hexarch.org. Put it in `RESEND_API_KEY`, and set `EMAIL_FROM`, e.g. `Momento <team@hexarch.org>`.
+4. Check it: `npm run email:test -- you@gmail.com`.
+
+### Microsoft Graph (fallback)
 
 Confirm-your-email messages are sent from a Microsoft 365 mailbox through an Entra ID app registration.
 

@@ -45,12 +45,17 @@ export const config = {
   },
   google: { clientId: env.GOOGLE_CLIENT_ID || '', clientSecret: env.GOOGLE_CLIENT_SECRET || '' },
   apple: { clientId: env.APPLE_CLIENT_ID || '' },
-  // Microsoft Graph (Entra ID app registration) for sending email from SENDER_EMAIL's mailbox
   email: {
+    // Resend (used when RESEND_API_KEY and EMAIL_FROM are set)
+    resendApiKey: env.RESEND_API_KEY || '',
+    from: env.EMAIL_FROM || '',
+    // Microsoft Graph (Entra ID app registration) sending from SENDER_EMAIL's mailbox
     tenantId: env.MS_TENANT_ID || '',
     clientId: env.MS_CLIENT_ID || '',
     clientSecret: env.MS_CLIENT_SECRET || '',
     sender: env.SENDER_EMAIL || '',
+    // Where replies go; defaults to the team mailbox so "reply to this email" reaches a person
+    replyTo: env.EMAIL_REPLY_TO || env.SENDER_EMAIL || '',
   },
   isProduction: env.NODE_ENV === 'production',
 };

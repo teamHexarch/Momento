@@ -1,9 +1,9 @@
-// Sends a sample "confirm your email" message through Microsoft Graph, to check the MS_* and
-// SENDER_EMAIL settings without signing anyone up. The button in it is a dummy link.
+// Sends a sample "confirm your email" message through the configured sender (Resend or
+// Microsoft Graph), to check the email settings without signing anyone up. The button is a dummy link.
 //
 //   npm run email:test -- you@example.com
 import { config } from '../src/config/env.js';
-import { sendEmail, isEmailConfigured, EmailError } from '../src/services/emailService.js';
+import { sendEmail, isEmailConfigured, EmailError, emailProviderName, emailFrom } from '../src/services/emailService.js';
 import { verificationHtml } from '../src/services/emailTemplates.js';
 
 const to = process.argv[2];
@@ -12,11 +12,11 @@ if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
   process.exit(1);
 }
 if (!isEmailConfigured()) {
-  console.error('Email isn’t set up. Fill in MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET and SENDER_EMAIL in Server/.env.');
+  console.error('Email isn’t set up. Fill in RESEND_API_KEY and EMAIL_FROM (or the MS_* settings) in Server/.env.');
   process.exit(1);
 }
 
-console.log(`Sending a test confirm email from ${config.email.sender} to ${to}…`);
+console.log(`Sending a test confirm email through ${emailProviderName} from ${emailFrom} to ${to}…`);
 try {
   await sendEmail({
     to,
