@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My albums | Momento</title>
   <meta name="description" content="Every Momento album you've joined or hosted, in one place.">
-  <link rel="icon" href="momento_assets/momento-icon.png">
+  <link rel="icon" href="assets/momento-icon.png">
+  <script src="assets/api.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -235,6 +236,13 @@
     .title { margin: 0; font-size: clamp(3.4rem, 8.6vw, 8rem); line-height: .95; font-weight: 700; letter-spacing: -.055em; }
     .lede { max-width: 28rem; margin: var(--s3) 0 0; color: var(--slate); font-size: 1.15rem; line-height: 1.6; }
     .lede b { color: var(--dusk); font-weight: 650; font-variant-numeric: tabular-nums; }
+    /* Shown until the email address is confirmed */
+    .verify-note { max-width: 28rem; margin: .8rem 0 0; color: var(--slate); font-size: .9rem; line-height: 1.6; }
+    .verify-note[hidden] { display: none; }
+    .verify-note button { padding: 0; border: 0; background: none; color: var(--copper); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; border-radius: 4px; }
+    .verify-note button:hover { color: var(--dusk); }
+    .verify-note button:active { opacity: .7; }
+    .verify-note button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
     .actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: var(--s4); }
 
     /* The live album plays like a story: newest photos, one after another */
@@ -445,6 +453,20 @@
     .field input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
     .field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
     .error { color: #9A3D3D; }
+    /* Create an album: ordinary text fields (the join code field above is all capitals) */
+    .field.plain + .field.plain { display: block; margin-top: .85rem; }
+    .field.plain input { text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .field small { font-weight: 500; color: var(--stone); }
+    .code-big { display: block; margin: .2rem 0 .4rem; padding: 1.1rem 1rem; border-radius: 18px; background: rgba(255,255,255,.9); box-shadow: inset 0 0 0 1px rgba(46,44,58,.12); text-align: center; font: 700 2.2rem var(--font-main); letter-spacing: .12em; color: var(--dusk); user-select: all; }
+    /* The name chip is a button that opens Log out */
+    button.me { border: 0; font-family: inherit; color: var(--dusk); cursor: pointer; transition: background-color .2s ease; }
+    button.me:hover { background-color: rgba(255,255,255,.6); }
+    button.me:active { background-color: rgba(255,255,255,.85); }
+    button.me:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .me-menu { position: absolute; top: calc(100% - .9rem); right: 4%; display: grid; min-width: 9rem; padding: .35rem; border-radius: 20px; }
+    .me-menu[hidden] { display: none; }
+    .me-menu .menu-item { border: 0; background: none; font-family: inherit; text-align: left; cursor: pointer; }
+    button:disabled { opacity: .6; pointer-events: none; }
 
     /* The album window: a big stage you can flip through, and every photo below it */
     .album-card { width: min(800px, calc(100vw - 32px)); padding: .9rem .9rem 1.4rem; border-radius: 32px; }
@@ -590,7 +612,10 @@
         <a href="index.html#faq" class="menu-item">FAQ</a>
       </div>
     </div>
-    <span class="me glass" id="me"><i>Y</i><span>You</span></span>
+    <button class="me glass" id="me" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="meMenu"><i>Y</i><span>You</span></button>
+    <div class="me-menu glass" id="meMenu" hidden>
+      <button class="menu-item" type="button" id="logout">Log out</button>
+    </div>
   </header>
 
   <div class="page-wrap" id="pageWrap">
@@ -601,9 +626,10 @@
         <div>
           <span class="mask"><h1 class="title ink rise" data-text="My albums">My albums</h1></span>
           <p class="lede intro" id="lede" style="--d: .3s"></p>
+          <p class="verify-note intro" id="verifyNote" style="--d: .36s" hidden></p>
           <div class="actions intro" style="--d: .42s">
             <button class="btn btn-pearl" type="button" id="joinOpen">Join with a code</button>
-            <a class="btn btn-dark" href="index.html#for-hosts">Create an album</a>
+            <button class="btn btn-dark" type="button" id="createOpen">Create an album</button>
           </div>
         </div>
         <article class="live panel intro" id="live" style="--d: .5s" aria-labelledby="liveTitle"></article>
@@ -655,8 +681,8 @@
       </div>
       <div class="thumbs" id="thumbs"></div>
       <div class="modal-actions">
-        <button class="btn btn-dark" type="button" data-preview="Uploading">Add your photos</button>
-        <button class="btn btn-light" type="button" data-preview="Downloading">Download all</button>
+        <button class="btn btn-dark" type="button" data-action="upload">Add your photos</button>
+        <button class="btn btn-light" type="button" data-action="download">Download all</button>
       </div>
       <p class="note" id="albumNote" role="status"></p>
     </div>
@@ -672,8 +698,31 @@
       <div class="modal-actions"><button class="btn btn-dark" type="submit" style="width: 100%">Join album</button></div>
     </form>
   </dialog>
+  <dialog class="modal" id="createModal" aria-labelledby="createTitle">
+    <div class="modal-card small">
+      <button class="close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+      <form id="createForm" novalidate>
+        <h2 id="createTitle" style="padding-right: 2.5rem">Create an album</h2>
+        <p class="modal-sub">Guests join with the code you’ll get next, and everyone’s photos land in one place.</p>
+        <label class="field plain"><span>Name</span><input name="name" placeholder="For example Noor turns 30" maxlength="100" autocomplete="off"></label>
+        <label class="field plain"><span>Day of the event</span><input name="date" type="date"></label>
+        <label class="field plain"><span>Place <small>(optional)</small></span><input name="place" placeholder="For example Shoreditch, London" maxlength="120" autocomplete="off"></label>
+        <p class="note" id="createNote" role="status"></p>
+        <div class="modal-actions"><button class="btn btn-dark" type="submit" style="width: 100%">Create album</button></div>
+      </form>
+      <div class="create-done" id="createDone" hidden>
+        <h2 style="padding-right: 2.5rem"><span id="createName"></span> is ready</h2>
+        <p class="modal-sub">Share this code with your guests. They type it under “Join with a code” on My albums.</p>
+        <output class="code-big" id="createCode" aria-label="Join code"></output>
+        <div class="modal-actions">
+          <button class="btn btn-dark" type="button" id="copyCode">Copy code</button>
+          <button class="btn btn-light" type="button" data-close>Done</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
 
-  <script>
+  <script type="module">
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const root = document.documentElement;
@@ -707,62 +756,103 @@
     addEventListener('pointerup', () => root.classList.remove('cursor-down'));
 
     // ---- Albums ----
-    // Sample data until the real account API exists. role: 'host' or 'guest'.
-    const ALBUMS = [
-      { id: 'noor30', name: 'Noor turns 30', date: '2026-11-01', place: 'Shoreditch, London', photos: 142, guests: 31, mine: 12, role: 'guest', live: true, pics: [1062, 1011, 1027, 64, 1047, 1012, 177, 1025, 91] },
-      { id: 'amira-joel', name: 'Amira & Joel’s wedding', date: '2026-09-12', place: 'Cotswolds', photos: 1284, guests: 118, mine: 46, role: 'guest', pics: [1040, 1015, 1035, 1005, 1043, 1050, 1054, 1058, 1060] },
-      { id: 'lisbon', name: 'Lisbon team offsite', date: '2026-07-22', place: 'Lisbon', photos: 412, guests: 19, mine: 88, role: 'host', pics: [1043, 1050, 1068, 1074, 1076, 1080, 1084, 1069, 1059] },
-      { id: 'grad', name: 'Graduation, class of 2026', date: '2026-06-28', place: 'University of Leeds', photos: 690, guests: 64, mine: 31, role: 'guest', pics: [1005, 1012, 1025, 1027, 1047, 1062, 64, 91, 177] },
-      { id: 'ella', name: 'Ella’s christening', date: '2026-05-03', place: 'St Mary’s, Bath', photos: 208, guests: 37, mine: 54, role: 'host', pics: [1054, 1058, 1060, 1068, 1015, 1011, 1035, 1040, 1043] },
-      { id: 'nye', name: 'New Year’s Eve at the barn', date: '2025-12-31', place: 'Hebden Bridge', photos: 356, guests: 42, mine: 19, role: 'guest', pics: [1074, 1076, 1080, 1084, 1069, 1059, 1050, 1043, 1005] },
-      { id: 'dad60', name: 'Dad’s 60th', date: '2025-11-09', place: 'Home', photos: 274, guests: 28, mine: 97, role: 'host', pics: [1011, 1012, 1015, 1025, 1027, 1035, 1040, 1047, 1062] },
-      { id: 'final', name: 'Sunday league final', date: '2025-09-14', place: 'Hackney Marshes', photos: 97, guests: 16, mine: 8, role: 'guest', pics: [1058, 1060, 1068, 1069, 1074, 1076, 1080, 1084, 1059] },
-    ];
-    // Newest uploads across your albums, for the line of pegged photos
-    const JUST = [
-      ['noor30', 3, 'Noor', 'just now'], ['noor30', 5, 'Sam', '2 min ago'], ['noor30', 1, 'Priya', '6 min ago'], ['noor30', 7, 'Tom', '11 min ago'],
-      ['noor30', 2, 'Lena', '25 min ago'], ['noor30', 6, 'Kofi', '40 min ago'], ['noor30', 8, 'Maya', '1 hr ago'], ['noor30', 4, 'Dan', '2 hr ago'],
-      ['amira-joel', 6, 'Joel', 'yesterday'], ['amira-joel', 2, 'Amira', 'yesterday'], ['lisbon', 4, 'Rui', '2 days ago'], ['grad', 3, 'Hannah', 'last week'],
-    ];
+    // Everything comes from the Momento API (Server folder). role: 'host' or 'guest';
+    // pics are the newest photo URLs (up to 9), and the full list loads when an album opens.
+    async function api(path, opts = {}) {
+      let r;
+      try { r = await momentoFetch(path, opts); }
+      catch {
+        // No answer at all (offline, or the server is still waking up)
+        const msg = 'Momento can’t be reached right now. Try again in a minute.';
+        if (!document.getElementById('lede').textContent) { document.getElementById('lede').textContent = msg; root.classList.add('is-ready'); return new Promise(() => {}); }
+        throw new Error(msg);
+      }
+      const d = await r.json().catch(() => ({}));
+      // Logged out: off to log in, and this page stops here (a promise that never settles)
+      if (r.status === 401) { location.replace('index.html?login=albums'); return new Promise(() => {}); }
+      if (!r.ok) throw new Error(d.error || 'Something went wrong. Try again.');
+      return d;
+    }
+    const [{ user: ME }, DATA] = await Promise.all([api('/api/auth/me'), api('/api/albums')]);
+    const ALBUMS = DATA.albums;
+    const ago = (t) => {
+      const s = (Date.now() - new Date(t)) / 1000;
+      if (s < 60) return 'just now';
+      if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)} hr ago`;
+      if (s < 172800) return 'yesterday';
+      if (s < 604800) return `${Math.floor(s / 86400)} days ago`;
+      return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    };
+    // Newest uploads across your albums, for the line of pegged photos: [album, photo URL, who, when]
+    const JUST = DATA.recent.map((r) => [r.albumId, r.url, r.by, ago(r.at)]);
     const INITIALS = 'NAJSPTLKMDRHEO';
     const FACE = ['#D9D0EA', '#E6CDD6', '#C6DEDA', '#EBDCCB'];
-    const pic = (id, w = 600, h = Math.round(w * .8)) => `https://picsum.photos/id/${id}/${w}/${h}`;
+    // A soft blank print stands in where an album has no photos yet
+    const BLANK = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 3" preserveAspectRatio="none"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="#E6DFF0"/><stop offset="1" stop-color="#EED8D2"/></linearGradient></defs><rect width="4" height="3" fill="url(#g)"/></svg>');
+    const pic = (src) => src || BLANK;
     const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
     const num = (n) => n.toLocaleString('en-GB');
-    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const at = (a) => (a.place ? `, ${esc(a.place)}` : '');
     const byId = (id) => ALBUMS.find((a) => a.id === id);
     const faces = (seed, n = 3) => Array.from({ length: n }, (_, i) => `<i style="background:${FACE[(seed + i) % 4]}">${INITIALS[(seed * 3 + i * 5) % INITIALS.length]}</i>`).join('');
-    const LIVE = ALBUMS.find((a) => a.live);
-    const ARCHIVE = ALBUMS.filter((a) => !a.live);
+    // The hero shows the album that's happening now, else the newest one, else an invitation to make one
+    const LIVE = ALBUMS.find((a) => a.live) || ALBUMS[0] || { id: null, name: 'Your first album', place: '', photos: 0, guests: 0, pics: [] };
+    const ARCHIVE = ALBUMS.filter((a) => !(a === LIVE && a.live));
 
-    // The signed-in name comes over from the landing page when there is one
-    let user = '';
-    try { user = sessionStorage.getItem('momento-user') || ''; } catch (e) {}
-    if (user) document.getElementById('me').innerHTML = `<i>${esc(user[0].toUpperCase())}</i><span>${esc(user.split(' ')[0])}</span>`;
+    // The signed-in name, in the chip at the top right
+    if (ME) {
+      const first = (ME.name || '').trim().split(/\s+/)[0];
+      document.getElementById('me').innerHTML = `<i>${esc((first || ME.email)[0].toUpperCase())}</i><span>${esc(first || 'You')}</span>`;
+    }
+
+    // Until the address is confirmed: a reminder, with a way to get the email again
+    const verifyNote = document.getElementById('verifyNote');
+    if (ME && !ME.emailVerified) {
+      verifyNote.innerHTML = `Confirm your email: we sent a link to <b>${esc(ME.email)}</b>. <button type="button" id="resendVerify">Send it again</button>`;
+      verifyNote.hidden = false;
+      document.getElementById('resendVerify').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try {
+          await api('/api/auth/verify-email/resend', { method: 'POST' });
+          verifyNote.textContent = `Sent. Check ${ME.email}, and the junk folder too.`;
+        } catch (err) {
+          verifyNote.textContent = err.message;
+        }
+      });
+    }
 
     const photos = ALBUMS.reduce((s, a) => s + a.photos, 0), mine = ALBUMS.reduce((s, a) => s + a.mine, 0);
-    document.getElementById('lede').innerHTML = `Every event you’ve been part of. ${ALBUMS.length} albums, <b data-count="${photos}">0</b> photos, <b data-count="${mine}">0</b> of them yours.`;
+    document.getElementById('lede').innerHTML = ALBUMS.length
+      ? `Every event you’ve been part of. ${ALBUMS.length} album${ALBUMS.length > 1 ? 's' : ''}, <b data-count="${photos}">0</b> photos, <b data-count="${mine}">0</b> of them yours.`
+      : 'Every event you’ve been part of will live here. Join one with the host’s code, or create your own.';
     const counts = { all: ARCHIVE.length, host: ARCHIVE.filter((a) => a.role === 'host').length };
     counts.guest = counts.all - counts.host;
     document.querySelectorAll('.tab').forEach((t) => { t.querySelector('small').textContent = counts[t.dataset.filter]; });
 
     // ---- Hero: the live album plays its newest photos like a story ----
     const liveEl = document.getElementById('live');
-    const STORY = LIVE.pics.slice(0, 5);
+    const STORY = LIVE.pics.length ? LIVE.pics.slice(0, 5) : [null];
+    const heroText = !LIVE.id ? 'Create one for your next event and share its code, or join a friend’s.'
+      : LIVE.live ? `${LIVE.place ? `${esc(LIVE.place)}. ` : ''}${LIVE.guests} guest${LIVE.guests === 1 ? ' has' : 's have'} added ${num(LIVE.photos)} photo${LIVE.photos === 1 ? '' : 's'} so far.`
+      : `${fmtDate(LIVE.date)}${at(LIVE)}. ${num(LIVE.photos)} photo${LIVE.photos === 1 ? '' : 's'} from ${LIVE.guests} guest${LIVE.guests === 1 ? '' : 's'}.`;
     liveEl.innerHTML = `
-      <div class="live-media" id="liveMedia" role="button" tabindex="0" aria-label="Open ${esc(LIVE.name)}">
+      <div class="live-media" id="liveMedia" role="button" tabindex="0" aria-label="${LIVE.id ? `Open ${esc(LIVE.name)}` : 'Create an album'}">
         ${STORY.map((p) => `<img class="live-img" src="${pic(p, 860, 1075)}" alt="">`).join('')}
         <div class="bars" aria-hidden="true">${STORY.map(() => '<i><b></b></i>').join('')}</div>
-        <span class="live-pill"><i></i>Live now</span>
+        ${LIVE.id ? `<span class="live-pill">${LIVE.live ? '<i></i>Live now' : 'Latest'}</span>` : ''}
         <div class="live-over">
           <h2 id="liveTitle">${esc(LIVE.name)}</h2>
-          <p>${esc(LIVE.place)}. ${LIVE.guests} guests have added ${num(LIVE.photos)} photos so far.</p>
-          <div class="faces">${faces(0, 4)}<span>adding photos now</span></div>
+          <p>${heroText}</p>
+          ${LIVE.live ? `<div class="faces">${faces(0, 4)}<span>adding photos now</span></div>` : ''}
         </div>
       </div>
-      <div class="live-actions">
+      <div class="live-actions">${LIVE.id ? `
         <button class="btn btn-dark" type="button" data-open>Open album</button>
-        <button class="btn btn-light" type="button" data-open data-upload>Add your photos</button>
+        <button class="btn btn-light" type="button" data-open data-upload>Add your photos</button>` : `
+        <button class="btn btn-dark" type="button" data-create>Create an album</button>`}
       </div>`;
     const liveMedia = document.getElementById('liveMedia');
     const liveImgs = [...liveEl.querySelectorAll('.live-img')];
@@ -782,7 +872,8 @@
     }
     liveMedia.addEventListener('pointerenter', () => { story.paused = true; });
     liveMedia.addEventListener('pointerleave', () => { story.paused = false; });
-    const openLive = (upload) => openAlbum(LIVE.id, story.i, liveImgs[story.i], upload);
+    const openLive = (upload) => (LIVE.id ? openAlbum(LIVE.id, story.i, liveImgs[story.i], upload) : openCreate());
+    liveEl.querySelector('[data-create]')?.addEventListener('click', () => openCreate());
     liveMedia.addEventListener('click', () => openLive(false));
     liveMedia.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLive(false); } });
     liveEl.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openLive(b.hasAttribute('data-upload'))));
@@ -819,8 +910,8 @@
           </span>
           <span class="info">
             <span class="name">${esc(a.name)}</span>
-            <span class="when">${fmtDate(a.date)}, ${esc(a.place)}</span>
-            <span class="foot-row"><span class="faces">${faces(n + 1)}</span><span>${num(a.photos)} photos from ${a.guests} guests</span></span>
+            <span class="when">${fmtDate(a.date)}${at(a)}</span>
+            <span class="foot-row"><span class="faces">${faces(n + 1)}</span><span>${num(a.photos)} photo${a.photos === 1 ? '' : 's'} from ${a.guests} guest${a.guests === 1 ? '' : 's'}</span></span>
           </span>
         </span>`;
       el.cover = el.querySelector('.cover');
@@ -924,13 +1015,15 @@
     // ---- Just added: a line of pegged prints that drifts, follows the scroll and can be thrown ----
     const strip = document.getElementById('strip');
     const track = document.getElementById('track');
-    const snapHTML = (hidden) => JUST.map(([id, p, who, ago]) => {
+    const snapHTML = (hidden) => JUST.map(([id, src, who, when]) => {
       const a = byId(id);
-      return `<button class="snap" type="button" data-id="${id}" data-i="${p}"${hidden ? ' tabindex="-1" aria-hidden="true"' : ''}>
-        <span class="snap-print"><img src="${pic(a.pics[p], 320, 320)}" alt="" draggable="false" loading="lazy">
-        <span class="snap-cap">${esc(a.name)}<small>${who}, ${ago}</small></span></span></button>`;
+      return `<button class="snap" type="button" data-id="${id}" data-src="${esc(src)}"${hidden ? ' tabindex="-1" aria-hidden="true"' : ''}>
+        <span class="snap-print"><img src="${pic(src, 320, 320)}" alt="" draggable="false" loading="lazy">
+        <span class="snap-cap">${esc(a.name)}<small>${esc(who)}, ${when}</small></span></span></button>`;
     }).join('');
     track.innerHTML = snapHTML(false) + snapHTML(true);   // two copies, so the line can loop forever
+    // Nothing uploaded anywhere yet: no line of prints
+    if (!JUST.length) document.querySelector('.just').style.display = 'none';
     const snaps = [...track.children];
     const S = { x: 0, v: -40, drag: false, lastX: 0, lastT: 0, moved: 0, hover: false, on: false, half: 0, lastScroll: scrollY };
     // Each print swings on its peg like a little pendulum, each at a slightly different rate
@@ -974,7 +1067,7 @@
     strip.addEventListener('click', (e) => {
       if (S.moved > 6) { e.stopPropagation(); e.preventDefault(); return; }
       const s = e.target.closest('.snap');
-      if (s) openAlbum(s.dataset.id, +s.dataset.i, s.querySelector('img'));
+      if (s) openAlbum(s.dataset.id, 0, s.querySelector('img'), false, s.dataset.src);
     }, true);
     function updateStrip(dt) {
       const sd = scrollY - S.lastScroll; S.lastScroll = scrollY;
@@ -1003,7 +1096,8 @@
     const stage = document.getElementById('stage');
     const stageImgs = [...stage.querySelectorAll('.stage-img')];
     const thumbsEl = document.getElementById('thumbs');
-    const M = { a: null, i: 0, cur: 0, from: null, hidden: null, closing: false, req: 0 };
+    // list: the photo URLs on show, newest first (the preview ones, then the full set once it loads)
+    const M = { a: null, list: [], i: 0, cur: 0, from: null, hidden: null, closing: false, req: 0 };
 
     function showModal(m) {
       // The custom cursor can't draw above a modal, so the normal cursor comes back
@@ -1013,10 +1107,11 @@
     }
     function show(i, instant) {
       const dir = i > M.i ? 1 : -1;
-      M.i = (i + 9) % 9;
+      const n = M.list.length || 1;
+      M.i = ((i % n) + n) % n;
       const req = ++M.req;
       const next = stageImgs[1 - M.cur], prev = stageImgs[M.cur];
-      const big = pic(M.a.pics[M.i], 1200, 750);
+      const big = pic(M.list[M.i], 1200, 750);
       if (instant && M.from?.complete) {
         // Start with the photo that was clicked (already loaded), then sharpen it once the big one arrives
         next.src = M.from.currentSrc || M.from.src;
@@ -1024,7 +1119,7 @@
         pre.src = big;
         pre.decode().then(() => { if (req === M.req) next.src = big; }).catch(() => {});
       } else next.src = big;
-      document.getElementById('stageCount').textContent = `${M.i + 1} of 9`;
+      document.getElementById('stageCount').textContent = M.list.length ? `${M.i + 1} of ${num(M.list.length)}` : 'No photos yet';
       thumbsEl.querySelectorAll('.thumb').forEach((t, n) => t.setAttribute('aria-current', n === M.i));
       const swap = () => {
         if (req !== M.req) return;
@@ -1044,15 +1139,43 @@
       const k = [{ transform: `translate(${small.left - big.left}px, ${small.top - big.top}px) scale(${small.width / big.width}, ${small.height / big.height})`, borderRadius: '6px' }, { transform: 'none', borderRadius: '22px' }];
       return im.animate(back ? k.reverse() : k, { duration: back ? 560 : 780, easing: back ? 'cubic-bezier(.5, 0, .15, 1)' : OUT, fill: 'forwards' });
     }
-    function openAlbum(id, i = 0, fromImg = null, upload = false) {
+    const albumNote = document.getElementById('albumNote');
+    function albumText(a) {
+      document.getElementById('albumTitle').textContent = a.name;
+      const code = a.code ? ` Guests join with code ${a.code}.` : '';
+      document.getElementById('albumSub').textContent = `${fmtDate(a.date)} ${a.date.slice(0, 4)}${a.place ? `, ${a.place}` : ''}. ${num(a.photos)} photo${a.photos === 1 ? '' : 's'} from ${a.guests} guest${a.guests === 1 ? '' : 's'}, ${a.mine} of them yours.${code}`;
+    }
+    function renderThumbs() {
+      thumbsEl.innerHTML = M.list.map((p, n) => `<button class="thumb" type="button" data-n="${n}" aria-label="Photo ${n + 1}"${n === M.i ? ' aria-current="true"' : ''}><img src="${pic(p, 200, 200)}" alt="" loading="lazy"></button>`).join('');
+    }
+    // The whole album, after the preview photos are already on screen. Lands on startSrc if given.
+    async function loadAlbum(a, startSrc) {
+      try {
+        const d = await api(`/api/albums/${a.id}`);
+        if (M.a !== a || !albumModal.open) return;
+        Object.assign(a, d.album);
+        M.list = d.photos.map((p) => p.url);
+        albumText(a);
+        const start = startSrc ? M.list.indexOf(startSrc) : -1;
+        if (start >= 0 && start !== M.i) show(start); else if (start < 0 && startSrc) show(0);
+        renderThumbs();
+        document.getElementById('stageCount').textContent = M.list.length ? `${M.i + 1} of ${num(M.list.length)}` : 'No photos yet';
+      } catch (err) {
+        if (M.a === a) albumNote.textContent = err.message;
+      }
+    }
+    function openAlbum(id, i = 0, fromImg = null, upload = false, startSrc = null) {
       const a = byId(id);
       M.a = a; M.i = i; M.from = fromImg;
-      document.getElementById('albumTitle').textContent = a.name;
-      document.getElementById('albumSub').textContent = `${fmtDate(a.date)} ${a.date.slice(0, 4)}, ${a.place}. ${num(a.photos)} photos from ${a.guests} guests, ${a.mine} of them yours.`;
-      thumbsEl.innerHTML = a.pics.map((p, n) => `<button class="thumb" type="button" data-n="${n}" aria-label="Photo ${n + 1}"><img src="${pic(p, 200, 200)}" alt=""></button>`).join('');
-      document.getElementById('albumNote').textContent = upload ? 'Uploading isn’t available in this preview.' : '';
+      M.list = startSrc && !a.pics.includes(startSrc) ? [startSrc, ...a.pics] : a.pics.slice();
+      if (startSrc) i = M.i = M.list.indexOf(startSrc);
+      albumText(a);
+      renderThumbs();
+      albumNote.textContent = '';
+      if (upload) pickPhotos();
       stageImgs.forEach((im) => im.classList.remove('is-on'));
       show(i, true);
+      loadAlbum(a, startSrc || M.list[i]);
       const flying = fromImg && !still && fromImg.complete;
       albumCard.classList.toggle('is-flying', !!flying);
       showModal(albumModal);
@@ -1114,11 +1237,43 @@
       const dx = e.clientX - swipeX; swipeX = null;
       if (Math.abs(dx) > 40) show(M.i + (dx < 0 ? 1 : -1));
     });
-    albumModal.querySelectorAll('[data-preview]').forEach((b) => b.addEventListener('click', () => {
-      document.getElementById('albumNote').textContent = `${b.dataset.preview} isn’t available in this preview.`;
-    }));
+    // ---- Adding photos and downloading the album ----
+    const picker = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', multiple: true });
+    let albumsChanged = false;
+    function pickPhotos() { picker.click(); }
+    picker.addEventListener('change', async () => {
+      const files = [...picker.files];
+      picker.value = '';
+      const a = M.a;
+      if (!files.length || !a) return;
+      let added = 0;
+      try {
+        // Ten at a time, so a big batch from a camera roll doesn't go up as one huge request
+        for (let k = 0; k < files.length; k += 10) {
+          albumNote.textContent = `Adding photos… ${added} of ${files.length}`;
+          const body = new FormData();
+          files.slice(k, k + 10).forEach((f) => body.append('photos', f));
+          added += (await api(`/api/albums/${a.id}/photos`, { method: 'POST', body })).photos.length;
+        }
+        albumNote.textContent = `Added ${added} photo${added === 1 ? '' : 's'}.`;
+      } catch (err) {
+        albumNote.textContent = added ? `Added ${added}, then: ${err.message}` : err.message;
+      }
+      if (added) {
+        albumsChanged = true;
+        if (M.a === a && albumModal.open) { M.i = 0; loadAlbum(a, null).then(() => show(0)); }
+      }
+    });
+    albumModal.querySelector('[data-action="upload"]').addEventListener('click', pickPhotos);
+    albumModal.querySelector('[data-action="download"]').addEventListener('click', () => {
+      if (!M.list.length) { albumNote.textContent = 'There are no photos to download yet.'; return; }
+      albumNote.textContent = 'Your download is starting.';
+      location.href = `${MOMENTO_API}/api/albums/${M.a.id}/download`;
+    });
+    // New photos change counts and covers all over the page, so it reloads once you're done looking
+    albumModal.addEventListener('close', () => { if (albumsChanged) location.reload(); });
 
-    // ---- Join by code (a preview: nothing is sent anywhere) ----
+    // ---- Join by code ----
     const joinModal = document.getElementById('joinModal');
     const joinForm = document.getElementById('joinForm');
     const joinCode = document.getElementById('joinCode');
@@ -1139,7 +1294,73 @@
         joinCode.focus(); return;
       }
       joinNote.classList.remove('error');
-      joinNote.textContent = 'Joining isn’t available in this preview, so nothing was sent.';
+      joinNote.textContent = 'Joining…';
+      api('/api/albums/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+        .then((d) => {
+          joinNote.textContent = d.already ? `You’re already in ${d.album.name}.` : `You’re in. Opening ${d.album.name}…`;
+          setTimeout(() => location.reload(), still ? 300 : 900);
+        })
+        .catch((err) => { joinNote.classList.add('error'); joinNote.textContent = err.message; joinCode.focus(); });
+    });
+
+    // ---- Create an album: name, day and place, then its join code to share ----
+    const createModal = document.getElementById('createModal');
+    const createForm = document.getElementById('createForm');
+    const createNote = document.getElementById('createNote');
+    const createDone = document.getElementById('createDone');
+    const cf = (n) => createForm.querySelector(`[name="${n}"]`);
+    function openCreate() {
+      createForm.reset();
+      const d = new Date();
+      cf('date').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      createNote.textContent = ''; createNote.classList.remove('error');
+      createForm.hidden = false; createDone.hidden = true;
+      showModal(createModal); cf('name').focus();
+    }
+    document.getElementById('createOpen').addEventListener('click', openCreate);
+    createModal.addEventListener('close', () => {
+      story.paused = false;
+      if (useCursor) root.classList.add('has-cursor');
+      if (!createDone.hidden) location.reload();   // the new album joins the page
+    });
+    createModal.addEventListener('click', (e) => { if (e.target === createModal) createModal.close(); });
+    createModal.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => createModal.close()));
+    let creating = false;
+    createForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (creating) return;
+      const name = cf('name').value.trim(), date = cf('date').value, place = cf('place').value.trim();
+      createNote.classList.add('error');
+      if (!name) { createNote.textContent = 'Give the album a name, like “Noor turns 30”.'; cf('name').focus(); return; }
+      if (!date) { createNote.textContent = 'Pick the day of the event.'; cf('date').focus(); return; }
+      createNote.classList.remove('error');
+      createNote.textContent = 'Creating…';
+      creating = true;
+      try {
+        const { album } = await api('/api/albums', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, date, place }) });
+        document.getElementById('createCode').textContent = album.code;
+        document.getElementById('createName').textContent = album.name;
+        createForm.hidden = true; createDone.hidden = false;
+      } catch (err) {
+        createNote.classList.add('error'); createNote.textContent = err.message;
+      } finally { creating = false; }
+    });
+    document.getElementById('copyCode').addEventListener('click', async (e) => {
+      const code = document.getElementById('createCode').textContent;
+      try { await navigator.clipboard.writeText(code); e.currentTarget.querySelectorAll('.roll > span').forEach((s) => { s.textContent = 'Copied'; }); }
+      catch { /* clipboard blocked: the code is on screen to copy by hand */ }
+    });
+
+    // ---- The name chip opens a small menu with Log out ----
+    const meBtn = document.getElementById('me');
+    const meMenu = document.getElementById('meMenu');
+    const setMenu = (open) => { meMenu.hidden = !open; meBtn.setAttribute('aria-expanded', open); };
+    meBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(meMenu.hidden); });
+    document.addEventListener('click', (e) => { if (!meMenu.hidden && !meMenu.contains(e.target)) setMenu(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !meMenu.hidden) { setMenu(false); meBtn.focus(); } });
+    document.getElementById('logout').addEventListener('click', async () => {
+      await momentoFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      location.assign('index.html');
     });
 
     // ---- Living background: the same silk shader as the landing page ----
