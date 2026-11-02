@@ -8,6 +8,7 @@ import { HttpError } from '../utils/httpError.js';
 import { startSession, endSession, setTempCookie, clearTempCookie } from '../utils/session.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
+import { startEmailChange, finishEmailChange, deleteAccount } from '../services/accountService.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Compared against when the email is unknown, so a miss takes as long as a wrong password
@@ -86,8 +87,47 @@ export async function updateMe(req, res) {
     if (!n || n.length > 80) throw new HttpError(400, 'Enter a name up to 80 characters.');
     req.user.name = n;
   }
+  // Email choices: only the three known switches, only true/false
+  const notify = req.body?.notify;
+  if (notify && typeof notify === 'object') {
+    for (const key of ['photos', 'closing', 'recap']) {
+      if (typeof notify[key] === 'boolean') req.user.set(`notify.${key}`, notify[key]);
+    }
+  }
   await req.user.save();
   res.json({ user: req.user.toPublic() });
+}
+
+// Accounts with a password confirm it before big changes, so a borrowed, logged-in browser
+// can't take the account away. Google/Apple-only accounts have no password to give.
+async function checkPassword(user, password) {
+  if (!user.passwordHash) return;
+  if (!password || !(await bcrypt.compare(String(password), user.passwordHash))) {
+    throw new HttpError(401, 'That password isn’t right.');
+  }
+}
+
+export async function requestEmailChange(req, res) {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'Enter an email address like name@example.com.');
+  if (email === req.user.email) throw new HttpError(400, 'That’s already your email.');
+  await checkPassword(req.user, req.body?.password);
+  if (await User.exists({ email })) throw new HttpError(409, 'Another account already uses that email.');
+  await startEmailChange(req.user, email);
+  res.json({ ok: true, pendingEmail: email });
+}
+
+// The link in the new address's email lands here, then goes on to Settings, which says how it went
+export async function confirmEmailChange(req, res) {
+  const result = await finishEmailChange(req.query.token);
+  res.redirect(303, `${config.frontendUrl}/settings.html?email=${result}`);
+}
+
+export async function deleteMe(req, res) {
+  await checkPassword(req.user, req.body?.password);
+  await deleteAccount(req.user);
+  endSession(res);
+  res.json({ ok: true });
 }
 
 // ---- Confirming the email address ----

@@ -35,6 +35,7 @@
   <title>Support | Momento</title>
   <meta name="description" content="Quick answers, and a way to contact the Momento team.">
   <link rel="icon" href="assets/momento-icon.png">
+  <script src="assets/api.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -343,6 +344,7 @@
       .qa i::before, .qa i::after, .qa-a, .s-go, .sp-card form { transition: none; }
       .sp-done-ic { scale: 1; opacity: 1; transition: none; }
     }
+      button:disabled { opacity: .6; pointer-events: none; }
   </style>
   <!-- @shared:css (generated block; the same in index.html and albums.html) -->
   <style>
@@ -1043,7 +1045,7 @@
             <div class="sp-done" id="formDone" hidden>
               <span class="sp-done-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span>
               <h3 id="doneTitle" tabindex="-1">Message sent</h3>
-              <p>We’ll reply to <b id="doneMail"></b> within a day. This is a preview, so nothing has actually been sent.</p>
+              <p>We’ll reply to <b id="doneMail"></b> within a day.</p>
               <button class="btn btn-light btn-sm" type="button" id="sendAnother">Send another</button>
             </div>
           </div>
@@ -1272,7 +1274,7 @@
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { setOpen(false); caret.focus(); } });
     })();
 
-    // ---- Support: the accordion, the topic picker and the message form (a preview: nothing is sent) ----
+    // ---- Support: the accordion, the topic picker and the message form (emailed to the team) ----
     // The shared script (theme, account) runs after this one, so everything that needs it waits
     addEventListener('DOMContentLoaded', () => {
       const M = window.Momento;
@@ -1315,6 +1317,7 @@
         for (const f of [form.name, form.email, form.message]) f.removeAttribute('aria-invalid');
         field.setAttribute('aria-invalid', 'true'); field.focus();
       };
+      let sending = false;
       form.addEventListener('input', () => { note.textContent = ''; note.classList.remove('is-error'); });
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -1322,12 +1325,20 @@
         if (!name) return fail('Enter your name so we know who to reply to.', form.name);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter an email address like name@example.com.', form.email);
         if (message.length < 10) return fail('Tell us a little more. A sentence or two is plenty.', form.message);
-        doneMail.textContent = email;
-        form.classList.add('is-out');
-        setTimeout(() => {
-          form.hidden = true; done.hidden = false;
-          requestAnimationFrame(() => { done.classList.add('is-in'); document.getElementById('doneTitle').focus({ preventScroll: true }); });
-        }, still ? 0 : 240);
+        if (sending) return;
+        sending = true;
+        const btn = form.querySelector('[type="submit"]');
+        btn.disabled = true; note.classList.remove('is-error'); note.textContent = 'Sending…';
+        M.api('/api/support', { method: 'POST', body: { name, email, topic, message } }).then(() => {
+          note.textContent = '';
+          doneMail.textContent = email;
+          form.classList.add('is-out');
+          setTimeout(() => {
+            form.hidden = true; done.hidden = false;
+            requestAnimationFrame(() => { done.classList.add('is-in'); document.getElementById('doneTitle').focus({ preventScroll: true }); });
+          }, still ? 0 : 240);
+        }).catch((err) => { note.textContent = err.message; note.classList.add('is-error'); })
+          .finally(() => { sending = false; btn.disabled = false; });
       });
       document.getElementById('sendAnother').addEventListener('click', () => {
         form.message.value = ''; note.textContent = '';
@@ -1433,35 +1444,47 @@
       onChange(fn) { themeListeners.add(fn); },
     };
   
-    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
+    // ---- Account: the signed-in person, from the Momento API, shared by every page ----
+    // The tab's last known copy shows straight away; the server's answer replaces it a moment later.
     const AKEY = 'momento-account';
     const NOTIFY = { photos: true, closing: true, recap: false };
     const accountListeners = new Set();
     const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
     let current = null;
-    try {
-      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
-      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
-    } catch (e) {}
-    current = norm(current);
+    try { current = norm(JSON.parse(sessionStorage.getItem(AKEY) || 'null')); } catch (e) {}
     const persist = () => {
       try {
         if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
-        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
+        else sessionStorage.removeItem(AKEY);
       } catch (e) {}
     };
     const emit = () => accountListeners.forEach((fn) => fn(current));
+    const adopt = (user) => { current = norm(user); persist(); emit(); return current; };
+    // One call to the API: JSON in and out, with its { error } message thrown as an Error
+    async function momentoApi(path, { method = 'GET', body } = {}) {
+      let r;
+      try {
+        r = await momentoFetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body && JSON.stringify(body) });
+      } catch (e) { throw new Error('Momento can’t be reached right now. Try again in a minute.'); }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { const err = new Error(d.error || 'Something went wrong. Try again.'); err.status = r.status; throw err; }
+      return d;
+    }
+    Momento.api = momentoApi;
     Momento.account = {
       get() { return current; },
-      set(patch) {
-        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
-        persist(); emit();
-        return current;
-      },
-      clear() { current = null; persist(); emit(); },
+      // Settles once the server has said who (if anyone) is logged in
+      ready: momentoApi('/api/auth/me').then((d) => adopt(d.user)).catch(() => current),
+      async set(patch) { return adopt((await momentoApi('/api/auth/me', { method: 'PATCH', body: patch })).user); },
+      // Emails a confirm link to the new address; the account keeps its email until it's opened
+      changeEmail(email, password) { return momentoApi('/api/auth/email', { method: 'POST', body: { email, password } }); },
+      async remove(password) { await momentoApi('/api/auth/me', { method: 'DELETE', body: { password } }); adopt(null); },
+      async clear() { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (e) {} adopt(null); },
+      // After signing up or logging in, with the user the server sent back
+      signedIn(user) { return adopt(user); },
       onChange(fn) { accountListeners.add(fn); },
     };
-  
+
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
     const ICON = {
@@ -1475,7 +1498,7 @@
       system: svg('<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/>', 16),
     };
     const first = (n) => (n || '').trim().split(/\s+/)[0] || '';
-    const SUPPORT = 'support@hexarch.org';   // placeholder address
+    const SUPPORT = 'team@hexarch.org';
   
     // The custom cursor can't draw above a modal, so the normal cursor comes back while one is open
     let cursorWas = false;
@@ -1537,9 +1560,10 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
+          <p class="acct-sub">Changes show on every page straight away.</p>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
+          <label class="acct-field" data-pass hidden><span>Your password, to change your email</span><input name="password" type="password" autocomplete="current-password"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
             <b>Email me when</b>
             <div class="acct-row"><span><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="acct-sw" type="button" role="switch" aria-label="Someone adds photos to an album I’m in" aria-checked="true" data-key="photos"></button></div>
@@ -1555,21 +1579,39 @@
       const switches = [...d.querySelectorAll('.acct-sw')];
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      // A new email needs the password (for password accounts) and is confirmed by email
+      const passRow = d.querySelector('[data-pass]');
+      const emailChanged = () => !!current && form.email.value.trim().toLowerCase() !== current.email;
+      form.email.addEventListener('input', () => { passRow.hidden = !(emailChanged() && current.hasPassword); });
+      let saving = false;
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saving) return;
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        if (emailChanged() && current.hasPassword && !form.password.value) { say('Enter your password to change your email.', true); form.password.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        Momento.account.set({ name, email, notify });
-        say('Saved');
-        setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+        saving = true; say('Saving…');
+        try {
+          const moving = emailChanged();
+          await Momento.account.set({ name, notify });
+          if (moving) {
+            await Momento.account.changeEmail(email, form.password.value);
+            form.email.value = current.email; form.password.value = ''; passRow.hidden = true;
+            say(`Saved. Open the link we sent to ${email} to switch to it.`);
+            return;
+          }
+          say('Saved');
+          setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+        } catch (err) { say(err.message, true); }
+        finally { saving = false; }
       });
       const launch = d.launch;
       d.launch = () => {
         const a = current || norm({});
-        form.name.value = a.name; form.email.value = a.email;
+        form.name.value = a.name; form.email.value = a.email; form.password.value = ''; passRow.hidden = true;
         switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
         say('');
         launch();
@@ -1673,7 +1715,7 @@
           const act = item.dataset.act;
           if (act === 'settings') Momento.openSettings(btn);
           else if (act === 'help') Momento.openHelp(btn);
-          else { Momento.account.clear(); if (onLogout) onLogout(); }
+          else Momento.account.clear().then(() => { if (onLogout) onLogout(); });
         });
   
         const syncSeg = () => {
@@ -1697,7 +1739,7 @@
         built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
-        built.headMail.textContent = (a && a.email) || 'Preview account';
+        built.headMail.textContent = (a && a.email) || '';
       }
       accountListeners.add(render);
       render();

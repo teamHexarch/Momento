@@ -14,6 +14,8 @@ const albumSchema = new mongoose.Schema({
     lng: Number,
     radiusM: { type: Number, min: 10, max: 5000 },
   },
+  // When a host last emailed guests who haven't added photos (one reminder a day per album)
+  lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.
   destination: { type: String, enum: ['momento', 'google-drive', 'dropbox', 'onedrive'], default: 'momento' },
 }, { timestamps: true });

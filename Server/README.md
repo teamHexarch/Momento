@@ -127,6 +127,10 @@ R2 keeps up to 10 GB free each month, and people viewing photos costs nothing. T
 
 Without these four values, photos are stored in `UPLOAD_DIR` on the machine, which is fine locally. Photos uploaded to disk don't move to R2 by themselves.
 
+## Album life cycle
+
+Each album is **upcoming** before its date, **live** around the day and the day after, **wrapping** until 30 days after the event (its `closes` date), then **kept**: still there to view and download, but closed to new photos and invites. The date is the host's local day and the server doesn't know their time zone, so "live" runs from the UTC day before to two UTC days after. The 30 days are `OPEN_DAYS` in `src/controllers/albumController.js`.
+
 ## How accounts work
 
 - Passwords are hashed with bcrypt (cost 12). The login lives in an httpOnly cookie (`momento_session`, a signed JWT, 30 days by default), so page scripts never see the token.
@@ -151,14 +155,20 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/auth/apple` | `{ idToken, name? }` from Apple's popup |
 | POST | `/api/auth/logout` | Ends the session |
 | GET | `/api/auth/me` | `{ user }`, or `{ user: null }` when logged out |
-| PATCH | `/api/auth/me` | `{ name }` |
+| PATCH | `/api/auth/me` | `{ name?, notify?: { photos, closing, recap } }` |
+| DELETE | `/api/auth/me` | `{ password }` (password accounts): deletes the account, the albums it hosts with all their photos, and its photos in other albums |
+| POST | `/api/auth/email` | `{ email, password }`: emails a confirm link to the new address and a notice to the old one |
+| GET | `/api/auth/email/confirm?token=` | The link in that email: switches the address, then goes to `settings.html?email=changed` (or `taken` / `invalid`) |
 | GET | `/api/auth/verify-email?token=` | The link in the email: confirms the address, then goes to `/?verified=1` (or `=invalid`) |
 | POST | `/api/auth/verify-email/resend` | Emails a new confirm link to the logged-in person |
 | POST | `/api/auth/password/forgot` | `{ email }` emails a reset link; always `{ ok: true }` |
 | POST | `/api/auth/password/reset` | `{ token, password }` from the reset link; logs in and logs out other devices |
-| GET | `/api/albums` | Your albums (host and guest) plus the 12 newest photos across them |
+| GET | `/api/albums` | Your albums (host and guest, with `status`, `closes`, `open`, and for hosts `waiting`), the 12 newest photos, `feed` (who added what, in batches) and `invites` waiting for you |
 | POST | `/api/albums` | `{ name, date: "YYYY-MM-DD", place?, zone? }` creates an album with a join code |
-| POST | `/api/albums/join` | `{ code }` joins as a guest; any case, dash optional |
+| POST | `/api/albums/join` | `{ code }` joins as a guest; any case, dash optional; uses up any invite to that album |
+| POST | `/api/albums/:id/remind` | Host only: emails guests who haven't added photos (once a day per album, at most 25 people) |
+| POST | `/api/albums/:id/invites` | Host only: `{ email }` emails an invite with the code; it also shows on their albums page |
+| POST | `/api/support` | `{ name, email, topic, message }` from the Support page, emailed to `SUPPORT_EMAIL` (default `EMAIL_REPLY_TO`, then `SENDER_EMAIL`) with Reply-To set to the sender |
 | GET | `/api/albums/:id` | One album with all its photos |
 | PATCH | `/api/albums/:id` | Host only: change name, date, place or zone |
 | DELETE | `/api/albums/:id` | Host only: deletes the album and its photos |

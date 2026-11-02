@@ -35,6 +35,7 @@
   <title>Momento | Moments, kept.</title>
   <meta name="description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
   <link rel="icon" href="assets/momento-icon.png">
+  <script src="assets/api.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1041,6 +1042,11 @@
     .auth-field input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
     .auth-field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
     .auth-card[data-mode="login"] [data-only="signup"], .auth-card[data-mode="signup"] [data-only="login"] { display: none; }
+    /* Forgot (email only) and reset (new password only): no tabs, providers or signup fields */
+    .auth-card[data-mode="signup"] [data-only="recover"], .auth-card[data-mode="login"] [data-only="recover"] { display: none; }
+    .auth-card:is([data-mode="forgot"], [data-mode="reset"]) :is(.auth-tabs, .auth-social, .auth-or, [data-only="signup"], [data-only="login"]) { display: none; }
+    .auth-card[data-mode="forgot"] .auth-pass, .auth-card[data-mode="reset"] .auth-email { display: none; }
+    .auth-card button:disabled { opacity: .6; pointer-events: none; }
     .auth-forgot { display: inline-block; margin-bottom: .4rem; color: var(--slate); font-size: .85rem; text-underline-offset: .2em; }
     .auth-forgot:hover { color: var(--dusk); }
     .auth-error { min-height: 1.2rem; margin: .1rem 0 .5rem; color: #9A3D3D; font-size: .85rem; font-weight: 500; }
@@ -1749,7 +1755,7 @@
     </div>
   </header>
 
-  <!-- Sign up / log in. A preview: nothing typed here leaves the page. -->
+  <!-- Sign up / log in. Sent to the Momento API; see the Server folder. -->
   <dialog class="auth-dialog" id="authDialog" aria-labelledby="authTitle">
     <form class="auth-card" id="authForm" data-mode="signup" novalidate>
       <button class="auth-close" type="button" aria-label="Close" data-close>
@@ -1770,13 +1776,14 @@
         </div>
         <div class="auth-or">or use your email</div>
         <label class="auth-field" data-only="signup"><span>Your name</span><input name="name" autocomplete="name"></label>
-        <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
-        <label class="auth-field"><span>Password</span><input name="password" type="password" autocomplete="new-password"></label>
+        <label class="auth-field auth-email"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
+        <label class="auth-field auth-pass"><span id="authPassLabel">Password</span><input name="password" type="password" autocomplete="new-password"></label>
         <a class="auth-forgot" data-only="login" href="#">Forgot your password?</a>
+        <a class="auth-forgot auth-back" data-only="recover" href="#">Back to log in</a>
         <p class="auth-error" id="authError" role="alert"></p>
         <button class="btn btn-dark auth-submit" type="submit" id="authSubmit">Create account</button>
         <button class="auth-skip" type="button" id="authSkip" hidden>Just look at the album for now</button>
-        <p class="auth-note">This is a preview. No account is made and nothing you type leaves this page.</p>
+        <p class="auth-note">Only people in an album can see its photos. Passwords are stored hashed, never as typed.</p>
       </div>
       <div class="auth-done" id="authDone" hidden role="status">
         <i><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></i>
@@ -2892,7 +2899,7 @@
       if (fromHash) addEventListener('load', () => setTimeout(() => go(fromHash), 60));
     })();
 
-    // ---- Sign up / log in (a preview: nothing is sent anywhere) ----
+    // ---- Sign up / log in, against the Momento API (Server folder) ----
     (() => {
       const dialog = document.getElementById('authDialog');
       const form = document.getElementById('authForm');
@@ -2909,11 +2916,22 @@
 
       const field = (n) => form.querySelector(`[name="${n}"]`);
       const setLabel = (btn, text) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
+      // Modes: signup, login, forgot (email only, sends a reset link), reset (new password, from that link)
+      let resetToken = null;
       function setMode(mode) {
         form.dataset.mode = mode;
         tabs.forEach((t) => t.setAttribute('aria-selected', t.dataset.mode === mode));
-        field('password').autocomplete =mode === 'signup' ? 'new-password' : 'current-password';
+        field('password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+        document.getElementById('authPassLabel').textContent = mode === 'reset' ? 'New password' : 'Password';
         error.textContent = '';
+        if (mode === 'forgot' || mode === 'reset') {
+          title.textContent = mode === 'forgot' ? 'Reset your password' : 'Choose a new password';
+          sub.textContent = mode === 'forgot'
+            ? 'Enter your account’s email and we’ll send you a link to choose a new one.'
+            : 'At least 8 characters. You’ll be logged in here and logged out everywhere else.';
+          setLabel(submit, mode === 'forgot' ? 'Send reset link' : 'Save new password');
+          return;
+        }
         if (fromScan) {
           title.textContent = mode === 'signup' ? 'Join to add your photos' : 'Log in to add your photos';
           sub.textContent = 'Everyone at the wedding can see the album. Sign up to add yours, or log in if you’ve used Momento before.';
@@ -2927,7 +2945,7 @@
       window.openAuth = (opts = {}) => {
         onDone = opts.onDone || null;
         fromScan = !!opts.fromScan;
-        if (window.Momento.account.get()) { finish(); return; }   // already signed in: carry straight on
+        if (window.Momento.account.get() && opts.mode !== 'reset') { finish(); return; }   // already signed in: carry straight on
         scanNote.hidden = !fromScan;
         skip.hidden = !fromScan;
         body.hidden = false; done.hidden = true;
@@ -2948,28 +2966,158 @@
       skip.addEventListener('click', () => dialog.close());
       dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });   // click outside the card
       tabs.forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
-      form.querySelector('.auth-forgot').addEventListener('click', (e) => { e.preventDefault(); error.textContent = 'Password reset isn’t available in this preview.'; });
+      form.querySelector('[data-only="login"].auth-forgot').addEventListener('click', (e) => { e.preventDefault(); setMode('forgot'); field('email').focus(); });
+      form.querySelector('.auth-back').addEventListener('click', (e) => { e.preventDefault(); resetToken = null; setMode('login'); });
 
-      function signedIn(name, how, email = '') {
+      // The server's user becomes the account every page shows (the header swaps Log in / Sign up for the chip)
+      function signedIn(user, how) {
         body.hidden = true; done.hidden = false;
-        document.getElementById('authDoneTitle').textContent = name ? `Welcome, ${name.split(' ')[0]}` : 'You’re in';
+        const first = (user.name || '').trim().split(/\s+/)[0];
+        document.getElementById('authDoneTitle').textContent = first ? `Welcome, ${first}` : 'You’re in';
         document.getElementById('authDoneSub').textContent = fromScan ? 'Opening the album…' : how;
-        // The header swaps Log in / Sign up for the account chip, which both pages share
-        window.Momento.account.set({ name, email });
+        window.Momento.account.signedIn(user);
         setTimeout(() => dialog.close(), still ? 300 : 1300);
       }
-      form.querySelectorAll('.auth-alt').forEach((b) => b.addEventListener('click', () => signedIn('', `Signed in with ${b.dataset.provider}.`)));
+      function notice(heading, text, ms) {
+        body.hidden = true; done.hidden = false;
+        document.getElementById('authDoneTitle').textContent = heading;
+        document.getElementById('authDoneSub').textContent = text;
+        document.documentElement.classList.remove('has-cursor');
+        dialog.showModal();
+        if (ms) setTimeout(() => dialog.close(), still ? 1500 : ms);
+      }
+
+      let busy = false;
+      async function send(path, data) {
+        let r;
+        // No answer at all (offline, or the server is still waking up)
+        try { r = await momentoFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); }
+        catch { throw new Error('Momento can’t be reached right now. Try again in a minute.'); }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Something went wrong. Try again.');
+        return d;
+      }
+      // Runs one sign-in attempt, keeping the buttons quiet until it settles
+      async function attempt(run) {
+        if (busy) return;
+        busy = true; error.textContent = '';
+        form.querySelectorAll('button[type="submit"], .auth-alt').forEach((b) => { b.disabled = true; });
+        try { await run(); } catch (err) { if (err?.message) error.textContent = err.message; }
+        finally { busy = false; form.querySelectorAll('button[type="submit"], .auth-alt').forEach((b) => { b.disabled = false; }); }
+      }
+
+      // ---- Google and Apple: their scripts load ahead of time, so the popup opens right on the click ----
+      const loadScript = (src) => new Promise((ok, fail) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = ok; s.onerror = fail; document.head.append(s); });
+      const providers = { google: null, apple: false };
+      momentoFetch('/api/config').then((r) => r.json()).then(async (cfg) => {
+        if (cfg.googleClientId) {
+          await loadScript('https://accounts.google.com/gsi/client');
+          providers.google = google.accounts.oauth2.initCodeClient({
+            client_id: cfg.googleClientId,
+            scope: 'openid email profile',
+            ux_mode: 'popup',
+            callback: (res) => attempt(async () => {
+              if (res.error) throw new Error(res.error === 'access_denied' ? '' : 'Google sign-in didn’t go through. Try again.');
+              const d = await send('/api/auth/google', { code: res.code });
+              signedIn(d.user, 'Signed in with Google.');
+            }),
+            error_callback: () => {},   // the person closed the popup
+          });
+        }
+        if (cfg.apple) {
+          await loadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js');
+          providers.apple = true;
+        }
+      }).catch(() => {});
+      // Apple's popup needs a fresh nonce from the server, fetched as soon as the dialog opens
+      async function prepareApple() {
+        if (!providers.apple) return;
+        const r = await momentoFetch('/api/auth/apple/start');
+        if (!r.ok) return;
+        const { clientId, redirectURI, nonce } = await r.json();
+        AppleID.auth.init({ clientId, scope: 'name email', redirectURI, usePopup: true, nonce });
+      }
+      dialog.addEventListener('focusin', () => { if (providers.apple && !dialog.dataset.appleReady) { dialog.dataset.appleReady = '1'; prepareApple(); } });
+      dialog.addEventListener('close', () => { delete dialog.dataset.appleReady; });
+
+      form.querySelectorAll('.auth-alt').forEach((b) => b.addEventListener('click', () => {
+        const p = b.dataset.provider;
+        if (p === 'Google') {
+          if (!providers.google) { error.textContent = 'Google sign-in isn’t set up yet.'; return; }
+          providers.google.requestCode();
+          return;
+        }
+        if (!providers.apple) { error.textContent = 'Apple sign-in isn’t set up yet.'; return; }
+        attempt(async () => {
+          let res;
+          try { res = await AppleID.auth.signIn(); }
+          catch (err) { throw new Error(err?.error === 'popup_closed_by_user' ? '' : 'Apple sign-in didn’t go through. Try again.'); }
+          finally { delete dialog.dataset.appleReady; prepareApple(); }   // each nonce is good for one try
+          const d = await send('/api/auth/apple', { idToken: res.authorization.id_token, name: res.user?.name });
+          signedIn(d.user, 'Signed in with Apple.');
+        });
+      }));
+
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        const signup = form.dataset.mode === 'signup';
+        const mode = form.dataset.mode, signup = mode === 'signup';
         const name = field('name').value.trim(), email = field('email').value.trim(), pass = field('password').value;
+        if (mode === 'forgot') {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
+          attempt(async () => {
+            await send('/api/auth/password/forgot', { email });
+            body.hidden = true; done.hidden = false;
+            document.getElementById('authDoneTitle').textContent = 'Check your email';
+            // Same message whether or not the address has an account
+            document.getElementById('authDoneSub').textContent = `If ${email} has a Momento account, a reset link is on its way. It works for an hour.`;
+          });
+          return;
+        }
+        if (mode === 'reset') {
+          if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
+          attempt(async () => {
+            const d = await send('/api/auth/password/reset', { token: resetToken, password: pass });
+            resetToken = null; field('password').value = '';
+            signedIn(d.user, 'Your new password is saved.');
+          });
+          return;
+        }
         if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
         if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
-        field('password').value = '';
-        signedIn(signup ? name : '', signup ? 'Your account is ready.' : 'You’re logged in.', email);
+        attempt(async () => {
+          const d = await send(signup ? '/api/auth/signup' : '/api/auth/login', signup ? { name, email, password: pass } : { email, password: pass });
+          field('password').value = '';
+          signedIn(d.user, signup ? 'Your account is ready.' : 'You’re logged in.');
+        });
       });
       document.querySelectorAll('[data-auth]').forEach((b) => b.addEventListener('click', () => window.openAuth({ mode: b.dataset.auth })));
+
+      // Links that land here: from My albums when logged out (?login=albums), the confirm link in
+      // the welcome email (?verified=1 or invalid), and a password reset email (?reset=<token>).
+      // The account (shared script) is ready once the page has loaded.
+      addEventListener('DOMContentLoaded', async () => {
+        const params = new URLSearchParams(location.search);
+        const backTo = { albums: 'albums.html', settings: 'settings.html' }[params.get('login')] || null;
+        const verified = params.get('verified'), reset = params.get('reset');
+        if (verified || reset) history.replaceState(null, '', location.pathname + location.hash);
+        if (verified) {
+          notice(verified === 'invalid' ? 'That link has expired' : 'Email confirmed', verified === 'invalid'
+            ? 'Confirm links work once, for 24 hours. Log in and ask for a new one on My albums.'
+            : 'Thanks. Your account is all set.', 3200);
+          return;
+        }
+        if (reset) {
+          resetToken = reset;
+          window.openAuth({ mode: 'reset' });
+          field('password').focus();
+          return;
+        }
+        if (!backTo) return;
+        const user = await window.Momento.account.ready;
+        if (user) { location.replace(backTo); return; }
+        window.openAuth({ mode: 'login', onDone: () => { if (window.Momento.account.get()) location.assign(backTo); } });
+      });
     })();
 
     // ---- Sections: rise-in, steps, phone, zone slider, switches, FAQ, counters ----
@@ -3304,35 +3452,47 @@
       onChange(fn) { themeListeners.add(fn); },
     };
   
-    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
+    // ---- Account: the signed-in person, from the Momento API, shared by every page ----
+    // The tab's last known copy shows straight away; the server's answer replaces it a moment later.
     const AKEY = 'momento-account';
     const NOTIFY = { photos: true, closing: true, recap: false };
     const accountListeners = new Set();
     const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
     let current = null;
-    try {
-      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
-      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
-    } catch (e) {}
-    current = norm(current);
+    try { current = norm(JSON.parse(sessionStorage.getItem(AKEY) || 'null')); } catch (e) {}
     const persist = () => {
       try {
         if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
-        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
+        else sessionStorage.removeItem(AKEY);
       } catch (e) {}
     };
     const emit = () => accountListeners.forEach((fn) => fn(current));
+    const adopt = (user) => { current = norm(user); persist(); emit(); return current; };
+    // One call to the API: JSON in and out, with its { error } message thrown as an Error
+    async function momentoApi(path, { method = 'GET', body } = {}) {
+      let r;
+      try {
+        r = await momentoFetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body && JSON.stringify(body) });
+      } catch (e) { throw new Error('Momento can’t be reached right now. Try again in a minute.'); }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { const err = new Error(d.error || 'Something went wrong. Try again.'); err.status = r.status; throw err; }
+      return d;
+    }
+    Momento.api = momentoApi;
     Momento.account = {
       get() { return current; },
-      set(patch) {
-        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
-        persist(); emit();
-        return current;
-      },
-      clear() { current = null; persist(); emit(); },
+      // Settles once the server has said who (if anyone) is logged in
+      ready: momentoApi('/api/auth/me').then((d) => adopt(d.user)).catch(() => current),
+      async set(patch) { return adopt((await momentoApi('/api/auth/me', { method: 'PATCH', body: patch })).user); },
+      // Emails a confirm link to the new address; the account keeps its email until it's opened
+      changeEmail(email, password) { return momentoApi('/api/auth/email', { method: 'POST', body: { email, password } }); },
+      async remove(password) { await momentoApi('/api/auth/me', { method: 'DELETE', body: { password } }); adopt(null); },
+      async clear() { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (e) {} adopt(null); },
+      // After signing up or logging in, with the user the server sent back
+      signedIn(user) { return adopt(user); },
       onChange(fn) { accountListeners.add(fn); },
     };
-  
+
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
     const ICON = {
@@ -3346,7 +3506,7 @@
       system: svg('<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/>', 16),
     };
     const first = (n) => (n || '').trim().split(/\s+/)[0] || '';
-    const SUPPORT = 'support@hexarch.org';   // placeholder address
+    const SUPPORT = 'team@hexarch.org';
   
     // The custom cursor can't draw above a modal, so the normal cursor comes back while one is open
     let cursorWas = false;
@@ -3408,9 +3568,10 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
+          <p class="acct-sub">Changes show on every page straight away.</p>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
+          <label class="acct-field" data-pass hidden><span>Your password, to change your email</span><input name="password" type="password" autocomplete="current-password"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
             <b>Email me when</b>
             <div class="acct-row"><span><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="acct-sw" type="button" role="switch" aria-label="Someone adds photos to an album I’m in" aria-checked="true" data-key="photos"></button></div>
@@ -3426,21 +3587,39 @@
       const switches = [...d.querySelectorAll('.acct-sw')];
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      // A new email needs the password (for password accounts) and is confirmed by email
+      const passRow = d.querySelector('[data-pass]');
+      const emailChanged = () => !!current && form.email.value.trim().toLowerCase() !== current.email;
+      form.email.addEventListener('input', () => { passRow.hidden = !(emailChanged() && current.hasPassword); });
+      let saving = false;
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saving) return;
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        if (emailChanged() && current.hasPassword && !form.password.value) { say('Enter your password to change your email.', true); form.password.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        Momento.account.set({ name, email, notify });
-        say('Saved');
-        setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+        saving = true; say('Saving…');
+        try {
+          const moving = emailChanged();
+          await Momento.account.set({ name, notify });
+          if (moving) {
+            await Momento.account.changeEmail(email, form.password.value);
+            form.email.value = current.email; form.password.value = ''; passRow.hidden = true;
+            say(`Saved. Open the link we sent to ${email} to switch to it.`);
+            return;
+          }
+          say('Saved');
+          setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+        } catch (err) { say(err.message, true); }
+        finally { saving = false; }
       });
       const launch = d.launch;
       d.launch = () => {
         const a = current || norm({});
-        form.name.value = a.name; form.email.value = a.email;
+        form.name.value = a.name; form.email.value = a.email; form.password.value = ''; passRow.hidden = true;
         switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
         say('');
         launch();
@@ -3544,7 +3723,7 @@
           const act = item.dataset.act;
           if (act === 'settings') Momento.openSettings(btn);
           else if (act === 'help') Momento.openHelp(btn);
-          else { Momento.account.clear(); if (onLogout) onLogout(); }
+          else Momento.account.clear().then(() => { if (onLogout) onLogout(); });
         });
   
         const syncSeg = () => {
@@ -3568,7 +3747,7 @@
         built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
-        built.headMail.textContent = (a && a.email) || 'Preview account';
+        built.headMail.textContent = (a && a.email) || '';
       }
       accountListeners.add(render);
       render();

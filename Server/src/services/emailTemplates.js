@@ -58,3 +58,55 @@ export function passwordChangedHtml(user) {
     footer: 'If it wasn’t you, use “Forgot your password?” on the Momento log in screen straight away to take your account back, and reply to this email so we can help.',
   });
 }
+
+export function emailChangeHtml(user, link, newEmail, hours = 24) {
+  const first = firstName(user);
+  return layout({
+    heading: 'Confirm your new email',
+    paragraphs: [`${first ? `Hi ${first}, you` : 'You'} asked to change the email on your Momento account to ${newEmail}. Tap the button to confirm it’s yours.`],
+    button: { href: link, label: 'Use this email' },
+    footer: `The link works for ${hours} hours. Until then, your account keeps its current email. If you didn’t ask for this, ignore this email.`,
+  });
+}
+
+export function emailChangeNoticeHtml(user, newEmail) {
+  const first = firstName(user);
+  return layout({
+    heading: 'Your email is about to change',
+    paragraphs: [
+      `${first ? `Hi ${first}, someone` : 'Someone'} signed in to your Momento account asked to move it to ${newEmail}. Nothing changes until that address confirms it.`,
+      'If this was you, there’s nothing else to do.',
+    ],
+    footer: 'If it wasn’t you, reset your password from the Momento log in screen straight away, and reply to this email so we can help.',
+  });
+}
+
+export function supportHtml({ name, email, topic, message, account }) {
+  return layout({
+    heading: `Support: ${topic}`,
+    paragraphs: [`From ${name} <${email}>${account ? ` (Momento account ${account})` : ' (not logged in)'}`, ...message.split(/\n{2,}/)],
+    footer: 'Reply to this email to answer them directly.',
+  });
+}
+
+export function reminderHtml(guest, album, hostName, link) {
+  const first = firstName(guest);
+  return layout({
+    heading: `Add your photos to ${album.name}`,
+    paragraphs: [`${first ? `Hi ${first}, ` : ''}${hostName || 'The host'} would love your photos from ${album.name}. Everyone in the album will see what you add, and the album takes new photos until ${album.closesLabel}.`],
+    button: { href: link, label: 'Add my photos' },
+    footer: 'You’re getting this because you joined this album and the host sent a reminder.',
+  });
+}
+
+export function inviteHtml(album, hostName, link, code) {
+  return layout({
+    heading: `${hostName || 'Someone'} invited you to ${album.name}`,
+    paragraphs: [
+      `${hostName || 'The host'} is collecting everyone’s photos from ${album.name}${album.place ? ` (${album.place})` : ''} in one shared Momento album.`,
+      `Join to see the photos and add yours. The album code is ${code}.`,
+    ],
+    button: { href: link, label: 'Join the album' },
+    footer: 'If you don’t know who sent this, you can ignore it.',
+  });
+}

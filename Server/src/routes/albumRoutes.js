@@ -40,3 +40,16 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 albumRoutes.post('/:id/photos', albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', albums.download);
+
+// Host actions that send email: invites are capped at 20 an hour per account (reminders are
+// already limited to one a day per album in the controller)
+const inviteLimit = rateLimit({
+  windowMs: 60 * 60000,
+  limit: 20,
+  keyGenerator: (req) => `user:${req.user.id}`,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'That’s a lot of invites at once. Wait a little before sending more.' },
+});
+albumRoutes.post('/:id/remind', albums.remind);
+albumRoutes.post('/:id/invites', inviteLimit, albums.invite);

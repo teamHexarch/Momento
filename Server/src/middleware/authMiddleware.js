@@ -6,7 +6,8 @@ import { HttpError } from '../utils/httpError.js';
 // last password reset no longer counts, which is how a reset logs out every other device.
 export async function loadUser(req, res, next) {
   const session = readSession(req);
-  const user = session?.sub ? await User.findById(session.sub).catch(() => null) : null;
+  // With the password hash, so routes can tell password accounts apart (it never leaves the server)
+  const user = session?.sub ? await User.findById(session.sub).select('+passwordHash').catch(() => null) : null;
   const changed = user?.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
   req.user = user && session.iat >= changed ? user : null;
   next();

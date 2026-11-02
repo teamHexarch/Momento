@@ -57,5 +57,7 @@ export const config = {
     // Where replies go; defaults to the team mailbox so "reply to this email" reaches a person
     replyTo: env.EMAIL_REPLY_TO || env.SENDER_EMAIL || '',
   },
+  // Where the support form's messages go
+  supportEmail: env.SUPPORT_EMAIL || env.EMAIL_REPLY_TO || env.SENDER_EMAIL || '',
   isProduction: env.NODE_ENV === 'production',
 };

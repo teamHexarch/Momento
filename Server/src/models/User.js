@@ -14,6 +14,12 @@ const userSchema = new mongoose.Schema({
   lastLoginAt: Date,
   // Logins issued before this moment are refused (set when the password is reset)
   passwordChangedAt: Date,
+  // Which emails they want (only the choice is stored; sending them comes later)
+  notify: {
+    photos: { type: Boolean, default: true },    // someone adds photos to an album I'm in
+    closing: { type: Boolean, default: true },   // an album is about to close
+    recap: { type: Boolean, default: false },    // weekly recap
+  },
 }, { timestamps: true });
 
 // What the client is allowed to see
@@ -25,6 +31,8 @@ userSchema.methods.toPublic = function () {
     avatarUrl: this.avatarUrl,
     emailVerified: this.emailVerified,
     plan: this.plan,
+    hasPassword: !!this.passwordHash,
+    notify: { photos: this.notify?.photos ?? true, closing: this.notify?.closing ?? true, recap: this.notify?.recap ?? false },
     providers: [this.googleId && 'google', this.appleId && 'apple'].filter(Boolean),
   };
 };

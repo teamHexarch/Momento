@@ -20,7 +20,14 @@ export const emailFrom = driver === resend ? config.email.from : config.email.se
  * Throws EmailError with a readable reason when the provider refuses.
  */
 export async function sendEmail({ to, subject, html, replyTo = config.email.replyTo }) {
-  if (!driver) throw new EmailError('Email isn’t set up: fill in RESEND_API_KEY and EMAIL_FROM (or the MS_* settings) in .env.');
+  if (!driver) {
+    // Locally, with no provider, emails are printed instead so every feature can still be tried
+    if (!config.isProduction) {
+      console.log(`[email not set up] To: ${[].concat(to).join(', ')} | Subject: ${subject}${replyTo ? ` | Reply-To: ${replyTo}` : ''}`);
+      return;
+    }
+    throw new EmailError('Email isn’t set up: fill in RESEND_API_KEY and EMAIL_FROM (or the MS_* settings) in .env.');
+  }
   const recipients = [].concat(to).filter(Boolean);
   if (!recipients.length) throw new EmailError('No recipient given.');
   await driver.send({ to: recipients, subject, html, replyTo });

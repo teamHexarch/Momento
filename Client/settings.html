@@ -35,6 +35,7 @@
   <title>Settings | Momento</title>
   <meta name="description" content="Upload rules, cloud destination, privacy and appearance for your Momento account.">
   <link rel="icon" href="assets/momento-icon.png">
+  <script src="assets/api.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -355,6 +356,14 @@
       .s-group { opacity: 1; translate: none; transition: none; }
       .s-sw::after, .s-check, .s-toast, .s-bar i { transition: none; }
     }
+      /* Delete account: the confirm step under the Account rows */
+    .s-delete { display: grid; gap: .8rem; padding: 1rem 1.1rem 1.2rem; border-top: 1px solid rgba(46,44,58,.1); }
+    .s-delete[hidden] { display: none; }
+    .s-delete p { margin: 0; line-height: 1.6; }
+    .s-delete-actions { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }
+    .s-danger { --fill: #9A3D3D; }
+    .s-group h2 small { font-weight: 500; opacity: .6; }
+    button:disabled { opacity: .6; pointer-events: none; }
   </style>
   <!-- @shared:css (generated block; the same in index.html and albums.html) -->
   <style>
@@ -1014,6 +1023,7 @@
             <form class="s-list panel s-profile" id="profileForm" novalidate>
               <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name" placeholder="For example Priya Shah"></label>
               <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
+              <label class="acct-field" id="profilePass" hidden><span>Your password, to change your email</span><input name="password" type="password" autocomplete="current-password"></label>
               <p class="s-note" id="profileNote" role="status"></p>
               <button class="btn btn-dark btn-sm" type="submit">Save profile</button>
             </form>
@@ -1031,12 +1041,12 @@
           </section>
 
           <section class="s-group" style="--d: .37s" aria-labelledby="g-dest">
-            <h2 id="g-dest">Where photos go</h2>
+            <h2 id="g-dest">Where photos go <small>coming soon</small></h2>
             <div class="s-list panel" role="radiogroup" aria-label="Cloud destination">
-              <button class="s-row" type="button" role="radio" aria-checked="true" data-dest="gdrive"><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Google Drive</b><small>Connected · 2 TB plan</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="icloud"><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>iCloud Drive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="dropbox"><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Dropbox</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="onedrive"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>OneDrive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="gdrive"><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Google Drive</b><small>Coming soon</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="icloud"><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>iCloud Drive</b><small>Coming soon</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="dropbox"><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Dropbox</b><small>Coming soon</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="onedrive"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>OneDrive</b><small>Coming soon</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
             </div>
           </section>
 
@@ -1074,12 +1084,12 @@
           </section>
 
           <section class="s-group" style="--d: .46s" aria-labelledby="g-store">
-            <h2 id="g-store">Storage on this browser</h2>
+            <h2 id="g-store">Storage on this browser <small>coming soon</small></h2>
             <div class="s-list panel">
               <div class="s-store">
-                <div class="s-store-top"><b id="storeTotal">2.1 GB used</b><button class="btn btn-light btn-sm" type="button" id="clearCache"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg>Clear cache</button></div>
-                <div class="s-bar" aria-hidden="true"><i style="--c:#AFC0F0;--w:58%"></i><i id="barPreviews" style="--c:#C9C0E2;--w:16%"></i><i style="--c:#C6DEDA;--w:8%"></i></div>
-                <div class="s-legend"><span style="--c:#AFC0F0">Upload queue 1.2 GB</span><span id="legPreviews" style="--c:#C9C0E2">Previews 340 MB</span><span style="--c:#C6DEDA">Offline albums 170 MB</span></div>
+                <div class="s-store-top"><b id="storeTotal">Nothing stored on this browser yet</b><button class="btn btn-light btn-sm" type="button" id="clearCache"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg>Clear cache</button></div>
+                <div class="s-bar" aria-hidden="true"><i style="--c:#AFC0F0;--w:0%"></i><i id="barPreviews" style="--c:#C9C0E2;--w:0%"></i><i style="--c:#C6DEDA;--w:0%"></i></div>
+                <div class="s-legend"><span style="--c:#AFC0F0">Upload queue</span><span id="legPreviews" style="--c:#C9C0E2">Previews</span><span style="--c:#C6DEDA">Offline albums</span></div>
               </div>
             </div>
           </section>
@@ -1088,7 +1098,13 @@
             <h2 id="g-account">Account</h2>
             <div class="s-list panel">
               <button class="s-row" type="button" id="logOut"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10"/></svg></span><span class="s-text"><b>Log out</b><small>You can sign back in any time</small></span></button>
-              <button class="s-row is-danger" type="button" id="deleteAcct"><span class="s-chip" style="--c:#F0CFCF"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><span class="s-text"><b>Delete account</b><small>Removes your albums and photos for good</small></span></button>
+              <button class="s-row is-danger" type="button" id="deleteAcct" aria-expanded="false" aria-controls="deleteBox"><span class="s-chip" style="--c:#F0CFCF"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><span class="s-text"><b>Delete account</b><small>Removes your albums and photos for good</small></span></button>
+              <form class="s-delete" id="deleteBox" hidden novalidate>
+                <p>This deletes your account, every album you host (with all its photos, for every guest), and the photos you added to other albums. It can’t be undone.</p>
+                <label class="acct-field" id="deletePassRow"><span>Your password</span><input name="password" type="password" autocomplete="current-password"></label>
+                <p class="s-note" id="deleteNote" role="status"></p>
+                <div class="s-delete-actions"><button class="btn btn-light btn-sm" type="button" id="deleteCancel">Keep my account</button><button class="btn btn-dark btn-sm s-danger" type="submit">Delete for good</button></div>
+              </form>
             </div>
           </section>
 
@@ -1342,10 +1358,12 @@
         if (key.startsWith('notify.')) {
           const k = key.slice(7);
           S.notify[k] = on;
-          if (M.account.get()) M.account.set({ notify: { [k]: on } });
+          if (M.account.get()) M.account.set({ notify: { [k]: on } }).catch((err) => toast('Not saved', err.message));
         } else S[key] = on;
         persist();
       };
+      // Once the server says who's logged in, its email choices replace this browser's
+      M.account.ready.then(() => document.querySelectorAll('.s-sw[data-key^="notify."]').forEach((sw) => sw.setAttribute('aria-checked', get(sw.dataset.key))));
       document.querySelectorAll('.s-sw[data-key]').forEach((sw) => {
         sw.setAttribute('aria-checked', get(sw.dataset.key));
         sw.addEventListener('click', () => {
@@ -1360,34 +1378,49 @@
         if (!e.target.closest('.s-sw')) row.querySelector('.s-sw').click();
       }));
 
-      // Where photos go
-      const dests = [...document.querySelectorAll('[data-dest]')];
-      dests.forEach((r) => r.setAttribute('aria-checked', r.dataset.dest === S.dest));
-      dests.forEach((r) => r.addEventListener('click', () => {
-        S.dest = r.dataset.dest; persist();
-        dests.forEach((x) => {
-          x.setAttribute('aria-checked', x === r);
-          x.querySelector('small').textContent = x === r ? 'Connected · photos land in /Momento' : (x.dataset.dest === 'gdrive' ? 'Connected · 2 TB plan' : 'Sign in to connect');
-        });
-        toast('Destination changed', DEST_NAME[S.dest]);
-      }));
-      dests.find((r) => r.dataset.dest === S.dest).querySelector('small').textContent = 'Connected · photos land in /Momento';
+      // Where photos go: not built yet, so nothing is chosen and every row says so
+      document.querySelectorAll('[data-dest]').forEach((r) => r.addEventListener('click', () => toast('Coming soon', 'Photos stay safe in Momento for now')));
 
-      // Profile: the same name and email the account menu shows
+      // Profile: the same name and email the account menu shows. Logged out, it asks you to log in first.
       const form = document.getElementById('profileForm'), note = document.getElementById('profileNote');
-      const fill = () => { const a = M.account.get(); form.name.value = a ? a.name : ''; form.email.value = a ? a.email : ''; };
+      const passRow = document.getElementById('profilePass');
+      const fill = () => { const a = M.account.get(); form.name.value = a ? a.name : ''; form.email.value = a ? a.email : ''; form.password.value = ''; passRow.hidden = true; };
       fill();
       M.account.onChange(() => { if (!form.contains(document.activeElement)) fill(); });
       const say = (msg, bad) => { note.textContent = msg; note.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      const emailChanged = () => { const a = M.account.get(); return !!a && form.email.value.trim().toLowerCase() !== a.email; };
+      form.email.addEventListener('input', () => { passRow.hidden = !(emailChanged() && M.account.get().hasPassword); });
+      M.account.ready.then((a) => { if (!a) say('Log in to edit your profile and email choices.'); });
+      let saving = false;
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saving) return;
+        const a = M.account.get();
+        if (!a) { location.href = 'index.html?login=settings'; return; }
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
-        // A first save creates the account, carrying over the notification choices already made here
-        M.account.set(M.account.get() ? { name, email } : { name, email, notify: S.notify });
-        say(''); toast('Profile saved', name);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        const moving = emailChanged();
+        if (moving && a.hasPassword && !form.password.value) { say('Enter your password to change your email.', true); form.password.focus(); return; }
+        saving = true; say('Saving…');
+        try {
+          await M.account.set({ name });
+          if (moving) {
+            await M.account.changeEmail(email, form.password.value);
+            fill();
+            say(`Open the link we sent to ${email} to switch to it. Until then, your email stays ${a.email}.`);
+          } else say('');
+          toast('Profile saved', name);
+        } catch (err) { say(err.message, true); }
+        finally { saving = false; }
       });
+      // Back from the link in an email-change email
+      const changed = new URLSearchParams(location.search).get('email');
+      if (changed) {
+        history.replaceState(null, '', location.pathname + location.hash);
+        const msg = { changed: ['Email changed', 'Your account now uses your new address'], taken: ['Email not changed', 'Another account already uses that address'], invalid: ['That link has expired', 'Ask for a new one by changing your email again'] }[changed];
+        if (msg) setTimeout(() => toast(...msg), 600);
+      }
 
       // Appearance: shares the choice with the account menu and every other page
       const seg = document.getElementById('appSeg'), segBtns = [...seg.querySelectorAll('button')];
@@ -1395,20 +1428,37 @@
       segBtns.forEach((b) => b.addEventListener('click', () => { M.theme.set(b.dataset.theme); toast('Appearance', b.textContent.trim()); }));
       M.theme.onChange(syncSeg); syncSeg();
 
-      // Storage
-      let cleared = false;
-      document.getElementById('clearCache').addEventListener('click', () => {
-        if (cleared) { toast('Nothing to clear', 'The cache is already empty'); return; }
-        cleared = true;
-        document.getElementById('barPreviews').classList.add('is-cleared');
-        document.getElementById('legPreviews').classList.add('is-cleared');
-        document.getElementById('storeTotal').textContent = '1.8 GB used';
-        toast('Cache cleared', '340 MB freed');
-      });
+      // Storage: not built yet
+      document.getElementById('clearCache').addEventListener('click', () => toast('Coming soon', 'Nothing is stored on this browser yet'));
 
       // Account
-      document.getElementById('logOut').addEventListener('click', () => { M.account.clear(); location.href = 'index.html'; });
-      document.getElementById('deleteAcct').addEventListener('click', () => toast('Preview only', 'Accounts can’t be deleted in this preview'));
+      document.getElementById('logOut').addEventListener('click', () => M.account.clear().then(() => { location.href = 'index.html'; }));
+      // Delete account: opens a confirm step that asks for the password (Google/Apple-only accounts have none)
+      const delBtn = document.getElementById('deleteAcct'), delBox = document.getElementById('deleteBox'), delNote = document.getElementById('deleteNote');
+      const openDelete = (open) => {
+        delBox.hidden = !open; delBtn.setAttribute('aria-expanded', open);
+        delNote.textContent = ''; delBox.password.value = '';
+        const a = M.account.get();
+        document.getElementById('deletePassRow').hidden = !(a && a.hasPassword);
+        if (open) (a && a.hasPassword ? delBox.password : delBox.querySelector('[type="submit"]')).focus();
+      };
+      delBtn.addEventListener('click', () => {
+        if (!M.account.get()) { location.href = 'index.html?login=settings'; return; }
+        openDelete(delBox.hidden);
+      });
+      document.getElementById('deleteCancel').addEventListener('click', () => openDelete(false));
+      delBox.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const a = M.account.get();
+        if (a.hasPassword && !delBox.password.value) { delNote.textContent = 'Enter your password to delete your account.'; delNote.classList.add('is-error'); delBox.password.focus(); return; }
+        const btn = delBox.querySelector('[type="submit"]');
+        btn.disabled = true; delNote.classList.remove('is-error'); delNote.textContent = 'Deleting…';
+        try {
+          await M.account.remove(delBox.password.value);
+          delNote.textContent = 'Your account is deleted.';
+          setTimeout(() => { location.href = 'index.html'; }, 900);
+        } catch (err) { btn.disabled = false; delNote.classList.add('is-error'); delNote.textContent = err.message; }
+      });
     });
 
     // ---- The header gains a veil once scrolled, and the page opens ----
@@ -1512,35 +1562,47 @@
       onChange(fn) { themeListeners.add(fn); },
     };
   
-    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
+    // ---- Account: the signed-in person, from the Momento API, shared by every page ----
+    // The tab's last known copy shows straight away; the server's answer replaces it a moment later.
     const AKEY = 'momento-account';
     const NOTIFY = { photos: true, closing: true, recap: false };
     const accountListeners = new Set();
     const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
     let current = null;
-    try {
-      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
-      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
-    } catch (e) {}
-    current = norm(current);
+    try { current = norm(JSON.parse(sessionStorage.getItem(AKEY) || 'null')); } catch (e) {}
     const persist = () => {
       try {
         if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
-        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
+        else sessionStorage.removeItem(AKEY);
       } catch (e) {}
     };
     const emit = () => accountListeners.forEach((fn) => fn(current));
+    const adopt = (user) => { current = norm(user); persist(); emit(); return current; };
+    // One call to the API: JSON in and out, with its { error } message thrown as an Error
+    async function momentoApi(path, { method = 'GET', body } = {}) {
+      let r;
+      try {
+        r = await momentoFetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body && JSON.stringify(body) });
+      } catch (e) { throw new Error('Momento can’t be reached right now. Try again in a minute.'); }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { const err = new Error(d.error || 'Something went wrong. Try again.'); err.status = r.status; throw err; }
+      return d;
+    }
+    Momento.api = momentoApi;
     Momento.account = {
       get() { return current; },
-      set(patch) {
-        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
-        persist(); emit();
-        return current;
-      },
-      clear() { current = null; persist(); emit(); },
+      // Settles once the server has said who (if anyone) is logged in
+      ready: momentoApi('/api/auth/me').then((d) => adopt(d.user)).catch(() => current),
+      async set(patch) { return adopt((await momentoApi('/api/auth/me', { method: 'PATCH', body: patch })).user); },
+      // Emails a confirm link to the new address; the account keeps its email until it's opened
+      changeEmail(email, password) { return momentoApi('/api/auth/email', { method: 'POST', body: { email, password } }); },
+      async remove(password) { await momentoApi('/api/auth/me', { method: 'DELETE', body: { password } }); adopt(null); },
+      async clear() { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (e) {} adopt(null); },
+      // After signing up or logging in, with the user the server sent back
+      signedIn(user) { return adopt(user); },
       onChange(fn) { accountListeners.add(fn); },
     };
-  
+
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
     const ICON = {
@@ -1554,7 +1616,7 @@
       system: svg('<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/>', 16),
     };
     const first = (n) => (n || '').trim().split(/\s+/)[0] || '';
-    const SUPPORT = 'support@hexarch.org';   // placeholder address
+    const SUPPORT = 'team@hexarch.org';
   
     // The custom cursor can't draw above a modal, so the normal cursor comes back while one is open
     let cursorWas = false;
@@ -1616,9 +1678,10 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
+          <p class="acct-sub">Changes show on every page straight away.</p>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
+          <label class="acct-field" data-pass hidden><span>Your password, to change your email</span><input name="password" type="password" autocomplete="current-password"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
             <b>Email me when</b>
             <div class="acct-row"><span><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="acct-sw" type="button" role="switch" aria-label="Someone adds photos to an album I’m in" aria-checked="true" data-key="photos"></button></div>
@@ -1634,21 +1697,39 @@
       const switches = [...d.querySelectorAll('.acct-sw')];
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      // A new email needs the password (for password accounts) and is confirmed by email
+      const passRow = d.querySelector('[data-pass]');
+      const emailChanged = () => !!current && form.email.value.trim().toLowerCase() !== current.email;
+      form.email.addEventListener('input', () => { passRow.hidden = !(emailChanged() && current.hasPassword); });
+      let saving = false;
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saving) return;
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        if (emailChanged() && current.hasPassword && !form.password.value) { say('Enter your password to change your email.', true); form.password.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        Momento.account.set({ name, email, notify });
-        say('Saved');
-        setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+        saving = true; say('Saving…');
+        try {
+          const moving = emailChanged();
+          await Momento.account.set({ name, notify });
+          if (moving) {
+            await Momento.account.changeEmail(email, form.password.value);
+            form.email.value = current.email; form.password.value = ''; passRow.hidden = true;
+            say(`Saved. Open the link we sent to ${email} to switch to it.`);
+            return;
+          }
+          say('Saved');
+          setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+        } catch (err) { say(err.message, true); }
+        finally { saving = false; }
       });
       const launch = d.launch;
       d.launch = () => {
         const a = current || norm({});
-        form.name.value = a.name; form.email.value = a.email;
+        form.name.value = a.name; form.email.value = a.email; form.password.value = ''; passRow.hidden = true;
         switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
         say('');
         launch();
@@ -1752,7 +1833,7 @@
           const act = item.dataset.act;
           if (act === 'settings') Momento.openSettings(btn);
           else if (act === 'help') Momento.openHelp(btn);
-          else { Momento.account.clear(); if (onLogout) onLogout(); }
+          else Momento.account.clear().then(() => { if (onLogout) onLogout(); });
         });
   
         const syncSeg = () => {
@@ -1776,7 +1857,7 @@
         built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
-        built.headMail.textContent = (a && a.email) || 'Preview account';
+        built.headMail.textContent = (a && a.email) || '';
       }
       accountListeners.add(render);
       render();

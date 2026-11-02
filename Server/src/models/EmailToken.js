@@ -4,8 +4,9 @@ import mongoose from 'mongoose';
 // can't be turned into working links. MongoDB deletes each row once it expires.
 const emailTokenSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  // 'verify' now; 'reset' is ready for password reset
-  purpose: { type: String, enum: ['verify', 'reset'], required: true },
+  // verify: confirm the address; reset: choose a new password; email: move the account to newEmail
+  purpose: { type: String, enum: ['verify', 'reset', 'email'], required: true },
+  newEmail: { type: String, lowercase: true, trim: true },
   tokenHash: { type: String, required: true, unique: true },
   expiresAt: { type: Date, required: true, index: { expires: 0 } },
 }, { timestamps: true });
