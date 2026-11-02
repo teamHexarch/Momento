@@ -145,7 +145,11 @@ async function socialSignIn(res, { provider, providerId, email, emailVerified, n
     if (user) {
       // Someone could have signed up with this address and a password before its real owner
       // arrived. The provider just proved ownership, so a password nobody confirmed is dropped.
-      if (!user.emailVerified) user.passwordHash = undefined;
+      // Whoever was logged in to it with that password is logged out too.
+      if (!user.emailVerified) {
+        user.passwordHash = undefined;
+        user.passwordChangedAt = new Date();
+      }
       user[idField] = providerId;
       user.emailVerified = true;
     } else {

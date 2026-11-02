@@ -40,16 +40,21 @@ app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 
 // Locally, the site itself comes from the Client folder too, so one address does everything.
 // In production the site is hosted on its own (FRONTEND_URL) and this server is API only.
-// Only page assets are served; notes, dev scripts and design screenshots stay private.
-const PUBLIC_FILE = /^\/(?!temporary screenshots\/)[^]*\.(html|css|js|png|jpe?g|svg|webp|ico|woff2?)$/i;
+// Only what the Pages workflow publishes is served: the two pages and simple files in assets/
+// (plain names, so not the design screenshot). Everything else in Client/ stays private.
+const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html']);
+const PUBLIC_ASSET = /^\/assets\/[\w-]+(\.[\w-]+)*\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i;
 if (!config.serveClient) {
   console.log(`API only: the site is served from ${config.frontendUrl}.`);
 } else if (fs.existsSync(config.clientDir)) {
   const serveClient = express.static(config.clientDir, { dotfiles: 'ignore' });
   app.use((req, res, next) => {
-    let p = req.path;
-    try { p = decodeURIComponent(p); } catch { return next(); }
-    return p === '/' || PUBLIC_FILE.test(p) ? serveClient(req, res, next) : next();
+    let p;
+    try { p = decodeURIComponent(req.path); } catch { return next(); }
+    // Judged on the path as written: anything with //, /./, /../ or a backslash is refused
+    // rather than tidied up, so it can't be dressed up to reach a private file
+    if (/\/\/|\/\.\.?(\/|$)|\\/.test(p)) return next();
+    return PUBLIC_PAGES.has(p) || PUBLIC_ASSET.test(p) ? serveClient(req, res, next) : next();
   });
 } else {
   console.warn(`Client folder not found at ${config.clientDir}; serving the API only.`);

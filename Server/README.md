@@ -171,7 +171,7 @@ The live setup: **the site on https://hexarch.org** (any static host) and **the 
 
 ### The API on Render
 
-1. Put the `Momento` folder in a Git repository (GitHub/GitLab). `Server/.gitignore` keeps `.env`, `node_modules` and uploaded photos out of it.
+1. The code is on GitHub at teamHexarch/Momento. `Server/.gitignore` keeps `.env`, `node_modules` and uploaded photos out of it.
 2. In Render: **New > Web Service**, pick the repository, then:
    - **Root Directory:** `Server`
    - **Runtime:** Node
@@ -184,7 +184,7 @@ The live setup: **the site on https://hexarch.org** (any static host) and **the 
    - `FRONTEND_URL=https://hexarch.org`
    - `CORS_ORIGINS=https://hexarch.org,https://www.hexarch.org`
    - Leave `PORT` out; Render sets it.
-4. **Settings > Custom Domains**: add `api.hexarch.org`, then create the DNS record Render shows (a CNAME from `api` to your `…onrender.com` address) where hexarch.org's DNS is managed. Render issues the HTTPS certificate itself.
+4. **Settings > Custom Domains**: add `api.hexarch.org`, then create the DNS record Render shows (a CNAME from `api` to your `…onrender.com` address) in GoDaddy's DNS for hexarch.org. Render issues the HTTPS certificate itself.
 5. **MongoDB Atlas > Network Access**: allow Render to connect. Either add Render's outbound IP addresses (shown on the service's **Connect** tab) or, more simply, `0.0.0.0/0` (the database password still protects it).
 
 **Photos must use R2 on Render.** Render wipes the service's own files on every deploy and restart, so set the four `R2_*` values (step 6 above) in Render's environment. The server warns in its log if it's running in production with photos on disk.
@@ -193,7 +193,9 @@ On Render's free plan the API goes to sleep after about 15 minutes without visit
 
 ### The site on hexarch.org
 
-Upload these from `Client/` to the root of hexarch.org: `index.html`, `albums.html` and the `assets/` folder. **Don't upload** `CLAUDE.md`, `serve.mjs`, `screenshot.mjs`, `temporary screenshots/` or `assets/Screenshot 2026-11-01 212834.png`: they're design-time files, and anything uploaded becomes public.
+The GitHub repo (teamHexarch/Momento) holds `Client/` and `Server/`. The workflow in `.github/workflows/pages.yml` publishes the site on every push that changes `Client/`, copying only `index.html`, `albums.html`, `CNAME` and the plain files in `assets/`. `CLAUDE.md`, `serve.mjs`, `screenshot.mjs` and the screenshots stay in the repo but are never served.
+
+Repo **Settings > Pages > Source** must be **GitHub Actions**, with the custom domain `hexarch.org`. Its DNS (GoDaddy) has GitHub Pages' four A records for `@`.
 
 ### Afterwards
 

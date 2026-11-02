@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { requireUser } from '../middleware/authMiddleware.js';
 import { HttpError } from '../utils/httpError.js';
@@ -15,12 +16,22 @@ const upload = multer({
   },
 });
 
+// Codes have ~17 billion combinations, but guessing is capped anyway: 30 tries an hour per account
+const joinLimit = rateLimit({
+  windowMs: 60 * 60000,
+  limit: 30,
+  keyGenerator: (req) => `user:${req.user.id}`,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many codes tried. Wait an hour, or check the code with the host.' },
+});
+
 export const albumRoutes = Router();
 albumRoutes.use(requireUser);
 
 albumRoutes.get('/', albums.list);
 albumRoutes.post('/', albums.create);
-albumRoutes.post('/join', albums.join);
+albumRoutes.post('/join', joinLimit, albums.join);
 
 albumRoutes.get('/:id', albums.show);
 albumRoutes.patch('/:id', albums.update);
