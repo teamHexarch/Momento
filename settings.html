@@ -1,0 +1,2070 @@
+<!doctype html>
+<html lang="en" data-page="settings">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
+  <script>
+  // Runs before first paint, so the page never flashes the wrong theme
+  (() => {
+    const root = document.documentElement;
+    let pref = 'system';
+    try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
+    const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    root.dataset.theme = dark ? 'dark' : 'light';
+    root.dataset.themePref = pref;
+    window.__theme = { target: +dark, a: +dark, b: +dark };   // read by the silk shader
+  
+    // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
+    // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
+    // veil (#intro) covers the page; if the script that runs it never loads, the veil is lifted anyway
+    try {
+      const page = root.dataset.page, seen = sessionStorage.getItem('momento-intro-' + page);
+      if (page && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\b/.test(location.search) || (!seen && !location.hash))) {
+        root.classList.add('intro-on');
+        setTimeout(() => {
+          if (!root.classList.contains('intro-on')) return;
+          root.classList.remove('intro-on');
+          document.dispatchEvent(new Event('momento:intro-reveal')); document.dispatchEvent(new Event('momento:intro-end'));
+        }, 10000);
+      }
+    } catch (e) {}
+  })();
+  </script>
+  <!-- /@shared:boot -->
+  <title>Settings | Momento</title>
+  <meta name="description" content="Upload rules, cloud destination, privacy and appearance for your Momento account.">
+  <link rel="icon" href="momento_assets/momento-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Same palette, type, glass, cursor and silk as the landing page (index.html) */
+    :root {
+      --fog: #ECEAF0;
+      --paper: #F8F7FA;
+      --dusk: #2E2C3A;
+      --slate: #5C596B;
+      --stone: #8A8697;
+      --copper: #9A603D;
+      --blush: #E6CDD6;
+      --lavender: #D9D0EA;
+      --tide: #6F9896;
+      --line: #D6D2DE;
+      --surface: #FFFFFF;
+      --font-main: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
+      --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+      --out: cubic-bezier(0.16, 1, 0.3, 1);
+      /* Spacing tokens */
+      --s1: .5rem; --s2: 1rem; --s3: 1.5rem; --s4: 2.5rem; --s5: 4rem; --s6: 6.5rem;
+    }
+
+    html { background: radial-gradient(120% 80% at 20% 10%, #FFF8EC, transparent 55%), linear-gradient(160deg, #EDECF2, #C9D0E4) fixed; }
+    body { margin: 0; overflow-x: hidden; font-family: var(--font-main); color: var(--dusk); -webkit-font-smoothing: antialiased; }
+
+    /* ---------- Background ---------- */
+    .bg { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
+    .grain {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .3;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .48 0 0 0 0 .55 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ---------- Cursor: droplet, with a focus frame over anything clickable ---------- */
+    .has-cursor, .has-cursor * { cursor: none !important; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
+    .has-cursor .cursor { opacity: 1; }
+    .cursor span {
+      position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
+      background: var(--dusk);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.5), 0 0 7px 1px rgba(188,178,236,.4);
+      transition: width .4s var(--spring), height .4s var(--spring), box-shadow .3s ease;
+    }
+    .cursor::before {
+      content: ""; position: absolute; left: 0; top: 0; width: 30px; height: 30px; translate: -50% -50%;
+      --c: var(--dusk); --l: 8px; --w: 2px;
+      background:
+        linear-gradient(var(--c), var(--c)) 0 0 / var(--l) var(--w),
+        linear-gradient(var(--c), var(--c)) 0 0 / var(--w) var(--l),
+        linear-gradient(var(--c), var(--c)) 100% 0 / var(--l) var(--w),
+        linear-gradient(var(--c), var(--c)) 100% 0 / var(--w) var(--l),
+        linear-gradient(var(--c), var(--c)) 0 100% / var(--l) var(--w),
+        linear-gradient(var(--c), var(--c)) 0 100% / var(--w) var(--l),
+        linear-gradient(var(--c), var(--c)) 100% 100% / var(--l) var(--w),
+        linear-gradient(var(--c), var(--c)) 100% 100% / var(--w) var(--l);
+      background-repeat: no-repeat;
+      filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 0 3px rgba(188,178,236,.5));
+      opacity: 0; scale: 1.9; rotate: 45deg;
+      transition: opacity .2s ease, scale .5s var(--spring), rotate .5s var(--spring);
+    }
+    .cursor-hover .cursor::before, .cursor-drag .cursor::before { opacity: 1; scale: 1; rotate: 0deg; }
+    .cursor-drag .cursor::before { scale: 1.4; }
+    .cursor-hover .cursor span, .cursor-drag .cursor span { width: 5px; height: 5px; box-shadow: 0 0 0 2px rgba(255,255,255,.6), 0 0 5px 1px rgba(188,178,236,.45); }
+    .cursor-down .cursor span { width: 8px; height: 8px; }
+    .cursor-hover.cursor-down .cursor::before, .cursor-drag.cursor-down .cursor::before { scale: .78; }
+
+    /* ---------- Liquid glass ---------- */
+    .glass, .panel, .modal-card {
+      border: 1.5px solid transparent;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.4) 46%, rgba(244,242,252,.58) 100%) padding-box,
+        linear-gradient(140deg, #fff 0%, rgba(255,255,255,.3) 32%, rgba(203,194,240,.6) 64%, rgba(255,255,255,.95) 100%) border-box;
+      box-shadow:
+        inset 0 1px 1px rgba(255,255,255,.95),
+        inset 0 -12px 26px -16px rgba(255,255,255,.75),
+        inset 0 0 32px rgba(255,255,255,.22),
+        0 0 0 .5px rgba(46,44,58,.05),
+        0 0 44px -8px rgba(188,178,236,.55),
+        0 26px 60px -30px rgba(60,50,90,.35);
+    }
+    .glass { --radius: 100px; position: relative; border-radius: var(--radius); box-shadow: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 18px rgba(255,255,255,.25), 0 0 26px -6px rgba(188,178,236,.55), 0 12px 30px -14px rgba(60,50,90,.3); }
+    .panel { --radius: 36px; position: relative; border-radius: var(--radius); }
+    /* Light follows the pointer across the glass */
+    .glass, .panel { --mx: 50%; --my: 0px; --shine: 0; }
+    .glass::after, .panel::after {
+      content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; padding: 1.5px;
+      opacity: var(--shine); transition: opacity .4s ease;
+      background: radial-gradient(140px circle at var(--mx) var(--my), #fff, rgba(255,255,255,.75) 32%, transparent 75%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+    }
+
+    /* ---------- Header ---------- */
+    .header {
+      position: fixed; top: 0; z-index: 100; width: 100%; box-sizing: border-box;
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;
+      padding: 1.6rem 4%; pointer-events: none;
+    }
+    .header > * { pointer-events: auto; }
+    .header::before {
+      content: ""; position: absolute; inset: 0 0 -2.5rem; z-index: -1; pointer-events: none;
+      background: linear-gradient(to bottom, rgba(236,236,243,.94) 0%, rgba(236,236,243,.8) 55%, rgba(236,236,243,0));
+      opacity: 0; transition: opacity .4s ease;
+    }
+    .header.is-veiled::before { opacity: 1; }
+    .brand { justify-self: start; display: flex; align-items: center; gap: .6rem; height: 2.95rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
+    .brand svg.glyph { width: 1.9rem; height: 1.9rem; transition: transform .35s var(--spring); }
+    .brand:hover svg.glyph { transform: scale(1.08) rotate(-4deg); }
+    .brand:active svg.glyph { transform: scale(.94); }
+    .brand-word { display: block; height: 1.3rem; aspect-ratio: 9217 / 1726; color: var(--dusk); }
+    .brand:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .nav { display: flex; gap: .25rem; padding: .35rem; }
+    .nav-item {
+      position: relative; z-index: 1; color: var(--slate); text-decoration: none;
+      font-size: .88rem; font-weight: 600; padding: .6rem 1.15rem; border-radius: 100px; white-space: nowrap;
+      transition: background-color .3s ease, color .3s ease;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.45); color: var(--dusk); }
+    .nav-item:active { background: rgba(255,255,255,.7); }
+    .nav-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .nav-item[aria-current="page"] { color: var(--dusk); background: var(--surface); box-shadow: inset 0 0 0 .5px #fff, 0 1px 2px rgba(46,44,58,.08), 0 4px 12px rgba(46,44,58,.1); }
+    /* Home is a link back to the home page; the small arrow beside it opens its sections */
+    .nav-wrap { position: relative; }
+    .nav-split { display: inline-flex; align-items: center; border-radius: 100px; }
+    .nav-split .nav-item { padding-right: .3rem; }
+    .nav-caret {
+      display: grid; place-items: center; width: 2rem; height: 2rem; margin-right: .3rem; padding: 0; border: none; border-radius: 50%;
+      background: none; color: var(--slate); cursor: pointer; transition: background-color .25s ease, color .25s ease;
+    }
+    .nav-caret:hover { background: rgba(46,44,58,.07); color: var(--dusk); }
+    .nav-caret:active { background: rgba(46,44,58,.12); }
+    .nav-caret:focus-visible { outline: 2px solid var(--dusk); outline-offset: 1px; }
+    .nav-caret svg { transition: transform .45s var(--spring); }
+    .nav-caret[aria-expanded="true"] svg { transform: rotate(180deg); }
+    .nav-menu {
+      position: absolute; top: calc(100% + .6rem); left: 0; z-index: 2; min-width: 15rem;
+      display: grid; padding: .4rem; --radius: 24px; border-radius: var(--radius); transform-origin: 2.5rem top;
+      opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden;
+      transition: opacity .25s ease, transform .5s var(--spring), visibility 0s .5s;
+    }
+    .nav-menu.is-open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity .25s ease, transform .5s var(--spring); }
+    .menu-item {
+      position: relative; z-index: 1; padding: .75rem 1rem; border-radius: 16px; color: var(--slate); text-decoration: none;
+      font-size: .92rem; font-weight: 600; transition: color .25s ease, background-color .25s ease;
+    }
+    .menu-item:hover { color: var(--dusk); background: rgba(255,255,255,.6); }
+    .menu-item:active { background: #fff; }
+    .menu-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: -2px; }
+    .me-slot { justify-self: end; }
+
+    /* ---------- Buttons: colour floods in from the cursor, label rolls ---------- */
+    .btn {
+      position: relative; overflow: hidden; isolation: isolate;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 3rem; padding: 0 1.4rem; border: none; border-radius: 100px;
+      font: 650 .95rem var(--font-main); text-decoration: none; cursor: pointer;
+      transform: translate(var(--bx, 0px), var(--by, 0px)) scale(var(--press, 1));
+      transition: transform .5s var(--out), color .35s ease, box-shadow .25s ease;
+    }
+    .btn:active { --press: .96; }
+    .btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .btn-fill {
+      position: absolute; z-index: -1; left: var(--fx, 50%); top: var(--fy, 50%);
+      width: 260%; aspect-ratio: 1; border-radius: 50%; background: var(--fill);
+      transform: translate(-50%, -50%) scale(0); transition: transform .6s var(--out);
+    }
+    .btn:hover .btn-fill { transform: translate(-50%, -50%) scale(1); }
+    .btn-label { display: inline-flex; align-items: flex-start; height: 1.3em; overflow: hidden; }
+    .roll { display: flex; flex-direction: column; flex: none; transition: transform .55s var(--out); }
+    .roll > span { display: inline-flex; flex: none; align-items: center; gap: .5rem; height: 1.3em; white-space: nowrap; }
+    .btn:hover .roll { transform: translateY(-50%); }
+    .btn-dark { background: var(--dusk); color: var(--paper); --fill: var(--copper); box-shadow: 0 8px 20px -10px rgba(46,44,58,.6); }
+    .btn-pearl {
+      background: linear-gradient(120deg, #D6CDEC 0%, #EBD3DC 52%, #C6DEDA 100%);
+      color: var(--dusk); --fill: var(--dusk);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.5), 0 0 20px -6px rgba(188,178,236,.8), 0 8px 18px -10px rgba(60,50,90,.45);
+    }
+    .btn-pearl:hover, .btn-light:hover { color: var(--paper); }
+    .btn-light { background: rgba(255,255,255,.92); color: var(--dusk); --fill: var(--dusk); box-shadow: inset 0 0 0 1px rgba(46,44,58,.08); }
+
+    /* ---------- Page ---------- */
+    .page-wrap { position: relative; z-index: 1; }
+    .page { position: relative; z-index: 1; width: min(1200px, 92%); margin: 0 auto; }
+
+    /* Opening: the headline rises out of a mask, then the rest follows in order */
+    .intro { opacity: 0; translate: 0 18px; transition: opacity .8s ease var(--d, 0s), translate 1s var(--out) var(--d, 0s); }
+    .is-ready .intro { opacity: 1; translate: 0 0; }
+    .mask { display: block; overflow: hidden; padding: .25em .15em .14em 0; margin: -.25em 0 -.14em; }
+    .rise { display: block; translate: 0 110%; transition: translate 1.2s var(--out) var(--d, .05s); }
+    .is-ready .rise, .is-in .rise { translate: 0 0; }
+
+    /* Ink: the landing page's headline treatment, lavender glow rising into cream */
+    @property --ink { syntax: '<number>'; inherits: true; initial-value: .3; }
+    .ink {
+      --lh: 1em; --base: .86; --horizon: #FFF6E8;
+      position: relative; color: transparent;
+      text-shadow: 0 -1px 0 rgba(30,24,40,.35), 0 1.5px 0 rgba(255,255,255,.85), 0 2px 7px rgba(255,255,255,.4);
+      transition: --ink .7s ease, translate 1.2s var(--out) var(--d, .05s);
+    }
+    .ink::after {
+      content: attr(data-text); position: absolute; top: -.25em; bottom: -.25em; left: 0; right: 0; padding-top: .25em;
+      white-space: pre-line; text-shadow: none; color: transparent; pointer-events: none;
+      background:
+        linear-gradient(to bottom,
+          var(--dusk) 0%,
+          var(--dusk) calc((var(--base) - var(--ink) * .62) * 100%),
+          #4C4F72 calc((var(--base) - var(--ink) * .4) * 100%),
+          #9AA5D0 calc((var(--base) - var(--ink) * .14) * 100%),
+          var(--horizon) calc(var(--base) * 100%),
+          #9AA5D0 calc((var(--base) + .05) * 100%),
+          #4C4F72 calc((var(--base) + .11) * 100%),
+          var(--dusk) calc((var(--base) + .15) * 100%))
+          0 .25em / 100% var(--lh) repeat-y;
+      -webkit-background-clip: text; background-clip: text;
+    }
+    .ink:hover { --ink: .78; }
+
+    /* ---------- Settings ----------
+       Two columns of groups, each a pane of glass holding rows: a small coloured icon chip, a title
+       with one line of explanation, and the control on the right. Changes apply as you make them. */
+    .s-head { padding: 8.2rem 0 var(--s4); }
+    .s-title { margin: 0; font-size: clamp(3rem, 6.4vw, 5.4rem); line-height: .98; font-weight: 700; letter-spacing: -.05em; }
+    .s-lede { max-width: 30rem; margin: var(--s3) 0 0; color: var(--slate); font-size: 1.12rem; line-height: 1.6; }
+    .s-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); align-items: start; margin-bottom: var(--s5); }
+    .s-stack { display: grid; gap: var(--s4); min-width: 0; }
+
+    /* Each group rises in as the page opens */
+    .s-group { --d: .2s; opacity: 0; translate: 0 22px; transition: opacity .7s ease var(--d), translate .9s var(--out) var(--d); }
+    .is-ready .s-group { opacity: 1; translate: 0 0; }
+    .s-group > h2 { margin: 0 0 .65rem; padding: 0 .55rem; color: var(--slate); font-size: .88rem; font-weight: 650; letter-spacing: -.005em; }
+    .s-group > h2 small { font-weight: 500; color: var(--stone); }
+    .s-list { --radius: 28px; display: grid; margin: 0; padding: .3rem 0; border-radius: var(--radius); }
+
+    .s-row {
+      position: relative; display: flex; align-items: center; gap: .95rem; width: 100%; box-sizing: border-box; min-height: 3.7rem; padding: .8rem 1.2rem;
+      border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 22px;
+      transition: background-color .25s ease;
+    }
+    .s-row + .s-row::before { content: ""; position: absolute; top: 0; left: 4.3rem; right: 1.2rem; height: 1px; background: rgba(46, 44, 58, .09); }
+    .s-row:hover { background: rgba(46, 44, 58, .04); }
+    .s-row:active { background: rgba(46, 44, 58, .07); }
+    .s-row:focus-visible { outline: 2px solid var(--dusk); outline-offset: -3px; }
+    .s-row.is-plain { cursor: default; }
+    .s-row.is-plain:hover, .s-row.is-plain:active { background: none; }
+    .s-chip {
+      display: grid; place-items: center; flex: none; width: 2.15rem; height: 2.15rem; border-radius: 11px; background: var(--c, #C9C0E2); color: #2A2B48;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 3px 8px -4px rgba(60, 50, 90, .35);
+    }
+    .s-text { display: grid; flex: 1; gap: .12rem; min-width: 0; }
+    .s-text b { font-size: .97rem; font-weight: 650; letter-spacing: -.012em; }
+    .s-text small { color: var(--slate); font-size: .85rem; line-height: 1.4; }
+    .s-row.is-danger .s-text b { color: #9A3D3D; }
+
+    /* Switch: the knob springs across, and stretches a little while it is held */
+    .s-sw { position: relative; flex: none; width: 3.1rem; height: 1.85rem; padding: 0; border: none; border-radius: 100px; background: rgba(46, 44, 58, .18); cursor: pointer; transition: background-color .3s ease; }
+    .s-sw::after {
+      content: ""; position: absolute; top: .18rem; left: .18rem; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 2px rgba(46, 44, 58, .2), 0 3px 8px rgba(46, 44, 58, .15); transition: translate .45s var(--spring), width .25s var(--spring);
+    }
+    .s-sw[aria-checked="true"] { background: var(--copper); }
+    .s-sw[aria-checked="true"]::after { translate: 1.25rem 0; }
+    .s-sw:active::after { width: 1.9rem; }
+    .s-sw[aria-checked="true"]:active::after { translate: .85rem 0; }
+    .s-sw:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+
+    /* The cloud to send photos to: a radio list, the chosen one gets a tick that springs in */
+    .s-check { flex: none; color: var(--copper); opacity: 0; scale: .4; transition: scale .4s var(--spring), opacity .2s ease; }
+    .s-row[aria-checked="true"] .s-check { opacity: 1; scale: 1; }
+
+    .s-profile { gap: 0; padding: 1.3rem 1.3rem 1.25rem; }
+    .s-profile .acct-field { margin-bottom: .8rem; }
+    .s-profile .btn { justify-self: start; margin-top: .25rem; }
+    .s-note { min-height: 1.2rem; margin: 0 0 .5rem; color: var(--slate); font-size: .85rem; font-weight: 500; }
+    .s-note.is-error { color: #9A3D3D; }
+    .btn-sm { min-height: 2.5rem; padding: 0 1.15rem; font-size: .88rem; }
+
+    .s-seg { padding: .85rem 1rem; }
+    .s-seg .acct-seg { margin: 0; }
+
+    .s-store { display: grid; gap: .85rem; padding: 1rem 1.25rem 1.25rem; }
+    .s-store-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .s-store-top b { font-size: 1.2rem; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+    .s-bar { display: flex; gap: 2px; height: 10px; border-radius: 5px; overflow: hidden; background: rgba(46, 44, 58, .08); }
+    .s-bar i { width: var(--w); height: 100%; background: var(--c); transition: opacity .5s ease; }
+    .s-bar i.is-cleared { opacity: .12; }
+    .s-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; color: var(--slate); font-size: .82rem; }
+    .s-legend span { display: flex; align-items: center; gap: .4rem; }
+    .s-legend span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+    .s-legend span.is-cleared { opacity: .45; text-decoration: line-through; }
+
+
+    /* A small confirmation after every change */
+    .s-toast {
+      position: fixed; left: 50%; bottom: 1.6rem; z-index: 120; display: flex; align-items: center; gap: .7rem; padding: .65rem 1.2rem .65rem .75rem;
+      border-radius: 100px; font-size: .9rem; pointer-events: none; opacity: 0; translate: -50% 26px; transition: translate .5s var(--spring), opacity .3s ease;
+    }
+    .s-toast.show { opacity: 1; translate: -50% 0; }
+    .s-toast i { display: grid; place-items: center; flex: none; width: 1.55rem; height: 1.55rem; border-radius: 50%; background: var(--copper); color: #fff; }
+    .s-toast b { font-weight: 650; }
+    .s-toast small { margin-left: .35rem; color: var(--slate); font-size: .85rem; }
+    .s-profile .acct-field input::placeholder { color: var(--stone); opacity: 1; }
+
+    @media (max-width: 900px) {
+      /* The header at phone width: the wordmark goes, the nav tightens (same as the other pages) */
+      .brand-word { display: none; }
+      .header { display: flex; justify-content: space-between; padding: 1rem 3%; gap: .5rem; }
+      .nav-item { padding: .55rem .85rem; font-size: .82rem; }
+      .s-cols { grid-template-columns: 1fr; }
+      .s-head { padding-top: 6.5rem; }
+    }
+    @media (max-width: 600px) {
+      .s-row { padding: .75rem 1rem; gap: .8rem; }
+      .s-row + .s-row::before { left: 3.8rem; right: 1rem; }
+      .s-profile { padding: 1.1rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .s-group { opacity: 1; translate: none; transition: none; }
+      .s-sw::after, .s-check, .s-toast, .s-bar i { transition: none; }
+    }
+  </style>
+  <!-- @shared:css (generated block; the same in index.html and albums.html) -->
+  <style>
+      /* ---------- Dark mode ----------
+         The same silk by moonlight: near-black ground, lavender for every accent and glint.
+         The tokens flip here (--copper becomes the lavender accent); the book, QR card, phone, map
+         and photo prints stay light on purpose, like real objects in a dim room, with a deeper
+         lavender accent of their own. */
+      :root { color-scheme: light; }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --fog: #0F0E14;
+        --paper: #1A1922;
+        --dusk: #ECEAF4;
+        --slate: #B4AFC8;
+        --stone: #8C88A0;
+        --copper: #B8AEF5;
+        --copper-soft: #D8D2FB;
+        --blush: #2F2A48;
+        --lavender: #3A3460;
+        --tide: #8FA8E8;
+        --line: #2A2834;
+        --surface: #24222F;
+        --glass: rgba(26, 25, 34, .78);
+      }
+      html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(120, 100, 200, .16), transparent 55%), linear-gradient(160deg, #121119, #08070C) fixed; }
+      :root[data-theme="dark"] .grain { opacity: .14; }
+  
+      /* Things that are objects, not interface, keep their daylight colours */
+      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav {
+        --fog: #ECEAF0; --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #8A8697; --copper: #9A603D; --copper-soft: #C08A66;
+        --blush: #E6CDD6; --lavender: #D9D0EA; --tide: #6F9896; --line: #D6D2DE; --surface: #FFFFFF; --glass: rgba(248, 247, 250, .8);
+        color: var(--dusk);
+      }
+      /* In dark their accent is a deeper lavender, so no copper is left anywhere at night */
+      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav) {
+        --copper: #6C5FC7; --copper-soft: #9A8FE0;
+      }
+  
+      /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
+      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .auth-card, .modal-card, .nav-menu) {
+        background:
+          linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
+        box-shadow:
+          inset 0 1px 1px rgba(255, 255, 255, .13),
+          inset 0 0 26px rgba(150, 140, 210, .05),
+          0 0 0 .5px rgba(0, 0, 0, .4),
+          0 0 40px -12px rgba(120, 100, 190, .25),
+          0 26px 60px -30px rgba(0, 0, 0, .75);
+      }
+      :root[data-theme="dark"] .glass { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .15), inset 0 0 16px rgba(150, 140, 210, .06), 0 0 24px -8px rgba(120, 100, 190, .3), 0 12px 30px -14px rgba(0, 0, 0, .7); }
+      :root[data-theme="dark"] :is(.zone-ctrl, .plan) { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
+      :root[data-theme="dark"] .plan-plus {
+        background:
+          radial-gradient(80% 60% at 85% 10%, rgba(255, 255, 255, .1), transparent 60%) padding-box,
+          linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
+          linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
+      }
+      :root[data-theme="dark"] .auth-card, :root[data-theme="dark"] .modal-card {
+        background:
+          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
+      }
+      :root[data-theme="dark"] :is(.auth-dialog, .modal)::backdrop { background: rgba(6, 5, 10, .62); }
+      :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
+      :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
+  
+      /* Hover and press states that were white washes on light glass */
+      :root[data-theme="dark"] :is(.nav-item, .menu-item):hover { background: rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] :is(.nav-item, .menu-item):active { background: rgba(255, 255, 255, .14); }
+      :root[data-theme="dark"] .nav-item.active, :root[data-theme="dark"] .nav-item[aria-current="page"], :root[data-theme="dark"] .nav-split.active, :root[data-theme="dark"] .menu-pill {
+        background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .22), 0 1px 2px rgba(0, 0, 0, .3), 0 4px 12px rgba(0, 0, 0, .3);
+      }
+      /* Home sits inside its own highlighted pill: only the outer pill gets the bubble, not both */
+      :root[data-theme="dark"] .nav-split .nav-item { background: none; box-shadow: none; }
+      :root[data-theme="dark"] .nav-menu.is-dragging .menu-pill { background: rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] .nav-caret:hover { background: rgba(255, 255, 255, .1); }
+      :root[data-theme="dark"] .nav-caret:active { background: rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] .auth-login:hover { background: rgba(255, 255, 255, .1); }
+      :root[data-theme="dark"] .auth-login:active { background: rgba(255, 255, 255, .16); }
+  
+      /* Buttons */
+      :root[data-theme="dark"] .btn-dark { box-shadow: 0 8px 20px -10px rgba(0, 0, 0, .7); }
+      :root[data-theme="dark"] .btn-pearl {
+        background: linear-gradient(120deg, #3F3880 0%, #5A4DB0 52%, #3A5199 100%);
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .22), inset 0 0 0 1px rgba(255, 255, 255, .1), 0 0 20px -6px rgba(140, 120, 240, .55), 0 8px 18px -10px rgba(0, 0, 0, .7);
+      }
+      :root[data-theme="dark"] .btn-light { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+      /* Lavender fills need dark text, not the white the daylight rules use */
+      :root[data-theme="dark"] :is(.todo-act:hover, .btn-dark:hover) { color: var(--fog); }
+  
+      /* Headings: the pressed-ink look, lit from below by moonlight instead of daylight */
+      :root[data-theme="dark"] .ink { --horizon: #F1EDFF; text-shadow: 0 -1px 0 rgba(0, 0, 0, .55), 0 1.5px 0 rgba(255, 255, 255, .1), 0 2px 12px rgba(150, 130, 230, .22); }
+      :root[data-theme="dark"] .ink::after {
+        background:
+          linear-gradient(to bottom,
+            var(--dusk) 0%,
+            var(--dusk) calc((var(--base) - var(--ink) * .62) * 100%),
+            #C5BFEA calc((var(--base) - var(--ink) * .4) * 100%),
+            #E2D7F2 calc((var(--base) - var(--ink) * .14) * 100%),
+            var(--horizon) calc(var(--base) * 100%),
+            #E2D7F2 calc((var(--base) + .05) * 100%),
+            #C5BFEA calc((var(--base) + .11) * 100%),
+            var(--dusk) calc((var(--base) + .15) * 100%))
+            0 .25em / 100% var(--lh) repeat-y;
+        -webkit-background-clip: text; background-clip: text;
+      }
+  
+      /* Strokes, rails and tints that were ink on paper */
+      :root[data-theme="dark"] .steps::before { background: rgba(255, 255, 255, .12); }
+      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .5); }
+      :root[data-theme="dark"] .step.is-on .step-body b, :root[data-theme="dark"] .step button:hover .step-body b { color: var(--dusk); }
+      :root[data-theme="dark"] .step-no { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] .host-controls li + li, :root[data-theme="dark"] .qa + .qa, :root[data-theme="dark"] .feat-item + .feat-item { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] .sw { background: rgba(255, 255, 255, .2); }
+      :root[data-theme="dark"] .sw[aria-checked="true"] { background: var(--copper); }
+      :root[data-theme="dark"] .qa i { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+      :root[data-theme="dark"] .auth-close { background: rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] .auth-close:hover { background: rgba(255, 255, 255, .14); }
+      :root[data-theme="dark"] .auth-tabs { background: rgba(255, 255, 255, .07); }
+      :root[data-theme="dark"] .auth-tab-pill { background: rgba(255, 255, 255, .14); box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 12px rgba(0, 0, 0, .3); }
+      :root[data-theme="dark"] .auth-alt { background: rgba(255, 255, 255, .07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+      :root[data-theme="dark"] .auth-alt:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
+      :root[data-theme="dark"] .auth-field input { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] .auth-field input:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
+      :root[data-theme="dark"] .auth-field input:focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(140, 120, 220, .4); }
+      :root[data-theme="dark"] .auth-or::before, :root[data-theme="dark"] .auth-or::after { background: rgba(255, 255, 255, .14); }
+      :root[data-theme="dark"] .auth-skip:hover { background: rgba(255, 255, 255, .07); }
+      :root[data-theme="dark"] .auth-scan { color: #A8D4D0; background: rgba(127, 176, 173, .16); }
+      :root[data-theme="dark"] .auth-error { color: #F0A3A3; }
+  
+      /* Copper tints written as plain colours (not through the token) become lavender at night */
+      :root[data-theme="dark"] .step.is-on .step-no { box-shadow: 0 0 0 5px rgba(184, 174, 245, .2); }
+      :root[data-theme="dark"] .app-zone { background: radial-gradient(circle, rgba(108, 95, 199, .25), rgba(108, 95, 199, .1) 70%); }
+      :root[data-theme="dark"] .app-radar .sweep { background: conic-gradient(from 0deg, transparent 0 290deg, rgba(108, 95, 199, .45) 360deg); }
+      :root[data-theme="dark"] .zone-ring { background: radial-gradient(circle, rgba(108, 95, 199, .25), rgba(108, 95, 199, .08) 72%); }
+      :root[data-theme="dark"] .zone-ping { box-shadow: inset 0 0 0 2px rgba(108, 95, 199, .5); }
+      :root[data-theme="dark"] :is(.divider-line, .rule) { background: linear-gradient(to right, var(--copper), rgba(184, 174, 245, .1)); }
+      :root[data-theme="dark"] .tag.soon { box-shadow: inset 0 0 0 1px rgba(108, 95, 199, .4); }
+      @keyframes live-lav { from { box-shadow: 0 0 0 0 rgba(184, 174, 245, .6); } to { box-shadow: 0 0 0 8px rgba(184, 174, 245, 0); } }
+      :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation-name: live-lav; }
+      @media (prefers-reduced-motion: reduce) {
+        :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
+      }
+  
+      /* ---------- Settings item in the main nav: its name on wide screens, a small icon on phones ---------- */
+      .nav-settings { display: inline-flex; align-items: center; justify-content: center; }
+      .nav-settings svg { display: none; }
+      @media (max-width: 520px) {
+        .nav-settings .nav-label { display: none; }
+        .nav-settings svg { display: block; }
+        .nav-settings { padding-left: .8rem; padding-right: .8rem; }
+      }
+  
+      /* ---------- The thread ----------
+         A hairline string draws itself down the page as you scroll, behind the content. Small
+         see-through prints hang along it and come into view as the string reaches them. */
+      .trail { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; overflow-x: clip; }
+      .trail-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+      .trail-line { fill: none; stroke: rgba(154, 96, 61, .24); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+      :root[data-theme="dark"] .trail-line { stroke: rgba(184, 174, 245, .2); }
+      .tp {
+        position: absolute; left: var(--x); top: var(--y); width: var(--w); box-sizing: border-box; padding: 3px 3px 9px;
+        background: rgba(255, 255, 255, .5); border-radius: 2px;
+        box-shadow: 0 0 0 .5px rgba(46, 44, 58, .08), 0 6px 14px -8px rgba(60, 50, 90, .25);
+        transform-origin: 50% 0; opacity: 0; scale: .6; rotate: calc(var(--r) - 9deg);
+        transition: opacity .45s ease, scale .6s var(--spring), rotate .8s var(--spring);
+      }
+      .tp::before {
+        content: ""; position: absolute; left: 50%; top: -2px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+        background: rgba(154, 96, 61, .4);
+      }
+      .tp img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; opacity: .45; filter: saturate(.7); }
+      .tp.is-on { opacity: .85; scale: 1; rotate: var(--r); }
+      :root[data-theme="dark"] .tp { background: rgba(236, 234, 244, .12); box-shadow: 0 0 0 .5px rgba(255, 255, 255, .08), 0 8px 16px -8px rgba(0, 0, 0, .6); }
+      :root[data-theme="dark"] .tp::before { background: rgba(184, 174, 245, .5); }
+      @media (prefers-reduced-motion: reduce) { .tp { transition: opacity .4s ease; scale: 1; rotate: var(--r); } }
+      /* ---------- Page intros ----------
+         A veil over the page while a short sequence plays (see Momento.intro). Its parts are hidden
+         here and brought in by the script, so nothing shows before it starts. Reduced motion never
+         turns the veil on. */
+      #intro { position: fixed; inset: 0; z-index: 150; display: none; overflow: hidden; }
+      html.intro-on #intro { display: block; }
+      .intro-bg { position: absolute; inset: 0; background: var(--fog); }
+  
+      /* Home: the logo writes itself. The glyph, then the sunset "o" rises and slides along, and the
+         letters of the name appear behind it */
+      #introLock { position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6em; font-size: min(3.6rem, 9.4vw); color: var(--dusk); opacity: 0; }
+      .il-glyph { width: 1.9em; height: 1.9em; flex: none; transform-origin: 0 0; }
+      .il-word { height: 1.3em; aspect-ratio: 9217 / 1726; overflow: visible; transform-origin: 0 0; }
+      .il-word .ltr { opacity: 0; }
+      .il-ghost { position: absolute; left: 0; top: 0; z-index: 1; color: var(--dusk); transform-origin: 50% 50%; will-change: transform; }
+  
+      /* My albums: the photo book. The same pearl cover, linen boards, heavy cards and spiral as the home
+         page's book, built by the page's intro script. It is an object, so it keeps its daylight colours. */
+      .ib-stage { position: absolute; inset: 0; perspective: 2200px; --pw: min(340px, 46vw, calc((100svh - 200px) / 1.28)); --ph: calc(var(--pw) * 1.28); }
+      .ib-book { --leaves: 1; position: absolute; left: 50%; top: 50%; width: var(--pw); height: var(--ph); margin-top: calc(var(--ph) / -2); transform-style: preserve-3d; opacity: 0; }
+      .ib-leaf, .ib-last, .ib-board { position: absolute; inset: 0; transform-origin: 0 50%; transform-style: preserve-3d; }
+      .ib-leaf.ib-cover, .ib-board { inset: -10px -12px -10px 0; }
+      .ib-face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; container-type: size; }
+      .ib-face, .ib-board, .ib-edge, .ib-thick, .ib-ring { outline: 1px solid transparent; }
+      .ib-face.ib-back { transform: rotateY(180deg); }
+      .ib-thick {
+        position: absolute; top: 8px; bottom: 8px; right: 0; width: calc((var(--leaves) + 1) * 2px);
+        transform-origin: 100% 50%; transform: rotateY(-90deg); border-radius: 3px; backface-visibility: hidden;
+        background: linear-gradient(to bottom, #E2E3EA, #B4B6C3 50%, #9698A6);
+      }
+      .ib-edge {
+        position: absolute; top: 1px; bottom: 1px; left: 100%; width: calc(var(--leaves) * 2px + 2px);
+        transform-origin: 0 50%; transform: translateZ(-1.5px) rotateY(90deg);
+        background: repeating-linear-gradient(to right, #F8F6F2 0 1.5px, #DDD8E2 1.5px 2px);
+      }
+      /* The turning cover darkens and lightens as it goes over (driven by the script) */
+      .ib-leaf .ib-face::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to right, rgba(46,44,58,.28), rgba(46,44,58,.06)); opacity: var(--shade-front, 0); }
+      .ib-leaf .ib-face.ib-back::after { background: linear-gradient(to left, rgba(46,44,58,.28), rgba(46,44,58,.06)); opacity: var(--shade-back, 0); }
+      .ib-paper {
+        background-color: #F8F6F2; color: var(--dusk);
+        background-image:
+          radial-gradient(130% 100% at 25% 0%, rgba(255,255,255,.6), rgba(255,255,255,0) 60%),
+          linear-gradient(to bottom, rgba(46,44,58,0) 75%, rgba(46,44,58,.04)),
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .18 0 0 0 0 .25 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+      }
+      .ib-face.ib-front.ib-paper { border-radius: 2px 10px 10px 2px; box-shadow: inset 14px 0 18px -12px rgba(46,44,58,.28); }
+      .ib-board, .ib-cover-back {
+        background-color: #C7C8D1;
+        background-image:
+          linear-gradient(to bottom, rgba(255,255,255,.35), rgba(255,255,255,0) 30%, rgba(60,60,80,.12)),
+          repeating-linear-gradient(0deg, rgba(255,255,255,.18) 0 1px, transparent 1px 3px),
+          repeating-linear-gradient(90deg, rgba(60,60,80,.06) 0 1px, transparent 1px 3px);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(60,60,80,.18), inset 0 -3px 6px rgba(60,60,80,.15);
+      }
+      .ib-board { border-radius: 4px 16px 16px 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(60,60,80,.18), inset 0 -3px 6px rgba(60,60,80,.15), 0 2px 4px rgba(46,44,58,.18), 0 24px 50px -10px rgba(46,44,58,.38); }
+      .ib-cover-front {
+        border-radius: 4px 16px 16px 4px;
+        background:
+          linear-gradient(to right, rgba(60,60,80,.22), rgba(60,60,80,0) 6.5%, rgba(255,255,255,.6) 7.5%, rgba(255,255,255,0) 9.5%),
+          linear-gradient(118deg, rgba(255,255,255,.75) 0%, rgba(255,255,255,.15) 30%, rgba(255,255,255,0) 46%, rgba(255,255,255,.35) 62%, rgba(255,255,255,0) 78%),
+          repeating-linear-gradient(95deg, rgba(255,255,255,.08) 0 2px, rgba(150,152,170,.05) 2px 4px),
+          radial-gradient(70% 50% at 85% 12%, rgba(214,210,236,.45), transparent 65%),
+          linear-gradient(165deg, #FAFAFC 0%, #E3E4EA 42%, #C8CAD5 74%, #EDEEF3 100%);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), inset 0 1.5px 0 #fff, inset 0 -4px 10px rgba(60,60,80,.16), inset -3px 0 6px rgba(60,60,80,.1);
+      }
+      .ib-cover-art { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16cqh 0 10cqh; box-sizing: border-box; }
+      .ib-cover-plate {
+        display: grid; place-items: center; width: 44cqw; aspect-ratio: 1; border-radius: 22%; color: var(--dusk);
+        background: linear-gradient(to bottom, rgba(255,255,255,.4), rgba(255,255,255,0) 45%, rgba(255,255,255,0) 65%, rgba(255,255,255,.22)), rgba(255,255,255,.42);
+        box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255,255,255,.6), 0 12px 30px rgba(46,44,58,.2);
+      }
+      .ib-cover-plate svg { width: 64%; height: auto; aspect-ratio: 1; }
+      .ib-cover-word { display: block; width: 62cqw; aspect-ratio: 9217 / 1726; margin: 0 auto; color: var(--dusk); }
+      .ib-cover-back { border-radius: 16px 4px 4px 16px; }
+      .ib-cover-back .ib-paper {
+        position: absolute; inset: 10px 0 10px 12px; border-radius: 10px 2px 2px 10px; container-type: size;
+        box-shadow: inset -14px 0 18px -12px rgba(46,44,58,.28), -1px 1px 0 #E2DEE6, -2px 2px 0 #F8F6F2, -3px 3px 0 #E2DEE6, -4px 3px 0 #F8F6F2, -5px 4px 0 #D9D4DF, -6px 5px 6px rgba(46,44,58,.25);
+      }
+      .ib-last.ib-face.ib-paper { box-shadow: inset 14px 0 18px -12px rgba(46,44,58,.28), 1px 1px 0 #E2DEE6, 2px 2px 0 #F8F6F2, 3px 3px 0 #E2DEE6, 4px 3px 0 #F8F6F2, 5px 4px 0 #D9D4DF, 6px 5px 6px rgba(46,44,58,.25); }
+      .ib-rings { position: absolute; top: 5%; bottom: 5%; left: 0; width: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+      .ib-ring {
+        position: relative; width: calc(var(--pw) * .085); height: calc(var(--pw) * .03); margin-left: calc(var(--pw) * -.0425); border-radius: 100px;
+        background: linear-gradient(to bottom, #FDFCFA 0%, #D9D5DE 30%, #8A8697 52%, #CFCBD6 72%, #F4F2F6 100%);
+        box-shadow: 0 1.5px 2px rgba(46,44,58,.45), 0 3px 6px rgba(46,44,58,.2), inset 0 0 0 .5px rgba(46,44,58,.35);
+      }
+      .ib-ring::after { content: ""; position: absolute; inset: 30% 18%; border-radius: 100px; background: rgba(46,44,58,.62); }
+      .ib-holes { position: absolute; top: 5%; bottom: 5%; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+      .ib-holes.ib-l { left: 1.8cqw; }
+      .ib-holes.ib-r { right: 1.8cqw; }
+      .ib-holes span { width: 3cqw; height: 3cqw; border-radius: 50%; background: rgba(46,44,58,.5); box-shadow: inset 0 1px 1.5px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.7); }
+      /* What is on the pages. Each item is brought in by the script once the cover has opened */
+      .ib-page { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 11cqw 10cqw 9cqw; box-sizing: border-box; }
+      .ib-page .ib-no { font-size: 3.6cqw; font-weight: 600; color: var(--stone); font-variant-numeric: tabular-nums; }
+      .ib-page h2 { margin: 2.5cqw 0 0; font-size: 11cqw; line-height: 1.02; font-weight: 700; letter-spacing: -.035em; color: var(--dusk); }
+      .ib-page p { margin: 4cqw 0 0; font-size: 4.3cqw; line-height: 1.55; color: var(--slate); }
+      .ib-page .ib-no, .ib-page h2, .ib-page p, .ib-photo figcaption { text-shadow: 0 -.5px 0 rgba(46,44,58,.2), 0 1px 0 rgba(255,255,255,.85); }
+      .ib-collage { position: absolute; inset: 0; pointer-events: none; }
+      .ib-photo { position: absolute; margin: 0; rotate: var(--rot, 0deg); }
+      .ib-photo-frame { position: relative; padding: 1.6cqw; background: #fff; box-shadow: 0 1px 2px rgba(46,44,58,.14), 0 8px 18px rgba(46,44,58,.12); }
+      .ib-photo img { display: block; width: 100%; aspect-ratio: var(--ratio); object-fit: cover; background: #ECEAF0; filter: saturate(.85) contrast(1.02); }
+      .ib-photo figcaption { margin-top: 2cqw; font-size: 3.2cqw; line-height: 1.25; color: var(--slate); text-align: center; }
+      .ib-photo.ib-polaroid .ib-photo-frame { padding: 2.6cqw 2.6cqw 0; }
+      .ib-photo.ib-polaroid figcaption { margin: 0; padding: 2.4cqw 0 3cqw; }
+      .ib-photo.ib-tape .ib-photo-frame::before { content: ""; position: absolute; top: -2.8cqw; left: 50%; z-index: 1; width: 40%; height: 6cqw; translate: -50% 0; rotate: -4deg; background: rgba(217,208,234,.85); box-shadow: 0 1px 2px rgba(46,44,58,.1); }
+      .ib-photo.ib-corners .ib-photo-frame::after {
+        --c: var(--dusk); --m: 5.4cqw; content: ""; position: absolute; inset: -1cqw; pointer-events: none;
+        background:
+          linear-gradient(135deg, var(--c) 50%, transparent 50%) top left / var(--m) var(--m) no-repeat,
+          linear-gradient(225deg, var(--c) 50%, transparent 50%) top right / var(--m) var(--m) no-repeat,
+          linear-gradient(45deg, var(--c) 50%, transparent 50%) bottom left / var(--m) var(--m) no-repeat,
+          linear-gradient(315deg, var(--c) 50%, transparent 50%) bottom right / var(--m) var(--m) no-repeat;
+      }
+      .ib-rev { opacity: 0; }
+  
+      /* Settings: two knobs set to their places, then the dial becomes the nav icon */
+      .intro-dial { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 150px; height: 150px; overflow: visible; color: var(--dusk); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: 0; transform-origin: 0 0; }
+      .intro-dial circle { fill: var(--fog); }
+  
+      /* Support: a chat bubble pops up, its dots bounce, and it carries on into the message form */
+      .intro-chat {
+        position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6rem; padding: 1.5rem 2rem;
+        border-radius: 34px 34px 34px 10px; background: #fff; opacity: 0; transform-origin: 50% 50%;
+        box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(60, 50, 90, .14), 0 24px 44px -20px rgba(60, 50, 90, .5);
+      }
+      .intro-chat i { width: .95rem; height: .95rem; border-radius: 50%; background: #6C5FC7; }
+  
+      /* ---------- Site footer ----------
+         The same on every page: the brand, three short columns of links, and a base row with the
+         small print, the theme switch and a way back to the top. */
+      .site-foot { width: min(1180px, 100%); margin: 5rem auto 0; padding: 3.2rem 1.5rem 1.6rem; box-sizing: border-box; border-top: 1px solid var(--line); color: var(--slate); font-size: .92rem; text-align: left; }
+      .sf-grid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 2.5rem 2rem; }
+      .sf-logo { display: inline-flex; align-items: center; gap: .6rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
+      .sf-logo svg.glyph { width: 1.8rem; height: 1.8rem; transition: transform .35s var(--spring); }
+      .sf-logo:hover svg.glyph { transform: scale(1.08) rotate(-4deg); }
+      .sf-logo:active svg.glyph { transform: scale(.94); }
+      .sf-logo .brand-word { display: block; height: 1.25rem; }   /* the pages hide the wordmark in the header at phone width; the footer keeps it */
+      .sf-logo:focus-visible { outline: 2px solid var(--dusk); outline-offset: 4px; }
+      .sf-brand p { max-width: 17rem; margin: .95rem 0 0; line-height: 1.6; }
+      .sf-col h2 { margin: 0 0 .9rem; color: var(--dusk); font-size: .88rem; font-weight: 650; letter-spacing: -.005em; }
+      .sf-col ul { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+      .sf-link {
+        position: relative; display: inline-block; padding: 0; border: none; background: none; border-radius: 4px;
+        color: var(--slate); font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: color .25s ease;
+      }
+      .sf-link::after {
+        content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px; background: currentColor;
+        scale: 0 1; transform-origin: left; transition: scale .35s var(--out);
+      }
+      .sf-link:hover { color: var(--dusk); }
+      .sf-link:hover::after { scale: 1 1; }
+      .sf-link:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+      .sf-link:active { opacity: .7; }
+      .sf-base { display: flex; align-items: center; justify-content: space-between; gap: 1rem 2rem; flex-wrap: wrap; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); font-size: .85rem; }
+      .sf-legal { display: grid; gap: .15rem; margin: 0; line-height: 1.5; }
+      .site-foot .acct-seg { flex: none; width: 15.5rem; margin: 0; }
+      .sf-top { display: inline-flex; align-items: center; gap: .4rem; }
+      .sf-top svg { transition: translate .35s var(--spring); }
+      .sf-top:hover svg { translate: 0 -2px; }
+      .sf-top::after { right: 1.4rem; }
+      @media (max-width: 900px) {
+        .site-foot { margin-top: 3.5rem; }
+        .sf-grid { grid-template-columns: repeat(3, 1fr); }
+        .sf-brand { grid-column: 1 / -1; }
+      }
+      @media (max-width: 600px) {
+        .sf-grid { grid-template-columns: 1fr 1fr; }
+        .sf-col:last-child { grid-column: 1 / -1; }
+        .sf-base { flex-direction: column; align-items: stretch; }
+        .site-foot .acct-seg { width: 100%; }
+        .sf-top { align-self: flex-start; }
+      }
+      @media (prefers-reduced-motion: reduce) { .sf-link::after, .sf-top svg, .sf-logo svg.glyph { transition: none; } }
+  
+      /* The settings page */
+      :root[data-theme="dark"] .s-row + .s-row::before { background: rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] .s-row:hover { background: rgba(255, 255, 255, .05); }
+      :root[data-theme="dark"] .s-row:active { background: rgba(255, 255, 255, .09); }
+      :root[data-theme="dark"] .s-sw { background: rgba(255, 255, 255, .2); }
+      :root[data-theme="dark"] .s-sw[aria-checked="true"] { background: var(--copper); }
+      :root[data-theme="dark"] .s-bar { background: rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] :is(.s-note.is-error, .s-row.is-danger .s-text b) { color: #F0A3A3; }
+      :root[data-theme="dark"] .s-toast i { color: var(--fog); }
+  
+      /* The albums page: lists, chips and rows that were ink on paper */
+      :root[data-theme="dark"] :is(.todo-row + .todo-row, .burst + .burst) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] .pulse .todo-row { --ring-bg: #231F30; }
+      :root[data-theme="dark"] .todo-end { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] .todo-act:disabled { background: rgba(255, 255, 255, .1); color: var(--slate); }
+      :root[data-theme="dark"] .bt-more, :root[data-theme="dark"] .role:not(.host) { background: rgba(255, 255, 255, .09); }
+      :root[data-theme="dark"] .burst-album { text-decoration-color: rgba(184, 174, 245, .55); }
+      :root[data-theme="dark"] .search { background: rgba(255, 255, 255, .06); }
+      :root[data-theme="dark"] .search:hover { background: rgba(255, 255, 255, .1); }
+      :root[data-theme="dark"] .tools { background: linear-gradient(135deg, rgba(40, 36, 56, .94), rgba(28, 26, 38, .92)) padding-box, linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box; }
+      :root[data-theme="dark"] .tab-pill { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .2), 0 1px 2px rgba(0, 0, 0, .3), 0 4px 12px rgba(0, 0, 0, .3); }
+  
+      /* ---------- Account chip, menu and dialogs (built by the script below) ---------- */
+      .acct { position: relative; display: inline-block; text-align: left; }
+      .acct-btn {
+        --radius: 100px; display: inline-flex; align-items: center; gap: .55rem; padding: .3rem .8rem .3rem .3rem;
+        border-radius: var(--radius); color: var(--dusk); font: 600 .88rem var(--font-main); white-space: nowrap; cursor: pointer;
+        transition: scale .3s var(--spring);
+      }
+      .acct-btn:hover { scale: 1.04; }
+      .acct-btn:active { scale: .97; }
+      .acct-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-av {
+        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+        background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-style: normal; font-weight: 700;
+      }
+      .acct-chev { flex: none; margin-left: -.1rem; transition: transform .45s var(--spring); }
+      .acct-btn[aria-expanded="true"] .acct-chev { transform: rotate(180deg); }
+      .acct-menu {
+        --radius: 26px; position: absolute; top: calc(100% + .6rem); right: 0; z-index: 5; width: 17.5rem; box-sizing: border-box; padding: .45rem;
+        border-radius: var(--radius); transform-origin: calc(100% - 2.5rem) top;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, .97) 0%, rgba(250, 249, 253, .95) 50%, rgba(244, 242, 252, .96) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
+        opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden;
+        transition: opacity .25s ease, transform .5s var(--spring), visibility 0s .5s;
+      }
+      .acct-menu.is-open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity .25s ease, transform .5s var(--spring); }
+      .acct-head { display: flex; align-items: center; gap: .75rem; padding: .65rem .65rem .8rem; }
+      .acct-head .acct-av { width: 2.6rem; height: 2.6rem; font-size: 1.05rem; }
+      .acct-head b { display: block; font-size: .95rem; letter-spacing: -.01em; color: var(--dusk); }
+      .acct-head small { display: block; max-width: 11.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--slate); font-size: .8rem; }
+      .acct-item {
+        display: flex; align-items: center; gap: .7rem; width: 100%; box-sizing: border-box; padding: .7rem .75rem; border: none; border-radius: 16px;
+        background: none; color: var(--slate); font: 600 .92rem var(--font-main); text-align: left; cursor: pointer;
+        transition: background-color .25s ease, color .25s ease;
+      }
+      .acct-item svg { flex: none; }
+      .acct-item:hover, .acct-item:focus-visible { background: rgba(46, 44, 58, .07); color: var(--dusk); }
+      .acct-item:active { background: rgba(46, 44, 58, .12); }
+      .acct-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: -2px; }
+      .acct-label { padding: .55rem .75rem .3rem; color: var(--stone); font-size: .75rem; font-weight: 600; }
+      .acct-sep { height: 1px; margin: .35rem .5rem; border: none; background: rgba(46, 44, 58, .1); }
+      .acct-seg { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 .25rem .2rem; padding: .25rem; border-radius: 100px; background: rgba(46, 44, 58, .07); }
+      .acct-seg-pill {
+        position: absolute; top: .25rem; bottom: .25rem; left: .25rem; width: calc((100% - .5rem) / 3); border-radius: 100px; background: var(--surface);
+        box-shadow: 0 1px 2px rgba(46, 44, 58, .1), 0 4px 12px rgba(46, 44, 58, .1); translate: calc(var(--i, 0) * 100%) 0; transition: translate .5s var(--out);
+      }
+      .acct-seg button {
+        position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: .35rem; padding: .5rem .2rem; border: none; border-radius: 100px;
+        background: none; color: var(--slate); font: 600 .8rem var(--font-main); cursor: pointer; transition: color .25s ease;
+      }
+      .acct-seg button:hover, .acct-seg button[aria-checked="true"] { color: var(--dusk); }
+      .acct-seg button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 1px; }
+      .acct-seg svg { overflow: visible; }
+      /* The icons answer the choice: sun rays open and turn, the moon tips, the screen lights up */
+      .acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot { transform-box: view-box; transform-origin: 12px 12px; transition: scale .5s var(--spring), rotate .7s var(--out), opacity .3s ease; }
+      .acct-seg .rays { opacity: .55; scale: .7; }
+      .acct-seg [aria-checked="true"] .rays { opacity: 1; scale: 1; rotate: 90deg; }
+      .acct-seg .moon { opacity: .75; }
+      .acct-seg [aria-checked="true"] .moon { opacity: 1; rotate: -16deg; scale: 1.08; }
+      .acct-seg .scr-dot { opacity: 0; scale: .4; }
+      .acct-seg [aria-checked="true"] .scr-dot { opacity: 1; scale: 1; }
+  
+      .acct-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
+      .acct-dialog::backdrop { background: rgba(46, 44, 58, .3); }
+      .acct-card {
+        position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: 0;
+        padding: 2rem 1.9rem 1.5rem; border: 1.5px solid transparent; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, .96) 0%, rgba(250, 249, 253, .9) 50%, rgba(244, 242, 252, .95) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .35) 32%, rgba(203, 194, 240, .7) 64%, #fff 100%) border-box;
+        box-shadow: 0 30px 80px -30px rgba(60, 50, 90, .5);
+      }
+      .acct-card h2 { margin: 0; padding-right: 2rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+      .acct-sub { margin: .45rem 0 1.3rem; color: var(--slate); font-size: .95rem; line-height: 1.5; }
+      .acct-x {
+        position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border: none; border-radius: 50%;
+        background: rgba(46, 44, 58, .06); color: var(--dusk); cursor: pointer; transition: background-color .2s ease;
+      }
+      .acct-x:hover { background: rgba(46, 44, 58, .12); }
+      .acct-x:active { background: rgba(46, 44, 58, .18); }
+      .acct-x:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-field { display: block; margin-bottom: .75rem; }
+      .acct-field span { display: block; margin-bottom: .3rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
+      .acct-field input, .acct-field textarea {
+        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .9); color: var(--dusk);
+        font: 500 1rem var(--font-main); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .14); transition: box-shadow .2s ease;
+      }
+      .acct-field textarea { display: block; height: auto; min-height: 8.5rem; padding: .8rem 1rem; line-height: 1.5; resize: vertical; }
+      .acct-field input::placeholder, .acct-field textarea::placeholder { color: var(--stone); opacity: 1; }
+      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .3); }
+      .acct-field input:focus, .acct-field textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188, 178, 236, .45); }
+      .acct-group { margin: 1.1rem 0 .4rem; }
+      .acct-group > b { display: block; margin-bottom: .1rem; font-size: .82rem; color: var(--slate); }
+      .acct-row { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; padding: .8rem 0; }
+      .acct-row + .acct-row { box-shadow: inset 0 1px 0 rgba(46, 44, 58, .08); }
+      .acct-row span { display: flex; flex-direction: column; gap: .1rem; }
+      .acct-row span b { font-weight: 650; font-size: .95rem; }
+      .acct-row small { color: var(--slate); font-size: .85rem; }
+      .acct-sw { position: relative; flex: none; width: 3.1rem; height: 1.85rem; padding: 0; border: none; border-radius: 100px; background: rgba(46, 44, 58, .18); cursor: pointer; transition: background-color .3s ease; }
+      .acct-sw::after { content: ""; position: absolute; top: .18rem; left: .18rem; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(46, 44, 58, .2), 0 3px 8px rgba(46, 44, 58, .15); transition: translate .4s var(--spring); }
+      .acct-sw[aria-checked="true"] { background: var(--copper); }
+      .acct-sw[aria-checked="true"]::after { translate: 1.25rem 0; }
+      .acct-sw:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+      .acct-status { min-height: 1.2rem; margin: .5rem 0 .6rem; color: var(--slate); font-size: .85rem; font-weight: 500; }
+      .acct-status.is-error { color: #9A3D3D; }
+      .acct-actions { display: flex; gap: .5rem; }
+      .acct-actions button { flex: 1; min-height: 3rem; border: none; border-radius: 100px; font: 650 .95rem var(--font-main); cursor: pointer; transition: transform .35s var(--out), background-color .2s ease; }
+      .acct-actions button:hover { transform: translateY(-1px); }
+      .acct-actions button:active { transform: scale(.97); }
+      .acct-actions button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+      .acct-primary { background: var(--dusk); color: var(--paper); }
+      .acct-ghost { background: rgba(46, 44, 58, .07); color: var(--dusk); }
+      .acct-ghost:hover { background: rgba(46, 44, 58, .12); }
+      .acct-help details { box-shadow: inset 0 1px 0 rgba(46, 44, 58, .08); }
+      .acct-help summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; font-weight: 650; cursor: pointer; list-style: none; }
+      .acct-help summary::-webkit-details-marker { display: none; }
+      .acct-help summary::after { content: "+"; flex: none; font-size: 1.3rem; font-weight: 500; color: var(--slate); transition: rotate .4s var(--spring); }
+      .acct-help details[open] summary::after { rotate: 45deg; }
+      .acct-help summary:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; border-radius: 8px; }
+      .acct-help p { margin: 0 0 1rem; color: var(--slate); line-height: 1.6; }
+      .acct-links { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+      .acct-links a { padding: .6rem 1rem; border-radius: 100px; background: rgba(46, 44, 58, .07); color: var(--dusk); font-weight: 600; font-size: .9rem; text-decoration: none; transition: background-color .2s ease; }
+      .acct-links a:hover { background: rgba(46, 44, 58, .13); }
+      .acct-links a:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      @media (max-width: 900px) { .acct-name, .acct-chev { display: none; } .acct-btn { padding-right: .3rem; } }
+      /* The link from the account dialog to the full settings page */
+      .acct-adv {
+        display: flex; align-items: center; gap: .8rem; margin: .6rem 0 .2rem; padding: .75rem .85rem; border-radius: 18px;
+        background: rgba(46, 44, 58, .05); color: var(--dusk); text-decoration: none; transition: background-color .25s ease, transform .35s var(--spring);
+      }
+      .acct-adv[hidden] { display: none; }
+      .acct-adv:hover { background: rgba(46, 44, 58, .09); transform: translateY(-1px); }
+      .acct-adv:active { transform: scale(.985); }
+      .acct-adv:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-adv-ic { display: grid; place-items: center; flex: none; width: 2.3rem; height: 2.3rem; border-radius: 12px; background: var(--lavender); }
+      .acct-adv > span:nth-child(2) { display: flex; flex: 1; flex-direction: column; gap: .1rem; min-width: 0; }
+      .acct-adv b { font-size: .92rem; font-weight: 650; }
+      .acct-adv small { color: var(--slate); font-size: .8rem; }
+      :root[data-theme="dark"] .acct-adv { background: rgba(255, 255, 255, .06); }
+      :root[data-theme="dark"] .acct-adv:hover { background: rgba(255, 255, 255, .1); }
+  
+      @media (prefers-reduced-motion: reduce) {
+        .acct-seg-pill, .acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot, .acct-menu, .acct-chev, .acct-sw::after { transition: none; }
+      }
+  
+      :root[data-theme="dark"] .acct-menu {
+        background:
+          linear-gradient(135deg, rgba(58, 53, 80, .96) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
+      }
+      :root[data-theme="dark"] .acct-card {
+        background:
+          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
+        box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8);
+      }
+      :root[data-theme="dark"] .acct-dialog::backdrop { background: rgba(6, 5, 10, .62); }
+      :root[data-theme="dark"] :is(.acct-item:hover, .acct-item:focus-visible) { background: rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] .acct-item:active { background: rgba(255, 255, 255, .14); }
+      :root[data-theme="dark"] .acct-sep { background: rgba(255, 255, 255, .1); }
+      :root[data-theme="dark"] :is(.acct-row + .acct-row, .acct-help details) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+      :root[data-theme="dark"] :is(.acct-seg, .acct-ghost, .acct-links a, .acct-x) { background: rgba(255, 255, 255, .07); }
+      :root[data-theme="dark"] :is(.acct-ghost:hover, .acct-links a:hover, .acct-x:hover) { background: rgba(255, 255, 255, .13); }
+      :root[data-theme="dark"] .acct-seg-pill { background: rgba(255, 255, 255, .14); box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 12px rgba(0, 0, 0, .3); }
+      :root[data-theme="dark"] :is(.acct-field input, .acct-field textarea) { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] :is(.acct-field input, .acct-field textarea):hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
+      :root[data-theme="dark"] :is(.acct-field input, .acct-field textarea):focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(140, 120, 220, .4); }
+      :root[data-theme="dark"] .acct-sw { background: rgba(255, 255, 255, .2); }
+      :root[data-theme="dark"] .acct-sw[aria-checked="true"] { background: var(--copper); }
+      :root[data-theme="dark"] .acct-status.is-error { color: #F0A3A3; }
+  
+      /* Switching: the page cross-fades (opacity only) while the silk eases underneath */
+      ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .6s; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+      @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+  
+      /* ---------- Moving between pages ----------
+         Browsers that can cross-fade between two documents (Chrome, Edge, Safari 18.2+) hold the old
+         page until the new one is ready. The header stays where it is, the highlighted tab glides from
+         the old tab to the new one, and the rest of the page sinks away and the next one rises in.
+         When the next page opens with its own intro, its veil is the new picture, and the header and tab
+         are left out so nothing sits above that veil. (A theme switch marks the page "theming", so these
+         motions only apply to navigation.) */
+      @view-transition { navigation: auto; }
+      :root:not(.intro-on) .header { view-transition-name: site-header; }
+      :root:not(.intro-on) .nav-split.active, :root:not(.intro-on) .nav > .nav-item[aria-current="page"] { view-transition-name: nav-current; }
+      :root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current) { animation-duration: .5s; animation-timing-function: cubic-bezier(.34, 1.2, .64, 1); }
+      :root:not(.theming)::view-transition-old(root) { animation: pt-out .26s cubic-bezier(.5, 0, 1, 1) both; }
+      :root:not(.theming)::view-transition-new(root) { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) .06s both; }
+      @keyframes pt-out { to { opacity: 0; transform: translateY(-14px) scale(.985); } }
+      @keyframes pt-in { from { opacity: 0; transform: translateY(18px); } }
+      /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
+      html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
+      html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
+    </style>
+  <!-- /@shared:css -->
+</head>
+<body>
+  <!-- @intro -->
+  <div id="intro" aria-hidden="true">
+    <div class="intro-bg"></div>
+    <svg class="intro-dial" id="idDial" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle id="idK1" cx="16" cy="7" r="2"/><circle id="idK2" cx="8" cy="17" r="2"/></svg>
+  </div>
+  <!-- /@intro -->
+  <canvas class="bg" id="bg" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="cursor" id="cursor" aria-hidden="true"><span></span></div>
+
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+    <symbol id="glyph-album" viewBox="165.5 161.5 700 700">
+      <g fill="currentColor" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+        <g fill="none" stroke-width="22">
+          <rect x="197" y="328" width="130" height="40" rx="20" />
+          <rect x="197" y="432" width="130" height="40" rx="20" />
+          <rect x="197" y="536" width="130" height="40" rx="20" />
+          <rect x="197" y="640" width="130" height="40" rx="20" />
+        </g>
+        <rect x="262" y="232" width="560" height="559" rx="88" fill="none" stroke-width="44" />
+        <polygon points="428,331 658,331 543,468" stroke-width="20" />
+        <circle cx="542" cy="524" r="27" stroke="none" />
+        <polygon points="361,691 457,557 542,616 627,557 726,691" stroke-width="20" />
+      </g>
+    </symbol>
+    <symbol id="wordmark" viewBox="-81.92 -1601.72 9217 1726">
+      <g transform="scale(1 -1)">
+        <defs>
+          <linearGradient id="wm-sky" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#EED8D2"/><stop offset="1" stop-color="#B98AA8"/></linearGradient>
+          <clipPath id="wm-up"><rect x="7842.7" y="586.7" width="1164.0" height="582.0"/></clipPath>
+          <clipPath id="wm-dn"><rect x="7842.7" y="-27.0" width="1164.0" height="550.3"/></clipPath>
+        </defs>
+        <circle cx="8424.7" cy="555.0" r="577.0" fill="url(#wm-sky)" clip-path="url(#wm-up)"/>
+        <circle cx="8424.7" cy="555.0" r="577.0" fill="#6F9896" clip-path="url(#wm-dn)"/>
+        <g fill="currentColor">
+          <path d="M135 0H438V703C438 815 430 1034 427 1215C480 1015 540 806 575 703L826 0H1083L1330 703C1365 809 1428 1026 1478 1227C1475 1039 1467 815 1467 703V0H1774V1490H1304L1066 806C1036 711 990 512 956 351C921 513 875 712 845 806L603 1490H135Z"/>
+          <path transform="translate(1815.8 0)" d="M628 -22C964 -22 1175 210 1175 554C1175 900 964 1132 628 1132C291 1132 81 900 81 554C81 210 291 -22 628 -22ZM628 214C468 214 387 360 387 555C387 753 468 896 628 896C788 896 870 752 870 555C870 360 788 214 628 214Z"/>
+          <path transform="translate(2979.7 0)" d="M128 0H428V676C428 810 509 884 615 884C717 884 789 814 789 705V0H1079V688C1079 805 1149 884 1263 884C1364 884 1440 823 1440 697V0H1741V754C1741 997 1589 1135 1384 1135C1230 1135 1088 1056 1025 884C973 1054 880 1135 737 1135C603 1135 478 1064 418 901L406 1118H128Z"/>
+          <path transform="translate(4756.5 0)" d="M633 -22C893 -22 1071 99 1126 285L854 336C822 250 743 204 638 204C487 204 385 298 378 481H1143V565C1143 947 910 1132 618 1132C291 1132 81 898 81 553C81 200 291 -22 633 -22ZM380 669C392 807 478 906 621 906C760 906 839 815 854 669Z"/>
+          <path transform="translate(5884.4 0)" d="M428 647C428 795 517 881 645 881C771 881 847 798 847 659V0H1147V711C1147 973 995 1132 763 1132C591 1132 478 1043 415 887L411 1118H128V0H428Z"/>
+          <path transform="translate(7067.2 0)" d="M683 1118H474V1384H174V1118H20V889H174V301C174 96 296 -16 520 -16C580 -16 647 -9 714 11L671 236C649 230 599 223 576 223C503 223 474 256 474 327V889H683Z"/>
+        </g>
+      </g>
+    </symbol>
+  </svg>
+
+  <header class="header" id="header">
+    <a href="index.html" class="brand" aria-label="Momento, home">
+      <svg class="glyph" aria-hidden="true"><use href="#glyph-album" /></svg>
+      <svg class="brand-word" aria-hidden="true"><use href="#wordmark" /></svg>
+    </a>
+    <div class="nav-wrap" id="navWrap">
+      <nav class="nav glass" aria-label="Main">
+        <span class="nav-split">
+          <a href="index.html" class="nav-item">Home</a>
+          <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        </span>
+        <a href="albums.html" class="nav-item">My albums</a>
+        <a href="settings.html" class="nav-item nav-settings" aria-label="Settings" aria-current="page"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
+      </nav>
+      <div class="nav-menu glass" id="navMenu" aria-label="Home page sections">
+        <a href="index.html#how-it-works" class="menu-item">How it works</a>
+        <a href="index.html#features" class="menu-item">Features</a>
+        <a href="index.html#for-hosts" class="menu-item">For hosts</a>
+        <a href="index.html#pricing" class="menu-item">Pricing</a>
+        <a href="index.html#faq" class="menu-item">FAQ</a>
+      </div>
+    </div>
+    <!-- The account chip and its menu are built here by the shared script -->
+    <div class="me-slot" data-acct-host data-acct-always data-acct-logout="index.html"></div>
+  </header>
+
+  <div class="page-wrap" id="pageWrap">
+    <div class="trail" id="trail" data-trail data-pad="10" data-avoid=".s-head > *, .s-group, .site-foot" aria-hidden="true"></div>
+    <main class="page">
+
+      <section class="s-head">
+        <span class="mask"><h1 class="s-title ink rise" data-text="Your upload rules">Your upload rules</h1></span>
+        <p class="s-lede intro" style="--d: .3s">Decide how Momento uploads, where your photos land and how the site looks. Changes save as you make them.</p>
+      </section>
+
+      <div class="s-cols">
+        <div class="s-stack">
+
+          <section class="s-group" style="--d: .25s" aria-labelledby="g-profile">
+            <h2 id="g-profile">Profile</h2>
+            <form class="s-list panel s-profile" id="profileForm" novalidate>
+              <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name" placeholder="For example Priya Shah"></label>
+              <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
+              <p class="s-note" id="profileNote" role="status"></p>
+              <button class="btn btn-dark btn-sm" type="submit">Save profile</button>
+            </form>
+          </section>
+
+          <section class="s-group" style="--d: .31s" aria-labelledby="g-uploads">
+            <h2 id="g-uploads">Uploads</h2>
+            <div class="s-list panel">
+              <div class="s-row" data-row><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.4a9.2 9.2 0 0 1 12.4 0M8.8 15.6a4.8 4.8 0 0 1 6.4 0"/><circle cx="12" cy="18.8" r="1.1" fill="currentColor" stroke="none"/></svg></span><span class="s-text"><b>Upload on Wi-Fi only</b><small>Shares wait in the queue on mobile data</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Upload on Wi-Fi only" data-key="wifiOnly"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#EBDCCB"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8Z"/></svg></span><span class="s-text"><b>Keep originals</b><small>RAW, HEIC and ProRAW are uploaded untouched</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Keep originals" data-key="originals"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg></span><span class="s-text"><b>Upload in the background</b><small>Keeps going after you close Momento</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Upload in the background" data-key="background"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10.5 21 19 10.5h-6Z"/></svg></span><span class="s-text"><b>Auto-sort by camera</b><small>Reads camera model and format from each file</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Auto-sort by camera" data-key="autosort"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg></span><span class="s-text"><b>Cameras before phones</b><small>Larger camera files start first</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Cameras before phones" data-key="camfirst"></button></div>
+            </div>
+          </section>
+
+          <section class="s-group" style="--d: .37s" aria-labelledby="g-dest">
+            <h2 id="g-dest">Where photos go</h2>
+            <div class="s-list panel" role="radiogroup" aria-label="Cloud destination">
+              <button class="s-row" type="button" role="radio" aria-checked="true" data-dest="gdrive"><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Google Drive</b><small>Connected · 2 TB plan</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="icloud"><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>iCloud Drive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="dropbox"><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Dropbox</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="onedrive"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>OneDrive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+            </div>
+          </section>
+
+        </div>
+        <div class="s-stack">
+
+          <section class="s-group" style="--d: .28s" aria-labelledby="g-privacy">
+            <h2 id="g-privacy">Location &amp; privacy</h2>
+            <div class="s-list panel">
+              <div class="s-row" data-row><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg></span><span class="s-text"><b>Precise location while sharing</b><small>Only used to check you’re inside the event zone</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Precise location while sharing" data-key="precise"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12 18.4 5.6"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span><span class="s-text"><b>Show me nearby albums</b><small>The search only runs when you tap it</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Show me nearby albums" data-key="nearby"></button></div>
+            </div>
+          </section>
+
+          <section class="s-group" style="--d: .34s" aria-labelledby="g-notify">
+            <h2 id="g-notify">Notifications <small>by email</small></h2>
+            <div class="s-list panel">
+              <div class="s-row" data-row><span class="s-chip" style="--c:#EBDCCB"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4.5 1.8 6 1.8 6H4.2S6 14.5 6 10Z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></span><span class="s-text"><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Someone adds photos to an album I’m in" data-key="notify.photos"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg></span><span class="s-text"><b>An album is about to close</b><small>so I can download my photos in time</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="An album is about to close" data-key="notify.closing"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8Z"/></svg></span><span class="s-text"><b>Weekly recap</b><small>the best new photos from my albums</small></span><button class="s-sw" type="button" role="switch" aria-checked="false" aria-label="Weekly recap" data-key="notify.recap"></button></div>
+              <div class="s-row" data-row><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg></span><span class="s-text"><b>Upload finished</b><small>Tell me when a batch has uploaded</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Upload finished" data-key="uploadNotify"></button></div>
+            </div>
+          </section>
+
+          <section class="s-group" style="--d: .4s" aria-labelledby="g-look">
+            <h2 id="g-look">Appearance</h2>
+            <div class="s-list panel s-seg">
+              <div class="acct-seg" id="appSeg" role="radiogroup" aria-label="Appearance">
+                <span class="acct-seg-pill" aria-hidden="true"></span>
+                <button type="button" role="radio" aria-checked="false" data-theme="light"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.6"/><g class="rays"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></g></svg>Light</button>
+                <button type="button" role="radio" aria-checked="false" data-theme="dark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>Dark</button>
+                <button type="button" role="radio" aria-checked="false" data-theme="system"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/></svg>System</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="s-group" style="--d: .46s" aria-labelledby="g-store">
+            <h2 id="g-store">Storage on this browser</h2>
+            <div class="s-list panel">
+              <div class="s-store">
+                <div class="s-store-top"><b id="storeTotal">2.1 GB used</b><button class="btn btn-light btn-sm" type="button" id="clearCache"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg>Clear cache</button></div>
+                <div class="s-bar" aria-hidden="true"><i style="--c:#AFC0F0;--w:58%"></i><i id="barPreviews" style="--c:#C9C0E2;--w:16%"></i><i style="--c:#C6DEDA;--w:8%"></i></div>
+                <div class="s-legend"><span style="--c:#AFC0F0">Upload queue 1.2 GB</span><span id="legPreviews" style="--c:#C9C0E2">Previews 340 MB</span><span style="--c:#C6DEDA">Offline albums 170 MB</span></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="s-group" style="--d: .52s" aria-labelledby="g-account">
+            <h2 id="g-account">Account</h2>
+            <div class="s-list panel">
+              <button class="s-row" type="button" id="logOut"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10"/></svg></span><span class="s-text"><b>Log out</b><small>You can sign back in any time</small></span></button>
+              <button class="s-row is-danger" type="button" id="deleteAcct"><span class="s-chip" style="--c:#F0CFCF"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><span class="s-text"><b>Delete account</b><small>Removes your albums and photos for good</small></span></button>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+      <footer class="site-foot" data-site-foot></footer>
+    </main>
+  </div>
+
+  <div class="s-toast glass" id="toast" role="status" aria-live="polite"><i><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></i><span><b id="toastT"></b> <small id="toastS"></small></span></div>
+
+  <script>
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const finePointer = matchMedia('(pointer: fine)').matches;
+    const root = document.documentElement;
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+    const easeOut = (v) => 1 - Math.pow(1 - v, 3);
+    const OUT = 'cubic-bezier(.16, 1, .3, 1)';
+
+    // ---- Shared pointer state and cursor ----
+    const pointer = { x: innerWidth / 2, y: innerHeight / 2, active: false, ix: 0, iy: 0 };
+    let vw = innerWidth, vh = innerHeight;
+    addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
+    const cursorEl = document.getElementById('cursor');
+    const useCursor = finePointer && !still;
+    let rx = pointer.x, ry = pointer.y;
+    if (useCursor) root.classList.add('has-cursor');
+    addEventListener('pointermove', (e) => {
+      if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
+      else { rx = e.clientX; ry = e.clientY; }
+      pointer.x = e.clientX; pointer.y = e.clientY;
+      pointer.active = true;
+      if (useCursor) {
+        const el = e.target instanceof Element ? e.target : null;
+        root.classList.toggle('cursor-hover', !!el?.closest('a, button, input, .live-media'));
+      }
+    }, { passive: true });
+    root.addEventListener('pointerleave', () => { pointer.active = false; });
+    addEventListener('pointerdown', () => root.classList.add('cursor-down'));
+    addEventListener('pointerup', () => root.classList.remove('cursor-down'));
+
+    // ---- Living background: the same silk shader as the landing page ----
+    const canvas = document.getElementById('bg');
+    const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
+    const SCALE = 0.33;
+    const flow = { t: 0, scroll: scrollY, vx: 0, vy: 0, mx: .5, my: .5, dirty: true, acc: 0 };
+    let renderFluid = () => {};
+    if (gl) {
+      const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
+      const frag = `
+        #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+        #else
+        precision mediump float;
+        #endif
+        uniform vec2 res;
+        uniform float t;
+        uniform vec2 m;
+        uniform vec2 v;
+        uniform float sc;
+        uniform vec3 c0, c1, c2, c3;   // the palette: fog, folds, sea glass, glints (eased between light and dark)
+        float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        float fbm(vec2 p) {
+          float s = 0.0, a = 0.5;
+          for (int i = 0; i < 3; i++) { s += a * noise(p); p = p * 2.02 + vec2(1.7, 9.2); a *= 0.5; }
+          return s;
+        }
+        void main() {
+          vec2 uv = gl_FragCoord.xy / res;
+          float asp = res.x / res.y;
+          vec2 p = vec2(uv.x * asp, 1.0 - uv.y);
+          vec2 d = p - vec2(m.x * asp, m.y);
+          p -= v * exp(-dot(d, d) / 0.008);
+          p.y += sc;
+          p *= 1.25;
+          vec2 q = vec2(fbm(p + vec2(0.0, t * 0.05)), fbm(p + vec2(5.2, 1.3) - t * 0.04));
+          vec2 r = vec2(fbm(p + 3.4 * q + vec2(1.7, 9.2) + t * 0.06), fbm(p + 3.4 * q + vec2(8.3, 2.8) - t * 0.05));
+          float f = fbm(p + 3.2 * r);
+          vec3 base = c0, shadow = c1, tide = c2, cream = c3;
+          vec3 col = mix(base, shadow, smoothstep(0.46, 0.74, f));
+          col = mix(col, tide, smoothstep(0.62, 0.95, q.y) * 0.3);
+          float edge = exp(-pow((f - 0.44) * 24.0, 2.0)) + 0.7 * exp(-pow((r.x - 0.6) * 20.0, 2.0)) + 0.5 * exp(-pow((f - 0.6) * 26.0, 2.0));
+          col = mix(col, cream, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
+          gl_FragColor = vec4(col, 1.0);
+        }`;
+      const prog = gl.createProgram();
+      for (const [type, src] of [[gl.VERTEX_SHADER, vert], [gl.FRAGMENT_SHADER, frag]]) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        gl.attachShader(prog, s);
+      }
+      gl.bindAttribLocation(prog, 0, 'a');
+      gl.linkProgram(prog);
+      if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        const u = {};
+        for (const name of ['res', 't', 'm', 'v', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
+        // Pale blue fog, lavender-blue folds, sea glass and cream edges by day; by night the same
+        // silk goes near-black, with the glints turning to moonlit lavender
+        const PAL = {
+          light: [[.905, .918, .955], [.740, .775, .880], [.790, .865, .870], [1, .975, .925]],
+          dark:  [[.046, .042, .072], [.020, .018, .034], [.052, .062, .108], [.175, .152, .280]],
+        };
+        // The folds and fog darken first; the glints warm up a beat later, like lamps coming on
+        const THEME = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
+        const mixPal = (i, m) => PAL.light[i].map((v, c) => v + (PAL.dark[i][c] - v) * m);
+        const sizeCanvas = () => {
+          canvas.width = Math.max(1, Math.round(vw * SCALE));
+          canvas.height = Math.max(1, Math.round(vh * SCALE));
+          gl.viewport(0, 0, canvas.width, canvas.height);
+          flow.dirty = true;
+        };
+        sizeCanvas();
+        addEventListener('resize', sizeCanvas);
+        renderFluid = (dt) => {
+          const k = (rate) => 1 - Math.exp(-dt * rate);
+          const before = flow.scroll;
+          flow.scroll += (scrollY - flow.scroll) * k(5);
+          const decay = Math.exp(-dt * 1.6);
+          flow.vx = flow.vx * decay + (still ? 0 : pointer.ix / vh * 0.3);
+          flow.vy = flow.vy * decay + (still ? 0 : pointer.iy / vh * 0.3);
+          pointer.ix = pointer.iy = 0;
+          const pull = Math.hypot(flow.vx, flow.vy);
+          if (pull > .12) { flow.vx *= .12 / pull; flow.vy *= .12 / pull; }
+          flow.mx += (pointer.x / vw - flow.mx) * k(25);
+          flow.my += (pointer.y / vh - flow.my) * k(25);
+          if (!still) flow.t += dt * 0.6;
+          // Ease toward the chosen theme (instantly with reduced motion)
+          const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
+          const settling = Math.abs(THEME.target - THEME.a) > .002 || Math.abs(THEME.target - THEME.b) > .002;
+          if (settling) {
+            THEME.a += (THEME.target - THEME.a) * fade; THEME.b += (THEME.target - THEME.b) * glow;
+            if (Math.abs(THEME.target - THEME.a) <= .002) THEME.a = THEME.target;
+            if (Math.abs(THEME.target - THEME.b) <= .002) THEME.b = THEME.target;
+            flow.dirty = true;
+          }
+          const moving = !still || Math.abs(flow.scroll - before) > .1;
+          if (!moving && !flow.dirty) return;
+          flow.acc += dt;
+          if (!flow.dirty && flow.acc < 1 / 31) return;
+          flow.acc = 0; flow.dirty = false;
+          gl.uniform2f(u.res, canvas.width, canvas.height);
+          gl.uniform1f(u.t, flow.t);
+          gl.uniform2f(u.m, flow.mx, flow.my);
+          gl.uniform2f(u.v, flow.vx, flow.vy);
+          gl.uniform1f(u.sc, flow.scroll / vh * 0.35);
+          gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
+          gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        };
+      }
+    }
+
+    // ---- Glass rim light follows the pointer ----
+    function lightUp(glass) {
+      glass.addEventListener('pointerenter', () => glass.style.setProperty('--shine', 1));
+      glass.addEventListener('pointerleave', () => glass.style.setProperty('--shine', 0));
+      glass.addEventListener('pointermove', (e) => {
+        const r = glass.getBoundingClientRect();
+        glass.style.setProperty('--mx', `${e.clientX - r.left}px`);
+        glass.style.setProperty('--my', `${e.clientY - r.top}px`);
+      });
+    }
+    document.querySelectorAll('.glass, .panel').forEach((g) => { if (!g.closest('.album')) lightUp(g); });
+
+    // ---- Buttons: fill floods in from where the cursor enters, label rolls, slight pull ----
+    function rollButton(btn) {
+      if (btn.querySelector('.btn-fill')) return;
+      const inner = btn.innerHTML.trim();
+      btn.innerHTML = `<span class="btn-fill" aria-hidden="true"></span><span class="btn-label"><span class="roll"><span>${inner}</span><span aria-hidden="true">${inner}</span></span></span>`;
+      const origin = (e) => {
+        const r = btn.getBoundingClientRect();
+        btn.style.setProperty('--fx', `${e.clientX - r.left}px`);
+        btn.style.setProperty('--fy', `${e.clientY - r.top}px`);
+      };
+      btn.addEventListener('pointerenter', origin);
+      btn.addEventListener('pointerleave', (e) => { origin(e); btn.style.setProperty('--bx', '0px'); btn.style.setProperty('--by', '0px'); });
+      if (useCursor) btn.addEventListener('pointermove', (e) => {
+        const r = btn.getBoundingClientRect();
+        btn.style.setProperty('--bx', `${(e.clientX - r.left - r.width / 2) * .18}px`);
+        btn.style.setProperty('--by', `${(e.clientY - r.top - r.height / 2) * .3}px`);
+      });
+    }
+    document.querySelectorAll('.btn').forEach(rollButton);
+
+    // ---- Nav: Home goes to the home page; the arrow (or hovering) opens its sections ----
+    (() => {
+      const wrap = document.getElementById('navWrap');
+      const split = wrap.querySelector('.nav-split');
+      const caret = wrap.querySelector('.nav-caret');
+      const menu = document.getElementById('navMenu');
+      let open = false, timer;
+      const setOpen = (v) => {
+        clearTimeout(timer);
+        if (v === open) return;
+        open = v;
+        menu.classList.toggle('is-open', v);
+        caret.setAttribute('aria-expanded', v);
+      };
+      caret.addEventListener('click', () => setOpen(!open));
+      if (finePointer) for (const zone of [split, menu]) {
+        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') setOpen(true); });
+        zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') timer = setTimeout(() => setOpen(false), 260); });
+      }
+      document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
+      addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { setOpen(false); caret.focus(); } });
+    })();
+
+    // ---- Settings: choices are remembered here; name, email and notifications live in the account ----
+    const STORE = 'momento-settings';
+    const DEFAULTS = { wifiOnly: true, originals: true, background: true, autosort: true, camfirst: true, dest: 'gdrive', precise: true, nearby: true, uploadNotify: true, notify: { photos: true, closing: true, recap: false } };
+    const DEST_NAME = { gdrive: 'Google Drive', icloud: 'iCloud Drive', dropbox: 'Dropbox', onedrive: 'OneDrive' };
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) {}
+    const S = { ...DEFAULTS, ...saved, notify: { ...DEFAULTS.notify, ...(saved.notify || {}) } };
+    const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+
+    // A small confirmation that slides up after a change
+    const toastEl = document.getElementById('toast');
+    let toastTimer = 0;
+    function toast(title, sub = '') {
+      document.getElementById('toastT').textContent = title;
+      document.getElementById('toastS').textContent = sub;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+    }
+
+    // The shared script (theme, account) runs after this one, so everything that needs it waits
+    addEventListener('DOMContentLoaded', () => {
+      const M = window.Momento;
+
+      // Switches. Notification switches are stored in the account when there is one
+      const get = (key) => {
+        if (key.startsWith('notify.')) { const a = M.account.get(); return a ? a.notify[key.slice(7)] : S.notify[key.slice(7)]; }
+        return S[key];
+      };
+      const set = (key, on) => {
+        if (key.startsWith('notify.')) {
+          const k = key.slice(7);
+          S.notify[k] = on;
+          if (M.account.get()) M.account.set({ notify: { [k]: on } });
+        } else S[key] = on;
+        persist();
+      };
+      document.querySelectorAll('.s-sw[data-key]').forEach((sw) => {
+        sw.setAttribute('aria-checked', get(sw.dataset.key));
+        sw.addEventListener('click', () => {
+          const on = sw.getAttribute('aria-checked') !== 'true';
+          sw.setAttribute('aria-checked', on);
+          set(sw.dataset.key, on);
+          toast(sw.getAttribute('aria-label'), on ? 'On' : 'Off');
+        });
+      });
+      // A click anywhere on the row flips its switch
+      document.querySelectorAll('.s-row[data-row]').forEach((row) => row.addEventListener('click', (e) => {
+        if (!e.target.closest('.s-sw')) row.querySelector('.s-sw').click();
+      }));
+
+      // Where photos go
+      const dests = [...document.querySelectorAll('[data-dest]')];
+      dests.forEach((r) => r.setAttribute('aria-checked', r.dataset.dest === S.dest));
+      dests.forEach((r) => r.addEventListener('click', () => {
+        S.dest = r.dataset.dest; persist();
+        dests.forEach((x) => {
+          x.setAttribute('aria-checked', x === r);
+          x.querySelector('small').textContent = x === r ? 'Connected · photos land in /Momento' : (x.dataset.dest === 'gdrive' ? 'Connected · 2 TB plan' : 'Sign in to connect');
+        });
+        toast('Destination changed', DEST_NAME[S.dest]);
+      }));
+      dests.find((r) => r.dataset.dest === S.dest).querySelector('small').textContent = 'Connected · photos land in /Momento';
+
+      // Profile: the same name and email the account menu shows
+      const form = document.getElementById('profileForm'), note = document.getElementById('profileNote');
+      const fill = () => { const a = M.account.get(); form.name.value = a ? a.name : ''; form.email.value = a ? a.email : ''; };
+      fill();
+      M.account.onChange(() => { if (!form.contains(document.activeElement)) fill(); });
+      const say = (msg, bad) => { note.textContent = msg; note.classList.toggle('is-error', !!bad); };
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = form.name.value.trim(), email = form.email.value.trim();
+        if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        // A first save creates the account, carrying over the notification choices already made here
+        M.account.set(M.account.get() ? { name, email } : { name, email, notify: S.notify });
+        say(''); toast('Profile saved', name);
+      });
+
+      // Appearance: shares the choice with the account menu and every other page
+      const seg = document.getElementById('appSeg'), segBtns = [...seg.querySelectorAll('button')];
+      const syncSeg = () => segBtns.forEach((b, i) => { const on = b.dataset.theme === M.theme.pref; b.setAttribute('aria-checked', on); if (on) seg.style.setProperty('--i', i); });
+      segBtns.forEach((b) => b.addEventListener('click', () => { M.theme.set(b.dataset.theme); toast('Appearance', b.textContent.trim()); }));
+      M.theme.onChange(syncSeg); syncSeg();
+
+      // Storage
+      let cleared = false;
+      document.getElementById('clearCache').addEventListener('click', () => {
+        if (cleared) { toast('Nothing to clear', 'The cache is already empty'); return; }
+        cleared = true;
+        document.getElementById('barPreviews').classList.add('is-cleared');
+        document.getElementById('legPreviews').classList.add('is-cleared');
+        document.getElementById('storeTotal').textContent = '1.8 GB used';
+        toast('Cache cleared', '340 MB freed');
+      });
+
+      // Account
+      document.getElementById('logOut').addEventListener('click', () => { M.account.clear(); location.href = 'index.html'; });
+      document.getElementById('deleteAcct').addEventListener('click', () => toast('Preview only', 'Accounts can’t be deleted in this preview'));
+    });
+
+    // ---- The header gains a veil once scrolled, and the page opens ----
+    const header = document.getElementById('header');
+    const veil = () => header.classList.toggle('is-veiled', scrollY > 40);
+    addEventListener('scroll', veil, { passive: true });
+    veil();
+    // (after the page intro, when there is one: it lifts the veil by announcing momento:intro-reveal)
+    const open = () => requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('is-ready')));
+    if (root.classList.contains('intro-on')) document.addEventListener('momento:intro-reveal', open, { once: true });
+    else open();
+
+    // ---- One loop for everything that moves ----
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(Math.max((now - last) / 1000, 0), .1);
+      last = now;
+      if (!document.hidden) {
+        renderFluid(dt);
+        if (useCursor) {
+          rx = lerp(rx, pointer.x, .35); ry = lerp(ry, pointer.y, .35);
+          const lx = pointer.x - rx, ly = pointer.y - ry;
+          const lens = root.classList.contains('cursor-hover') || root.classList.contains('cursor-drag');
+          const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
+          cursorEl.style.transform = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+  <script>
+    // ---- Intro (once per tab): a dial appears and its two knobs are set to their places, then it shrinks
+    // into the Settings tab in the nav while the groups rise in ----
+    document.addEventListener('DOMContentLoaded', () => window.Momento.intro(async (I) => {
+      const $ = (s) => document.querySelector(s);
+      const dial = $('#idDial'), k1 = $('#idK1'), k2 = $('#idK2'), bg = $('#intro .intro-bg');
+      const OUT = 'cubic-bezier(.2, .8, .2, 1)', SPRING = 'cubic-bezier(.34, 1.4, .64, 1)', GLIDE = 'cubic-bezier(.65, 0, .25, 1)';
+      // The nav shows the icon at phone width and the word otherwise; the dial lands on whichever is there
+      const tab = $('.nav-settings'), icon = $('.nav-settings svg');
+      const target = icon.getBoundingClientRect().width ? icon : tab;
+      I.hold(target);
+
+      await I.play(dial, [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: OUT });
+      // The knobs start on the wrong ends of their tracks and are set where they belong
+      I.play(k1, [{ transform: 'translate(-8px, 0)' }, { transform: 'none' }], { duration: 700, easing: SPRING });
+      await I.play(k2, [{ transform: 'translate(8px, 0)' }, { transform: 'none' }], { duration: 700, delay: 140, easing: SPRING });
+      await I.wait(120);
+
+      // The dial becomes the nav icon and the groups come in
+      I.reveal();
+      const r = target.getBoundingClientRect(), size = Math.min(r.width, r.height);
+      const to = { left: r.left + (r.width - size) / 2, top: r.top + (r.height - size) / 2, width: size, height: size };
+      I.wait(560).then(() => I.play(target, [{ opacity: 0 }, { opacity: 1 }], { duration: 160 }));
+      await Promise.all([
+        I.play(bg, [{ opacity: 1 }, { opacity: 0 }], { duration: 620, delay: 120, easing: 'ease' }),
+        I.play(dial, [{ transform: 'none', opacity: 1 }, { transform: I.flip(dial, to), opacity: 1, offset: .8 }, { transform: I.flip(dial, to), opacity: 0 }], { duration: 720, easing: GLIDE }),
+      ]);
+    }));
+  </script>
+
+  <!-- @shared:js (generated block; the same in index.html and albums.html) -->
+  <script>
+  // Shared by index.html and albums.html: theme, account, account menu.
+  (() => {
+    const root = document.documentElement;
+    const KEY = 'momento-theme';
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    const TH = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
+    const themeListeners = new Set();
+    const read = () => { try { return localStorage.getItem(KEY) || 'system'; } catch (e) { return 'system'; } };
+    const resolve = (p) => (p === 'dark' || (p === 'system' && mq.matches) ? 'dark' : 'light');
+    let pref = read();
+  
+    // Applies a preference. The page cross-fades where View Transitions exist; the silk shader
+    // eases on its own from the new target
+    function apply(p, animate) {
+      pref = p;
+      const next = resolve(p);
+      const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
+      if (root.dataset.theme === next) root.dataset.themePref = p;
+      else if (animate && document.startViewTransition && !reduced.matches) {
+        root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
+        const done = () => root.classList.remove('theming');
+        document.startViewTransition(flip).finished.then(done, done);
+      } else flip();
+      themeListeners.forEach((fn) => fn(p, next));
+    }
+    mq.addEventListener('change', () => { if (pref === 'system') apply('system', true); });
+    addEventListener('storage', (e) => { if (e.key === KEY) apply(read(), true); });
+  
+    const Momento = (window.Momento = window.Momento || {});
+    Momento.theme = {
+      get pref() { return pref; },
+      get resolved() { return resolve(pref); },
+      set(p) {
+        try { localStorage.setItem(KEY, p); } catch (e) {}
+        apply(p, true);
+      },
+      onChange(fn) { themeListeners.add(fn); },
+    };
+  
+    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
+    const AKEY = 'momento-account';
+    const NOTIFY = { photos: true, closing: true, recap: false };
+    const accountListeners = new Set();
+    const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
+    let current = null;
+    try {
+      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
+      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
+    } catch (e) {}
+    current = norm(current);
+    const persist = () => {
+      try {
+        if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
+        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
+      } catch (e) {}
+    };
+    const emit = () => accountListeners.forEach((fn) => fn(current));
+    Momento.account = {
+      get() { return current; },
+      set(patch) {
+        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
+        persist(); emit();
+        return current;
+      },
+      clear() { current = null; persist(); emit(); },
+      onChange(fn) { accountListeners.add(fn); },
+    };
+  
+    // ---- Account chip, menu and dialogs ----
+    const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+    const ICON = {
+      chev: svg('<path d="m6 9 6 6 6-6"/>', 14),
+      close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+      settings: svg('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
+      help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/>'),
+      logout: svg('<path d="M9 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3M15 8l4 4-4 4M19 12H9"/>'),
+      sun: svg('<circle cx="12" cy="12" r="3.6"/><g class="rays"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></g>', 16),
+      moon: svg('<path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>', 16),
+      system: svg('<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/>', 16),
+    };
+    const first = (n) => (n || '').trim().split(/\s+/)[0] || '';
+    const SUPPORT = 'support@hexarch.org';   // placeholder address
+  
+    // The custom cursor can't draw above a modal, so the normal cursor comes back while one is open
+    let cursorWas = false;
+    // The card grows out of the account chip when it opens and shrinks back into it when it closes:
+    // the chip's box and the card's box, as a move and a (non-uniform) scale
+    const morph = (from, card) => {
+      const f = from.getBoundingClientRect(), c = card.getBoundingClientRect();
+      if (!f.width || !c.width) return null;
+      const dx = f.left + f.width / 2 - (c.left + c.width / 2), dy = f.top + f.height / 2 - (c.top + c.height / 2);
+      return `translate(${dx}px, ${dy}px) scale(${Math.max(.08, f.width / c.width)}, ${Math.max(.05, f.height / c.height)})`;
+    };
+    function dialog(id, html, getReturn) {
+      const d = document.createElement('dialog');
+      d.className = 'acct-dialog'; d.id = id; d.setAttribute('aria-labelledby', `${id}Title`);
+      d.innerHTML = html;
+      document.body.append(d);
+      const card = () => d.querySelector('.acct-card');
+      let closing = false;
+      d.dismiss = async () => {
+        if (closing || !d.open) return;
+        closing = true;
+        const c = card(), from = getReturn(), shape = from && c && morph(from, c);
+        if (!reduced.matches && c) {
+          const out = shape ? [{ transform: 'none', opacity: 1 }, { transform: shape, opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }];
+          try { await c.animate(out, { duration: shape ? 340 : 200, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished; } catch (e) {}
+        }
+        d.close();
+        if (c) c.getAnimations().forEach((a) => a.cancel());
+        closing = false;
+      };
+      d.addEventListener('click', (e) => { if (e.target === d) d.dismiss(); });
+      d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => d.dismiss()));
+      d.addEventListener('cancel', (e) => { e.preventDefault(); d.dismiss(); });
+      d.addEventListener('close', () => {
+        if (cursorWas) root.classList.add('has-cursor');
+        const back = getReturn(); if (back) back.focus();
+      });
+      d.launch = () => {
+        cursorWas = root.classList.contains('has-cursor');
+        root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
+        d.showModal();
+        if (reduced.matches) return;
+        const c = card(), from = getReturn(), shape = from && morph(from, c);
+        c.animate(shape
+          ? [{ transform: shape, opacity: 0 }, { opacity: 1, offset: .22 }, { transform: 'none', opacity: 1 }]
+          : [{ opacity: 0, transform: 'translateY(12px) scale(.96)' }, { opacity: 1, transform: 'none' }],
+        { duration: shape ? 620 : 380, easing: 'cubic-bezier(.34, 1.25, .64, 1)' });
+        // Its rows rise in one after another once the card has opened out
+        [...c.children].filter((el) => !el.matches('.acct-x')).forEach((el, i) => el.animate(
+          [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+          { duration: 460, delay: 200 + i * 45, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' }));
+        try { d.animate({ opacity: [0, 1] }, { duration: 300, pseudoElement: '::backdrop' }); } catch (e) {}
+      };
+      return d;
+    }
+  
+    function settingsDialog(getReturn) {
+      const d = dialog('acctSettings', `
+        <form class="acct-card" novalidate>
+          <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+          <h2 id="acctSettingsTitle">Account settings</h2>
+          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
+          <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
+          <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
+          <div class="acct-group" role="group" aria-label="Email me when">
+            <b>Email me when</b>
+            <div class="acct-row"><span><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="acct-sw" type="button" role="switch" aria-label="Someone adds photos to an album I’m in" aria-checked="true" data-key="photos"></button></div>
+            <div class="acct-row"><span><b>An album is about to close</b><small>so I can download my photos in time</small></span><button class="acct-sw" type="button" role="switch" aria-label="An album is about to close" aria-checked="true" data-key="closing"></button></div>
+            <div class="acct-row"><span><b>Weekly recap</b><small>the best new photos from my albums</small></span><button class="acct-sw" type="button" role="switch" aria-label="Weekly recap" aria-checked="false" data-key="recap"></button></div>
+          </div>
+          <a class="acct-adv" href="settings.html"><span class="acct-adv-ic">${ICON.settings}</span><span><b>Advanced settings</b><small>Uploads, cloud, privacy and storage</small></span>${ICON.chev}</a>
+          <p class="acct-status" role="status"></p>
+          <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Save changes</button></div>
+        </form>`, getReturn);
+      if (/settings\.html$/.test(location.pathname)) d.querySelector('.acct-adv').hidden = true;   // already here
+      const form = d.querySelector('form'), status = d.querySelector('.acct-status');
+      const switches = [...d.querySelectorAll('.acct-sw')];
+      switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
+      const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = form.name.value.trim(), email = form.email.value.trim();
+        if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        const notify = {};
+        switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
+        Momento.account.set({ name, email, notify });
+        say('Saved');
+        setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+      });
+      const launch = d.launch;
+      d.launch = () => {
+        const a = current || norm({});
+        form.name.value = a.name; form.email.value = a.email;
+        switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
+        say('');
+        launch();
+      };
+      return d;
+    }
+  
+    function helpDialog(getReturn) {
+      const d = dialog('acctHelp', `
+        <div class="acct-card acct-help">
+          <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+          <h2 id="acctHelpTitle">Help and support</h2>
+          <p class="acct-sub">Quick answers. If you’re still stuck, email us.</p>
+          <details><summary>How do guests join an album?</summary><p>They point their phone camera at the host’s QR code and the album opens. Signing up lets them add their own photos.</p></details>
+          <details><summary>Who can see the photos?</summary><p>Only the people who joined the album. The host decides whether guests can see the gallery while the event is on.</p></details>
+          <details><summary>How long does an album stay open?</summary><p>Uploads and downloads stay open for a while after the event, then the album is kept as an archive. Download your photos before it closes.</p></details>
+          <div class="acct-links">
+            <a href="support.html">Contact us</a>
+            <a href="index.html#how-it-works">How it works</a>
+            <a href="index.html#faq">FAQ</a>
+            <a href="mailto:${SUPPORT}">Email support</a>
+          </div>
+        </div>`, getReturn);
+      if (/support\.html$/.test(location.pathname)) d.querySelector('.acct-links [href="support.html"]').hidden = true;   // already here
+      return d;
+    }
+  
+    // One of each dialog per page. Whatever opened it (the chip, a footer link) is where it grows
+    // out of and where focus returns
+    let returnTo = null, settingsD = null, helpD = null;
+    Momento.openSettings = (from) => { returnTo = from; (settingsD ||= settingsDialog(() => returnTo)).launch(); };
+    Momento.openHelp = (from) => { returnTo = from; (helpD ||= helpDialog(() => returnTo)).launch(); };
+  
+    // A Light / Dark / System segment bound to the theme (the account menu and the footer both use it)
+    function wireSeg(seg) {
+      const btns = [...seg.querySelectorAll('button')];
+      seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) Momento.theme.set(b.dataset.theme); });
+      const sync = () => btns.forEach((b, i) => {
+        const on = b.dataset.theme === Momento.theme.pref;
+        b.setAttribute('aria-checked', on);
+        if (on) seg.style.setProperty('--i', i);
+      });
+      Momento.theme.onChange(sync);
+      sync();
+    }
+  
+    // Fills one host element with the chip and its menu. `out` (optional) is the signed-out UI,
+    // shown instead of the chip when there is no account. `always` shows the chip regardless.
+    function mountAccount({ host, out, always, onLogout }) {
+      let built = null;
+      function build() {
+        const wrap = document.createElement('div');
+        wrap.className = 'acct';
+        wrap.innerHTML = `
+          <button class="acct-btn glass" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="acctMenu" aria-label="Account menu"><i class="acct-av"></i><span class="acct-name"></span>${ICON.chev.replace('<svg', '<svg class="acct-chev"')}</button>
+          <div class="acct-menu glass" id="acctMenu" role="menu" aria-label="Account">
+            <div class="acct-head"><i class="acct-av"></i><span><b></b><small></small></span></div>
+            <button class="acct-item" type="button" role="menuitem" data-act="settings">${ICON.settings}Account settings</button>
+            <div class="acct-label" id="acctThemeLabel">Appearance</div>
+            <div class="acct-seg" role="radiogroup" aria-labelledby="acctThemeLabel">
+              <span class="acct-seg-pill" aria-hidden="true"></span>
+              <button type="button" role="radio" aria-checked="false" data-theme="light">${ICON.sun}Light</button>
+              <button type="button" role="radio" aria-checked="false" data-theme="dark">${ICON.moon}Dark</button>
+              <button type="button" role="radio" aria-checked="false" data-theme="system">${ICON.system}System</button>
+            </div>
+            <button class="acct-item" type="button" role="menuitem" data-act="help">${ICON.help}Help and support</button>
+            <hr class="acct-sep">
+            <button class="acct-item" type="button" role="menuitem" data-act="logout">${ICON.logout}Log out</button>
+          </div>`;
+        host.append(wrap);
+  
+        const btn = wrap.querySelector('.acct-btn'), menu = wrap.querySelector('.acct-menu'), seg = wrap.querySelector('.acct-seg');
+        const segBtns = [...seg.querySelectorAll('button')];
+        const items = () => [...menu.querySelectorAll('.acct-item, .acct-seg button')];
+        let open = false;
+  
+        function setOpen(v, focusFirst) {
+          if (v === open) return;
+          open = v;
+          menu.classList.toggle('is-open', v);
+          btn.setAttribute('aria-expanded', v);
+          if (v && focusFirst) items()[0].focus();
+        }
+        btn.addEventListener('click', (e) => setOpen(!open, e.detail === 0));
+        document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
+        wrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && open) { setOpen(false); btn.focus(); return; }
+          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+          e.preventDefault();
+          if (!open) { setOpen(true, true); return; }
+          const list = items(), i = list.indexOf(document.activeElement);
+          const next = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
+          list[next].focus();
+        });
+        menu.addEventListener('click', (e) => {
+          const choice = e.target.closest('.acct-seg button');
+          if (choice) { Momento.theme.set(choice.dataset.theme); return; }   // stays open so the change can be seen
+          const item = e.target.closest('.acct-item');
+          if (!item) return;
+          setOpen(false);
+          const act = item.dataset.act;
+          if (act === 'settings') Momento.openSettings(btn);
+          else if (act === 'help') Momento.openHelp(btn);
+          else { Momento.account.clear(); if (onLogout) onLogout(); }
+        });
+  
+        const syncSeg = () => {
+          segBtns.forEach((b, i) => {
+            const on = b.dataset.theme === Momento.theme.pref;
+            b.setAttribute('aria-checked', on);
+            if (on) seg.style.setProperty('--i', i);
+          });
+        };
+        Momento.theme.onChange(syncSeg);
+        syncSeg();
+        return { avatars: wrap.querySelectorAll('.acct-av'), name: wrap.querySelector('.acct-name'), headName: menu.querySelector('.acct-head b'), headMail: menu.querySelector('.acct-head small') };
+      }
+      function render() {
+        const a = current, show = !!a || !!always;
+        host.hidden = !show;
+        if (out) out.hidden = show;
+        if (!show) return;
+        built ||= build();
+        const name = (a && a.name) || '';
+        built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
+        built.name.textContent = first(name) || 'You';
+        built.headName.textContent = name || 'You';
+        built.headMail.textContent = (a && a.email) || 'Preview account';
+      }
+      accountListeners.add(render);
+      render();
+    }
+  
+    // ---- The thread: a faint string draws itself down the page as you scroll, with small see-through
+    // polaroids hung along it. A page marks the container:
+    //   <div class="trail" data-trail data-avoid="selectors of content to keep clear" data-pad="26">
+    // The string runs behind everything; a print is only hung where its box clears the avoided content ----
+    (function trail() {
+      const host = document.querySelector('[data-trail]');
+      if (!host) return;
+      const wrap = host.parentElement;
+      const IDS = [1062, 1011, 1027, 64, 1047, 1012, 177, 1025, 91, 1040, 1015, 1035, 1005, 1043, 1050, 1054, 1058, 1060, 1068, 1074];
+      const TILT = [-9, 6, -5, 10, -12, 4, -7, 8, -3, 12, -10, 5];
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      const path = document.createElementNS(NS, 'path');
+      svg.setAttribute('class', 'trail-svg'); path.setAttribute('class', 'trail-line'); svg.append(path);
+      const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+      let prints = [], lut = [], len = 0, target = 0, drawn = 0, raf = 0, timer = 0;
+  
+      function build() {
+        host.replaceChildren(svg); prints = []; lut = [];
+        const wr = wrap.getBoundingClientRect(), W = wrap.offsetWidth, H = wrap.offsetHeight;
+        const small = innerWidth < 700, pad = +host.dataset.pad || 26;
+        svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  
+        // A vertical trochoid: when the loop radius d outgrows the step r, the string curls
+        const y0 = innerHeight * .85, y1 = H - 40;
+        const r = clamp(W * .05, 46, 80) * (small ? .7 : 1), swing = small ? .26 : .36;
+        const pts = [];
+        for (let t = 0; ; t += .11) {
+          const d = r * (.55 + .95 * Math.max(0, Math.sin(t * .23 + 1)));
+          const y = y0 + r * t - d * Math.sin(t);
+          if (y > y1) break;
+          pts.push(`${(W / 2 + W * swing * Math.sin(t * .11) + W * .07 * Math.sin(t * .37) + d * Math.cos(t)).toFixed(1)},${y.toFixed(1)}`);
+        }
+        path.setAttribute('d', 'M' + pts.join(' L'));
+        len = path.getTotalLength();
+        path.style.strokeDasharray = len;
+        // Length against the furthest point reached so far, so the loops don't confuse the search
+        let maxY = -Infinity;
+        for (let i = 0; i <= 600; i++) {
+          const l = len * i / 600;
+          maxY = Math.max(maxY, path.getPointAtLength(l).y);
+          lut.push([l, maxY]);
+        }
+  
+        // The content to keep clear of, measured once, relative to the page: whole blocks the page names
+        // (data-avoid), plus every line of text, picture and control, so a print can hang in the empty
+        // parts of a glass panel but never under what you read
+        const blocks = [];
+        const keep = (b, p) => { if (b.width > 1 && b.height > 1) blocks.push({ l: b.left - wr.left - p, t: b.top - wr.top - p, r: b.right - wr.left + p, b: b.bottom - wr.top + p }); };
+        const sel = host.dataset.avoid || '';
+        if (sel) wrap.querySelectorAll(sel).forEach((el) => keep(el.getBoundingClientRect(), pad));
+        wrap.querySelectorAll('img, svg, video, canvas, input, textarea, select, button, .btn').forEach((el) => {
+          if (!host.contains(el) && (el.tagName !== 'svg' || !el.parentElement.closest('svg'))) keep(el.getBoundingClientRect(), 8);
+        });
+        const range = document.createRange();
+        const words = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
+        for (let n; (n = words.nextNode());) {
+          if (!n.nodeValue.trim() || host.contains(n) || /^(SCRIPT|STYLE|NOSCRIPT)$/.test(n.parentElement.tagName)) continue;
+          range.selectNodeContents(n);
+          for (const q of range.getClientRects()) keep(q, 10);
+        }
+        const hits = (x, y, w, h) => blocks.some((b) => x + w > b.l && x < b.r && y + h > b.t && y < b.b);
+  
+        // Hang a print every so often along the string, wherever there is room for it
+        const gap = small ? 80 : 90, kept = [];
+        let k = 0;
+        for (let l = 140; l < len - 40; l += gap) {
+          const p = path.getPointAtLength(l), q = path.getPointAtLength(l + 4);
+          const pw = (small ? 30 : 36) + (k % 3) * 4, ph = pw + 9;
+          const x = p.x - pw / 2, y = p.y - 2;
+          if (x < 8 || x + pw > W - 8 || y < 80 || y + ph > H - 40 || hits(x, y, pw, ph)) continue;
+          // Not too near the last one: prints are an accent on the string, not a row of photos
+          if (kept.some((o) => Math.hypot(o.x - x, o.y - y) < 150)) continue;
+          kept.push({ x, y });
+          // It hangs under the string, leaning a little with the string's direction
+          const dev = ((Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI - 90 + 540) % 360) - 180;
+          const el = document.createElement('span');
+          el.className = 'tp';
+          el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * .25, -14, 14) + TILT[k % TILT.length] * .5).toFixed(1)}deg`;
+          el.innerHTML = `<img src="https://picsum.photos/id/${IDS[k % IDS.length]}/96/96" alt="" loading="lazy" decoding="async" draggable="false">`;
+          host.append(el);
+          prints.push({ el, l, on: false });
+          k++;
+        }
+        drawn = reduced.matches ? len : Math.min(drawn, len);
+        target = reduced.matches ? len : aim();
+        write();
+        if (drawn !== target) kick();
+      }
+  
+      // How far along the string the reading line (a little above the bottom of the screen) has got
+      function aim() {
+        if (!lut.length) return 0;
+        const y = scrollY + innerHeight * .7;
+        let lo = 0, hi = lut.length - 1;
+        while (lo < hi) { const mid = (lo + hi) >> 1; lut[mid][1] < y ? lo = mid + 1 : hi = mid; }
+        return lut[lo][0];
+      }
+      function write() {
+        path.style.strokeDashoffset = (len - drawn).toFixed(1);
+        for (const p of prints) {
+          const on = p.l <= drawn;
+          if (on !== p.on) { p.on = on; p.el.classList.toggle('is-on', on); }
+        }
+      }
+      // The string eases toward the reading line; the loop stops as soon as it gets there
+      function tick() {
+        raf = 0;
+        const d = target - drawn;
+        drawn = Math.abs(d) < .5 ? target : drawn + d * .2;
+        write();
+        if (drawn !== target) raf = requestAnimationFrame(tick);
+      }
+      function kick() { if (!raf) raf = requestAnimationFrame(tick); }
+  
+      if (!reduced.matches) addEventListener('scroll', () => { target = aim(); kick(); }, { passive: true });
+      new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(build, 250); }).observe(wrap);
+      // Text that is still rising into place when the page first measures is measured again once it has settled
+      const later = (ms) => () => { clearTimeout(timer); timer = setTimeout(build, ms); };
+      addEventListener('load', later(1800));
+      document.addEventListener('momento:intro-end', later(1600));
+    })();
+  
+    // ---- Leaving a page, in browsers that can't cross-fade between pages themselves: the page fades and
+    // lifts away (CSS .is-leaving), then the next one loads ----
+    if (!('CSSViewTransitionRule' in window) && !reduced.matches) {
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a[href]');
+        if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute('download')) return;
+        const url = new URL(a.href, location.href);
+        if (url.origin !== location.origin || url.pathname === location.pathname) return;   // other sites, mailto:, same-page anchors
+        e.preventDefault();
+        root.classList.add('is-leaving');
+        setTimeout(() => { location.href = url.href; }, 240);
+      });
+      addEventListener('pageshow', (e) => { if (e.persisted) root.classList.remove('is-leaving'); });   // back from the page cache
+    }
+  
+    // ---- Page intros ----
+    // A page puts a veil (#intro) over itself and plays a short sequence once per tab session, ending by
+    // handing off to real elements (the header logo, an album cover, a nav icon). Momento.intro(run) gives
+    // `run` a small kit. A press, key, wheel or touch skips straight to the finished page.
+    Momento.intro = (run) => {
+      const veil = document.getElementById('intro');
+      if (!root.classList.contains('intro-on')) { if (veil) veil.remove(); return; }
+      const anims = [], undo = [];
+      let done = false, revealed = false;
+      // The moment the page's own entrance (groups rising in, headings) may begin
+      const reveal = () => { if (!revealed) { revealed = true; document.dispatchEvent(new Event('momento:intro-reveal')); } };
+      const EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+      const skip = () => finish(true);
+      function finish(skipped) {
+        if (done) return;
+        done = true;
+        EVENTS.forEach((t) => removeEventListener(t, skip, true));
+        root.classList.remove('intro-on');
+        anims.forEach((a) => a.cancel());
+        undo.forEach((fn) => fn());
+        try { sessionStorage.setItem('momento-intro-' + root.dataset.page, '1'); } catch (e) {}
+        reveal();
+        document.dispatchEvent(new Event('momento:intro-end'));
+        if (!veil) return;
+        if (!skipped) { veil.remove(); return; }
+        // Skipped: the veil keeps catching the press for a moment, then fades off the finished page
+        veil.style.display = 'block';
+        veil.animate({ opacity: [1, 0] }, { duration: 260, easing: 'ease-out' }).finished.then(() => veil.remove(), () => veil.remove());
+      }
+      // Once the intro has finished (or been skipped) nothing in the sequence may carry on: its promises
+      // simply never settle, so the code after an `await` never runs against elements that are gone
+      const never = new Promise(() => {});
+      const kit = {
+        get done() { return done; },
+        reveal, finish,
+        undo: (fn) => undo.push(fn),
+        // Plays an animation that holds its end state until the intro finishes; resolves when it ends
+        play(el, frames, opts = {}) {
+          if (done || !el) return never;
+          const a = el.animate(frames, { fill: 'both', ...opts });
+          anims.push(a);
+          return a.finished.then(() => {}, () => never);
+        },
+        // Keeps a real element invisible until its turn
+        hold: (el) => kit.play(el, [{ opacity: 0 }, { opacity: 0 }], { duration: 1 }),
+        wait: (ms) => new Promise((r) => setTimeout(() => { if (!done) r(); }, ms)),
+        // Calls fn(progress 0..1) every frame for `ms`
+        tween: (ms, fn) => new Promise((res) => {
+          const t0 = performance.now();
+          const step = (t) => { if (done) return; const p = Math.min(1, (t - t0) / ms); fn(p); if (p < 1) requestAnimationFrame(step); else res(); };
+          requestAnimationFrame(step);
+        }),
+        // Where `el` would have to move and scale (about its top left) to cover `to`
+        flip(el, to) {
+          const a = el.getBoundingClientRect();
+          return `translate(${to.left - a.left}px, ${to.top - a.top}px) scale(${to.width / a.width}, ${to.height / a.height})`;
+        },
+      };
+      if (scrollY > 40) { finish(); return; }   // reopened part-way down: no intro
+      EVENTS.forEach((t) => addEventListener(t, skip, { capture: true, passive: true }));
+      setTimeout(() => finish(), 9000);
+      Promise.resolve().then(() => run(kit)).then(() => finish(), (e) => { console.error(e); finish(true); });
+    };
+  
+    // ---- Site footer: one footer for every page. A page marks it <footer class="site-foot" data-site-foot> ----
+    document.querySelectorAll('[data-site-foot]').forEach((foot) => {
+      const home = root.dataset.page === 'home', P = home ? '' : 'index.html';
+      const up = svg('<path d="M12 19V5M6 11l6-6 6 6"/>', 15);
+      foot.innerHTML = `
+        <div class="sf-grid">
+          <div class="sf-brand">
+            <a class="sf-logo" href="${home ? '#home' : 'index.html'}" aria-label="Momento, home"><svg class="glyph" aria-hidden="true"><use href="#glyph-album"/></svg><svg class="brand-word" aria-hidden="true"><use href="#wordmark"/></svg></a>
+            <p>Every photo from your event, in one shared album.</p>
+          </div>
+          <nav class="sf-col" aria-labelledby="sfProduct">
+            <h2 id="sfProduct">Product</h2>
+            <ul>
+              <li><a class="sf-link" href="${P}#how-it-works">How it works</a></li>
+              <li><a class="sf-link" href="${P}#features">Features</a></li>
+              <li><a class="sf-link" href="${P}#for-hosts">For hosts</a></li>
+              <li><a class="sf-link" href="${P}#pricing">Pricing</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfAlbums">
+            <h2 id="sfAlbums">Your albums</h2>
+            <ul>
+              <li><a class="sf-link" href="albums.html">My albums</a></li>
+              <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="${P}#for-hosts">Create an album</a></li>
+              <li><a class="sf-link" href="settings.html">Settings</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfHelp">
+            <h2 id="sfHelp">Help</h2>
+            <ul>
+              <li><button class="sf-link" type="button" data-foot-act="help">Help and support</button></li>
+              <li><a class="sf-link" href="support.html">Contact support</a></li>
+              <li><a class="sf-link" href="${P}#faq">FAQ</a></li>
+              <li><a class="sf-link" href="mailto:${SUPPORT}">Email support</a></li>
+              <li data-foot-account hidden><button class="sf-link" type="button" data-foot-act="settings">Account settings</button></li>
+            </ul>
+          </nav>
+        </div>
+        <div class="sf-base">
+          <p class="sf-legal"><span>© 2026 HexArch Limited</span><span>Proof of concept. Design and features are subject to change.</span></p>
+          <div class="acct-seg" role="radiogroup" aria-label="Appearance">
+            <span class="acct-seg-pill" aria-hidden="true"></span>
+            <button type="button" role="radio" aria-checked="false" data-theme="light">${ICON.sun}Light</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="dark">${ICON.moon}Dark</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="system">${ICON.system}System</button>
+          </div>
+          <button class="sf-top sf-link" type="button">Back to top${up}</button>
+        </div>`;
+      wireSeg(foot.querySelector('.acct-seg'));
+      foot.querySelectorAll('[data-foot-act]').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.footAct === 'help') Momento.openHelp(b); else Momento.openSettings(b);
+      }));
+      foot.querySelector('.sf-top').addEventListener('click', () => scrollTo({ top: 0, behavior: reduced.matches ? 'auto' : 'smooth' }));
+      // Account settings only makes sense once there is an account
+      const acct = foot.querySelector('[data-foot-account]');
+      const syncAcct = () => { acct.hidden = !current; };
+      accountListeners.add(syncAcct); syncAcct();
+      // On the home page its own sections are reached the way its menu does it (the album stage is pinned)
+      if (home) foot.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href^="#"]');
+        if (!a || a.matches('.sf-logo')) return;
+        const item = document.querySelector(`.menu-item[href="${a.getAttribute('href')}"]`);
+        if (item) { e.preventDefault(); item.click(); }
+      });
+    });
+  
+    // Pages mark where the chip goes:
+    //   <div data-acct-host hidden data-acct-out="authOut"></div>            (home: shown once signed in)
+    //   <div data-acct-host data-acct-always data-acct-logout="index.html">   (albums: always there)
+    document.querySelectorAll('[data-acct-host]').forEach((host) => {
+      const to = host.dataset.acctLogout;
+      mountAccount({
+        host,
+        out: host.dataset.acctOut ? document.getElementById(host.dataset.acctOut) : null,
+        always: host.hasAttribute('data-acct-always'),
+        onLogout: to ? () => { location.href = to; } : null,
+      });
+    });
+  })();
+    </script>
+  <!-- /@shared:js -->
+</body>
+</html>
