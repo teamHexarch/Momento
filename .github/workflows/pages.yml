@@ -1,0 +1,47 @@
+# Publishes the Client folder to https://hexarch.org (GitHub Pages) on every push that
+# changes it. Only the files the site needs are published; design-time files in Client/
+# (CLAUDE.md, serve.mjs, screenshot.mjs, screenshots) stay in the repo but aren't served.
+#
+# Needs Settings > Pages > Build and deployment > Source set to "GitHub Actions".
+
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+    paths: ['Client/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the public site files
+        run: |
+          mkdir -p _site/assets
+          cp Client/index.html Client/albums.html Client/CNAME _site/
+          cp Client/assets/*.js Client/assets/momento-icon.png _site/assets/
+          ls -R _site
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
