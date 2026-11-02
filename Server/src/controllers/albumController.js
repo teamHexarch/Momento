@@ -142,7 +142,11 @@ export async function list(req, res) {
     statsFor(ids, req.user._id),
     Photo.find({ album: { $in: ids } }).sort({ createdAt: -1 }).limit(80).populate('uploader', 'name'),
     waitingGuests(hostedIds),
-    Invite.find({ email: req.user.email, album: { $nin: ids } }).sort({ createdAt: -1 }).limit(10).populate('album').populate('invitedBy', 'name'),
+    // Only to someone who has proved the address is theirs: anyone can sign up with an email they
+    // don't own, and an invite carries the album's join code
+    req.user.emailVerified
+      ? Invite.find({ email: req.user.email, album: { $nin: ids } }).sort({ createdAt: -1 }).limit(10).populate('album').populate('invitedBy', 'name')
+      : [],
   ]);
   const albums = mine
     .map((m) => ({ ...summary(m.album, m.role, stats.get(String(m.album._id))), ...(m.role === 'host' && { waiting: waiting.get(String(m.album._id)) || 0 }) }))
@@ -202,7 +206,8 @@ export async function join(req, res) {
       m = await Membership.findOne({ album: album._id, user: req.user._id });
     }
   }
-  await Invite.deleteMany({ album: album._id, email: req.user.email });
+  // (only for a confirmed address, so an unconfirmed sign-up can't clear the real person's invite)
+  if (req.user.emailVerified) await Invite.deleteMany({ album: album._id, email: req.user.email });
   const stats = await statsFor([album._id], req.user._id);
   res.status(already ? 200 : 201).json({ already, album: summary(album, m.role, stats.get(String(album._id))) });
 }
@@ -314,9 +319,12 @@ const REMIND_EVERY_MS = 24 * 3600000;
 const REMIND_MAX = 25;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Host actions send email from our domain to other people, so they need a confirmed address:
+// otherwise a throwaway account could use Momento to send "invites" to anyone
 async function hostedAlbum(req) {
   const m = await membershipOf(req, req.params.id);
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can do that.');
+  if (!req.user.emailVerified) throw new HttpError(403, 'Confirm your email first: we sent you a link when you signed up (My albums can send it again).');
   return m.album;
 }
 
@@ -325,11 +333,14 @@ export async function remind(req, res) {
   const album = await hostedAlbum(req);
   const { open, closes } = lifecycle(album.date);
   if (!open) throw new HttpError(400, 'This album has closed, so there’s nothing to add any more.');
-  if (album.lastReminderAt && Date.now() - album.lastReminderAt < REMIND_EVERY_MS) {
-    throw new HttpError(429, 'You’ve already sent a reminder today. Try again tomorrow.');
-  }
   const waiting = await waitingGuests([album._id]);
   if (!waiting.get(String(album._id))) throw new HttpError(400, 'Every guest has added photos already.');
+  // Claim today's reminder in one step, so two quick clicks can't both send
+  const claimed = await Album.findOneAndUpdate(
+    { _id: album._id, $or: [{ lastReminderAt: { $exists: false } }, { lastReminderAt: null }, { lastReminderAt: { $lt: new Date(Date.now() - REMIND_EVERY_MS) } }] },
+    { lastReminderAt: new Date() },
+  );
+  if (!claimed) throw new HttpError(429, 'You’ve already sent a reminder today. Try again tomorrow.');
   const [guests, contributors] = await Promise.all([
     Membership.find({ album: album._id, role: 'guest' }, 'user'),
     Photo.distinct('uploader', { album: album._id }),
@@ -337,8 +348,6 @@ export async function remind(req, res) {
   const added = new Set(contributors.map(String));
   const ids = guests.map((g) => g.user).filter((u) => !added.has(String(u))).slice(0, REMIND_MAX);
   const people = await User.find({ _id: { $in: ids } }, 'name email');
-  album.lastReminderAt = new Date();
-  await album.save();
   const link = `${config.frontendUrl}/albums.html?album=${album.id}`;
   const info = { name: album.name, closesLabel: closesLabel(closes) };
   const results = await Promise.allSettled(people.map((p) => sendEmail({
