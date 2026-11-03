@@ -23,6 +23,11 @@ const corsOrigins = (env.CORS_ORIGINS || [frontendUrl, 'http://localhost:3000', 
   .split(',').map((o) => trimSlash(o.trim())).filter(Boolean);
 
 export const config = {
+  turnstile: {
+    siteKey: env.TURNSTILE_SITE_KEY || '',
+    secretKey: env.TURNSTILE_SECRET_KEY || '',
+    hostnames: (env.TURNSTILE_HOSTNAMES || new URL(frontendUrl).hostname).split(',').map((s) => s.trim()).filter(Boolean),
+  },
   port: Number(env.PORT) || 4000,
   mongoUri: required('MONGODB_URI'),
   jwtSecret,

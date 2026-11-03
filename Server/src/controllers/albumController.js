@@ -16,6 +16,7 @@ import { savePhoto, deletePhotos, openPhoto } from '../services/storageService.j
 const PREVIEW_PICS = 9;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
 const photoUrl = (id) => `${config.publicUrl}/api/photos/${id}`;
+const thumbnailUrl = (id) => `${photoUrl(id)}?size=thumb`;
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 
 // An album's life: 'upcoming' before the day, 'live' around the day itself and the day after
@@ -62,7 +63,7 @@ async function statsFor(albumIds, userId) {
     ]),
   ]);
   const byAlbum = new Map(albumIds.map((id) => [String(id), { photos: 0, mine: 0, pics: [], guests: 0 }]));
-  for (const s of photoStats) Object.assign(byAlbum.get(String(s._id)), { photos: s.photos, mine: s.mine, pics: s.pics.map(photoUrl) });
+  for (const s of photoStats) Object.assign(byAlbum.get(String(s._id)), { photos: s.photos, mine: s.mine, pics: s.pics.map(thumbnailUrl) });
   for (const s of memberStats) byAlbum.get(String(s._id)).guests = s.guests;
   return byAlbum;
 }
@@ -157,7 +158,7 @@ export async function list(req, res) {
     recent: recent.slice(0, 12).map((p) => ({
       albumId: String(p.album),
       photoId: p.id,
-      url: photoUrl(p.id),
+      url: thumbnailUrl(p.id),
       by: p.uploader?._id.equals(req.user._id) ? 'You' : firstName(p.uploader?.name),
       at: p.createdAt,
     })),
@@ -224,7 +225,7 @@ export async function show(req, res) {
     album: summary(m.album, m.role, stats.get(String(m.album._id))),
     photos: photos.map((p) => {
       const mine = p.uploader?._id.equals(req.user._id);
-      return { id: p.id, url: photoUrl(p.id), by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt };
+      return { id: p.id, url: `${photoUrl(p.id)}?size=preview`, thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt };
     }),
   });
 }
@@ -278,11 +279,12 @@ export async function addPhotos(req, res) {
   const album = req.membership.album;
   const saved = [];
   for (const f of files) {
-    const storageKey = await savePhoto(album.id, f.buffer, f.mimetype);
-    const p = await Photo.create({
-      album: album._id, uploader: req.user._id, storageKey,
-      originalName: f.originalname.slice(0, 200), mimeType: f.mimetype, size: f.size,
-    });
+    const stored = await savePhoto(album.id, f.buffer);
+    let p;
+    try { p = await Photo.create({
+      album: album._id, uploader: req.user._id, ...stored,
+      originalName: f.originalname.slice(0, 200),
+    }); } catch (err) { await deletePhotos([stored.storageKey]); throw err; }
     saved.push({ id: p.id, url: photoUrl(p.id), by: 'You', mine: true, at: p.createdAt });
   }
   res.status(201).json({ photos: saved });

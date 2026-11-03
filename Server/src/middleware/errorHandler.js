@@ -4,7 +4,7 @@ import { EmailError } from '../services/emailService.js';
 // Turns anything a route throws into { error } with a sensible status
 export function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
-  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
+  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, ...(err.code && { code: err.code }) });
   if (err instanceof EmailError) {
     console.error(`Email failed: ${err.message}`);
     return res.status(502).json({ error: 'We couldn’t send the email just now. Try again in a few minutes.' });

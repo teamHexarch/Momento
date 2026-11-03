@@ -12,6 +12,12 @@ const userSchema = new mongoose.Schema({
   googleId: { type: String, unique: true, sparse: true },
   appleId: { type: String, unique: true, sparse: true },
   lastLoginAt: Date,
+  // One record per login. Never apply a TTL index here: that would delete users.
+  sessions: {
+    type: [{ _id: false, id: { type: String, required: true }, expiresAt: { type: Date, required: true } }],
+    default: [],
+    select: false,
+  },
   // Logins issued before this moment are refused (set when the password is reset)
   passwordChangedAt: Date,
   // Which emails they want (only the choice is stored; sending them comes later)

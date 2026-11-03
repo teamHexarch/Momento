@@ -16,7 +16,19 @@ async function photoFor(req) {
 export async function file(req, res) {
   const { photo } = await photoFor(req);
   // From disk: the file itself. From R2: a short-lived link straight to Cloudflare.
-  if (!(await sendPhoto(res, photo.storageKey, photo.mimeType))) throw new HttpError(404, 'Photo file is missing.');
+  const thumbnail = req.query.size === 'thumb' && photo.thumbnailKey;
+  const preview = req.query.size === 'preview' && photo.previewKey;
+  if (!(await sendPhoto(res, thumbnail || preview || photo.storageKey, thumbnail ? 'image/webp' : preview ? photo.previewMimeType : photo.mimeType))) throw new HttpError(404, 'Photo file is missing.');
+}
+
+export async function download(req, res) {
+  const { photo } = await photoFor(req);
+  const { openPhoto } = await import('../services/storageService.js');
+  const stream = await openPhoto(photo.storageKey);
+  res.attachment(`photo-${photo.id}${photo.storageKey.slice(photo.storageKey.lastIndexOf('.'))}`);
+  res.type(photo.mimeType);
+  stream.on('error', (err) => res.destroy(err));
+  stream.pipe(res);
 }
 
 // The person who added a photo, or the host, can take it down

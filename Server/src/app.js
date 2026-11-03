@@ -29,6 +29,7 @@ app.use(loadUser);
 // What the browser needs to start Google and Apple sign-in (all public values)
 app.get('/api/config', (req, res) => {
   res.json({
+    turnstileSiteKey: config.turnstile.secretKey ? config.turnstile.siteKey : null,
     googleClientId: config.google.clientId && config.google.clientSecret ? config.google.clientId : null,
     apple: !!config.apple.clientId,
   });

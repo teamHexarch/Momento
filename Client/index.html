@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en" data-page="home">
 <head>
+  <script src="assets/api.js"></script>
+  <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
@@ -29,41 +31,6 @@
         }, 10000);
       }
     } catch (e) {}
-  })();
-  </script>
-  <script>
-  // Albums you create, join or remove, kept in this browser (localStorage) so every page agrees.
-  // Pages hear about changes through a `momento:albums` event on document.
-  window.MomentoStore = (() => {
-    const MINE = 'momento-my-albums', GONE = 'momento-removed';
-    const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
-    const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-    const tell = (detail) => document.dispatchEvent(new CustomEvent('momento:albums', { detail }));
-    const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I to misread
-    return {
-      created: () => read(MINE, []),
-      removed: () => read(GONE, []),
-      find: (id) => read(MINE, []).find((a) => a.id === id) || null,
-      findCode: (code) => read(MINE, []).find((a) => a.code.replace('-', '') === code.replace('-', '')) || null,
-      add(a) { write(MINE, [a, ...read(MINE, []).filter((x) => x.id !== a.id)]); tell({ type: 'add', album: a }); },
-      // Albums made here are dropped; the sample albums are remembered as removed
-      remove(id) {
-        const list = read(MINE, []), hit = list.find((x) => x.id === id) || null;
-        if (hit) write(MINE, list.filter((x) => x.id !== id));
-        else write(GONE, [...new Set([...read(GONE, []), id])]);
-        tell({ type: 'remove', id });
-        return hit;
-      },
-      restore(id, saved) {
-        if (saved) write(MINE, [saved, ...read(MINE, []).filter((x) => x.id !== id)]);
-        else write(GONE, read(GONE, []).filter((x) => x !== id));
-        tell({ type: 'restore', id, album: saved });
-      },
-      code() {
-        const pick = () => CHARS[Math.floor(Math.random() * CHARS.length)];
-        return `${pick()}${pick()}${pick()}-${pick()}${pick()}${pick()}${pick()}`;
-      },
-    };
   })();
   </script>
   <!-- /@shared:boot -->
@@ -1914,10 +1881,11 @@
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
         <label class="auth-field"><span>Password</span><input name="password" type="password" autocomplete="new-password"></label>
         <a class="auth-forgot" data-only="login" href="#">Forgot your password?</a>
+        <div data-only="signup"><div id="signupCaptcha"></div><p id="captchaStatus" role="status"></p></div>
         <p class="auth-error" id="authError" role="alert"></p>
         <button class="btn btn-dark auth-submit" type="submit" id="authSubmit">Create account</button>
         <button class="auth-skip" type="button" id="authSkip" hidden>Just look at the album for now</button>
-        <p class="auth-note">This is a preview. No account is made and nothing you type leaves this page.</p>
+        <p class="auth-note">Your account keeps your albums together. Please verify your email after signing up.</p>
       </div>
       <div class="auth-done" id="authDone" hidden role="status">
         <i><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></i>
@@ -3036,7 +3004,7 @@
       menu.addEventListener('touchmove', (e) => { if (drag?.on) e.preventDefault(); }, { passive: false });
       menu.addEventListener('contextmenu', (e) => { if (drag) e.preventDefault(); });
 
-      menu.addEventListener('click', (e) => {
+      menu.addEventListener('click', async (e) => {
         const item = e.target.closest('.menu-item');
         if (!item) return;
         e.preventDefault();
@@ -3065,6 +3033,37 @@
       const skip = document.getElementById('authSkip');
       const error = document.getElementById('authError');
       const submit = document.getElementById('authSubmit');
+      let captchaWidget = null, captchaToken = '', captchaLoading = null;
+      const captchaStatus = document.getElementById('captchaStatus');
+      async function prepareCaptcha() {
+        if (captchaWidget !== null) return;
+        if (captchaLoading) return captchaLoading;
+        captchaLoading = (async () => {
+          captchaStatus.textContent = 'Loading security check…';
+          try {
+            const { turnstileSiteKey } = await momentoApi('/api/config');
+            if (!turnstileSiteKey) throw new Error('Sign-up is temporarily unavailable. Please try again later.');
+            if (!window.turnstile) await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              const timer = setTimeout(() => { script.remove(); reject(new Error('Security check could not load. Reopen sign-up to retry.')); }, 15000);
+              script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+              script.async = true;
+              script.onload = () => { clearTimeout(timer); resolve(); };
+              script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error('Security check could not load. Reopen sign-up to retry.')); };
+              document.head.append(script);
+            });
+            captchaWidget = window.turnstile.render('#signupCaptcha', {
+              sitekey: turnstileSiteKey, action: 'signup',
+              callback: (token) => { captchaToken = token; captchaStatus.textContent = ''; },
+              'expired-callback': () => { captchaToken = ''; captchaStatus.textContent = 'Security check expired. Please complete it again.'; },
+              'error-callback': () => { captchaToken = ''; captchaStatus.textContent = 'Security check failed. Please retry or reload the page.'; },
+            });
+            captchaStatus.textContent = '';
+          } catch (err) { captchaStatus.textContent = err.message; }
+        })();
+        await captchaLoading;
+        captchaLoading = null;
+      }
       const tabs = [...form.querySelectorAll('[role="tab"]')];
       let onDone = null, fromScan = false;
 
@@ -3072,6 +3071,7 @@
       const setLabel = (btn, text) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
       function setMode(mode) {
         form.dataset.mode = mode;
+        if (mode === 'signup') void prepareCaptcha();
         tabs.forEach((t) => t.setAttribute('aria-selected', t.dataset.mode === mode));
         field('password').autocomplete =mode === 'signup' ? 'new-password' : 'current-password';
         error.textContent = '';
@@ -3085,10 +3085,11 @@
         setLabel(submit, mode === 'signup' ? 'Create account' : 'Log in');
       }
 
-      window.openAuth = (opts = {}) => {
+      window.openAuth = async (opts = {}) => {
+        try { await Momento.sessionReady; } catch {} 
         onDone = opts.onDone || null;
         fromScan = !!opts.fromScan;
-        if (window.Momento.account.get()) { finish(); return; }   // already signed in: carry straight on
+        if (window.Momento.account.get()) { location.href = 'albums.html'; return; }   // already signed in: carry straight on
         scanNote.hidden = !fromScan;
         skip.hidden = !fromScan;
         body.hidden = false; done.hidden = true;
@@ -3109,28 +3110,39 @@
       skip.addEventListener('click', () => dialog.close());
       dialog.addEventListener('pointerdown', (e) => { dialog._downOutside = e.target === dialog; }); dialog.addEventListener('click', (e) => { if (e.target === dialog && dialog._downOutside) dialog.close(); });   // click outside the card
       tabs.forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
-      form.querySelector('.auth-forgot').addEventListener('click', (e) => { e.preventDefault(); error.textContent = 'Password reset isn’t available in this preview.'; });
-
-      function signedIn(name, how, email = '') {
-        body.hidden = true; done.hidden = false;
-        document.getElementById('authDoneTitle').textContent = name ? `Welcome, ${name.split(' ')[0]}` : 'You’re in';
-        document.getElementById('authDoneSub').textContent = fromScan ? 'Opening the album…' : how;
-        // The header swaps Log in / Sign up for the account chip, which both pages share
-        window.Momento.account.set({ name, email });
-        setTimeout(() => dialog.close(), still ? 300 : 1300);
-      }
-      form.querySelectorAll('.auth-alt').forEach((b) => b.addEventListener('click', () => signedIn('', `Signed in with ${b.dataset.provider}.`)));
-      form.addEventListener('submit', (e) => {
+      form.querySelector('.auth-forgot').addEventListener('click', async (e) => {
         e.preventDefault();
+        const email = field('email').value.trim();
+        if (!email) { error.textContent = 'Enter your email first.'; return; }
+        try { await momentoApi('/api/auth/password/forgot', momentoJson('POST', { email })); error.textContent = 'If this account exists, a password reset link has been sent.'; }
+        catch (err) { error.textContent = err.message; }
+      });
+
+      form.querySelectorAll('.auth-alt').forEach((b) => { b.hidden = true; });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (submit.disabled) return;
         const signup = form.dataset.mode === 'signup';
         const name = field('name').value.trim(), email = field('email').value.trim(), pass = field('password').value;
         if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
         if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
-        field('password').value = '';
-        signedIn(signup ? name : '', signup ? 'Your account is ready.' : 'You’re logged in.', email);
+        submit.disabled = true;
+        error.textContent = '';
+        try {
+          if (signup && !captchaToken) throw new Error('Complete the security check before signing up.');
+          const { user } = await momentoApi('/api/auth/' + (signup ? 'signup' : 'login'), momentoJson('POST', { name, email, password: pass, ...(signup ? { captchaToken } : {}) }));
+          field('password').value = '';
+          Momento.account.set(user);
+          location.href = 'albums.html';
+        } catch (err) { error.textContent = err.message; }
+        finally {
+          submit.disabled = false;
+          if (signup && captchaWidget !== null) { captchaToken = ''; window.turnstile.reset(captchaWidget); }
+        }
       });
       document.querySelectorAll('[data-auth]').forEach((b) => b.addEventListener('click', () => window.openAuth({ mode: b.dataset.auth })));
+      document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).has('login')) window.openAuth({ mode: 'login' }); });
     })();
 
     // ---- Sections: rise-in, steps, phone, zone slider, switches, FAQ, counters ----
@@ -3471,11 +3483,6 @@
     const accountListeners = new Set();
     const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
     let current = null;
-    try {
-      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
-      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
-    } catch (e) {}
-    current = norm(current);
     const persist = () => {
       try {
         if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
@@ -3494,6 +3501,12 @@
       onChange(fn) { accountListeners.add(fn); },
     };
   
+    Momento.sessionReady = momentoApi('/api/auth/me').then(({ user }) => {
+      if (user) Momento.account.set(user); else Momento.account.clear();
+      return user;
+    });
+    Momento.sessionReady.catch(() => {});
+
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
     const ICON = {
@@ -3569,7 +3582,7 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
+          <p class="acct-sub">Update your name and email notification preferences.</p>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
@@ -3587,14 +3600,18 @@
       const switches = [...d.querySelectorAll('.acct-sw')];
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        Momento.account.set({ name, email, notify });
+        if (email !== current.email) { say('Use your current email here. Contact support to change your email address.', true); return; }
+        try {
+          const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name, notify }));
+          Momento.account.set(user);
+        } catch (err) { say(err.message, true); return; }
         say('Saved');
         Momento.toast('Account settings saved', email || name);
         setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
@@ -3768,7 +3785,6 @@
     });
 
     // ---- Albums: create one (ending on a "created" screen with its guest code), and remove one ----
-    const Store = window.MomentoStore;
     const isoToday = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
     const onAlbums = /albums\.html$/.test(location.pathname);
     const viewAlbum = (id) => {
@@ -3789,11 +3805,11 @@
         ok: host ? 'Delete album' : 'Leave album',
       });
       if (!ok) return false;
-      const saved = Store.remove(a.id);
-      Momento.toast(host ? 'Album deleted' : 'You left the album', a.name, {
-        danger: true,
-        action: { label: 'Undo', run: () => { Store.restore(a.id, saved); Momento.toast(host ? 'Album restored' : 'You’re back in the album', a.name); } },
-      });
+      try {
+        await momentoApi('/api/albums/' + encodeURIComponent(a.id) + (host ? '' : '/membership'), { method: 'DELETE' });
+      } catch (err) { Momento.toast('Could not remove album', err.message); return false; }
+      document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'remove', id: a.id } }));
+      Momento.toast(host ? 'Album deleted' : 'You left the album', a.name);
       return true;
     };
 
@@ -3827,14 +3843,20 @@
       const showView = (v) => views.forEach((x) => { x.hidden = x.dataset.view !== v; });
       const say = (msg) => { status.textContent = msg; status.classList.toggle('is-error', !!msg); };
       let made = null;
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (form.dataset.busy) return;
         const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
         if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
         if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
         say('');
-        made = { id: `a-${Date.now().toString(36)}`, name, date, place, code: Store.code(), role: 'host', created: Date.now() };
-        Store.add(made);
+        form.dataset.busy = 'true';
+        const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+        try {
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place })));
+          document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
+        } catch (err) { say(err.message); return; }
+        finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
         d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}. Share this code so guests can join and add their photos.`;
         d.querySelector('.m-code b').textContent = made.code;
@@ -3934,7 +3956,7 @@
           const next = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
           list[next].focus();
         });
-        menu.addEventListener('click', (e) => {
+        menu.addEventListener('click', async (e) => {
           const choice = e.target.closest('.acct-seg button');
           if (choice) { Momento.theme.set(choice.dataset.theme); return; }   // stays open so the change can be seen
           const item = e.target.closest('.acct-item');
@@ -3943,7 +3965,7 @@
           const act = item.dataset.act;
           if (act === 'settings') Momento.openSettings(btn);
           else if (act === 'help') Momento.openHelp(btn);
-          else { Momento.account.clear(); if (onLogout) { Momento.flash('You’re logged out', 'Log back in any time'); onLogout(); } else Momento.toast('You’re logged out', 'Log back in any time'); }
+          else { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (err) { Momento.toast('Could not log out', err.message); return; } Momento.account.clear(); if (onLogout) { Momento.flash('You’re logged out', 'Log back in any time'); onLogout(); } else Momento.toast('You’re logged out', 'Log back in any time'); }
         });
   
         const syncSeg = () => {

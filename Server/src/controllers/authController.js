@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { verifySignupCaptcha } from '../services/captchaService.js';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -33,13 +34,14 @@ function providerNames(user) {
 async function signedIn(res, user, status = 200) {
   user.lastLoginAt = new Date();
   await user.save();
-  startSession(res, user);
+  await startSession(res, user);
   res.status(status).json({ user: user.toPublic() });
 }
 
 // ---- Email and password ----
 
 export async function signup(req, res) {
+  await verifySignupCaptcha(req.body?.captchaToken, config.turnstile);
   const { name, email, password } = readCredentials(req.body, { needName: true });
   const existing = await User.findOne({ email }).select('+passwordHash');
   if (existing) {
@@ -71,8 +73,8 @@ export async function login(req, res) {
   await signedIn(res, user);
 }
 
-export function logout(req, res) {
-  endSession(res);
+export async function logout(req, res) {
+  await endSession(req, res);
   res.json({ ok: true });
 }
 
@@ -126,7 +128,7 @@ export async function confirmEmailChange(req, res) {
 export async function deleteMe(req, res) {
   await checkPassword(req.user, req.body?.password);
   await deleteAccount(req.user);
-  endSession(res);
+  await endSession(req, res);
   res.json({ ok: true });
 }
 

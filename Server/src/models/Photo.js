@@ -5,6 +5,9 @@ const photoSchema = new mongoose.Schema({
   uploader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   // Path inside the upload folder, e.g. "<albumId>/<random>.jpg"
   storageKey: { type: String, required: true },
+  thumbnailKey: String,
+  previewKey: String,
+  previewMimeType: String,
   originalName: { type: String, default: '' },
   mimeType: { type: String, required: true },
   size: { type: Number, required: true },

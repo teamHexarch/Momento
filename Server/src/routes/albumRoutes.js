@@ -2,18 +2,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { config } from '../config/env.js';
-import { requireUser } from '../middleware/authMiddleware.js';
-import { HttpError } from '../utils/httpError.js';
-import { ALLOWED_TYPES } from '../services/storageService.js';
+import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.maxUploadBytes, files: 30 },
-  fileFilter: (req, file, cb) => {
-    if (ALLOWED_TYPES.includes(file.mimetype)) cb(null, true);
-    else cb(new HttpError(400, `${file.originalname} isn’t a photo we can take (JPEG, PNG, WebP, HEIC or GIF).`));
-  },
+  // MIME types and names come from the client and are not proof of image content.
+  // savePhoto fully decodes and re-encodes allowed image formats before any write.
 });
 
 // Codes have ~17 billion combinations, but guessing is capped anyway: 30 tries an hour per account
@@ -27,7 +23,7 @@ const joinLimit = rateLimit({
 });
 
 export const albumRoutes = Router();
-albumRoutes.use(requireUser);
+albumRoutes.use(requireVerified);
 
 albumRoutes.get('/', albums.list);
 albumRoutes.post('/', albums.create);
