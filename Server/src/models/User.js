@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
   googleId: { type: String, unique: true, sparse: true },
   appleId: { type: String, unique: true, sparse: true },
   lastLoginAt: Date,
+  verificationResendAt: Date,
   // One record per login. Never apply a TTL index here: that would delete users.
   sessions: {
     type: [{ _id: false, id: { type: String, required: true }, expiresAt: { type: Date, required: true } }],
@@ -36,6 +37,7 @@ userSchema.methods.toPublic = function () {
     email: this.email,
     avatarUrl: this.avatarUrl,
     emailVerified: this.emailVerified,
+    verificationResendAt: this.verificationResendAt || null,
     plan: this.plan,
     hasPassword: !!this.passwordHash,
     notify: { photos: this.notify?.photos ?? true, closing: this.notify?.closing ?? true, recap: this.notify?.recap ?? false },

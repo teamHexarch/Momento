@@ -24,6 +24,8 @@ each request; expired array entries are pruned on login. There is no TTL index
 on users, because it would delete entire user documents. Cookies issued by the
 previous separate-collection implementation require a fresh login. Any old
 sessions collection is unused; this change does not delete existing collections.
+Run `node .qa/session-validation.mjs` from the project root for isolated replay,
+multi-session, expiry, legacy-cookie and repeated logout checks.
 
 ### Connected frontend
 
@@ -46,11 +48,14 @@ For a local check, keep the server running and hard-refresh
 http://localhost:4000/albums.html. Log in with a real account and confirm its email.
 Create or join an open album, upload a GPS-tagged original, then download it and
 inspect its metadata. Existing stored photos are not retroactively sanitized.
+Frontend integration test instructions are in `../.qa/README.md`.
 
 ```
 Momento/
-  Client/                  the website: index.html, albums.html, settings.html, support.html, assets/ (icon, api.js)
+  Client/                  the website: index.html, albums.html, assets/ (icon, api.js)
+                           also design-time files: CLAUDE.md, serve.mjs, screenshot.mjs, temporary screenshots/
   Server/
+    scripts/               devMemory.js (temporary database), sendTestEmail.js
     src/
       app.js               builds the Express app: middleware, routes, the Client pages
       server.js            connects to MongoDB and starts listening
@@ -77,9 +82,11 @@ cp .env.example .env        # then fill in .env (see below)
 npm run dev                 # restarts on code changes; or: npm start
 ```
 
-Open **http://localhost:4000**.
+Open **http://localhost:4000**. You can also run `node serve.mjs` in `Client/` and open http://localhost:3000: the pages there talk to this server on port 4000, just as hexarch.org talks to api.hexarch.org.
 
 `Client/assets/api.js` decides where the pages send API calls: the same address on port 4000, `http://localhost:4000` from any other local port, and `https://api.hexarch.org` everywhere else.
+
+To try everything before Atlas is set up, run `npm run dev:memory`. It uses a temporary database that is wiped when it stops.
 
 ## 1. MongoDB Atlas
 
@@ -135,6 +142,7 @@ Momento sends its emails (confirm, reset, password changed) through **Resend** w
 1. Sign up at https://resend.com, then **Domains > Add Domain** `hexarch.org`.
 2. Add the records it shows in GoDaddy DNS (an MX and TXT named `send`, a TXT named `resend._domainkey`), then **Verify**. They don't affect Microsoft 365 mail.
 3. **API Keys > Create API Key** with **Sending access**, limited to hexarch.org. Put it in `RESEND_API_KEY`, and set `EMAIL_FROM`, e.g. `Momento <team@hexarch.org>`.
+4. Check it: `npm run email:test -- you@gmail.com`.
 
 ### Microsoft Graph (fallback)
 
@@ -145,6 +153,7 @@ Confirm-your-email messages are sent from a Microsoft 365 mailbox through an Ent
 3. **Certificates & secrets > New client secret**: copy its **Value** (shown once, not the Secret ID) to `MS_CLIENT_SECRET`. Note its expiry date; email stops when it expires.
 4. **API permissions > Add a permission > Microsoft Graph > Application permissions > Mail.Send**, then **Grant admin consent**. It must be an *application* permission, not delegated.
 5. Set `SENDER_EMAIL` to the mailbox to send from, e.g. `hello@yourdomain.com`. It must be a licensed Exchange Online mailbox (a shared mailbox works) in the same tenant.
+6. Check it: `npm run email:test -- you@example.com`. If Microsoft refuses, the script says what to fix.
 
 Mail.Send as an application permission lets the app send as *any* mailbox in the tenant. To limit it to `SENDER_EMAIL`, an Exchange admin can add an application access policy (`New-ApplicationAccessPolicy`, or the newer RBAC for Applications).
 
@@ -233,7 +242,7 @@ The live setup: **the site on https://hexarch.org** (any static host) and **the 
 2. In Render: **New > Web Service**, pick the repository, then:
    - **Root Directory:** `Server`
    - **Runtime:** Node
-   - **Build Command:** `npm ci --omit=dev`
+   - **Build Command:** `npm ci --omit=dev` (skips the test-only database download)
    - **Start Command:** `npm start`
    - **Health Check Path:** `/api/health`
 3. **Environment**: add every value from your `.env`, with these changes:
@@ -251,7 +260,7 @@ On Render's free plan the API goes to sleep after about 15 minutes without visit
 
 ### The site on hexarch.org
 
-The GitHub repo (teamHexarch/Momento) holds `Client/` and `Server/`. The workflow in `.github/workflows/pages.yml` publishes the site on every push that changes `Client/`, copying only `index.html`, `albums.html`, `settings.html`, `support.html`, `CNAME` and the plain files in `assets/`.
+The GitHub repo (teamHexarch/Momento) holds `Client/` and `Server/`. The workflow in `.github/workflows/pages.yml` publishes the site on every push that changes `Client/`, copying only `index.html`, `albums.html`, `CNAME` and the plain files in `assets/`. `CLAUDE.md`, `serve.mjs`, `screenshot.mjs` and the screenshots stay in the repo but are never served.
 
 Repo **Settings > Pages > Source** must be **GitHub Actions**, with the custom domain `hexarch.org`. Its DNS (GoDaddy) has GitHub Pages' four A records for `@`.
 
@@ -277,6 +286,11 @@ their stored file and are not regenerated. Deleting photos removes all variants.
 PNG transparency and GIF/WebP animation are retained. HEIC/HEIF decoding depends on the installed
 sharp/libvips build; unsupported files receive a 400 response asking for JPEG/PNG,
 and original bytes are never stored as a fallback.
+
+Run `node --test src/services/imageService.test.js` for local checks.
+Run `node --env-file=.env scripts/testPhotoPrivacy.js` to test the configured
+storage: it uploads a synthetic image to `test-upload`, reads it back, verifies
+metadata removal and deletes only its own test object. It does not write to MongoDB.
 
 Deploy the updated server together with package.json and package-lock.json and
 install dependencies before restarting. Existing stored photos are not changed;

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { config } from '../config/env.js';
 import * as disk from './storage/diskStorage.js';
 import { sanitizePhoto } from './imageService.js';
@@ -38,6 +39,27 @@ export const sendPhoto = (res, key, mimeType) => driver.send(res, key, mimeType)
 
 // A readable stream of the photo (for zip downloads)
 export const openPhoto = (key) => driver.open(key);
+
+// Deterministic keys let old uploads gain compressed thumbnails on first use.
+const thumbnailJobs = new Map();
+export function ensureThumbnail(photo) {
+  if (photo.thumbnailKey) return Promise.resolve(photo.thumbnailKey);
+  if (thumbnailJobs.has(photo.storageKey)) return thumbnailJobs.get(photo.storageKey);
+  const job = (async () => {
+    const stream = await driver.open(photo.storageKey);
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const thumbnail = await sharp(Buffer.concat(chunks), { limitInputPixels: 100_000_000 })
+      .autoOrient().resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 75 }).toBuffer();
+    const key = `${photo.storageKey}.thumb.webp`;
+    await driver.save(key, thumbnail, 'image/webp');
+    await photo.constructor.updateOne({ _id: photo._id }, { $set: { thumbnailKey: key } });
+    return key;
+  })().finally(() => thumbnailJobs.delete(photo.storageKey));
+  thumbnailJobs.set(photo.storageKey, job);
+  return job;
+}
 
 export const deletePhoto = async (key) => {
   await driver.remove(`${key}.thumb.webp`);

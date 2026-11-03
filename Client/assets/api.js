@@ -1,7 +1,7 @@
 // Where the Momento API lives, and one way to call it.
 // - Live site (hexarch.org): the API is on its own address, api.hexarch.org.
 // - Locally through the Momento server (localhost:4000): same address, so no prefix.
-// - Locally from any other port: the API is the Momento server on port 4000.
+// - Locally through serve.mjs (localhost:3000): the API is the Momento server on port 4000.
 (() => {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   window.MOMENTO_API = !local ? 'https://api.hexarch.org' : location.port === '4000' ? '' : 'http://localhost:4000';
@@ -14,6 +14,7 @@
       const error = new Error(data.error || 'The request failed. Please try again.');
       error.status = response.status;
       error.code = data.code;
+      error.retryAt = data.retryAt;
       throw error;
     }
     return data;

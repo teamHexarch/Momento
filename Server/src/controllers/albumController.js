@@ -113,10 +113,10 @@ function batches(photos, userId) {
     const by = p.uploader?._id;
     if (last && String(last.albumId) === String(p.album) && String(last.uploaderId) === String(by) && last.oldest - p.createdAt < BATCH_GAP_MS) {
       last.n++; last.oldest = p.createdAt;
-      if (last.pics.length < 6) last.pics.push(photoUrl(p.id));
+      if (last.pics.length < 6) last.pics.push(thumbnailUrl(p.id));
       continue;
     }
-    out.push({ albumId: String(p.album), uploaderId: by, by: by?.equals(userId) ? 'You' : firstName(p.uploader?.name), n: 1, pics: [photoUrl(p.id)], at: p.createdAt, oldest: p.createdAt });
+    out.push({ albumId: String(p.album), uploaderId: by, by: by?.equals(userId) ? 'You' : firstName(p.uploader?.name), n: 1, pics: [thumbnailUrl(p.id)], at: p.createdAt, oldest: p.createdAt });
   }
   return out.map(({ uploaderId, oldest, ...b }) => b);
 }
@@ -225,7 +225,7 @@ export async function show(req, res) {
     album: summary(m.album, m.role, stats.get(String(m.album._id))),
     photos: photos.map((p) => {
       const mine = p.uploader?._id.equals(req.user._id);
-      return { id: p.id, url: `${photoUrl(p.id)}?size=preview`, thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt };
+      return { id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt };
     }),
   });
 }
@@ -285,7 +285,7 @@ export async function addPhotos(req, res) {
       album: album._id, uploader: req.user._id, ...stored,
       originalName: f.originalname.slice(0, 200),
     }); } catch (err) { await deletePhotos([stored.storageKey]); throw err; }
-    saved.push({ id: p.id, url: photoUrl(p.id), by: 'You', mine: true, at: p.createdAt });
+    saved.push({ id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), by: 'You', mine: true, at: p.createdAt });
   }
   res.status(201).json({ photos: saved });
 }

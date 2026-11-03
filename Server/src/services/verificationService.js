@@ -12,7 +12,7 @@ const LINK_HOURS = 24;
  */
 export async function sendVerificationEmail(user) {
   const token = await issueToken(user, 'verify', LINK_HOURS * 60);
-  const link = `${config.publicUrl}/api/auth/verify-email?token=${token}`;
+  const link = `${config.verificationBaseUrl}/api/auth/verify-email?token=${token}`;
   if (!isEmailConfigured() && !config.isProduction) {
     console.log(`[email not set up] Confirm link for ${user.email}: ${link}`);
     return { sent: false };

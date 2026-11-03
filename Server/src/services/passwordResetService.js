@@ -29,6 +29,7 @@ export async function resetPassword(token, newPassword) {
   if (!user) return null;
   user.passwordHash = await bcrypt.hash(newPassword, 12);
   user.passwordChangedAt = new Date();
+  user.sessions = [];
   // Opening the link proved they own the address
   user.emailVerified = true;
   await user.save();

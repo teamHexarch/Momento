@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { Photo } from '../models/Photo.js';
 import { Membership } from '../models/Membership.js';
 import { HttpError } from '../utils/httpError.js';
-import { sendPhoto, deletePhoto } from '../services/storageService.js';
+import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageService.js';
 
 // A photo plus the caller's membership of its album; anyone outside the album gets a 404
 async function photoFor(req) {
@@ -16,7 +16,7 @@ async function photoFor(req) {
 export async function file(req, res) {
   const { photo } = await photoFor(req);
   // From disk: the file itself. From R2: a short-lived link straight to Cloudflare.
-  const thumbnail = req.query.size === 'thumb' && photo.thumbnailKey;
+  const thumbnail = req.query.size === 'thumb' && await ensureThumbnail(photo);
   const preview = req.query.size === 'preview' && photo.previewKey;
   if (!(await sendPhoto(res, thumbnail || preview || photo.storageKey, thumbnail ? 'image/webp' : preview ? photo.previewMimeType : photo.mimeType))) throw new HttpError(404, 'Photo file is missing.');
 }

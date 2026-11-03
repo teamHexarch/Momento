@@ -33,6 +33,7 @@ export const config = {
   jwtSecret,
   sessionDays: Number(env.SESSION_DAYS) || 30,
   publicUrl,
+  verificationBaseUrl: trimSlash(env.EMAIL_VERIFICATION_BASE_URL || publicUrl),
   frontendUrl,
   corsOrigins,
   // The API serves the Client pages only when the site and API share an address (local development)

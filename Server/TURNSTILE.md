@@ -4,7 +4,7 @@ Signup requires Cloudflare Turnstile server verification before database access,
 
 Create a Managed widget in Cloudflare Turnstile. Allow the frontend hostnames `hexarch.org` and `www.hexarch.org`, and `localhost` / `127.0.0.1` if using the same widget locally. Set `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_HOSTNAMES` in the local Server/.env and Render environment. Restart locally or redeploy on Render, and publish the updated frontend together with the backend. Only the public site key is returned by /api/config.
 
-Open Sign up, complete the challenge, and create a test account. Missing, forged, expired or reused tokens must be rejected without creating an account or sending mail. Login must still work.
+Open Sign up, complete the challenge, and create a test account. Missing, forged, expired or reused tokens must be rejected without creating an account or sending mail. Login must still work. Unit tests: `node --test src/services/captchaService.test.js`. These mock Cloudflare responses; a live widget test is still required after configuring keys.
 
 CAPTCHA reduces automated signups but is not a hard daily email budget. Existing resend and password-reset rate limits remain; distributed abuse of those endpoints and a shared daily mail quota require additional protection.
 

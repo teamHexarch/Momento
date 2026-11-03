@@ -137,13 +137,38 @@ export async function deleteMe(req, res) {
 // The link in the email lands here, then goes on to the home page, which says how it went
 export async function verifyEmail(req, res) {
   const user = await confirmEmail(req.query.token);
-  res.redirect(303, `${config.frontendUrl}/?verified=${user ? '1' : 'invalid'}`);
+  if (!user) return res.redirect(303, `${config.frontendUrl}/?verified=invalid`);
+  try {
+    if (String(req.user?._id) !== String(user._id)) await startSession(res, user);
+  } catch (error) {
+    if (error.code !== 'session_limit') throw error;
+    return res.redirect(303, `${config.frontendUrl}/?login=1&verified=session_limit`);
+  }
+  res.redirect(303, `${config.frontendUrl}/albums.html?verified=1`);
 }
 
 export async function resendVerification(req, res) {
   if (req.user.emailVerified) throw new HttpError(400, 'Your email is already confirmed.');
-  const { sent } = await sendVerificationEmail(req.user);
-  res.json({ ok: true, sent });
+  const now = new Date();
+  const retryAt = new Date(now.getTime() + 120000);
+  const claimed = await User.findOneAndUpdate({
+    _id: req.user._id,
+    $or: [{ verificationResendAt: null }, { verificationResendAt: { $lte: now } }],
+  }, { $set: { verificationResendAt: retryAt } }, { new: true });
+  if (!claimed) {
+    const current = await User.findById(req.user._id);
+    const retryAfter = Math.max(1, Math.ceil((current.verificationResendAt - now) / 1000));
+    return res.status(429).set('Retry-After', String(retryAfter)).json({
+      error: 'Please wait before requesting another verification email.', retryAt: current.verificationResendAt,
+    });
+  }
+  try {
+    const { sent } = await sendVerificationEmail(req.user);
+    res.json({ ok: true, sent, retryAt });
+  } catch (error) {
+    await User.updateOne({ _id: req.user._id, verificationResendAt: retryAt }, { $unset: { verificationResendAt: 1 } });
+    throw error;
+  }
 }
 
 // ---- Forgotten password ----

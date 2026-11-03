@@ -1735,7 +1735,7 @@
       M.i = (i + total) % total;
       const req = ++M.req;
       const next = stageImgs[1 - M.cur], prev = stageImgs[M.cur];
-      const big = pic(M.a.pics[M.i], 1200, 750);
+      const big = M.a.photoItems?.[M.i]?.url || pic(M.a.pics[M.i], 1200, 750);
       if (instant && M.from?.complete) {
         // Start with the photo that was clicked (already loaded), then sharpen it once the big one arrives
         next.src = M.from.currentSrc || M.from.src;
@@ -2252,7 +2252,7 @@
       const result = await momentoApi('/api/albums/' + a.id);
       Object.assign(a, fromStore(result.album));
       a.photoItems = result.photos;
-      a.pics = result.photos.map((p) => p.url);
+      a.pics = result.photos.map((p) => p.thumbnailUrl || p.url + '?size=thumb');
     }
     async function loadAlbums() {
       const result = await momentoApi('/api/albums');
@@ -2266,7 +2266,7 @@
       for (const p of result.recent || []) {
         const a = byId(p.albumId); if (!a) continue;
         const button = document.createElement('button'); button.type = 'button'; button.className = 'burst-album';
-        const img = document.createElement('img'); img.src = p.url; img.alt = ''; img.width = 80; img.height = 60; img.style.objectFit = 'cover';
+        const img = document.createElement('img'); img.src = p.thumbnailUrl || p.url; img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; img.width = 80; img.height = 60; img.style.objectFit = 'cover';
         button.append(img, document.createTextNode(' ' + p.by + ' · ' + a.name));
         button.addEventListener('click', () => openAlbum(a.id)); feedEl.append(button);
       }
@@ -2292,16 +2292,44 @@
           document.querySelector('.tools').parentElement.hidden = true;
           document.querySelector('.actions').hidden = true;
           const resend = document.createElement('button'); resend.className = 'btn btn-dark'; resend.textContent = 'Resend verification email';
+          lede.setAttribute('role', 'status');
+          let retryAt = new Date(user.verificationResendAt || 0).getTime();
+          let sending = false;
+          const updateResend = () => {
+            const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+            resend.disabled = sending || seconds > 0;
+            resend.textContent = sending ? 'Sending…' : seconds > 0
+              ? `Resend available in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+              : 'Resend verification email';
+          };
+          updateResend();
+          const resendTimer = setInterval(updateResend, 1000);
+          window.addEventListener('pagehide', () => clearInterval(resendTimer), { once: true });
           resend.addEventListener('click', async () => {
-            resend.disabled = true;
-            try { await momentoApi('/api/auth/verify-email/resend', { method: 'POST' }); lede.textContent = 'Verification email sent. Check your inbox, then reload this page.'; }
-            catch (err) { lede.textContent = err.message; }
-            finally { resend.disabled = false; }
+            sending = true;
+            updateResend();
+            try {
+              const result = await momentoApi('/api/auth/verify-email/resend', { method: 'POST' });
+              retryAt = new Date(result.retryAt).getTime();
+              lede.textContent = result.sent
+                ? 'Verification link sent. Check your inbox and spam folder. Please wait 2 minutes before sending another link.'
+                : 'Email delivery is not configured. Your verification link is in the server log. Please wait 2 minutes before trying again.';
+            }
+            catch (err) {
+              if (err.retryAt) retryAt = new Date(err.retryAt).getTime();
+              lede.textContent = err.message;
+            }
+            finally { sending = false; updateResend(); }
           });
           lede.after(resend); return;
         }
         await loadAlbums();
         const params = new URLSearchParams(location.search);
+        if (params.get('verified') === '1' && user.emailVerified) {
+          Momento.toast('Your email is verified ✨', 'Welcome to Momento! Your lovely moments start here.');
+          params.delete('verified');
+          history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
+        }
         if (params.get('album')) await openAlbum(params.get('album'));
         else if (params.get('join')) openJoin(params.get('join'));
         else albumFromHash();
