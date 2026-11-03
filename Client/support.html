@@ -31,11 +31,45 @@
     } catch (e) {}
   })();
   </script>
+  <script>
+  // Albums you create, join or remove, kept in this browser (localStorage) so every page agrees.
+  // Pages hear about changes through a `momento:albums` event on document.
+  window.MomentoStore = (() => {
+    const MINE = 'momento-my-albums', GONE = 'momento-removed';
+    const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
+    const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+    const tell = (detail) => document.dispatchEvent(new CustomEvent('momento:albums', { detail }));
+    const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I to misread
+    return {
+      created: () => read(MINE, []),
+      removed: () => read(GONE, []),
+      find: (id) => read(MINE, []).find((a) => a.id === id) || null,
+      findCode: (code) => read(MINE, []).find((a) => a.code.replace('-', '') === code.replace('-', '')) || null,
+      add(a) { write(MINE, [a, ...read(MINE, []).filter((x) => x.id !== a.id)]); tell({ type: 'add', album: a }); },
+      // Albums made here are dropped; the sample albums are remembered as removed
+      remove(id) {
+        const list = read(MINE, []), hit = list.find((x) => x.id === id) || null;
+        if (hit) write(MINE, list.filter((x) => x.id !== id));
+        else write(GONE, [...new Set([...read(GONE, []), id])]);
+        tell({ type: 'remove', id });
+        return hit;
+      },
+      restore(id, saved) {
+        if (saved) write(MINE, [saved, ...read(MINE, []).filter((x) => x.id !== id)]);
+        else write(GONE, read(GONE, []).filter((x) => x !== id));
+        tell({ type: 'restore', id, album: saved });
+      },
+      code() {
+        const pick = () => CHARS[Math.floor(Math.random() * CHARS.length)];
+        return `${pick()}${pick()}${pick()}-${pick()}${pick()}${pick()}${pick()}`;
+      },
+    };
+  })();
+  </script>
   <!-- /@shared:boot -->
   <title>Support | Momento</title>
   <meta name="description" content="Quick answers, and a way to contact the Momento team.">
-  <link rel="icon" href="assets/momento-icon.png">
-  <script src="assets/api.js"></script>
+  <link rel="icon" href="momento_assets/momento-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -70,7 +104,7 @@
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .48 0 0 0 0 .55 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     }
 
-    /* ---------- Cursor: droplet, with a focus frame over anything clickable ---------- */
+    /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
     .has-cursor, .has-cursor * { cursor: none !important; }
     .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
     .has-cursor .cursor { opacity: 1; }
@@ -81,25 +115,14 @@
       transition: width .4s var(--spring), height .4s var(--spring), box-shadow .3s ease;
     }
     .cursor::before {
-      content: ""; position: absolute; left: 0; top: 0; width: 30px; height: 30px; translate: -50% -50%;
-      --c: var(--dusk); --l: 8px; --w: 2px;
-      background:
-        linear-gradient(var(--c), var(--c)) 0 0 / var(--l) var(--w),
-        linear-gradient(var(--c), var(--c)) 0 0 / var(--w) var(--l),
-        linear-gradient(var(--c), var(--c)) 100% 0 / var(--l) var(--w),
-        linear-gradient(var(--c), var(--c)) 100% 0 / var(--w) var(--l),
-        linear-gradient(var(--c), var(--c)) 0 100% / var(--l) var(--w),
-        linear-gradient(var(--c), var(--c)) 0 100% / var(--w) var(--l),
-        linear-gradient(var(--c), var(--c)) 100% 100% / var(--l) var(--w),
-        linear-gradient(var(--c), var(--c)) 100% 100% / var(--w) var(--l);
-      background-repeat: no-repeat;
-      filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 0 3px rgba(188,178,236,.5));
-      opacity: 0; scale: 1.9; rotate: 45deg;
-      transition: opacity .2s ease, scale .5s var(--spring), rotate .5s var(--spring);
+      content: ""; position: absolute; left: 0; top: 0; width: 28px; height: 28px; translate: -50% -50%; border-radius: 50%;
+      box-shadow: 0 0 0 1.5px rgba(255,255,255,.9), inset 0 0 0 1.5px #2E2C3A, 0 0 8px rgba(188,178,236,.55);
+      opacity: 0; scale: .4;
+      transition: opacity .2s ease, scale .4s var(--spring);
     }
-    .cursor-hover .cursor::before, .cursor-drag .cursor::before { opacity: 1; scale: 1; rotate: 0deg; }
+    .cursor-hover .cursor::before, .cursor-drag .cursor::before { opacity: 1; scale: 1; }
     .cursor-drag .cursor::before { scale: 1.4; }
-    .cursor-hover .cursor span, .cursor-drag .cursor span { width: 5px; height: 5px; box-shadow: 0 0 0 2px rgba(255,255,255,.6), 0 0 5px 1px rgba(188,178,236,.45); }
+    .cursor-hover .cursor span, .cursor-drag .cursor span { width: 6px; height: 6px; }
     .cursor-down .cursor span { width: 8px; height: 8px; }
     .cursor-hover.cursor-down .cursor::before, .cursor-drag.cursor-down .cursor::before { scale: .78; }
 
@@ -344,7 +367,92 @@
       .qa i::before, .qa i::after, .qa-a, .s-go, .sp-card form { transition: none; }
       .sp-done-ic { scale: 1; opacity: 1; transition: none; }
     }
-      button:disabled { opacity: .6; pointer-events: none; }
+
+    /* ---------- Phones: keep it simple and keep things apart ----------
+       The background thread is dropped (it crossed text on a narrow screen), and the header
+       always gets its soft veil so content never scrolls up underneath the nav */
+    @media (max-width: 700px) {
+      .trail { display: none; }
+      .header::before { opacity: 1; }
+    }
+    @media (max-width: 420px) {
+      .header { gap: .3rem; padding-left: 12px; padding-right: 12px; }
+      .nav { gap: .1rem; padding: .25rem; }
+      .nav-item { padding: .5rem .7rem; }
+      .brand svg.glyph { width: 1.6rem; height: 1.6rem; }
+    }
+
+    /* ---------- Confirmations ----------
+       A toast answers every action (with Undo where something was removed), a short dialog asks
+       before anything is deleted, and creating an album ends on its own "created" screen */
+    .m-toast {
+      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: none; overflow: visible;
+      display: flex; align-items: center; gap: .75rem; width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+      padding: .55rem .55rem .55rem .6rem; border-radius: 100px; color: var(--dusk); font: 500 .92rem var(--font-main);
+      translate: -50% 0;
+    }
+    .m-toast:not(.has-act) { padding-right: 1.25rem; }
+    .m-toast:popover-open { display: flex; }
+    .m-toast-ic { display: grid; place-items: center; flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
+    .m-toast.is-danger .m-toast-ic { background: #9A3D3D; color: #fff; }
+    .m-toast-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+    .m-toast-text b { font-weight: 650; }
+    .m-toast-text small { overflow: hidden; color: var(--slate); font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+    .m-toast-text small:empty { display: none; }
+    .m-toast-act {
+      flex: none; margin-left: .35rem; padding: .6rem 1.05rem; border: none; border-radius: 100px; background: rgba(46, 44, 58, .08);
+      color: var(--dusk); font: 650 .86rem var(--font-main); cursor: pointer; transition: background-color .2s ease, transform .3s var(--spring);
+    }
+    .m-toast-act[hidden] { display: none; }
+    .m-toast-act:hover { background: rgba(46, 44, 58, .15); }
+    .m-toast-act:active { transform: scale(.95); }
+    .m-toast-act:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
+    .m-view[hidden] { display: none; }
+    .m-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .75rem; }
+    .m-row2 .acct-field span i { font-style: normal; font-weight: 500; color: var(--stone); }
+    .acct-primary.is-danger { background: #9A3D3D; color: #fff; }
+    .acct-primary.is-danger:hover { background: #85302F; }
+    .acct-primary:disabled { opacity: .5; cursor: default; transform: none; }
+    .m-warn-ic { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: 1.1rem; border-radius: 50%; background: rgba(154, 61, 61, .1); color: #9A3D3D; }
+    .m-warn-ic[hidden] { display: none; }
+    .m-done { display: grid; justify-items: center; text-align: center; padding-top: .4rem; }
+    .m-done h2 { padding-right: 0; outline: none; }
+    .m-done .acct-sub { max-width: 22rem; }
+    .m-done-ic { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; margin-bottom: 1rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
+    .m-done .acct-actions { width: 100%; }
+    .m-code {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; box-sizing: border-box;
+      margin: 0 0 1.2rem; padding: .75rem .75rem .75rem 1.1rem; border-radius: 18px; background: rgba(46, 44, 58, .06); text-align: left;
+    }
+    .m-code span { display: flex; flex-direction: column; gap: .1rem; }
+    .m-code small { color: var(--slate); font-size: .78rem; font-weight: 600; }
+    .m-code b { font-size: 1.4rem; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+    .m-copy {
+      flex: none; padding: .6rem 1rem; border: none; border-radius: 100px; background: var(--paper); color: var(--dusk);
+      font: 650 .86rem var(--font-main); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .12); transition: box-shadow .2s ease, transform .3s var(--spring);
+    }
+    .m-copy:hover { box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .3); }
+    .m-copy:active { transform: scale(.95); }
+    .m-copy:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .m-del {
+      margin-top: .9rem; padding: .55rem 1rem; border: none; border-radius: 100px; background: none; color: #9A3D3D;
+      font: 600 .88rem var(--font-main); cursor: pointer; transition: background-color .2s ease;
+    }
+    .m-del:hover { background: rgba(154, 61, 61, .08); }
+    .m-del:active { background: rgba(154, 61, 61, .14); }
+    .m-del:focus-visible { outline: 2px solid #9A3D3D; outline-offset: 2px; }
+    :root[data-theme="dark"] .m-toast-act, :root[data-theme="dark"] .m-code { background: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .m-toast-act:hover { background: rgba(255, 255, 255, .15); }
+    :root[data-theme="dark"] .m-copy { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+    :root[data-theme="dark"] .m-del { color: #F0A3A3; }
+    :root[data-theme="dark"] .m-del:hover { background: rgba(240, 163, 163, .1); }
+    :root[data-theme="dark"] .m-warn-ic { background: rgba(240, 163, 163, .12); color: #F0A3A3; }
+    :root[data-theme="dark"] .acct-field input[type="date"] { color-scheme: dark; }
+    @media (max-width: 480px) {
+      .m-row2 { grid-template-columns: 1fr; }
+      .m-toast { bottom: 1rem; }
+    }
   </style>
   <!-- @shared:css (generated block; the same in index.html and albums.html) -->
   <style>
@@ -1045,7 +1153,7 @@
             <div class="sp-done" id="formDone" hidden>
               <span class="sp-done-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span>
               <h3 id="doneTitle" tabindex="-1">Message sent</h3>
-              <p>We’ll reply to <b id="doneMail"></b> within a day.</p>
+              <p>We’ll reply to <b id="doneMail"></b> within a day. This is a preview, so nothing has actually been sent.</p>
               <button class="btn btn-light btn-sm" type="button" id="sendAnother">Send another</button>
             </div>
           </div>
@@ -1274,7 +1382,7 @@
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { setOpen(false); caret.focus(); } });
     })();
 
-    // ---- Support: the accordion, the topic picker and the message form (emailed to the team) ----
+    // ---- Support: the accordion, the topic picker and the message form (a preview: nothing is sent) ----
     // The shared script (theme, account) runs after this one, so everything that needs it waits
     addEventListener('DOMContentLoaded', () => {
       const M = window.Momento;
@@ -1317,7 +1425,6 @@
         for (const f of [form.name, form.email, form.message]) f.removeAttribute('aria-invalid');
         field.setAttribute('aria-invalid', 'true'); field.focus();
       };
-      let sending = false;
       form.addEventListener('input', () => { note.textContent = ''; note.classList.remove('is-error'); });
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -1325,20 +1432,12 @@
         if (!name) return fail('Enter your name so we know who to reply to.', form.name);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter an email address like name@example.com.', form.email);
         if (message.length < 10) return fail('Tell us a little more. A sentence or two is plenty.', form.message);
-        if (sending) return;
-        sending = true;
-        const btn = form.querySelector('[type="submit"]');
-        btn.disabled = true; note.classList.remove('is-error'); note.textContent = 'Sending…';
-        M.api('/api/support', { method: 'POST', body: { name, email, topic, message } }).then(() => {
-          note.textContent = '';
-          doneMail.textContent = email;
-          form.classList.add('is-out');
-          setTimeout(() => {
-            form.hidden = true; done.hidden = false;
-            requestAnimationFrame(() => { done.classList.add('is-in'); document.getElementById('doneTitle').focus({ preventScroll: true }); });
-          }, still ? 0 : 240);
-        }).catch((err) => { note.textContent = err.message; note.classList.add('is-error'); })
-          .finally(() => { sending = false; btn.disabled = false; });
+        doneMail.textContent = email;
+        form.classList.add('is-out');
+        setTimeout(() => {
+          form.hidden = true; done.hidden = false;
+          requestAnimationFrame(() => { done.classList.add('is-in'); document.getElementById('doneTitle').focus({ preventScroll: true }); });
+        }, still ? 0 : 240);
       });
       document.getElementById('sendAnother').addEventListener('click', () => {
         form.message.value = ''; note.textContent = '';
@@ -1444,47 +1543,35 @@
       onChange(fn) { themeListeners.add(fn); },
     };
   
-    // ---- Account: the signed-in person, from the Momento API, shared by every page ----
-    // The tab's last known copy shows straight away; the server's answer replaces it a moment later.
+    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
     const AKEY = 'momento-account';
     const NOTIFY = { photos: true, closing: true, recap: false };
     const accountListeners = new Set();
     const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
     let current = null;
-    try { current = norm(JSON.parse(sessionStorage.getItem(AKEY) || 'null')); } catch (e) {}
+    try {
+      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
+      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
+    } catch (e) {}
+    current = norm(current);
     const persist = () => {
       try {
         if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
-        else sessionStorage.removeItem(AKEY);
+        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
       } catch (e) {}
     };
     const emit = () => accountListeners.forEach((fn) => fn(current));
-    const adopt = (user) => { current = norm(user); persist(); emit(); return current; };
-    // One call to the API: JSON in and out, with its { error } message thrown as an Error
-    async function momentoApi(path, { method = 'GET', body } = {}) {
-      let r;
-      try {
-        r = await momentoFetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body && JSON.stringify(body) });
-      } catch (e) { throw new Error('Momento can’t be reached right now. Try again in a minute.'); }
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { const err = new Error(d.error || 'Something went wrong. Try again.'); err.status = r.status; throw err; }
-      return d;
-    }
-    Momento.api = momentoApi;
     Momento.account = {
       get() { return current; },
-      // Settles once the server has said who (if anyone) is logged in
-      ready: momentoApi('/api/auth/me').then((d) => adopt(d.user)).catch(() => current),
-      async set(patch) { return adopt((await momentoApi('/api/auth/me', { method: 'PATCH', body: patch })).user); },
-      // Emails a confirm link to the new address; the account keeps its email until it's opened
-      changeEmail(email, password) { return momentoApi('/api/auth/email', { method: 'POST', body: { email, password } }); },
-      async remove(password) { await momentoApi('/api/auth/me', { method: 'DELETE', body: { password } }); adopt(null); },
-      async clear() { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (e) {} adopt(null); },
-      // After signing up or logging in, with the user the server sent back
-      signedIn(user) { return adopt(user); },
+      set(patch) {
+        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
+        persist(); emit();
+        return current;
+      },
+      clear() { current = null; persist(); emit(); },
       onChange(fn) { accountListeners.add(fn); },
     };
-
+  
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
     const ICON = {
@@ -1498,7 +1585,7 @@
       system: svg('<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/>', 16),
     };
     const first = (n) => (n || '').trim().split(/\s+/)[0] || '';
-    const SUPPORT = 'team@hexarch.org';
+    const SUPPORT = 'support@hexarch.org';   // placeholder address
   
     // The custom cursor can't draw above a modal, so the normal cursor comes back while one is open
     let cursorWas = false;
@@ -1529,15 +1616,15 @@
         if (c) c.getAnimations().forEach((a) => a.cancel());
         closing = false;
       };
-      d.addEventListener('click', (e) => { if (e.target === d) d.dismiss(); });
+      d.addEventListener('pointerdown', (e) => { d._downOutside = e.target === d; }); d.addEventListener('click', (e) => { if (e.target === d && d._downOutside) d.dismiss(); });
       d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => d.dismiss()));
       d.addEventListener('cancel', (e) => { e.preventDefault(); d.dismiss(); });
       d.addEventListener('close', () => {
-        if (cursorWas) root.classList.add('has-cursor');
+        if (cursorWas && !document.querySelector('dialog[open]')) root.classList.add('has-cursor');
         const back = getReturn(); if (back) back.focus();
       });
       d.launch = () => {
-        cursorWas = root.classList.contains('has-cursor');
+        if (!document.querySelector('dialog[open]')) cursorWas = root.classList.contains('has-cursor');
         root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
         d.showModal();
         if (reduced.matches) return;
@@ -1560,10 +1647,9 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Changes show on every page straight away.</p>
+          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
-          <label class="acct-field" data-pass hidden><span>Your password, to change your email</span><input name="password" type="password" autocomplete="current-password"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
             <b>Email me when</b>
             <div class="acct-row"><span><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="acct-sw" type="button" role="switch" aria-label="Someone adds photos to an album I’m in" aria-checked="true" data-key="photos"></button></div>
@@ -1579,39 +1665,22 @@
       const switches = [...d.querySelectorAll('.acct-sw')];
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
-      // A new email needs the password (for password accounts) and is confirmed by email
-      const passRow = d.querySelector('[data-pass]');
-      const emailChanged = () => !!current && form.email.value.trim().toLowerCase() !== current.email;
-      form.email.addEventListener('input', () => { passRow.hidden = !(emailChanged() && current.hasPassword); });
-      let saving = false;
-      form.addEventListener('submit', async (e) => {
+      form.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (saving) return;
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
-        if (emailChanged() && current.hasPassword && !form.password.value) { say('Enter your password to change your email.', true); form.password.focus(); return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        saving = true; say('Saving…');
-        try {
-          const moving = emailChanged();
-          await Momento.account.set({ name, notify });
-          if (moving) {
-            await Momento.account.changeEmail(email, form.password.value);
-            form.email.value = current.email; form.password.value = ''; passRow.hidden = true;
-            say(`Saved. Open the link we sent to ${email} to switch to it.`);
-            return;
-          }
-          say('Saved');
-          setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
-        } catch (err) { say(err.message, true); }
-        finally { saving = false; }
+        Momento.account.set({ name, email, notify });
+        say('Saved');
+        Momento.toast('Account settings saved', email || name);
+        setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
       });
       const launch = d.launch;
       d.launch = () => {
         const a = current || norm({});
-        form.name.value = a.name; form.email.value = a.email; form.password.value = ''; passRow.hidden = true;
+        form.name.value = a.name; form.email.value = a.email;
         switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
         say('');
         launch();
@@ -1644,6 +1713,243 @@
     let returnTo = null, settingsD = null, helpD = null;
     Momento.openSettings = (from) => { returnTo = from; (settingsD ||= settingsDialog(() => returnTo)).launch(); };
     Momento.openHelp = (from) => { returnTo = from; (helpD ||= helpDialog(() => returnTo)).launch(); };
+
+    // ---- Confirmations: every action answers with a toast; anything that removes something asks first
+    // and can be undone from the toast. The toast is a popover so it shows above open dialogs too ----
+    const MARK = {
+      check: svg('<path d="m5 12.5 4.2 4.2L19 7"/>', 15),
+      bin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 15),
+      bigCheck: svg('<path d="m5 12.5 4.2 4.2L19 7"/>', 26),
+      bigBin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 22),
+    };
+    const canPop = typeof HTMLElement.prototype.showPopover === 'function';
+    let toastEl = null, toastTimer = 0, toastLife = 0;
+    function hideToast() {
+      clearTimeout(toastTimer);
+      if (!toastEl) return;
+      const gone = () => { toastEl.style.visibility = 'hidden'; if (canPop && toastEl.matches(':popover-open')) toastEl.hidePopover(); };
+      if (reduced.matches) return gone();
+      toastEl.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(16px)' }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).finished.then(gone, gone);
+    }
+    const armToast = (ms) => { clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, ms); };
+    // While a window is open everything outside it is inert, so the toast lives inside the topmost open
+    // window (and its Undo stays clickable), and is re-shown so it lands on top of it
+    function placeToast() {
+      const host = [...document.querySelectorAll('dialog[open]')].pop() || document.body;
+      if (toastEl.parentElement !== host) host.append(toastEl);
+      if (canPop) { if (toastEl.matches(':popover-open')) toastEl.hidePopover(); toastEl.showPopover(); }
+    }
+    // When that window closes, the toast moves out to whatever is open underneath
+    document.addEventListener('close', (e) => {
+      if (!toastEl || !e.target.contains(toastEl) || toastEl.style.visibility === 'hidden') return;
+      requestAnimationFrame(placeToast);
+    }, true);
+    Momento.toast = (title, sub = '', opts = {}) => {
+      if (!toastEl) {
+        toastEl = document.createElement('div');
+        toastEl.className = 'm-toast glass';
+        toastEl.setAttribute('role', 'status'); toastEl.setAttribute('aria-live', 'polite');
+        if (canPop) toastEl.popover = 'manual';
+        toastEl.innerHTML = '<i class="m-toast-ic" aria-hidden="true"></i><span class="m-toast-text"><b></b><small></small></span><button class="m-toast-act" type="button" hidden></button>';
+        document.body.append(toastEl);
+        // Reading it (or reaching for Undo) holds it on screen
+        toastEl.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+        toastEl.addEventListener('pointerleave', () => armToast(1800));
+        toastEl.addEventListener('focusin', () => clearTimeout(toastTimer));
+      }
+      const act = toastEl.querySelector('.m-toast-act'), a = opts.action;
+      toastEl.querySelector('.m-toast-ic').innerHTML = opts.danger ? MARK.bin : MARK.check;
+      toastEl.querySelector('b').textContent = title;
+      toastEl.querySelector('small').textContent = sub;
+      toastEl.classList.toggle('is-danger', !!opts.danger);
+      toastEl.classList.toggle('has-act', !!a);
+      act.hidden = !a; act.textContent = a ? a.label : '';
+      act.onclick = a ? () => { hideToast(); a.run(); } : null;
+      toastEl.getAnimations().forEach((x) => x.cancel());
+      toastEl.style.visibility = '';
+      placeToast();
+      if (!reduced.matches) toastEl.animate([{ opacity: 0, transform: 'translateY(22px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
+      toastLife = a ? 6000 : 3400;
+      armToast(toastLife);
+    };
+    // A toast for the next page, when the action also navigates (logging out, say)
+    const FLASH = 'momento-flash';
+    Momento.flash = (title, sub = '') => { try { sessionStorage.setItem(FLASH, JSON.stringify([title, sub])); } catch (e) {} };
+    try {
+      const f = JSON.parse(sessionStorage.getItem(FLASH) || 'null');
+      sessionStorage.removeItem(FLASH);
+      if (f) {
+        const later = () => setTimeout(() => Momento.toast(f[0], f[1]), 450);
+        if (root.classList.contains('intro-on')) document.addEventListener('momento:intro-end', later, { once: true });
+        else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later, { once: true });
+        else later();
+      }
+    } catch (e) {}
+
+    // Asks before something is removed. Resolves true only for the confirm button
+    let confirmD = null, confirmDone = null;
+    Momento.confirm = ({ title, body = '', ok = 'Delete', danger = true, from = null }) => new Promise((resolve) => {
+      if (!confirmD) {
+        confirmD = dialog('mConfirm', `
+          <div class="acct-card">
+            <i class="m-warn-ic" aria-hidden="true">${MARK.bigBin}</i>
+            <h2 id="mConfirmTitle"></h2>
+            <p class="acct-sub"></p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="button" data-ok></button></div>
+          </div>`, () => returnTo);
+        confirmD.querySelector('[data-ok]').addEventListener('click', () => { const r = confirmDone; confirmDone = null; confirmD.dismiss(); if (r) r(true); });
+        confirmD.addEventListener('close', () => { const r = confirmDone; confirmDone = null; if (r) r(false); });
+      }
+      returnTo = from;
+      confirmD.querySelector('h2').textContent = title;
+      confirmD.querySelector('.acct-sub').textContent = body;
+      confirmD.querySelector('.m-warn-ic').hidden = !danger;
+      const okBtn = confirmD.querySelector('[data-ok]');
+      okBtn.textContent = ok; okBtn.classList.toggle('is-danger', danger);
+      confirmDone = resolve;
+      confirmD.launch();
+      confirmD.querySelector('.acct-ghost').focus();   // the safe choice has focus
+    });
+
+    // Asks for one value (an email for the waitlist, say). Resolves the value, or null if cancelled
+    let askD = null, askDone = null;
+    Momento.ask = ({ title, body = '', label, type = 'text', value = '', placeholder = '', ok = 'Continue', check, from = null }) => new Promise((resolve) => {
+      if (!askD) {
+        askD = dialog('mAsk', `
+          <form class="acct-card" novalidate>
+            <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+            <h2 id="mAskTitle"></h2>
+            <p class="acct-sub"></p>
+            <label class="acct-field"><span></span><input name="v" autocomplete="email"></label>
+            <p class="acct-status" role="status"></p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit"></button></div>
+          </form>`, () => returnTo);
+        askD.addEventListener('close', () => { const r = askDone; askDone = null; if (r) r(null); });
+      }
+      returnTo = from;
+      const form = askD.querySelector('form'), input = form.v, status = askD.querySelector('.acct-status');
+      askD.querySelector('h2').textContent = title;
+      askD.querySelector('.acct-sub').textContent = body;
+      askD.querySelector('.acct-field span').textContent = label;
+      Object.assign(input, { type, value, placeholder });
+      askD.querySelector('[type="submit"]').textContent = ok;
+      status.textContent = ''; status.classList.remove('is-error');
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const v = input.value.trim(), problem = check ? check(v) : (v ? '' : `Enter ${label.toLowerCase()}.`);
+        if (problem) { status.textContent = problem; status.classList.add('is-error'); input.focus(); return; }
+        const r = askDone; askDone = null; askD.dismiss(); r(v);
+      };
+      askDone = resolve;
+      askD.launch();
+      input.focus();
+    });
+
+    // ---- Albums: create one (ending on a "created" screen with its guest code), and remove one ----
+    const Store = window.MomentoStore;
+    const isoToday = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+    const onAlbums = /albums\.html$/.test(location.pathname);
+    const viewAlbum = (id) => {
+      if (onAlbums) document.dispatchEvent(new CustomEvent('momento:open-album', { detail: id }));
+      else location.href = `albums.html#album=${encodeURIComponent(id)}`;
+    };
+
+    // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
+    Momento.removeAlbum = async (a, from) => {
+      const host = a.role !== 'guest';
+      const n = a.photos || 0;
+      const ok = await Momento.confirm({
+        from,
+        title: host ? `Delete “${a.name}”?` : `Leave “${a.name}”?`,
+        body: host
+          ? (n ? `All ${n.toLocaleString('en-GB')} photos and the guest code go with it, for everyone who joined.` : 'It has no photos yet, so only the album and its guest code are removed.')
+          : `It’s taken off your albums. ${a.mine ? `Your ${a.mine} photos stay` : 'Photos stay'} in the album for the host and other guests.`,
+        ok: host ? 'Delete album' : 'Leave album',
+      });
+      if (!ok) return false;
+      const saved = Store.remove(a.id);
+      Momento.toast(host ? 'Album deleted' : 'You left the album', a.name, {
+        danger: true,
+        action: { label: 'Undo', run: () => { Store.restore(a.id, saved); Momento.toast(host ? 'Album restored' : 'You’re back in the album', a.name); } },
+      });
+      return true;
+    };
+
+    let createD = null;
+    function createDialog(getReturn) {
+      const d = dialog('mCreate', `
+        <form class="acct-card" novalidate>
+          <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+          <div class="m-view" data-view="form">
+            <h2 id="mCreateTitle">Create an album</h2>
+            <p class="acct-sub">Name it after the event. You’ll get a code to share with guests next.</p>
+            <label class="acct-field"><span>Album name</span><input name="name" maxlength="60" placeholder="For example Maya’s 30th" autocomplete="off"></label>
+            <div class="m-row2">
+              <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
+              <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" placeholder="Where it’s on" autocomplete="off"></label>
+            </div>
+            <p class="acct-status" role="status"></p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Create album</button></div>
+          </div>
+          <div class="m-view m-done" data-view="done" hidden>
+            <i class="m-done-ic" aria-hidden="true">${MARK.bigCheck}</i>
+            <h2 tabindex="-1">Album created</h2>
+            <p class="acct-sub"></p>
+            <div class="m-code"><span><small>Guest code</small><b></b></span><button class="m-copy" type="button">Copy code</button></div>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Done</button><button class="acct-primary" type="button" data-view-album>View album</button></div>
+            <button class="m-del" type="button" data-delete>Delete this album</button>
+          </div>
+        </form>`, getReturn);
+      const form = d.querySelector('form'), status = d.querySelector('.acct-status');
+      const views = [...d.querySelectorAll('.m-view')];
+      const showView = (v) => views.forEach((x) => { x.hidden = x.dataset.view !== v; });
+      const say = (msg) => { status.textContent = msg; status.classList.toggle('is-error', !!msg); };
+      let made = null;
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
+        if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
+        if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
+        say('');
+        made = { id: `a-${Date.now().toString(36)}`, name, date, place, code: Store.code(), role: 'host', created: Date.now() };
+        Store.add(made);
+        const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}. Share this code so guests can join and add their photos.`;
+        d.querySelector('.m-code b').textContent = made.code;
+        d.querySelector('.m-copy').textContent = 'Copy code';
+        showView('done');
+        if (!reduced.matches) [...d.querySelector('.m-done').children].forEach((el, i) => el.animate(
+          [{ opacity: 0, transform: i ? 'translateY(10px)' : 'scale(.4)' }, { opacity: 1, transform: 'none' }],
+          { duration: i ? 460 : 620, delay: i * 55, easing: i ? 'cubic-bezier(.16, 1, .3, 1)' : 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+        d.querySelector('.m-done h2').focus();
+      });
+      d.querySelector('.m-copy').addEventListener('click', async (e) => {
+        const b = e.currentTarget;
+        try { await navigator.clipboard.writeText(made.code); b.textContent = 'Copied'; } catch (err) { b.textContent = 'Select and copy'; }
+        setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
+      });
+      d.querySelector('[data-view-album]').addEventListener('click', async () => { const id = made.id; await d.dismiss(); viewAlbum(id); });
+      d.querySelector('[data-delete]').addEventListener('click', async (e) => {
+        if (await Momento.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) d.dismiss();
+      });
+      const launch = d.launch;
+      d.launch = () => {
+        form.reset(); made = null; say('');
+        form.date.value = isoToday();
+        showView('form');
+        launch();
+        form.name.focus();
+      };
+      return d;
+    }
+    Momento.createAlbum = (from) => { returnTo = from; (createD ||= createDialog(() => returnTo)).launch(); };
+    // Any "Create an album" control on any page: <a|button data-create>
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-create]');
+      if (!t) return;
+      e.preventDefault();
+      Momento.createAlbum(t);
+    });
   
     // A Light / Dark / System segment bound to the theme (the account menu and the footer both use it)
     function wireSeg(seg) {
@@ -1715,7 +2021,7 @@
           const act = item.dataset.act;
           if (act === 'settings') Momento.openSettings(btn);
           else if (act === 'help') Momento.openHelp(btn);
-          else Momento.account.clear().then(() => { if (onLogout) onLogout(); });
+          else { Momento.account.clear(); if (onLogout) { Momento.flash('You’re logged out', 'Log back in any time'); onLogout(); } else Momento.toast('You’re logged out', 'Log back in any time'); }
         });
   
         const syncSeg = () => {
@@ -1739,7 +2045,7 @@
         built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
-        built.headMail.textContent = (a && a.email) || '';
+        built.headMail.textContent = (a && a.email) || 'Preview account';
       }
       accountListeners.add(render);
       render();
@@ -1971,7 +2277,7 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
-              <li><a class="sf-link" href="${P}#for-hosts">Create an album</a></li>
+              <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
             </ul>
           </nav>
