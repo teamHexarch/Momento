@@ -923,6 +923,8 @@
 
     /* FAQ */
     .faq-panel { width: min(860px, 100%); padding: clamp(2rem, 4vw, 3.5rem); box-sizing: border-box; }
+    /* No pointer-following light on the FAQ panel */
+    .faq-panel::before, .faq-panel::after { display: none; }
     .faq-list { margin-top: 1.4rem; }
     .qa + .qa { box-shadow: inset 0 1px 0 rgba(46,44,58,.08); }
     .qa button { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; padding: 1.15rem 0; border: none; background: none; color: var(--dusk); font: 650 1.08rem var(--font-main); letter-spacing: -.01em; text-align: left; cursor: pointer; }

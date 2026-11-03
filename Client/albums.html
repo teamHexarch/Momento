@@ -569,7 +569,13 @@
 
     /* The album window: a big stage you can flip through, and every photo below it */
     .album-card { width: min(800px, calc(100vw - 32px)); padding: .9rem .9rem 1.4rem; border-radius: 32px; }
-    .album-card .close { top: 1.7rem; right: 1.7rem; background: rgba(255,255,255,.88); }
+    .album-card .close { top: 1.7rem; right: 1.7rem; background: rgba(255,255,255,.88); transition: opacity .3s ease, background-color .2s ease, scale .3s var(--spring); }
+    /* While the photo is flying in it is drawn above the window, so the X waits until it has landed */
+    .album-card.is-flying .close { opacity: 0; pointer-events: none; }
+    /* On short screens the photo gives up height, so the window fits without scrolling */
+    .album-card .stage { width: 100%; max-height: max(12rem, calc(100dvh - 21.5rem)); }
+    .album-card { scrollbar-width: thin; }
+    .album-card .note:empty { display: none; }
     .album-card .close:hover { background: #fff; }
     .stage { position: relative; aspect-ratio: 16 / 10; border-radius: 22px; overflow: hidden; background: var(--line); touch-action: pan-y; }
     .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to top, rgba(30,26,40,.5), transparent 32%); }
@@ -599,7 +605,7 @@
     .thumb:active { transform: scale(.94); }
     .thumb:focus-visible { outline: 2px solid var(--dusk); outline-offset: 4px; }
     .album-card .modal-actions, .album-card .note { padding: 0 .7rem; }
-    .fly { position: fixed; z-index: 10; margin: 0; object-fit: cover; border-radius: 22px; transform-origin: 0 0; pointer-events: none; box-shadow: 0 30px 60px -24px rgba(40,30,60,.55); }
+    .fly { position: fixed; z-index: 10; margin: 0; object-fit: fill; transform-origin: 50% 50%; pointer-events: none; will-change: transform, clip-path; }
 
     @media (max-width: 980px) {
       .year { grid-template-columns: 1fr; gap: var(--s3); }
@@ -1856,7 +1862,7 @@
       if (!still) {
         const ease = 'cubic-bezier(.4, 0, .2, 1)';
         const jobs = [...extra];
-        if (card) jobs.push(card.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(12px) scale(.96)' }], { duration: 340, easing: ease, fill: 'forwards' }).finished);
+        if (card) jobs.push(card.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px) scale(.975)' }], { duration: 260, easing: ease, fill: 'forwards' }).finished);
         try { jobs.push(d.animate({ opacity: [1, 0] }, { duration: 420, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' }).finished); } catch (e) {}
         await Promise.all(jobs).catch(() => {});
       }
@@ -1892,13 +1898,24 @@
       };
       instant ? swap() : next.decode().catch(() => {}).then(swap);
     }
-    function fly(small, big, src, back) {
+    // The clicked photo grows into the stage. It is drawn at its own proportions, scaled evenly and clipped
+    // to the shape of the box it is passing through, so it crops cleanly instead of stretching
+    function fly(fromImg, big) {
+      const small = fromImg.getBoundingClientRect();
+      const ratio = (fromImg.naturalWidth || small.width) / (fromImg.naturalHeight || small.height);
+      const cover = (w, h) => (w / h > ratio ? [w, w / ratio] : [h * ratio, h]);
+      const [W, H] = cover(big.width, big.height), [w0] = cover(small.width, small.height);
+      const s0 = w0 / W;
       const im = new Image();
-      im.src = src; im.className = 'fly'; im.alt = '';
-      Object.assign(im.style, { left: `${big.left}px`, top: `${big.top}px`, width: `${big.width}px`, height: `${big.height}px` });
+      im.src = fromImg.currentSrc || fromImg.src; im.className = 'fly'; im.alt = '';
+      Object.assign(im.style, { left: `${big.left + big.width / 2 - W / 2}px`, top: `${big.top + big.height / 2 - H / 2}px`, width: `${W}px`, height: `${H}px` });
       albumModal.append(im);
-      const k = [{ transform: `translate(${small.left - big.left}px, ${small.top - big.top}px) scale(${small.width / big.width}, ${small.height / big.height})`, borderRadius: '6px' }, { transform: 'none', borderRadius: '22px' }];
-      return im.animate(back ? k.reverse() : k, { duration: back ? 640 : 780, easing: back ? 'cubic-bezier(.45, 0, .2, 1)' : OUT, fill: 'forwards' });
+      const dx = small.left + small.width / 2 - (big.left + big.width / 2), dy = small.top + small.height / 2 - (big.top + big.height / 2);
+      const clip = (vw, vh, r) => `inset(${((H - vh) / 2).toFixed(1)}px ${((W - vw) / 2).toFixed(1)}px round ${r.toFixed(1)}px)`;
+      return im.animate([
+        { transform: `translate(${dx}px, ${dy}px) scale(${s0})`, clipPath: clip(small.width / s0, small.height / s0, 20 / s0) },
+        { transform: 'none', clipPath: clip(big.width, big.height, 22) },
+      ], { duration: 760, easing: OUT, fill: 'forwards' });
     }
     function openAlbum(id, i = 0, fromImg = null, upload = false) {
       const a = byId(id);
@@ -1922,25 +1939,24 @@
       // Hide the photo it came from while it's "in the air"
       M.hidden = fromImg;
       M.hidden.style.opacity = 0;
-      const anim = fly(fromImg.getBoundingClientRect(), stage.getBoundingClientRect(), fromImg.currentSrc || fromImg.src, false);
+      const anim = fly(fromImg, stage.getBoundingClientRect());
       anim.finished.then(() => {
         albumCard.classList.remove('is-flying');
         const im = albumModal.querySelector('.fly');
         im?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).finished.then(() => im.remove());
       });
     }
-    // Closing sends the photo back to where it came from, if that spot is still on screen
-    async function closeAlbum(flyBack = true) {
+    // Closing (X, Esc or a click on the page behind): the window and its backdrop fade out together
+    async function closeAlbum() {
       if (M.closing || !albumModal.open) return;
       M.closing = true;
-      const extra = [];
-      const src = flyBack && !still && M.from?.isConnected && M.a.pics.length ? M.from.getBoundingClientRect() : null;
-      if (src && src.bottom > 0 && src.top < vh && src.width) {
-        const curImg = stageImgs[M.cur];
-        extra.push(fly(src, stage.getBoundingClientRect(), curImg.currentSrc || curImg.src, true).finished);
-        albumCard.classList.add('is-flying');
+      // The cover it opened from comes back as the window fades, instead of popping in at the end
+      if (M.hidden) {
+        const h = M.hidden; M.hidden = null;
+        h.style.opacity = '';
+        if (!still) h.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: 'ease-out' });
       }
-      await softClose(albumModal, albumCard, extra);
+      await softClose(albumModal, albumCard);
     }
     albumModal.addEventListener('close', () => {
       albumModal.querySelectorAll('.fly').forEach((f) => f.remove());
@@ -2106,7 +2122,7 @@
       if (type === 'remove') {
         if (!a) return;
         a.gone = true;
-        if (albumModal.open && M.a === a) closeAlbum(false);
+        if (albumModal.open && M.a === a) closeAlbum();
         setRows(id, false);
         if (id === 'kofi') document.querySelectorAll('.todo-row[data-id="kofi"]').forEach((r) => { r.classList.remove('is-done'); const b = r.querySelector('.todo-act'); b.textContent = 'Join'; b.disabled = false; });
         const el = cards.get(id);
