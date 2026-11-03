@@ -862,6 +862,10 @@
       :root[data-theme="dark"] .auth-field input { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
       :root[data-theme="dark"] .auth-field input:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
       :root[data-theme="dark"] .auth-field input:focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(140, 120, 220, .4); }
+      /* The join-code box: a light box with light text was unreadable in dark mode */
+      :root[data-theme="dark"] .field input { background: rgba(255, 255, 255, .06); color: var(--dusk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] .field input:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
+      :root[data-theme="dark"] .field input:focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(140, 120, 220, .4); }
       :root[data-theme="dark"] .auth-or::before, :root[data-theme="dark"] .auth-or::after { background: rgba(255, 255, 255, .14); }
       :root[data-theme="dark"] .auth-skip:hover { background: rgba(255, 255, 255, .07); }
       :root[data-theme="dark"] .auth-scan { color: #A8D4D0; background: rgba(127, 176, 173, .16); }
@@ -1841,6 +1845,24 @@
       root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
       story.paused = true;
       m.showModal();
+      // The dimmed backdrop fades in rather than snapping on
+      if (!still) try { m.animate({ opacity: [0, 1] }, { duration: 380, easing: 'ease-out', pseudoElement: '::backdrop' }); } catch (e) {}
+    }
+    // Closing a window: its card sinks and fades while the backdrop lifts, together, and only then
+    // does it close, so nothing snaps away at the end. `extra` are animations to wait for too
+    async function softClose(d, card = d.querySelector('.modal-card'), extra = []) {
+      if (d._closing || !d.open) return;
+      d._closing = true;
+      if (!still) {
+        const ease = 'cubic-bezier(.4, 0, .2, 1)';
+        const jobs = [...extra];
+        if (card) jobs.push(card.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(12px) scale(.96)' }], { duration: 340, easing: ease, fill: 'forwards' }).finished);
+        try { jobs.push(d.animate({ opacity: [1, 0] }, { duration: 420, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' }).finished); } catch (e) {}
+        await Promise.all(jobs).catch(() => {});
+      }
+      d.close();
+      d.getAnimations({ subtree: true }).forEach((a) => a.cancel());
+      d._closing = false;
     }
     function show(i, instant) {
       const dir = i > M.i ? 1 : -1;
@@ -1876,7 +1898,7 @@
       Object.assign(im.style, { left: `${big.left}px`, top: `${big.top}px`, width: `${big.width}px`, height: `${big.height}px` });
       albumModal.append(im);
       const k = [{ transform: `translate(${small.left - big.left}px, ${small.top - big.top}px) scale(${small.width / big.width}, ${small.height / big.height})`, borderRadius: '6px' }, { transform: 'none', borderRadius: '22px' }];
-      return im.animate(back ? k.reverse() : k, { duration: back ? 560 : 780, easing: back ? 'cubic-bezier(.5, 0, .15, 1)' : OUT, fill: 'forwards' });
+      return im.animate(back ? k.reverse() : k, { duration: back ? 640 : 780, easing: back ? 'cubic-bezier(.45, 0, .2, 1)' : OUT, fill: 'forwards' });
     }
     function openAlbum(id, i = 0, fromImg = null, upload = false) {
       const a = byId(id);
@@ -1908,20 +1930,17 @@
       });
     }
     // Closing sends the photo back to where it came from, if that spot is still on screen
-    async function closeAlbum() {
+    async function closeAlbum(flyBack = true) {
       if (M.closing || !albumModal.open) return;
       M.closing = true;
-      if (!still) {
-        const jobs = [albumCard.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(14px) scale(.97)' }], { duration: 380, easing: 'ease', fill: 'forwards' }).finished];
-        const src = M.from?.isConnected ? M.from.getBoundingClientRect() : null;
-        if (src && src.bottom > 0 && src.top < vh && src.width) {
-          const curImg = stageImgs[M.cur];
-          jobs.push(fly(src, stage.getBoundingClientRect(), curImg.currentSrc || curImg.src, true).finished);
-          albumCard.classList.add('is-flying');
-        }
-        await Promise.all(jobs);
+      const extra = [];
+      const src = flyBack && !still && M.from?.isConnected && M.a.pics.length ? M.from.getBoundingClientRect() : null;
+      if (src && src.bottom > 0 && src.top < vh && src.width) {
+        const curImg = stageImgs[M.cur];
+        extra.push(fly(src, stage.getBoundingClientRect(), curImg.currentSrc || curImg.src, true).finished);
+        albumCard.classList.add('is-flying');
       }
-      albumModal.close();
+      await softClose(albumModal, albumCard, extra);
     }
     albumModal.addEventListener('close', () => {
       albumModal.querySelectorAll('.fly').forEach((f) => f.remove());
@@ -2019,8 +2038,9 @@
     const joinCode = document.getElementById('joinCode');
     const joinNote = document.getElementById('joinNote');
     joinModal.addEventListener('close', () => { story.paused = false; if (useCursor) root.classList.add('has-cursor'); });
-    joinModal.addEventListener('pointerdown', (e) => { joinModal._downOutside = e.target === joinModal; }); joinModal.addEventListener('click', (e) => { if (e.target === joinModal && joinModal._downOutside) joinModal.close(); });
-    joinModal.querySelector('[data-close]').addEventListener('click', () => joinModal.close());
+    joinModal.addEventListener('pointerdown', (e) => { joinModal._downOutside = e.target === joinModal; }); joinModal.addEventListener('click', (e) => { if (e.target === joinModal && joinModal._downOutside) softClose(joinModal); });
+    joinModal.querySelector('[data-close]').addEventListener('click', () => softClose(joinModal));
+    joinModal.addEventListener('cancel', (e) => { e.preventDefault(); softClose(joinModal); });
     // Opened empty from the hero, or with a code already typed when it comes from an invite
     function openJoin(code = '') {
       joinCode.value = code; joinNote.textContent = ''; joinNote.classList.remove('error');
@@ -2051,9 +2071,9 @@
       const invite = INVITES[flat];
       if (!invite) { joinNote.classList.add('error'); joinNote.textContent = `No album uses the code ${pretty}. Check it with the host.`; joinCode.focus(); return; }
       const have = byId(invite.id);
-      if (have && !have.gone) { joinModal.close(); Momento.toast('You’re already in this album', have.name, { action: { label: 'Open', run: () => openAlbum(have.id) } }); return; }
+      if (have && !have.gone) { softClose(joinModal); Momento.toast('You’re already in this album', have.name, { action: { label: 'Open', run: () => openAlbum(have.id) } }); return; }
       STORE.add({ ...invite, code: pretty, role: 'guest' });
-      joinModal.close();
+      softClose(joinModal);
       Momento.toast('You joined the album', invite.name, { action: { label: 'Open', run: () => openAlbum(invite.id) } });
     });
 
@@ -2086,7 +2106,7 @@
       if (type === 'remove') {
         if (!a) return;
         a.gone = true;
-        if (albumModal.open && M.a === a) albumModal.close();
+        if (albumModal.open && M.a === a) closeAlbum(false);
         setRows(id, false);
         if (id === 'kofi') document.querySelectorAll('.todo-row[data-id="kofi"]').forEach((r) => { r.classList.remove('is-done'); const b = r.querySelector('.todo-act'); b.textContent = 'Join'; b.disabled = false; });
         const el = cards.get(id);
