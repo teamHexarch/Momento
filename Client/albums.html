@@ -567,6 +567,46 @@
     .field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
     .error { color: #9A3D3D; }
 
+    /* Join code: one box per character, like a verification code (K7Q-48DM) */
+    .otp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto repeat(4, minmax(0, 1fr)); align-items: center; gap: .4rem; }
+    .otp input {
+      width: 100%; min-width: 0; box-sizing: border-box; height: 3.4rem; padding: 0; border: none; border-radius: 14px;
+      background: rgba(255,255,255,.9); color: var(--dusk); text-align: center; caret-color: transparent;
+      font: 700 1.35rem/1 ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; text-transform: uppercase;
+      box-shadow: inset 0 0 0 1px rgba(46,44,58,.14), 0 1px 2px rgba(46,44,58,.06);
+      transition: box-shadow .2s ease, transform .35s cubic-bezier(.34,1.56,.64,1), background-color .2s ease;
+    }
+    .otp input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
+    .otp input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); transform: translateY(-2px); }
+    .otp input.is-filled { background: #fff; box-shadow: inset 0 0 0 1.5px rgba(46,44,58,.38), 0 4px 12px -6px rgba(46,44,58,.3); }
+    .otp input.is-filled:focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
+    .otp input::placeholder { color: rgba(46,44,58,.18); }
+    .otp-dash { width: .7rem; height: 2px; border-radius: 2px; background: var(--stone, #A9A5B4); }
+    .otp.is-error input { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
+    .otp.is-shake { animation: otpShake .42s cubic-bezier(.36,.07,.19,.97); }
+    @keyframes otpShake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    @media (prefers-reduced-motion: reduce) { .otp.is-shake { animation: none; } .otp input:focus { transform: none; } }
+    @media (max-width: 380px) { .otp { gap: .28rem; } .otp input { height: 3rem; font-size: 1.15rem; border-radius: 11px; } }
+    :root[data-theme="dark"] .otp input { background: rgba(255,255,255,.06); color: var(--dusk); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
+    :root[data-theme="dark"] .otp input.is-filled { background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
+    :root[data-theme="dark"] .otp input::placeholder { color: rgba(255,255,255,.18); }
+
+    /* Album window: who hosts it, and (for the host) the code to share */
+    .album-host { display: flex; align-items: center; gap: .5rem; margin: 0 0 .55rem; font-size: .92rem; color: var(--slate); }
+    .album-host-tag { padding: .22rem .6rem; border-radius: 100px; background: var(--dusk); color: var(--paper, #fff); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .album-host b { color: var(--dusk); font-weight: 650; }
+    .album-host-you { padding: .18rem .5rem; border-radius: 100px; background: rgba(188,178,236,.35); color: var(--dusk); font-size: .74rem; font-weight: 650; }
+    .album-code { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin: .9rem 0 0; padding: .6rem .6rem .6rem 1rem; border-radius: 16px; background: rgba(46,44,58,.06); }
+    .album-code small { color: var(--slate); font-size: .78rem; font-weight: 600; }
+    .album-code b { font: 700 1.2rem ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; letter-spacing: .12em; color: var(--dusk); }
+    .album-code button { margin-left: auto; padding: .5rem .95rem; border: none; border-radius: 100px; background: var(--paper, #fff); color: var(--dusk); font: 650 .84rem var(--font-main); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(46,44,58,.14); transition: box-shadow .2s ease, transform .3s cubic-bezier(.34,1.56,.64,1); }
+    .album-code button:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.32); }
+    .album-code button:active { transform: scale(.95); }
+    .album-code button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    :root[data-theme="dark"] .album-host-tag { background: #F3F0EA; color: #24222D; }
+    :root[data-theme="dark"] .album-code { background: rgba(255,255,255,.08); }
+    :root[data-theme="dark"] .album-code button { background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+
     /* The album window: a big stage you can flip through, and every photo below it */
     .album-card { width: min(800px, calc(100vw - 32px)); padding: .9rem .9rem 1.4rem; border-radius: 32px; }
     .album-card .close { top: 1.7rem; right: 1.7rem; background: rgba(255,255,255,.88); transition: opacity .3s ease, background-color .2s ease, scale .3s var(--spring); }
@@ -1469,8 +1509,10 @@
         <button class="stage-del" type="button" id="stageDel" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Delete photo</button>
       </div>
       <div class="album-head">
+        <p class="album-host" id="albumHost" hidden><span class="album-host-tag">Host</span><b id="albumHostName"></b><span class="album-host-you" id="albumHostYou" hidden>You</span></p>
         <h2 id="albumTitle"></h2>
         <p class="modal-sub" id="albumSub"></p>
+        <div class="album-code" id="albumCode" hidden><small>Album code</small><b id="albumCodeText"></b><button type="button" id="albumCodeCopy">Copy code</button></div>
       </div>
       <div class="thumbs" id="thumbs"></div>
       <div class="album-empty" id="albumEmpty" hidden>
@@ -1486,7 +1528,7 @@
         <button class="btn btn-dark" type="button" id="albumAdd">Add your photos</button>
         <button class="btn btn-light" type="button" id="albumDownload">Download all</button>
         <button class="btn btn-light" type="button" id="photoDownload">Download photo</button>
-        <button class="btn btn-light" type="button" id="albumLink">Copy album link</button>
+        <button class="btn btn-light" type="button" id="albumLink" hidden>Copy album link</button>
         <button class="album-remove" type="button" id="albumRemove">Delete album</button>
       </div>
       <p class="note" id="albumNote" role="status"></p>
@@ -1497,8 +1539,20 @@
     <form class="modal-card small" id="joinForm" novalidate>
       <button class="close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
       <h2 id="joinTitle" style="padding-right: 2.5rem">Join an album</h2>
-      <p class="modal-sub">Type the code printed under the host’s QR code.</p>
-      <label class="field"><span>Album code</span><input name="code" id="joinCode" placeholder="For example K7Q-48DM" autocomplete="off" spellcheck="false" maxlength="9"></label>
+      <p class="modal-sub">Enter the 7-character code the host shared with you.</p>
+      <div class="field"><span id="joinCodeLabel">Album code</span>
+        <div class="otp" id="joinOtp" role="group" aria-labelledby="joinCodeLabel">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 1 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 2 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 3 of 7">
+          <span class="otp-dash" aria-hidden="true"></span>
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 4 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 5 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 6 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 7 of 7">
+        </div>
+        <input type="hidden" name="code" id="joinCode">
+      </div>
       <p class="note" id="joinNote" role="status"></p>
       <div class="modal-actions"><button class="btn btn-dark" type="submit" style="width: 100%">Join album</button></div>
     </form>
@@ -1635,7 +1689,7 @@
           <span class="info">
             <span class="name">${esc(a.name)}</span>
             <span class="when">${esc([fmtDate(a.date), a.place].filter(Boolean).join(', '))}</span>
-            <span class="foot-row">${a.guests ? `<span>${num(a.photos)} photos from ${a.guests} guests</span>` : `<span>${a.photos ? `${num(a.photos)} photos so far` : 'Waiting for the first photos'}${a.code ? `, code ${a.code}` : ''}</span>`}<span class="role${a.role === 'host' ? ' host' : ''}">${a.role === 'host' ? 'You’re hosting' : 'Joined'}</span></span>
+            <span class="foot-row">${a.guests ? `<span>${num(a.photos)} photos from ${a.guests} guests</span>` : `<span>${a.photos ? `${num(a.photos)} photos so far` : 'Waiting for the first photos'}${a.code ? `, code ${a.code}` : ''}</span>`}<span class="role${a.role === 'host' ? ' host' : ''}">${a.role === 'host' ? 'You’re hosting' : a.hostName ? 'Host: ' + esc(a.hostName) : 'Joined'}</span></span>
           </span>
         </span>`;
       el.cover = el.querySelector('.cover');
@@ -1919,6 +1973,14 @@
     function fillAlbum(a) {
       const empty = !a.pics.length;
       const who = a.guests ? `${num(a.photos)} photos from ${a.guests} guests, ${a.mine} of them yours.` : a.photos ? `${num(a.photos)} photos so far, all yours.` : 'No photos yet.';
+      // Everyone sees who hosts the album; only the host gets the code and the link to share
+      document.getElementById('albumHost').hidden = !a.hostName;
+      document.getElementById('albumHostName').textContent = a.hostName || '';
+      document.getElementById('albumHostYou').hidden = a.role !== 'host';
+      const isHost = a.role === 'host' && !!a.code;
+      document.getElementById('albumCode').hidden = !isHost;
+      document.getElementById('albumCodeText').textContent = isHost ? a.code : '';
+      document.getElementById('albumLink').hidden = !isHost;
       document.getElementById('albumSub').textContent = `${[`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place].filter(Boolean).join(', ')}. ${who}`;
       thumbsEl.innerHTML = a.pics.map((p, n) => `<button class="thumb" type="button" data-n="${n}" aria-label="Photo ${n + 1}"><img src="${a.photoItems?.[n]?.thumbnailUrl || pic(p, 200, 200)}" alt=""></button>`).join('');
       albumCard.classList.toggle('is-empty', empty);
@@ -2020,9 +2082,15 @@
       ta.remove();
       return ok;
     }
+    document.getElementById('albumCodeCopy').addEventListener('click', async (e) => {
+      const a = M.a, b = e.currentTarget;
+      if (!a?.code) return;
+      b.textContent = await copyText(a.code) ? 'Copied' : 'Copy failed';
+      setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
+    });
     document.getElementById('albumLink').addEventListener('click', async () => {
       const a = M.a;
-      if (!a) return;
+      if (!a || a.role !== 'host' || !a.code) return;
       const link = albumLinkFor(a);
       if (await copyText(link)) Momento.toast('Album link copied', a.code ? `Anyone with the link can join ${a.name} with the code ${a.code}.` : `People already in ${a.name} can open it with this link.`);
       else document.getElementById('albumNote').textContent = 'Copy this link: ' + link;
@@ -2072,9 +2140,53 @@
     joinModal.querySelector('[data-close]').addEventListener('click', () => softClose(joinModal));
     joinModal.addEventListener('cancel', (e) => { e.preventDefault(); softClose(joinModal); });
     // Opened empty from the hero, or with a code already typed when it comes from an invite
+    const otp = document.getElementById('joinOtp');
+    const otpBoxes = [...otp.querySelectorAll('input')];
+    const CODE_CHAR = /[^A-Z0-9]/g;
+    // The hidden field holds the whole code (K7Q-48DM) for the form
+    function syncOtp() {
+      const chars = otpBoxes.map((b) => b.value).join('');
+      joinCode.value = chars.length > 3 ? chars.slice(0, 3) + '-' + chars.slice(3) : chars;
+      otpBoxes.forEach((b) => b.classList.toggle('is-filled', !!b.value));
+      otp.classList.remove('is-error');
+      return chars;
+    }
+    function setOtp(code) {
+      const chars = String(code || '').toUpperCase().replace(CODE_CHAR, '').slice(0, 7);
+      otpBoxes.forEach((b, i) => { b.value = chars[i] || ''; });
+      syncOtp();
+    }
+    const focusOtp = () => (otpBoxes.find((b) => !b.value) || otpBoxes[otpBoxes.length - 1]).focus();
+    // Typing or pasting into any box fills it and the boxes after it; the last one sends the form
+    function fillFrom(i, text) {
+      const chars = text.toUpperCase().replace(CODE_CHAR, '');
+      if (!chars) { syncOtp(); return; }
+      for (let k = 0; k < chars.length && i + k < otpBoxes.length; k++) otpBoxes[i + k].value = chars[k];
+      const next = Math.min(i + chars.length, otpBoxes.length - 1);
+      const full = syncOtp().length === 7;
+      otpBoxes[next].focus();
+      if (full && i + chars.length >= 7) joinForm.requestSubmit();
+    }
+    otpBoxes.forEach((box, i) => {
+      box.addEventListener('focus', () => box.select());
+      box.addEventListener('input', () => {
+        const v = box.value; box.value = '';
+        fillFrom(i, v);
+      });
+      box.addEventListener('paste', (e) => { e.preventDefault(); fillFrom(i, e.clipboardData?.getData('text') || ''); });
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !box.value && i > 0) { e.preventDefault(); otpBoxes[i - 1].value = ''; otpBoxes[i - 1].focus(); syncOtp(); }
+        else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); otpBoxes[i - 1].focus(); }
+        else if (e.key === 'ArrowRight' && i < otpBoxes.length - 1) { e.preventDefault(); otpBoxes[i + 1].focus(); }
+      });
+    });
+    function otpError() {
+      otp.classList.add('is-error'); otp.classList.remove('is-shake');
+      void otp.offsetWidth; otp.classList.add('is-shake');
+    }
     function openJoin(code = '') {
-      joinCode.value = code; joinNote.textContent = ''; joinNote.classList.remove('error');
-      showModal(joinModal); joinCode.focus();
+      setOtp(code); joinNote.textContent = ''; joinNote.classList.remove('error');
+      showModal(joinModal); focusOtp();
     }
     document.getElementById('joinOpen').addEventListener('click', () => openJoin());
     // The footer's "Join with a code" link arrives as albums.html#join
@@ -2092,7 +2204,7 @@
       if (!/^[A-Z0-9]{3}-?[A-Z0-9]{4}$/.test(code)) {
         joinNote.classList.add('error');
         joinNote.textContent = 'Codes are 7 letters and numbers, like K7Q-48DM.';
-        joinCode.focus(); return;
+        otpError(); focusOtp(); return;
       }
       joinNote.classList.remove('error');
       const button = joinForm.querySelector('[type="submit"]');
@@ -2103,7 +2215,7 @@
         await loadAlbums();
         await softClose(joinModal);
         await openAlbum(album.id);
-      } catch (err) { joinNote.classList.add('error'); joinNote.textContent = err.message; }
+      } catch (err) { joinNote.classList.add('error'); joinNote.textContent = err.message; otpError(); }
       finally { button.disabled = false; }
     });
 

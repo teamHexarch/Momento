@@ -47,7 +47,7 @@ export async function membershipOf(req, albumId) {
 
 // Counts and the newest few photos for a set of albums, in two queries
 async function statsFor(albumIds, userId) {
-  const [photoStats, memberStats] = await Promise.all([
+  const [photoStats, memberStats, hosts] = await Promise.all([
     Photo.aggregate([
       { $match: { album: { $in: albumIds } } },
       { $group: {
@@ -61,10 +61,16 @@ async function statsFor(albumIds, userId) {
       { $match: { album: { $in: albumIds } } },
       { $group: { _id: '$album', guests: { $sum: 1 } } },
     ]),
+    // Who hosts each album, so everyone in it can see it clearly
+    Membership.find({ album: { $in: albumIds }, role: 'host' }, 'album user').populate('user', 'name'),
   ]);
-  const byAlbum = new Map(albumIds.map((id) => [String(id), { photos: 0, mine: 0, pics: [], guests: 0 }]));
+  const byAlbum = new Map(albumIds.map((id) => [String(id), { photos: 0, mine: 0, pics: [], guests: 0, hostName: '', hostIsYou: false }]));
   for (const s of photoStats) Object.assign(byAlbum.get(String(s._id)), { photos: s.photos, mine: s.mine, pics: s.pics.map(thumbnailUrl) });
   for (const s of memberStats) byAlbum.get(String(s._id)).guests = s.guests;
+  for (const h of hosts) {
+    const name = (h.user?.name || '').trim() || 'The host';
+    Object.assign(byAlbum.get(String(h.album)), { hostName: name, hostIsYou: !!h.user?._id.equals(userId) });
+  }
   return byAlbum;
 }
 
@@ -188,7 +194,7 @@ export async function create(req, res) {
     }
   }
   await Membership.create({ album: album._id, user: req.user._id, role: 'host' });
-  res.status(201).json({ album: summary(album, 'host', { photos: 0, mine: 0, pics: [], guests: 1 }) });
+  res.status(201).json({ album: summary(album, 'host', { photos: 0, mine: 0, pics: [], guests: 1, hostName: (req.user.name || '').trim() || 'The host', hostIsYou: true }) });
 }
 
 // Joins an album from the code an invite link carried, when the account's email is confirmed.
