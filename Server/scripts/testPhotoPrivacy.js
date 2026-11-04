@@ -16,14 +16,15 @@ try {
   for await (const chunk of await openPhoto(key)) chunks.push(Buffer.from(chunk));
   const downloaded = Buffer.concat(chunks);
   const metadata = await sharp(downloaded).metadata();
-  assert.equal(metadata.exif, undefined);
-  assert.equal(metadata.xmp, undefined);
-  assert.equal(metadata.iptc, undefined);
-  assert.equal(metadata.width, 10);
-  assert.equal(metadata.height, 20);
+  assert.deepEqual(downloaded, input);
   assert.equal(downloaded.length, stored.size);
-  assert.equal(stored.mimeType, 'image/png');
-  console.log(`PASS: ${storageName} upload/download has no EXIF, XMP or IPTC; orientation and size correct.`);
+  assert.equal(stored.mimeType, 'image/jpeg');
+  const previewChunks = [];
+  for await (const chunk of await openPhoto(stored.thumbnailKey)) previewChunks.push(Buffer.from(chunk));
+  const thumb = await sharp(Buffer.concat(previewChunks)).metadata();
+  assert.equal(thumb.exif, undefined);
+  assert.equal(thumb.xmp, undefined);
+  console.log('PASS: exact original download and metadata-free thumbnail.');
 } finally {
   if (key) {
     await deletePhoto(key);

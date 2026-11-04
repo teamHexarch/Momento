@@ -65,7 +65,8 @@ try {
   await Photo.updateOne({ _id: photo.id }, { $unset: { thumbnailKey: 1 } });
   await call('/api/photos/' + photo.id + '?size=thumb', 200, h);
   assert.ok((await Photo.findById(photo.id)).thumbnailKey);
-  await call('/api/photos/' + photo.id + '/download', 200, h);
+  const download = await call('/api/photos/' + photo.id + '/download', 200, h);
+  assert.deepEqual(Buffer.from(await download.arrayBuffer()), bytes);
   await call('/api/albums/' + album.id + '/download', 200, h);
   await call('/api/photos/' + photo.id, 403, g, 'DELETE');
   await call('/api/photos/' + photo.id, 200, h, 'DELETE');

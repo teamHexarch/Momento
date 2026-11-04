@@ -8,7 +8,7 @@ import { sanitizePhoto } from './imageService.js';
 // ("<albumId>/<random>.jpg"), so drivers can change without touching routes.
 // Cloudflare R2 when its four settings are filled in, otherwise this machine's disk.
 
-const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif', 'image/gif': '.gif' };
+const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif', 'image/avif': '.avif', 'image/gif': '.gif' };
 
 const { accountId, accessKeyId, secretAccessKey, bucket } = config.r2;
 const useR2 = Boolean(accountId && accessKeyId && secretAccessKey && bucket);
