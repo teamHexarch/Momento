@@ -1209,8 +1209,10 @@
     // ---- Living background: the same silk shader as the landing page ----
     const canvas = document.getElementById('bg');
     const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
-    const SCALE = 0.33;
-    const flow = { t: 0, scroll: scrollY, vx: 0, vy: 0, mx: .5, my: .5, dirty: true, acc: 0 };
+    // The silk is soft, so it is drawn into a small buffer (about 60k pixels on any screen) that the
+    // browser scales up smoothly. That is cheap enough to redraw every frame, so the drift stays fluid
+    const SILK_PIXELS = 60000;
+    const flow = { t: 0, scroll: scrollY, dirty: true, acc: 0 };
     let renderFluid = () => {};
     if (gl) {
       const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
@@ -1222,10 +1224,9 @@
         #endif
         uniform vec2 res;
         uniform float t;
-        uniform vec2 m;
-        uniform vec2 v;
-        uniform float sc;
+        uniform float sc;     // scroll offset
         uniform vec3 c0, c1, c2, c3;   // the palette: fog, folds, sea glass, glints (eased between light and dark)
+        // Stable hash (no sin), so the noise doesn't break into blocks at lower precision
         float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
         float noise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
@@ -1241,18 +1242,17 @@
           vec2 uv = gl_FragCoord.xy / res;
           float asp = res.x / res.y;
           vec2 p = vec2(uv.x * asp, 1.0 - uv.y);
-          vec2 d = p - vec2(m.x * asp, m.y);
-          p -= v * exp(-dot(d, d) / 0.008);
           p.y += sc;
           p *= 1.25;
+          // Domain warping folds the noise into large soft ridges, like draped silk
           vec2 q = vec2(fbm(p + vec2(0.0, t * 0.05)), fbm(p + vec2(5.2, 1.3) - t * 0.04));
           vec2 r = vec2(fbm(p + 3.4 * q + vec2(1.7, 9.2) + t * 0.06), fbm(p + 3.4 * q + vec2(8.3, 2.8) - t * 0.05));
           float f = fbm(p + 3.2 * r);
-          vec3 base = c0, shadow = c1, tide = c2, cream = c3;
-          vec3 col = mix(base, shadow, smoothstep(0.46, 0.74, f));
-          col = mix(col, tide, smoothstep(0.62, 0.95, q.y) * 0.3);
+          vec3 col = mix(c0, c1, smoothstep(0.46, 0.74, f));
+          col = mix(col, c2, smoothstep(0.62, 0.95, q.y) * 0.3);
+          // Soft cream light where the folds turn over
           float edge = exp(-pow((f - 0.44) * 24.0, 2.0)) + 0.7 * exp(-pow((r.x - 0.6) * 20.0, 2.0)) + 0.5 * exp(-pow((f - 0.6) * 26.0, 2.0));
-          col = mix(col, cream, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
+          col = mix(col, c3, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
           gl_FragColor = vec4(col, 1.0);
         }`;
       const prog = gl.createProgram();
@@ -1271,7 +1271,7 @@
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
         const u = {};
-        for (const name of ['res', 't', 'm', 'v', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
+        for (const name of ['res', 't', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
         // Pale blue fog, lavender-blue folds, sea glass and cream edges by day; by night the same
         // silk goes near-black, with the glints turning to moonlit lavender
         const PAL = {
@@ -1282,25 +1282,22 @@
         const THEME = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
         const mixPal = (i, m) => PAL.light[i].map((v, c) => v + (PAL.dark[i][c] - v) * m);
         const sizeCanvas = () => {
-          canvas.width = Math.max(1, Math.round(vw * SCALE));
-          canvas.height = Math.max(1, Math.round(vh * SCALE));
+          const s = Math.min(.25, Math.sqrt(SILK_PIXELS / Math.max(1, innerWidth * innerHeight)));
+          canvas.width = Math.max(1, Math.round(innerWidth * s));
+          canvas.height = Math.max(1, Math.round(innerHeight * s));
           gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.uniform2f(u.res, canvas.width, canvas.height);
           flow.dirty = true;
         };
         sizeCanvas();
-        addEventListener('resize', sizeCanvas);
+        // Resizing reallocates the buffer, so it waits until the window has settled
+        let resizeTimer = 0;
+        addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(sizeCanvas, 150); });
         renderFluid = (dt) => {
           const k = (rate) => 1 - Math.exp(-dt * rate);
           const before = flow.scroll;
           flow.scroll += (scrollY - flow.scroll) * k(5);
-          const decay = Math.exp(-dt * 1.6);
-          flow.vx = flow.vx * decay + (still ? 0 : pointer.ix / vh * 0.3);
-          flow.vy = flow.vy * decay + (still ? 0 : pointer.iy / vh * 0.3);
-          pointer.ix = pointer.iy = 0;
-          const pull = Math.hypot(flow.vx, flow.vy);
-          if (pull > .12) { flow.vx *= .12 / pull; flow.vy *= .12 / pull; }
-          flow.mx += (pointer.x / vw - flow.mx) * k(25);
-          flow.my += (pointer.y / vh - flow.my) * k(25);
+          if (Math.abs(scrollY - flow.scroll) < .5) flow.scroll = scrollY;
           if (!still) flow.t += dt * 0.6;
           // Ease toward the chosen theme (instantly with reduced motion)
           const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
@@ -1311,15 +1308,12 @@
             if (Math.abs(THEME.target - THEME.b) <= .002) THEME.b = THEME.target;
             flow.dirty = true;
           }
-          const moving = !still || Math.abs(flow.scroll - before) > .1;
-          if (!moving && !flow.dirty) return;
+          if (still && flow.scroll === before && !flow.dirty) return;
+          // Every frame up to about 75 a second; faster screens (120 Hz and up) draw every other frame
           flow.acc += dt;
-          if (!flow.dirty && flow.acc < 1 / 31) return;
+          if (!flow.dirty && flow.acc < 1 / 75) return;
           flow.acc = 0; flow.dirty = false;
-          gl.uniform2f(u.res, canvas.width, canvas.height);
           gl.uniform1f(u.t, flow.t);
-          gl.uniform2f(u.m, flow.mx, flow.my);
-          gl.uniform2f(u.v, flow.vx, flow.vy);
           gl.uniform1f(u.sc, flow.scroll / vh * 0.35);
           gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
           gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
@@ -1467,10 +1461,12 @@
         renderFluid(dt);
         if (useCursor) {
           rx = lerp(rx, pointer.x, .35); ry = lerp(ry, pointer.y, .35);
+          if (Math.abs(pointer.x - rx) < .05 && Math.abs(pointer.y - ry) < .05) { rx = pointer.x; ry = pointer.y; }
           const lx = pointer.x - rx, ly = pointer.y - ry;
           const lens = root.classList.contains('cursor-hover') || root.classList.contains('cursor-drag');
           const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
-          cursorEl.style.transform = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+          const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+          if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
         }
       }
       requestAnimationFrame(frame);

@@ -347,6 +347,16 @@
     .bt:active img { transform: scale(1.02); opacity: .85; }
     .bt:focus-visible { outline: 2px solid var(--dusk); outline-offset: -2px; z-index: 1; }
     .bt-more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(30,26,40,.55); color: #fff; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; pointer-events: none; }
+    /* Live data: batches size to their content, and the list ends in an optional "show more" */
+    .feed-list .burst { min-height: 0; }
+    .feed-empty { margin: 0; padding: .95rem 0; color: var(--stone); font-size: .9rem; line-height: 1.5; }
+    .feed-more {
+      justify-self: start; margin-top: .4rem; padding: .5rem .2rem; border: none; background: none; color: var(--slate);
+      font: 600 .86rem var(--font-main); cursor: pointer; text-decoration: underline; text-decoration-color: rgba(92,89,107,.35); text-underline-offset: .2em;
+    }
+    .feed-more:hover { color: var(--dusk); }
+    .feed-more:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; border-radius: 4px; }
+    .todo-pic .todo-initial { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 14px; background: var(--line); color: var(--dusk); font-size: 1.1rem; font-weight: 700; }
 
     /* ---------- The archive: filter bar, then one chapter per year ---------- */
     .tools {
@@ -560,7 +570,24 @@
     .stage-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .stage-nav.prev { left: 1rem; }
     .stage-nav.next { right: 1rem; }
-    .stage-count { position: absolute; left: 1.2rem; bottom: 1rem; z-index: 2; color: #fff; font-size: .88rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .stage-count { position: absolute; left: 1.2rem; bottom: 1rem; z-index: 2; color: #fff; font-size: .88rem; font-weight: 650; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
+    .stage-count small { margin-left: .55rem; font-size: .84rem; font-weight: 550; opacity: .85; }
+    /* Upload progress: bytes sent fill the bar; then a soft sweep while the server finishes the photos */
+    .upload { margin-top: 1rem; padding: 0 .7rem; }
+    .upload[hidden] { display: none; }
+    .upload-top { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .45rem; color: var(--slate); font-size: .85rem; font-weight: 600; }
+    .upload-top span:last-child { font-variant-numeric: tabular-nums; color: var(--dusk); }
+    .upload-track { position: relative; height: 6px; border-radius: 6px; background: rgba(46,44,58,.09); overflow: hidden; }
+    .upload-track i { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(to right, var(--blush), var(--copper)); transform-origin: left; transform: scaleX(0); transition: transform .3s ease-out; }
+    .upload.is-processing .upload-track i { transform: scaleX(1); }
+    .upload.is-processing .upload-track::after {
+      content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+      transform: translateX(-100%); animation: upload-sweep 1.2s ease-in-out infinite;
+    }
+    @keyframes upload-sweep { to { transform: translateX(100%); } }
+    .upload.is-failed .upload-track i { background: #9A3D3D; }
+    :root[data-theme="dark"] .upload-track { background: rgba(255,255,255,.1); }
+    @media (prefers-reduced-motion: reduce) { .upload-track i { transition: none; } .upload.is-processing .upload-track::after { animation: none; } }
     .album-head { padding: 1.3rem .7rem 0; }
     .album-head .modal-sub { margin-bottom: 0; }
     .thumbs { display: grid; grid-template-columns: repeat(9, 1fr); gap: .45rem; padding: 1.1rem .7rem 0; }
@@ -1427,10 +1454,15 @@
         <span id="albumEmptyText"></span>
       </div>
       <input type="file" id="albumFiles" accept="image/*" multiple hidden>
+      <div class="upload" id="upload" hidden>
+        <div class="upload-top"><span id="uploadLabel">Uploading</span><span id="uploadPct">0%</span></div>
+        <div class="upload-track" id="uploadTrack" role="progressbar" aria-labelledby="uploadLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="uploadFill"></i></div>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-dark" type="button" id="albumAdd">Add your photos</button>
         <button class="btn btn-light" type="button" id="albumDownload">Download all</button>
         <button class="btn btn-light" type="button" id="photoDownload">Download photo</button>
+        <button class="btn btn-light" type="button" id="albumLink">Copy album link</button>
         <button class="album-remove" type="button" id="albumRemove">Delete album</button>
       </div>
       <p class="note" id="albumNote" role="status"></p>
@@ -1743,7 +1775,9 @@
         pre.src = big;
         pre.decode().then(() => { if (req === M.req) next.src = big; }).catch(() => {});
       } else next.src = big;
-      document.getElementById('stageCount').textContent = `${M.i + 1} of ${total}`;
+      const countEl = document.getElementById('stageCount'), by = M.a.photoItems?.[M.i]?.by;
+      countEl.textContent = `${M.i + 1} of ${total}`;
+      if (by) { const s = document.createElement('small'); s.textContent = `Added by ${by}`; countEl.append(s); }
       document.getElementById('stageDel').hidden = !(M.a.role === 'host' || M.a.photoItems?.[M.i]?.mine);
       thumbsEl.querySelectorAll('.thumb').forEach((t, n) => t.setAttribute('aria-current', n === M.i));
       const swap = () => {
@@ -1783,10 +1817,16 @@
       try { await fetchAlbum(a); }
       catch (err) { Momento.toast('Could not open album', err.message); return; }
       if (request !== opening) return;
+      // A photo can be named by its address (from the "Just added" list) instead of its position
+      if (typeof i === 'string') {
+        const pid = (i.match(/\/photos\/([^/?#]+)/) || [])[1];
+        i = Math.max(0, (a.photoItems || []).findIndex((p) => p.id === pid));
+      }
       M.a = a; M.i = i; M.from = fromImg;
       document.getElementById('albumTitle').textContent = a.name;
       fillAlbum(a);
       document.getElementById('albumNote').textContent = '';
+      if (!uploading) setUpload('off');
       if (upload) document.getElementById('albumNote').textContent = 'Choose Add your photos below to upload.';
       stageImgs.forEach((im) => im.classList.remove('is-on'));
       show(i, true);
@@ -1865,6 +1905,41 @@
       albumRemove.textContent = a.role === 'host' ? 'Delete album' : 'Leave album';
     }
     document.getElementById('albumAdd').addEventListener('click', () => albumFiles.click());
+    // fetch can't report upload progress, so photos go up with XMLHttpRequest (same cookie, same errors)
+    function sendWithProgress(path, body, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', window.MOMENTO_API + path);
+        xhr.withCredentials = true;
+        xhr.responseType = 'json';
+        xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); });
+        xhr.upload.addEventListener('load', () => onProgress(1));
+        xhr.addEventListener('load', () => {
+          const data = xhr.response || {};
+          if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
+          const err = new Error(data.error || 'The upload failed. Please try again.');
+          err.status = xhr.status; err.code = data.code;
+          reject(err);
+        });
+        xhr.addEventListener('error', () => reject(new Error('The connection dropped during the upload.')));
+        xhr.addEventListener('abort', () => reject(new Error('The upload was cancelled.')));
+        xhr.send(body);
+      });
+    }
+    const uploadEl = document.getElementById('upload'), uploadLabel = document.getElementById('uploadLabel');
+    const uploadPct = document.getElementById('uploadPct'), uploadTrack = document.getElementById('uploadTrack'), uploadFill = document.getElementById('uploadFill');
+    let uploadHide = 0;
+    function setUpload(state, p = 0, label = '') {
+      clearTimeout(uploadHide);
+      uploadEl.hidden = state === 'off';
+      uploadEl.classList.toggle('is-processing', state === 'processing');
+      uploadEl.classList.toggle('is-failed', state === 'failed');
+      const pct = Math.round(p * 100);
+      uploadFill.style.transform = `scaleX(${p})`;
+      uploadPct.textContent = state === 'processing' ? '' : `${pct}%`;
+      uploadTrack.setAttribute('aria-valuenow', pct);
+      if (label) uploadLabel.textContent = label;
+    }
     let uploading = false;
     albumFiles.addEventListener('change', async () => {
       const a = M.a, files = [...albumFiles.files];
@@ -1874,19 +1949,55 @@
       if (files.length > 30) { note.textContent = 'Choose up to 30 photos at a time.'; return; }
       uploading = true;
       const add = document.getElementById('albumAdd'); add.disabled = true;
-      note.textContent = 'Uploading and removing photo location data…';
+      note.textContent = '';
+      const count = `${files.length} ${files.length === 1 ? 'photo' : 'photos'}`;
+      const size = files.reduce((t, f) => t + f.size, 0);
+      const mb = (b) => (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB';
+      setUpload('sending', 0, `Uploading ${count}`);
+      uploadEl.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
       const form = new FormData();
       files.forEach((file) => form.append('photos', file));
       try {
-        await momentoApi('/api/albums/' + a.id + '/photos', { method: 'POST', body: form });
+        await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => {
+          if (p >= 1) setUpload('processing', 1, `Finishing ${count}, removing location data…`);
+          else setUpload('sending', p, `Uploading ${count}, ${mb(size * p)} of ${mb(size)}`);
+        });
+        setUpload('done', 1, `${count[0].toUpperCase() + count.slice(1)} uploaded`);
         await loadAlbums();
         await fetchAlbum(a);
         photosChanged(a, 0);
-        note.textContent = 'Uploaded. Embedded location data has been removed from these new photos.';
+        note.textContent = 'Location data was removed from these photos.';
+        uploadHide = setTimeout(() => setUpload('off'), 2500);
       } catch (err) {
+        setUpload('failed', 1, 'Upload didn’t finish');
+        uploadPct.textContent = '';
         note.textContent = err.message + ' Refresh the album before retrying; some photos may have uploaded.';
         try { await fetchAlbum(a); photosChanged(a, 0); } catch {}
       } finally { uploading = false; add.disabled = !M.a?.open; }
+    });
+    // A link to share: hosts get a join link (it carries the album code); guests get a link back to the album
+    const albumLinkFor = (a) => {
+      const url = new URL('albums.html', location.href);
+      url.search = ''; url.hash = '';
+      url.searchParams.set(a.code ? 'join' : 'album', a.code || a.id);
+      return url.href;
+    };
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); return true; } catch {}
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0;left:0;top:0';
+      albumModal.append(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch {}
+      ta.remove();
+      return ok;
+    }
+    document.getElementById('albumLink').addEventListener('click', async () => {
+      const a = M.a;
+      if (!a) return;
+      const link = albumLinkFor(a);
+      if (await copyText(link)) Momento.toast('Album link copied', a.code ? `Anyone with the link can join ${a.name} with the code ${a.code}.` : `People already in ${a.name} can open it with this link.`);
+      else document.getElementById('albumNote').textContent = 'Copy this link: ' + link;
     });
     // After photos are added, deleted or brought back: redraw the window (if it shows this album), its card and the totals
     function photosChanged(a, at) {
@@ -2009,8 +2120,10 @@
     // ---- Living background: the same silk shader as the landing page ----
     const canvas = document.getElementById('bg');
     const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
-    const SCALE = 0.33;
-    const flow = { t: 0, scroll: scrollY, vx: 0, vy: 0, mx: .5, my: .5, dirty: true, acc: 0 };
+    // The silk is soft, so it is drawn into a small buffer (about 60k pixels on any screen) that the
+    // browser scales up smoothly. That is cheap enough to redraw every frame, so the drift stays fluid
+    const SILK_PIXELS = 60000;
+    const flow = { t: 0, scroll: scrollY, dirty: true, acc: 0 };
     let renderFluid = () => {};
     if (gl) {
       const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
@@ -2022,10 +2135,9 @@
         #endif
         uniform vec2 res;
         uniform float t;
-        uniform vec2 m;
-        uniform vec2 v;
-        uniform float sc;
+        uniform float sc;     // scroll offset
         uniform vec3 c0, c1, c2, c3;   // the palette: fog, folds, sea glass, glints (eased between light and dark)
+        // Stable hash (no sin), so the noise doesn't break into blocks at lower precision
         float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
         float noise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
@@ -2041,18 +2153,17 @@
           vec2 uv = gl_FragCoord.xy / res;
           float asp = res.x / res.y;
           vec2 p = vec2(uv.x * asp, 1.0 - uv.y);
-          vec2 d = p - vec2(m.x * asp, m.y);
-          p -= v * exp(-dot(d, d) / 0.008);
           p.y += sc;
           p *= 1.25;
+          // Domain warping folds the noise into large soft ridges, like draped silk
           vec2 q = vec2(fbm(p + vec2(0.0, t * 0.05)), fbm(p + vec2(5.2, 1.3) - t * 0.04));
           vec2 r = vec2(fbm(p + 3.4 * q + vec2(1.7, 9.2) + t * 0.06), fbm(p + 3.4 * q + vec2(8.3, 2.8) - t * 0.05));
           float f = fbm(p + 3.2 * r);
-          vec3 base = c0, shadow = c1, tide = c2, cream = c3;
-          vec3 col = mix(base, shadow, smoothstep(0.46, 0.74, f));
-          col = mix(col, tide, smoothstep(0.62, 0.95, q.y) * 0.3);
+          vec3 col = mix(c0, c1, smoothstep(0.46, 0.74, f));
+          col = mix(col, c2, smoothstep(0.62, 0.95, q.y) * 0.3);
+          // Soft cream light where the folds turn over
           float edge = exp(-pow((f - 0.44) * 24.0, 2.0)) + 0.7 * exp(-pow((r.x - 0.6) * 20.0, 2.0)) + 0.5 * exp(-pow((f - 0.6) * 26.0, 2.0));
-          col = mix(col, cream, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
+          col = mix(col, c3, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
           gl_FragColor = vec4(col, 1.0);
         }`;
       const prog = gl.createProgram();
@@ -2071,7 +2182,7 @@
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
         const u = {};
-        for (const name of ['res', 't', 'm', 'v', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
+        for (const name of ['res', 't', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
         // Pale blue fog, lavender-blue folds, sea glass and cream edges by day; by night the same
         // silk goes near-black, with the glints turning to moonlit lavender
         const PAL = {
@@ -2082,25 +2193,22 @@
         const THEME = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
         const mixPal = (i, m) => PAL.light[i].map((v, c) => v + (PAL.dark[i][c] - v) * m);
         const sizeCanvas = () => {
-          canvas.width = Math.max(1, Math.round(vw * SCALE));
-          canvas.height = Math.max(1, Math.round(vh * SCALE));
+          const s = Math.min(.25, Math.sqrt(SILK_PIXELS / Math.max(1, innerWidth * innerHeight)));
+          canvas.width = Math.max(1, Math.round(innerWidth * s));
+          canvas.height = Math.max(1, Math.round(innerHeight * s));
           gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.uniform2f(u.res, canvas.width, canvas.height);
           flow.dirty = true;
         };
         sizeCanvas();
-        addEventListener('resize', sizeCanvas);
+        // Resizing reallocates the buffer, so it waits until the window has settled
+        let resizeTimer = 0;
+        addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(sizeCanvas, 150); });
         renderFluid = (dt) => {
           const k = (rate) => 1 - Math.exp(-dt * rate);
           const before = flow.scroll;
           flow.scroll += (scrollY - flow.scroll) * k(5);
-          const decay = Math.exp(-dt * 1.6);
-          flow.vx = flow.vx * decay + (still ? 0 : pointer.ix / vh * 0.3);
-          flow.vy = flow.vy * decay + (still ? 0 : pointer.iy / vh * 0.3);
-          pointer.ix = pointer.iy = 0;
-          const pull = Math.hypot(flow.vx, flow.vy);
-          if (pull > .12) { flow.vx *= .12 / pull; flow.vy *= .12 / pull; }
-          flow.mx += (pointer.x / vw - flow.mx) * k(25);
-          flow.my += (pointer.y / vh - flow.my) * k(25);
+          if (Math.abs(scrollY - flow.scroll) < .5) flow.scroll = scrollY;
           if (!still) flow.t += dt * 0.6;
           // Ease toward the chosen theme (instantly with reduced motion)
           const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
@@ -2111,15 +2219,12 @@
             if (Math.abs(THEME.target - THEME.b) <= .002) THEME.b = THEME.target;
             flow.dirty = true;
           }
-          const moving = !still || Math.abs(flow.scroll - before) > .1;
-          if (!moving && !flow.dirty) return;
+          if (still && flow.scroll === before && !flow.dirty) return;
+          // Every frame up to about 75 a second; faster screens (120 Hz and up) draw every other frame
           flow.acc += dt;
-          if (!flow.dirty && flow.acc < 1 / 31) return;
+          if (!flow.dirty && flow.acc < 1 / 75) return;
           flow.acc = 0; flow.dirty = false;
-          gl.uniform2f(u.res, canvas.width, canvas.height);
           gl.uniform1f(u.t, flow.t);
-          gl.uniform2f(u.m, flow.mx, flow.my);
-          gl.uniform2f(u.v, flow.vx, flow.vy);
           gl.uniform1f(u.sc, flow.scroll / vh * 0.35);
           gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
           gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
@@ -2132,11 +2237,19 @@
     function lightUp(glass) {
       glass.addEventListener('pointerenter', () => glass.style.setProperty('--shine', 1));
       glass.addEventListener('pointerleave', () => glass.style.setProperty('--shine', 0));
+      // One rect read and one write per frame, however many pointer events arrive
+      let gx = 0, gy = 0, queued = false;
       glass.addEventListener('pointermove', (e) => {
-        const r = glass.getBoundingClientRect();
-        glass.style.setProperty('--mx', `${e.clientX - r.left}px`);
-        glass.style.setProperty('--my', `${e.clientY - r.top}px`);
-      });
+        gx = e.clientX; gy = e.clientY;
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          const r = glass.getBoundingClientRect();
+          glass.style.setProperty('--mx', `${gx - r.left}px`);
+          glass.style.setProperty('--my', `${gy - r.top}px`);
+        });
+      }, { passive: true });
     }
     document.querySelectorAll('.glass, .panel').forEach((g) => { if (!g.closest('.album')) lightUp(g); });
 
@@ -2230,8 +2343,13 @@
         t.x = lerp(t.x, -ty * 10 + p * 6, .12);
         t.y = lerp(t.y, tx * 12, .12);
         t.g = lerp(t.g, t.over ? 1 : 0, .1);
-        el.cover.style.transform = `perspective(1000px) rotateX(${(t.x + W.s * 12).toFixed(2)}deg) rotateY(${t.y.toFixed(2)}deg) skewY(${(W.s * 2.5).toFixed(2)}deg) scale(${(1 - W.a * .04).toFixed(4)}, ${(1 + W.a * .06).toFixed(4)})`;
-        if (el.img) el.img.style.transform = `translate3d(0, ${(p * -6).toFixed(2)}%, 0) scale(${(1.14 + W.a * .14).toFixed(4)})`;
+        // Only written when they change, so resting covers cost nothing
+        const ct = `perspective(1000px) rotateX(${(t.x + W.s * 12).toFixed(2)}deg) rotateY(${t.y.toFixed(2)}deg) skewY(${(W.s * 2.5).toFixed(2)}deg) scale(${(1 - W.a * .04).toFixed(3)}, ${(1 + W.a * .06).toFixed(3)})`;
+        if (ct !== el._ct) el.cover.style.transform = el._ct = ct;
+        if (el.img) {
+          const it = `translate3d(0, ${(p * -6).toFixed(2)}%, 0) scale(${(1.14 + W.a * .14).toFixed(3)})`;
+          if (it !== el._it) el.img.style.transform = el._it = it;
+        }
         if (t.g > .01 || t.over) {
           el.cover.style.setProperty('--glare', t.g.toFixed(3));
           el.cover.style.setProperty('--gx', `${(t.hx * 100).toFixed(1)}%`);
@@ -2262,30 +2380,70 @@
       ALBUMS.forEach((a, i) => cards.set(a.id, makeCard(a, i)));
       render(false); sumUp(false); renderLive();
       document.querySelector('#empty > span').textContent = ALBUMS.length ? 'Try another name or place.' : 'Create an album or join with a code to add your first photos.';
-      feedEl.replaceChildren();
-      for (const p of result.recent || []) {
-        const a = byId(p.albumId); if (!a) continue;
-        const button = document.createElement('button'); button.type = 'button'; button.className = 'burst-album';
-        const img = document.createElement('img'); img.src = p.thumbnailUrl || p.url; img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; img.width = 80; img.height = 60; img.style.objectFit = 'cover';
-        button.append(img, document.createTextNode(' ' + p.by + ' · ' + a.name));
-        button.addEventListener('click', () => openAlbum(a.id)); feedEl.append(button);
-      }
-      if (!feedEl.children.length) feedEl.textContent = 'No photos added yet.';
-      todoEl.replaceChildren();
-      for (const invite of result.invites || []) {
-        const row = document.createElement('li'); row.className = 'todo-row';
-        const label = document.createElement('span'); label.textContent = invite.by + ' invited you to ' + invite.name;
-        const button = document.createElement('button'); button.type = 'button'; button.className = 'todo-act'; button.textContent = 'Join';
-        button.addEventListener('click', () => openJoin(invite.code)); row.append(label, button); todoEl.append(row);
-      }
+      renderFeed(result);
+      todoEl.innerHTML = (result.invites || []).map((inv) => `
+        <li class="todo-row" data-kind="invite">
+          <span class="todo-pic"><span class="todo-initial" aria-hidden="true">${esc((inv.name.trim()[0] || '·').toUpperCase())}</span></span>
+          <span class="todo-text"><b>${esc(inv.by)} invited you to ${esc(inv.name)}</b><small>${esc([inv.date && fmtDate(inv.date), inv.place].filter(Boolean).join(', ') || 'Join to see and add photos.')}</small></span>
+          <button class="todo-act" type="button" data-code="${esc(inv.code)}">Join</button>
+        </li>`).join('');
     }
+    todoEl.addEventListener('click', (e) => { const b = e.target.closest('.todo-act[data-code]'); if (b) openJoin(b.dataset.code); });
+
+    // ---- Just added: who added how many photos to which album, newest first ----
+    const FACE = ['#D9D0EA', '#E6CDD6', '#C6DEDA', '#EBDCCB'];
+    const tint = (s) => FACE[[...s].reduce((h, c) => h + c.charCodeAt(0), 0) % FACE.length];
+    const FEED_SHOWN = 4;
+    function agoText(t) {
+      const s = (Date.now() - new Date(t)) / 1000;
+      if (!(s >= 0)) return '';
+      if (s < 45) return 'just now';
+      const m = Math.round(s / 60); if (m < 60) return `${m} min ago`;
+      const h = Math.round(m / 60); if (h < 24) return `${h} ${h === 1 ? 'hour' : 'hours'} ago`;
+      const d = Math.round(h / 24); if (d === 1) return 'yesterday';
+      return d < 7 ? `${d} days ago` : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+    function burstHTML(b, a, hide) {
+      const shown = b.pics.slice(0, 4), extra = b.n - shown.length, who = b.by || 'Someone';
+      return `
+        <article class="burst" data-id="${esc(a.id)}"${hide ? ' hidden' : ''}>
+          <span class="burst-av" style="background:${tint(who)}" aria-hidden="true">${esc(who[0].toUpperCase())}</span>
+          <div>
+            <p class="burst-line"><b>${esc(who)}</b> added ${b.n} ${b.n === 1 ? 'photo' : 'photos'} to <button class="burst-album" type="button">${esc(a.name)}</button></p>
+            <div class="burst-time">${a.status === 'live' ? '<i aria-hidden="true"></i>' : ''}<span>${esc(agoText(b.at))}</span></div>
+            <div class="burst-thumbs" style="--n:${shown.length}">${shown.map((src, j) => `<button class="bt" type="button" data-src="${esc(src)}" aria-label="Open photo ${j + 1} from ${esc(who)} in ${esc(a.name)}"><img src="${esc(src)}" alt="" loading="lazy" decoding="async">${extra > 0 && j === shown.length - 1 ? `<span class="bt-more" aria-hidden="true">+${extra}</span>` : ''}</button>`).join('')}</div>
+          </div>
+        </article>`;
+    }
+    function renderFeed(result) {
+      // Batches from the server; an older server only sends single photos, so those become batches of one
+      const list = (result.feed || (result.recent || []).map((p) => ({ albumId: p.albumId, by: p.by, n: 1, pics: [p.thumbnailUrl || p.url], at: p.at })))
+        .filter((b) => byId(b.albumId) && b.pics?.length);
+      if (!list.length) { feedEl.innerHTML = '<p class="feed-empty">No photos yet. When anyone adds photos to your albums, you’ll see who added what here.</p>'; return; }
+      const more = list.length - FEED_SHOWN;
+      feedEl.innerHTML = list.map((b, i) => burstHTML(b, byId(b.albumId), i >= FEED_SHOWN)).join('')
+        + (more > 0 ? `<button class="feed-more" type="button" aria-expanded="false">Show ${more} more</button>` : '');
+    }
+    feedEl.addEventListener('click', (e) => {
+      const moreBtn = e.target.closest('.feed-more');
+      if (moreBtn) { feedEl.querySelectorAll('.burst[hidden]').forEach((b) => { b.hidden = false; }); moreBtn.remove(); return; }
+      const row = e.target.closest('.burst');
+      if (!row) return;
+      const thumb = e.target.closest('.bt');
+      if (thumb) openAlbum(row.dataset.id, thumb.dataset.src, thumb.querySelector('img'));
+      else if (e.target.closest('.burst-album')) openAlbum(row.dataset.id, 0, row.querySelector('.bt img'));
+    });
     document.addEventListener('DOMContentLoaded', async () => {
       const lede = document.getElementById('lede');
       lede.textContent = 'Loading your albums…';
       document.getElementById('empty').hidden = true;
       try {
         const user = await Momento.sessionReady;
-        if (!user) { location.replace('index.html?login=1'); return; }
+        // Signed out: log in first, then come back to the same album link (?join= or ?album=)
+        if (!user) {
+          const back = location.search || location.hash ? '&next=' + encodeURIComponent('albums.html' + location.search + location.hash) : '';
+          location.replace('index.html?login=1' + back); return;
+        }
         if (!user.emailVerified) {
           lede.textContent = 'Confirm your email to view albums and upload photos. Check ' + user.email + ' for your verification link.';
           document.querySelector('.pulse').hidden = true;
@@ -2345,10 +2503,12 @@
         renderFluid(dt);
         if (useCursor) {
           rx = lerp(rx, pointer.x, .35); ry = lerp(ry, pointer.y, .35);
+          if (Math.abs(pointer.x - rx) < .05 && Math.abs(pointer.y - ry) < .05) { rx = pointer.x; ry = pointer.y; }
           const lx = pointer.x - rx, ly = pointer.y - ry;
           const lens = root.classList.contains('cursor-hover') || root.classList.contains('cursor-drag');
           const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
-          cursorEl.style.transform = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+          const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+          if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
         }
         updateSpeed(dt);
         updateStory(dt);

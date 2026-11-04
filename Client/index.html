@@ -1037,6 +1037,11 @@
     .auth-forgot:hover { color: var(--dusk); }
     .auth-error { min-height: 1.2rem; margin: .1rem 0 .5rem; color: #9A3D3D; font-size: .85rem; font-weight: 500; }
     .auth-submit { width: 100%; }
+    /* While logging in: the label says so, with a small turning ring, and the button holds still */
+    .auth-submit.is-busy { cursor: progress; }
+    .auth-submit.is-busy .roll { transform: none; }
+    .btn-spin { flex: none; width: .95em; height: .95em; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .75s linear infinite; }
+    @media (prefers-reduced-motion: reduce) { .btn-spin { animation-duration: 2s; } }
     .auth-skip { display: block; width: 100%; margin-top: .5rem; padding: .7rem; border: none; border-radius: 100px; background: none; color: var(--slate); font: 600 .9rem var(--font-main); cursor: pointer; }
     .auth-skip:hover { color: var(--dusk); background: rgba(46,44,58,.05); }
     .auth-skip:active { background: rgba(46,44,58,.1); }
@@ -2264,14 +2269,15 @@
     addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
 
     // ---- Living background: flowing silk, drawn by a small shader at a third of screen size ----
-    // It drifts slowly on its own, rides up and down with the scroll, and is dragged along
-    // wherever the cursor moves. Without WebGL the page keeps its plain fog gradient.
+    // It drifts slowly on its own and rides up and down with the scroll.
+    // Without WebGL the page keeps its plain fog gradient.
     const canvas = document.getElementById('bg');
     const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
-    const SCALE = 0.25;
-    const flow = { t: 0, scroll: scrollY, vx: 0, vy: 0, mx: .5, my: .5, dirty: true };
+    // The silk is soft, so it is drawn into a small buffer (about 60k pixels on any screen) that the
+    // browser scales up smoothly. That is cheap enough to redraw every frame, so the drift stays fluid
+    const SILK_PIXELS = 60000;
+    const flow = { t: 0, scroll: scrollY, dirty: true, acc: 0 };
     let renderFluid = () => {};
-
     if (gl) {
       const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
       const frag = `
@@ -2282,11 +2288,8 @@
         #endif
         uniform vec2 res;
         uniform float t;
-        uniform vec2 m;       // cursor, 0..1 with y from the top
-        uniform vec2 v;       // how far the cursor has dragged the silk
         uniform float sc;     // scroll offset
         uniform vec3 c0, c1, c2, c3;   // the palette: fog, folds, sea glass, glints (eased between light and dark)
-
         // Stable hash (no sin), so the noise doesn't break into blocks at lower precision
         float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
         float noise(vec2 p) {
@@ -2299,32 +2302,21 @@
           for (int i = 0; i < 3; i++) { s += a * noise(p); p = p * 2.02 + vec2(1.7, 9.2); a *= 0.5; }
           return s;
         }
-
         void main() {
           vec2 uv = gl_FragCoord.xy / res;
           float asp = res.x / res.y;
           vec2 p = vec2(uv.x * asp, 1.0 - uv.y);
-
-          // Near the cursor the silk is pulled along the way the cursor moved
-          vec2 d = p - vec2(m.x * asp, m.y);
-          // Only a small patch under the cursor is touched: it's pulled along the cursor's path
-          float near = exp(-dot(d, d) / 0.008);
-          p -= v * near;
           p.y += sc;
           p *= 1.25;
-
           // Domain warping folds the noise into large soft ridges, like draped silk
           vec2 q = vec2(fbm(p + vec2(0.0, t * 0.05)), fbm(p + vec2(5.2, 1.3) - t * 0.04));
           vec2 r = vec2(fbm(p + 3.4 * q + vec2(1.7, 9.2) + t * 0.06), fbm(p + 3.4 * q + vec2(8.3, 2.8) - t * 0.05));
           float f = fbm(p + 3.2 * r);
-
-          vec3 base = c0, shadow = c1, tide = c2, cream = c3;
-
-          vec3 col = mix(base, shadow, smoothstep(0.46, 0.74, f));
-          col = mix(col, tide, smoothstep(0.62, 0.95, q.y) * 0.3);
-          // Soft cream light where the folds turn over, and a faint warm wash on the crests
+          vec3 col = mix(c0, c1, smoothstep(0.46, 0.74, f));
+          col = mix(col, c2, smoothstep(0.62, 0.95, q.y) * 0.3);
+          // Soft cream light where the folds turn over
           float edge = exp(-pow((f - 0.44) * 24.0, 2.0)) + 0.7 * exp(-pow((r.x - 0.6) * 20.0, 2.0)) + 0.5 * exp(-pow((f - 0.6) * 26.0, 2.0));
-          col = mix(col, cream, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
+          col = mix(col, c3, clamp(edge * 0.85 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
           gl_FragColor = vec4(col, 1.0);
         }`;
       const prog = gl.createProgram();
@@ -2343,7 +2335,7 @@
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
         const u = {};
-        for (const name of ['res', 't', 'm', 'v', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
+        for (const name of ['res', 't', 'sc', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
         // Pale blue fog, lavender-blue folds, sea glass and cream edges by day; by night the same
         // silk goes near-black, with the glints turning to moonlit lavender
         const PAL = {
@@ -2353,31 +2345,23 @@
         // The folds and fog darken first; the glints warm up a beat later, like lamps coming on
         const THEME = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
         const mixPal = (i, m) => PAL.light[i].map((v, c) => v + (PAL.dark[i][c] - v) * m);
-
         const sizeCanvas = () => {
-          canvas.width = Math.max(1, Math.round(vw * SCALE));
-          canvas.height = Math.max(1, Math.round(vh * SCALE));
+          const s = Math.min(.25, Math.sqrt(SILK_PIXELS / Math.max(1, innerWidth * innerHeight)));
+          canvas.width = Math.max(1, Math.round(innerWidth * s));
+          canvas.height = Math.max(1, Math.round(innerHeight * s));
           gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.uniform2f(u.res, canvas.width, canvas.height);
           flow.dirty = true;
         };
         sizeCanvas();
-        addEventListener('resize', sizeCanvas);
-
+        // Resizing reallocates the buffer, so it waits until the window has settled
+        let resizeTimer = 0;
+        addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(sizeCanvas, 150); });
         renderFluid = (dt) => {
           const k = (rate) => 1 - Math.exp(-dt * rate);
           const before = flow.scroll;
           flow.scroll += (scrollY - flow.scroll) * k(5);
-          // Cursor movement is added as a drag that eases away again
-          const decay = Math.exp(-dt * 1.6);
-          flow.vx = flow.vx * decay + (still ? 0 : pointer.ix / vh * 0.3);
-          flow.vy = flow.vy * decay + (still ? 0 : pointer.iy / vh * 0.3);
-          pointer.ix = pointer.iy = 0;
-          // Capped so even a fast flick only bends the silk gently
-          const pull = Math.hypot(flow.vx, flow.vy);
-          if (pull > .12) { flow.vx *= .12 / pull; flow.vy *= .12 / pull; }
-          // The patch stays right under the cursor rather than trailing behind it
-          flow.mx += (pointer.x / vw - flow.mx) * k(25);
-          flow.my += (pointer.y / vh - flow.my) * k(25);
+          if (Math.abs(scrollY - flow.scroll) < .5) flow.scroll = scrollY;
           if (!still) flow.t += dt * 0.6;
           // Ease toward the chosen theme (instantly with reduced motion)
           const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
@@ -2388,20 +2372,12 @@
             if (Math.abs(THEME.target - THEME.b) <= .002) THEME.b = THEME.target;
             flow.dirty = true;
           }
-          const moving = !still || Math.abs(flow.scroll - before) > .1;
-          if (!moving && !flow.dirty) return;
-          // The silk moves slowly, so 30 frames a second is plenty and halves the GPU work.
-          // Once the visitor has been idle for a second, the slow drift alone drops to 15
-          const active = Math.abs(flow.scroll - before) > .1 || Math.hypot(flow.vx, flow.vy) > .002;
-          flow.idle = active ? 0 : (flow.idle || 0) + dt;
-          flow.acc = (flow.acc || 0) + dt;
-          if (!flow.dirty && flow.acc < (flow.idle > 1 ? 1 / 15.5 : 1 / 31)) return;
-          flow.acc = 0;
-          flow.dirty = false;
-          gl.uniform2f(u.res, canvas.width, canvas.height);
+          if (still && flow.scroll === before && !flow.dirty) return;
+          // Every frame up to about 75 a second; faster screens (120 Hz and up) draw every other frame
+          flow.acc += dt;
+          if (!flow.dirty && flow.acc < 1 / 75) return;
+          flow.acc = 0; flow.dirty = false;
           gl.uniform1f(u.t, flow.t);
-          gl.uniform2f(u.m, flow.mx, flow.my);
-          gl.uniform2f(u.v, flow.vx, flow.vy);
           gl.uniform1f(u.sc, flow.scroll / vh * 0.35);
           gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
           gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
@@ -2698,6 +2674,23 @@
       spread = 0; syncArrows();
       bookTo(rest(0), 3000);
     }
+    // Back to the start (the logo): the book closes and the QR code returns, ready to scan again
+    let resetting = false;
+    window.resetHome = () => {
+      if (scanState !== 'done' || resetting) return;
+      resetting = true;
+      closeBook(false, 900);
+      const swap = () => {
+        // Wait for the cover to shut, then the book goes and the card comes back in its place
+        if (!still && (book.s > .02 || screens > .02)) { requestAnimationFrame(swap); return; }
+        album.style.visibility = 'hidden';
+        popAt = 0; scanState = 'idle'; syncArrows();
+        stage.classList.remove('is-reading');
+        qrCard.classList.remove('is-gone', 'is-found', 'is-scanning');
+        resetting = false;
+      };
+      requestAnimationFrame(swap);
+    };
     qrCard.addEventListener('click', scan);
     document.querySelector('.hero-cta [data-go]')?.addEventListener('click', (e) => {
       const item = document.querySelector(`.menu-item[href="${e.currentTarget.dataset.go}"]`);
@@ -2930,7 +2923,7 @@
       }
 
       home.addEventListener('click', (e) => { e.preventDefault(); setOpen(false); go(null); });
-      document.querySelector('.brand').addEventListener('click', (e) => { e.preventDefault(); go(null); });
+      document.querySelector('.brand').addEventListener('click', (e) => { e.preventDefault(); go(null); window.resetHome?.(); });
       caret.addEventListener('click', () => setOpen(!open));
       // With a mouse, hovering Home or the list opens it; it waits a moment before closing
       if (finePointer) for (const zone of [split, menu]) {
@@ -3069,6 +3062,20 @@
 
       const field = (n) => form.querySelector(`[name="${n}"]`);
       const setLabel = (btn, text) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
+      // Busy: a turning ring and what's happening ("Logging in…"); null puts the normal label back
+      function setBusy(text, idleText) {
+        submit.classList.toggle('is-busy', !!text);
+        submit.setAttribute('aria-busy', String(!!text));
+        if (!text) { setLabel(submit, idleText); return; }
+        submit.querySelectorAll('.roll > span').forEach((s) => { s.innerHTML = '<i class="btn-spin" aria-hidden="true"></i>'; s.append(text); });
+      }
+      // After logging in, go back to the album link that sent you here (albums.html only), or to your albums
+      const nextPage = () => {
+        const next = new URLSearchParams(location.search).get('next') || '';
+        return /^albums\.html([?#]|$)/.test(next) ? next : 'albums.html';
+      };
+      // Coming back to this page (Back button) shouldn't leave the button stuck on "Opening your albums…"
+      addEventListener('pageshow', (e) => { if (e.persisted && submit.classList.contains('is-busy')) { submit.disabled = false; setBusy(null, form.dataset.mode === 'signup' ? 'Create account' : 'Log in'); } });
       function setMode(mode) {
         form.dataset.mode = mode;
         if (mode === 'signup') void prepareCaptcha();
@@ -3089,7 +3096,7 @@
         try { await Momento.sessionReady; } catch {} 
         onDone = opts.onDone || null;
         fromScan = !!opts.fromScan;
-        if (window.Momento.account.get()) { location.href = 'albums.html'; return; }   // already signed in: carry straight on
+        if (window.Momento.account.get()) { location.href = nextPage(); return; }   // already signed in: carry straight on
         scanNote.hidden = !fromScan;
         skip.hidden = !fromScan;
         body.hidden = false; done.hidden = true;
@@ -3127,17 +3134,23 @@
         if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
         if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
+        if (signup && !captchaToken) { error.textContent = 'Complete the security check before signing up.'; return; }
         submit.disabled = true;
         error.textContent = '';
+        const idle = signup ? 'Create account' : 'Log in';
+        setBusy(signup ? 'Creating your account…' : 'Logging in…');
+        let leaving = false;
         try {
-          if (signup && !captchaToken) throw new Error('Complete the security check before signing up.');
           const { user } = await momentoApi('/api/auth/' + (signup ? 'signup' : 'login'), momentoJson('POST', { name, email, password: pass, ...(signup ? { captchaToken } : {}) }));
           field('password').value = '';
           Momento.account.set(user);
-          location.href = 'albums.html';
+          // Stays busy until the next page has loaded, so it never looks like nothing happened
+          leaving = true;
+          setBusy('Opening your albums…');
+          location.href = nextPage();
         } catch (err) { error.textContent = err.message; }
         finally {
-          submit.disabled = false;
+          if (!leaving) { submit.disabled = false; setBusy(null, idle); }
           if (signup && captchaWidget !== null) { captchaToken = ''; window.turnstile.reset(captchaWidget); }
         }
       });
@@ -3342,11 +3355,13 @@
             // The bead trails the pointer just slightly; the gap becomes a stretch along the
             // direction of travel, so it reads like a droplet, and it rounds off when still
             rx = lerp(rx, pointer.x, .35); ry = lerp(ry, pointer.y, .35);
+            if (Math.abs(pointer.x - rx) < .05 && Math.abs(pointer.y - ry) < .05) { rx = pointer.x; ry = pointer.y; }
             const lx = pointer.x - rx, ly = pointer.y - ry;
             const lens = document.documentElement.classList.contains('cursor-hover') || document.documentElement.classList.contains('cursor-drag');
             // The focus frame stays square and upright, so it doesn't stretch
             const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
-            cursorEl.style.transform = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+            const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+            if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
           }
           window.updateAlbum(dt, now);
           if (scrolled) { lastScroll = scrollY; lastW = vw; window.updateLines(); }
