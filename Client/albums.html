@@ -2,6 +2,7 @@
 <html lang="en" data-page="albums">
 <head>
   <script src="assets/api.js"></script>
+  <script src="assets/guard.js"></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -710,6 +711,7 @@
     .m-code span { display: flex; flex-direction: column; gap: .1rem; }
     .m-code small { color: var(--slate); font-size: .78rem; font-weight: 600; }
     .m-code b { font-size: 1.4rem; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+    .m-code .m-link { font-style: normal; font-size: .82rem; color: var(--slate); word-break: break-all; }
     .m-copy {
       flex: none; padding: .6rem 1rem; border: none; border-radius: 100px; background: var(--paper); color: var(--dusk);
       font: 650 .86rem var(--font-main); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .12); transition: box-shadow .2s ease, transform .3s var(--spring);
@@ -2433,63 +2435,47 @@
       if (thumb) openAlbum(row.dataset.id, thumb.dataset.src, thumb.querySelector('img'));
       else if (e.target.closest('.burst-album')) openAlbum(row.dataset.id, 0, row.querySelector('.bt img'));
     });
+
+    const PENDING_JOIN = 'momento-pending-join';
     document.addEventListener('DOMContentLoaded', async () => {
       const lede = document.getElementById('lede');
       lede.textContent = 'Loading your albums…';
       document.getElementById('empty').hidden = true;
       try {
         const user = await Momento.sessionReady;
-        // Signed out: log in first, then come back to the same album link (?join= or ?album=)
+        const params = new URLSearchParams(location.search);
+        if (params.get('join')) {
+          try { localStorage.setItem(PENDING_JOIN, JSON.stringify({ code: params.get('join'), at: Date.now() })); } catch (e) {}
+        }
         if (!user) {
-          const back = location.search || location.hash ? '&next=' + encodeURIComponent('albums.html' + location.search + location.hash) : '';
-          location.replace('index.html?login=1' + back); return;
+          // Not logged in (or the login has expired): log in or sign up first, then come back here
+          location.replace('index.html?login=1&next=' + encodeURIComponent('albums.html' + location.search + location.hash));
+          return;
         }
         if (!user.emailVerified) {
-          lede.textContent = 'Confirm your email to view albums and upload photos. Check ' + user.email + ' for your verification link.';
+          // The confirm-your-email popup (assets/guard.js) covers the page; nothing loads behind it
+          lede.textContent = 'Confirm your email to view albums and upload photos.';
           document.querySelector('.pulse').hidden = true;
           document.querySelector('.tools').parentElement.hidden = true;
           document.querySelector('.actions').hidden = true;
-          const resend = document.createElement('button'); resend.className = 'btn btn-dark'; resend.textContent = 'Resend verification email';
-          lede.setAttribute('role', 'status');
-          let retryAt = new Date(user.verificationResendAt || 0).getTime();
-          let sending = false;
-          const updateResend = () => {
-            const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
-            resend.disabled = sending || seconds > 0;
-            resend.textContent = sending ? 'Sending…' : seconds > 0
-              ? `Resend available in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-              : 'Resend verification email';
-          };
-          updateResend();
-          const resendTimer = setInterval(updateResend, 1000);
-          window.addEventListener('pagehide', () => clearInterval(resendTimer), { once: true });
-          resend.addEventListener('click', async () => {
-            sending = true;
-            updateResend();
-            try {
-              const result = await momentoApi('/api/auth/verify-email/resend', { method: 'POST' });
-              retryAt = new Date(result.retryAt).getTime();
-              lede.textContent = result.sent
-                ? 'Verification link sent. Check your inbox and spam folder. Please wait 2 minutes before sending another link.'
-                : 'Email delivery is not configured. Your verification link is in the server log. Please wait 2 minutes before trying again.';
-            }
-            catch (err) {
-              if (err.retryAt) retryAt = new Date(err.retryAt).getTime();
-              lede.textContent = err.message;
-            }
-            finally { sending = false; updateResend(); }
-          });
-          lede.after(resend); return;
+          return;
         }
         await loadAlbums();
-        const params = new URLSearchParams(location.search);
+        // An invite link opened before logging in or confirming the email (kept for a week)
+        let pending = null;
+        try { pending = JSON.parse(localStorage.getItem(PENDING_JOIN) || 'null'); localStorage.removeItem(PENDING_JOIN); } catch (e) {}
+        const joinCode = params.get('join') || (pending && Date.now() - pending.at < 7 * 864e5 ? pending.code : '');
         if (params.get('verified') === '1' && user.emailVerified) {
           Momento.toast('Your email is verified ✨', 'Welcome to Momento! Your lovely moments start here.');
           params.delete('verified');
           history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
         }
         if (params.get('album')) await openAlbum(params.get('album'));
-        else if (params.get('join')) openJoin(params.get('join'));
+        else if (joinCode) {
+          openJoin(joinCode);
+          params.delete('join');
+          history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
+        }
         else albumFromHash();
       } catch (err) { lede.textContent = 'Could not load your albums. ' + err.message + ' Reload to try again.'; }
     });
@@ -2878,6 +2864,17 @@
     };
 
     // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
+    // The link a host sends guests: opening it asks them to log in or sign up first, then offers to join
+    Momento.inviteLink = (code) => new URL('albums.html?join=' + encodeURIComponent(code), location.href).href;
+    Momento.shareInvite = async (album, btn, label = 'Share link') => {
+      const url = Momento.inviteLink(album.code);
+      if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+        try { await navigator.share({ title: album.name, text: `Add your photos to ${album.name} on Momento`, url }); return; }
+        catch (err) { if (err.name === 'AbortError') return; }
+      }
+      try { await navigator.clipboard.writeText(url); btn.textContent = 'Link copied'; } catch (err) { btn.textContent = 'Copy failed'; Momento.toast('Copy this link', url); }
+      setTimeout(() => { btn.textContent = label; }, 1800);
+    };
     Momento.removeAlbum = async (a, from) => {
       const host = a.role !== 'guest';
       const n = a.photos || 0;
@@ -2919,6 +2916,7 @@
             <h2 tabindex="-1">Album created</h2>
             <p class="acct-sub"></p>
             <div class="m-code"><span><small>Guest code</small><b></b></span><button class="m-copy" type="button">Copy code</button></div>
+            <div class="m-code"><span><small>Invite link</small><em class="m-link"></em></span><button class="m-copy" type="button" data-copy-link>Copy link</button></div>
             <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Done</button><button class="acct-primary" type="button" data-view-album>View album</button></div>
             <button class="m-del" type="button" data-delete>Delete this album</button>
           </div>
@@ -2946,6 +2944,8 @@
         d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}. Share this code so guests can join and add their photos.`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
+        d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
+        d.querySelector('[data-copy-link]').textContent = 'Copy link';
         showView('done');
         if (!reduced.matches) [...d.querySelector('.m-done').children].forEach((el, i) => el.animate(
           [{ opacity: 0, transform: i ? 'translateY(10px)' : 'scale(.4)' }, { opacity: 1, transform: 'none' }],
@@ -2957,6 +2957,7 @@
         try { await navigator.clipboard.writeText(made.code); b.textContent = 'Copied'; } catch (err) { b.textContent = 'Select and copy'; }
         setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
       });
+      d.querySelector('[data-copy-link]').addEventListener('click', (e) => Momento.shareInvite(made, e.currentTarget, 'Copy link'));
       d.querySelector('[data-view-album]').addEventListener('click', async () => { const id = made.id; await d.dismiss(); viewAlbum(id); });
       d.querySelector('[data-delete]').addEventListener('click', async (e) => {
         if (await Momento.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) d.dismiss();
