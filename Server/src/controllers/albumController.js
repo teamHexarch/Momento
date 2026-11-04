@@ -191,6 +191,22 @@ export async function create(req, res) {
   res.status(201).json({ album: summary(album, 'host', { photos: 0, mine: 0, pics: [], guests: 1 }) });
 }
 
+// Joins an album from the code an invite link carried, when the account's email is confirmed.
+// Returns the album, or null when the code no longer matches one
+export async function joinFromInvite(user, rawCode) {
+  const code = normaliseCode(rawCode);
+  if (code.length !== 7) return null;
+  const album = await Album.findOne({ code });
+  if (!album) return null;
+  try {
+    await Membership.updateOne({ album: album._id, user: user._id }, { $setOnInsert: { role: 'guest' } }, { upsert: true });
+  } catch (err) {
+    if (err.code !== 11000) throw err;   // joined at the same moment some other way
+  }
+  if (user.emailVerified) await Invite.deleteMany({ album: album._id, email: user.email });
+  return album;
+}
+
 export async function join(req, res) {
   const code = normaliseCode(req.body?.code);
   if (code.length !== 7) throw new HttpError(400, 'Codes are 7 letters and numbers, like K7Q-48DM.');

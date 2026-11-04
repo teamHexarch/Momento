@@ -350,6 +350,28 @@
     .bt-more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(30,26,40,.55); color: #fff; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; pointer-events: none; }
     /* Live data: batches size to their content, and the list ends in an optional "show more" */
     .feed-list .burst { min-height: 0; }
+    /* Each photo is its own square print, so one photo isn't stretched across the whole row */
+    .feed-list .burst-thumbs { display: flex; gap: .45rem; height: auto; border-radius: 0; overflow: visible; }
+    .feed-list .bt { flex: none; width: 4.75rem; height: 4.75rem; border-radius: 12px; box-shadow: 0 1px 2px rgba(46,44,58,.08), 0 6px 14px -8px rgba(46,44,58,.35); }
+    .feed-list .bt-more { border-radius: inherit; }
+    @media (max-width: 560px) { .feed-list .bt { width: 3.7rem; height: 3.7rem; } }
+    /* Waiting on you: more kinds of to-do, and a proper "all caught up" state */
+    .todo-row[data-kind="closing"] { --dot: #C0563F; }
+    .todo-row[data-kind="share"] { --dot: var(--tide); }
+    .todo-act.is-light { background: rgba(46,44,58,.07); color: var(--dusk); }
+    .todo-act.is-light:hover { background: rgba(46,44,58,.13); color: var(--dusk); }
+    :root[data-theme="dark"] .todo-act.is-light { background: rgba(255,255,255,.09); color: var(--dusk); }
+    .todo-empty { display: grid; justify-items: start; gap: .5rem; padding: 1.4rem 0 .6rem; }
+    .todo-empty-ic { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: .35rem; border-radius: 14px; background: rgba(111,152,150,.16); color: var(--tide); }
+    .todo-empty b { font-size: 1.05rem; font-weight: 650; letter-spacing: -.015em; }
+    .todo-empty p { margin: 0; max-width: 30ch; color: var(--slate); font-size: .9rem; line-height: 1.5; }
+    .todo-empty-acts { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
+    .todo-list:has(.todo-empty) + .todo-end { display: none; }
+    .todo-sub { padding: 1.1rem 0 .1rem; color: var(--stone); font-size: .8rem; font-weight: 650; letter-spacing: .01em; }
+    .todo-clear { display: flex; align-items: center; gap: .6rem; padding: .7rem 0 .3rem; color: var(--slate); font-size: .92rem; font-weight: 600; }
+    .todo-clear span { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: rgba(111,152,150,.16); color: var(--tide); font-size: .8rem; }
+    .todo-row[data-kind="recent"] .todo-pic::after { display: none; }
+    .todo-sub + .todo-row { box-shadow: none; }
     .feed-empty { margin: 0; padding: .95rem 0; color: var(--stone); font-size: .9rem; line-height: 1.5; }
     .feed-more {
       justify-self: start; margin-top: .4rem; padding: .5rem .2rem; border: none; background: none; color: var(--slate);
@@ -1829,7 +1851,11 @@
       fillAlbum(a);
       document.getElementById('albumNote').textContent = '';
       if (!uploading) setUpload('off');
-      if (upload) document.getElementById('albumNote').textContent = 'Choose Add your photos below to upload.';
+      if (upload && a.open !== false) {
+        // Straight to the photo picker (browsers allow it shortly after a click); the hint covers the rest
+        document.getElementById('albumNote').textContent = 'Choose Add your photos below to upload.';
+        try { albumFiles.click(); } catch {}
+      }
       stageImgs.forEach((im) => im.classList.remove('is-on'));
       show(i, true);
       const flying = fromImg && !still && fromImg.complete && a.pics.length;
@@ -2383,14 +2409,100 @@
       render(false); sumUp(false); renderLive();
       document.querySelector('#empty > span').textContent = ALBUMS.length ? 'Try another name or place.' : 'Create an album or join with a code to add your first photos.';
       renderFeed(result);
-      todoEl.innerHTML = (result.invites || []).map((inv) => `
-        <li class="todo-row" data-kind="invite">
-          <span class="todo-pic"><span class="todo-initial" aria-hidden="true">${esc((inv.name.trim()[0] || '·').toUpperCase())}</span></span>
-          <span class="todo-text"><b>${esc(inv.by)} invited you to ${esc(inv.name)}</b><small>${esc([inv.date && fmtDate(inv.date), inv.place].filter(Boolean).join(', ') || 'Join to see and add photos.')}</small></span>
-          <button class="todo-act" type="button" data-code="${esc(inv.code)}">Join</button>
-        </li>`).join('');
+      renderTodo(result);
     }
-    todoEl.addEventListener('click', (e) => { const b = e.target.closest('.todo-act[data-code]'); if (b) openJoin(b.dataset.code); });
+
+    // ---- Waiting on you: invites, plus what your albums need from you right now ----
+    const TODO_MAX = 5;
+    let todos = [];
+    const initialTile = (name) => `<span class="todo-initial" aria-hidden="true">${esc((name.trim()[0] || '·').toUpperCase())}</span>`;
+    const coverTile = (a) => (a.pics?.length ? `<img src="${esc(pic(a.pics[0], 120, 120))}" alt="" loading="lazy" decoding="async">` : initialTile(a.name));
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    function renderTodo(result) {
+      todos = [];
+      for (const inv of result.invites || []) todos.push({
+        kind: 'invite', pic: initialTile(inv.name), title: `${inv.by} invited you to ${inv.name}`,
+        note: [inv.date && fmtDate(inv.date), inv.place].filter(Boolean).join(', ') || 'Join to see and add photos.',
+        act: 'Join', run: () => openJoin(inv.code),
+      });
+      const list = kept();
+      // Happening now and you haven't added anything yet
+      for (const a of list) if (a.status === 'live' && a.open !== false && !a.mine) todos.push({
+        kind: 'live', id: a.id, pic: coverTile(a), title: `${a.name} is live`,
+        note: a.photos ? `${plural(a.photos, 'photo', 'photos')} so far, none from you yet. Add yours while it’s happening.` : 'Nobody has added photos yet. Be the first.',
+        act: 'Add photos', run: () => openAlbum(a.id, 0, null, true),
+      });
+      // Closing within a week: last chance to add or download
+      for (const a of list) if (a.status === 'wrapping' && a.closes && closesIn(a) <= 7) todos.push({
+        kind: 'closing', id: a.id, pic: coverTile(a), title: `${a.name} closes ${inDays(closesIn(a))}`,
+        note: a.photos ? `Download all ${plural(a.photos, 'photo', 'photos')} before it’s archived.` : 'Add your photos before it’s archived.',
+        act: a.photos ? 'Download' : 'Add photos',
+        run: () => (a.photos ? (location.href = window.MOMENTO_API + '/api/albums/' + a.id + '/download') : openAlbum(a.id, 0, null, true)),
+      });
+      // Albums you host: guests to nudge, or nobody invited yet
+      for (const a of list) {
+        if (a.role !== 'host' || a.open === false || !a.code) continue;
+        if (a.waiting > 0) todos.push({
+          kind: 'remind', id: a.id, pic: coverTile(a), title: `${plural(a.waiting, 'guest hasn’t', 'guests haven’t')} added photos to ${a.name}`,
+          note: 'You’re hosting it. A reminder email usually brings a few more in.', act: 'Send a reminder', light: true,
+          run: async (btn) => {
+            btn.disabled = true; btn.textContent = 'Sending…';
+            try {
+              await momentoApi('/api/albums/' + a.id + '/remind', { method: 'POST' });
+              btn.textContent = 'Reminder sent'; btn.closest('.todo-row').classList.add('is-done');
+              Momento.toast('Reminder sent', `To the ${plural(a.waiting, 'guest', 'guests')} who haven’t added photos to ${a.name}`);
+            } catch (err) { btn.disabled = false; btn.textContent = 'Send a reminder'; Momento.toast('Reminder not sent', err.message); }
+          },
+        });
+        else if (a.guests <= 1) todos.push({
+          kind: 'share', id: a.id, pic: coverTile(a), title: `Invite people to ${a.name}`,
+          note: `Nobody else has joined yet. Send the link, or share the code ${a.code}.`, act: 'Copy link', light: true,
+          run: async (btn) => {
+            if (await copyText(Momento.inviteLink?.(a.code) || albumLinkFor(a))) { btn.textContent = 'Link copied'; setTimeout(() => { btn.textContent = 'Copy link'; }, 1800); }
+            else Momento.toast('Copy this link', albumLinkFor(a));
+          },
+        });
+      }
+      todos = todos.slice(0, TODO_MAX);
+      // A quiet list: the newest albums fill the space, so the panel is never just empty glass
+      const busy = new Set(todos.map((t) => t.id));
+      const recent = todos.length >= 3 ? [] : list.filter((a) => !busy.has(a.id)).slice(0, 3 - todos.length).map((a) => ({
+        kind: 'recent', id: a.id, pic: coverTile(a), title: a.name, light: true, act: 'Open',
+        note: [fmtDate(a.date), a.photos ? `${plural(a.photos, 'photo', 'photos')}${a.mine ? `, ${a.mine} yours` : ''}` : 'No photos yet'].join('. '),
+        run: () => openAlbum(a.id),
+      }));
+      const row = (t, i) => `
+        <li class="todo-row" data-kind="${t.kind}">
+          <span class="todo-pic">${t.pic}</span>
+          <span class="todo-text"><b>${esc(t.title)}</b><small>${esc(t.note)}</small></span>
+          <button class="todo-act${t.light ? ' is-light' : ''}" type="button" data-todo="${i}">${esc(t.act)}</button>
+        </li>`;
+      if (todos.length && recent.length) {
+        const start = todos.length;
+        todos.push(...recent);
+        todoEl.innerHTML = todos.slice(0, start).map(row).join('') + '<li class="todo-sub">Jump back in</li>' + recent.map((t, k) => row(t, start + k)).join('');
+        return;
+      }
+      if (!todos.length && recent.length) {
+        todos = recent;
+        todoEl.innerHTML = `<li class="todo-clear"><span aria-hidden="true">✓</span>Nothing needs you right now.</li><li class="todo-sub">Jump back in</li>` + recent.map(row).join('');
+        return;
+      }
+      todoEl.innerHTML = todos.length ? todos.map(row).join('') : `
+        <li class="todo-empty">
+          <span class="todo-empty-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+          <b>You’re all caught up</b>
+          <p>${list.length ? 'Nothing needs you right now. Invites, reminders and albums about to close will show up here.' : 'Create an album for your next event, or join one with the code from a host.'}</p>
+          <span class="todo-empty-acts"><button class="todo-act" type="button" data-empty="create">Create an album</button><button class="todo-act is-light" type="button" data-empty="join">Join with a code</button></span>
+        </li>`;
+    }
+    todoEl.addEventListener('click', (e) => {
+      const b = e.target.closest('.todo-act');
+      if (!b || b.disabled) return;
+      if (b.dataset.empty === 'create') return Momento.createAlbum?.(b);
+      if (b.dataset.empty === 'join') return openJoin();
+      todos[+b.dataset.todo]?.run(b);
+    });
 
     // ---- Just added: who added how many photos to which album, newest first ----
     const FACE = ['#D9D0EA', '#E6CDD6', '#C6DEDA', '#EBDCCB'];
@@ -2437,6 +2549,19 @@
     });
 
     const PENDING_JOIN = 'momento-pending-join';
+    // An invite link joins straight away and opens the album. If the code doesn't work, the join
+    // window opens with it filled in and says why
+    async function joinFromLink(code) {
+      try {
+        const { album, already } = await momentoApi('/api/albums/join', momentoJson('POST', { code }));
+        await loadAlbums();
+        Momento.toast(already ? 'You’re already in this album' : 'You joined the album', `${album.name}. Add your photos whenever you like.`);
+        await openAlbum(album.id);
+      } catch (err) {
+        openJoin(code);
+        joinNote.classList.add('error'); joinNote.textContent = err.message;
+      }
+    }
     document.addEventListener('DOMContentLoaded', async () => {
       const lede = document.getElementById('lede');
       lede.textContent = 'Loading your albums…';
@@ -2472,9 +2597,9 @@
         }
         if (params.get('album')) await openAlbum(params.get('album'));
         else if (joinCode) {
-          openJoin(joinCode);
           params.delete('join');
           history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
+          await joinFromLink(joinCode);
         }
         else albumFromHash();
       } catch (err) { lede.textContent = 'Could not load your albums. ' + err.message + ' Reload to try again.'; }

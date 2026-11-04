@@ -3079,6 +3079,8 @@
       };
       // Sent here by an invite link (albums.html?join=…): the dialog says so
       const fromInvite = /[?&]join=/.test(nextPage());
+      // The album code in that invite link: sent with sign-up, so confirming the email joins the album
+      const inviteCode = () => new URLSearchParams(nextPage().split('?')[1] || '').get('join') || undefined;
       // Coming back to this page (Back button) shouldn't leave the button stuck on "Opening your albums…"
       addEventListener('pageshow', (e) => { if (e.persisted && submit.classList.contains('is-busy')) { submit.disabled = false; setBusy(null, form.dataset.mode === 'signup' ? 'Create account' : 'Log in'); } });
       function setMode(mode) {
@@ -3104,7 +3106,11 @@
         try { await Momento.sessionReady; } catch {} 
         onDone = opts.onDone || null;
         fromScan = !!opts.fromScan;
-        if (window.Momento.account.get()) { location.href = nextPage(); return; }   // already signed in: carry straight on
+        if (window.Momento.account.get()) {
+          // Already signed in: scanning the code just opens the photobook; anything else carries straight on
+          if (opts.fromScan) { onDone = null; opts.onDone?.(); return; }
+          location.href = nextPage(); return;
+        }
         scanNote.hidden = !fromScan;
         skip.hidden = !fromScan;
         body.hidden = false; done.hidden = true;
@@ -3149,7 +3155,7 @@
         setBusy(signup ? 'Creating your account…' : 'Logging in…');
         let leaving = false;
         try {
-          const { user } = await momentoApi('/api/auth/' + (signup ? 'signup' : 'login'), momentoJson('POST', { name, email, password: pass, ...(signup ? { captchaToken } : {}) }));
+          const { user } = await momentoApi('/api/auth/' + (signup ? 'signup' : 'login'), momentoJson('POST', { name, email, password: pass, ...(signup ? { captchaToken, joinCode: inviteCode() } : {}) }));
           field('password').value = '';
           Momento.account.set(user);
           // Stays busy until the next page has loaded, so it never looks like nothing happened
@@ -3163,7 +3169,8 @@
         }
       });
       document.querySelectorAll('[data-auth]').forEach((b) => b.addEventListener('click', () => window.openAuth({ mode: b.dataset.auth })));
-      document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).has('login')) window.openAuth({ mode: 'login' }); });
+      // From an invite link most people are new, so it opens on Sign up (Log in is one tap away)
+      document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).has('login')) window.openAuth({ mode: fromInvite ? 'signup' : 'login' }); });
       document.addEventListener('DOMContentLoaded', () => {
         const verified = new URLSearchParams(location.search).get('verified');
         if (verified === 'session_limit') Momento.toast('Your email is verified', 'Log out on another device to free a login slot, then sign in here.');

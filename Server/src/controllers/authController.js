@@ -10,6 +10,8 @@ import { startSession, endSession, setTempCookie, clearTempCookie } from '../uti
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, finishEmailChange, deleteAccount } from '../services/accountService.js';
+import { joinFromInvite } from './albumController.js';
+import { normaliseCode } from '../utils/albumCodes.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Compared against when the email is unknown, so a miss takes as long as a wrong password
@@ -51,6 +53,9 @@ export async function signup(req, res) {
     throw new HttpError(409, 'An account with this email already exists. Log in instead.');
   }
   const user = new User({ name, email, passwordHash: await bcrypt.hash(password, 12) });
+  // Signed up through an invite link: they're added to that album once their email is confirmed
+  const joinCode = normaliseCode(req.body?.joinCode);
+  if (joinCode.length === 7) user.pendingJoin = joinCode;
   try {
     await signedIn(res, user, 201);
   } catch (err) {
@@ -144,7 +149,16 @@ export async function verifyEmail(req, res) {
     if (error.code !== 'session_limit') throw error;
     return res.redirect(303, `${config.frontendUrl}/?login=1&verified=session_limit`);
   }
-  res.redirect(303, `${config.frontendUrl}/albums.html?verified=1`);
+  // Signed up through an invite link: join that album now and open it
+  let album = null;
+  try {
+    const pending = await User.findById(user._id).select('+pendingJoin');
+    if (pending?.pendingJoin) {
+      album = await joinFromInvite(user, pending.pendingJoin);
+      await User.updateOne({ _id: user._id }, { $unset: { pendingJoin: 1 } });
+    }
+  } catch (err) { console.error(`Joining the invite album for ${user.email} failed: ${err.message}`); }
+  res.redirect(303, `${config.frontendUrl}/albums.html?verified=1${album ? `&album=${album.id}` : ''}`);
 }
 
 export async function resendVerification(req, res) {

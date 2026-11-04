@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema({
   appleId: { type: String, unique: true, sparse: true },
   lastLoginAt: Date,
   verificationResendAt: Date,
+  // The album code from the invite link they signed up through. Joined (and cleared) once they
+  // confirm their email, so the confirm link takes them into the album on any device
+  pendingJoin: { type: String, maxlength: 7, select: false },
   // One record per login. Never apply a TTL index here: that would delete users.
   sessions: {
     type: [{ _id: false, id: { type: String, required: true }, expiresAt: { type: Date, required: true } }],
