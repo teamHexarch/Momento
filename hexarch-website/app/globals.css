@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+/* Hexarch design tokens.
+   Directive: dark theme, large headlines, rounded cards, template section order.
+   Values were measured from the reference template's layout; all content and graphics are Hexarch's own. */
+@theme {
+  --color-ink: #000000;
+  --color-panel: #0d0d0d;
+  --color-card: #1b1b1b;
+  --color-card-2: #202020;
+  --color-card-3: #2f2f2f;
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-line-strong: rgb(255 255 255 / 0.2);
+  --color-text: #ffffff;
+  --color-soft: #eeeeee;
+  --color-muted: #999999;
+  --color-faint: rgb(255 255 255 / 0.5);
+  --color-copper: #9a603d;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-playfair), ui-serif, Georgia, serif;
+
+  --radius-card: 24px;
+  --radius-panel: 56px;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv06" on, "cv11" on;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgb(255 255 255 / 0.9);
+  color: #000;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-copper);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Shared layout */
+.container-x {
+  width: 100%;
+  max-width: 1425px;
+  margin-inline: auto;
+  padding-inline: 72px;
+}
+@media (max-width: 1199px) {
+  .container-x { padding-inline: 40px; }
+}
+@media (max-width: 809px) {
+  .container-x { padding-inline: 20px; }
+}
+
+/* Display type */
+.display-hero {
+  font-size: clamp(56px, 9.7vw, 140px);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+  font-weight: 400;
+}
+.display-hero-serif {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(56px, 9.7vw, 140px);
+  line-height: 0.7;
+  letter-spacing: -0.04em;
+  font-weight: 400;
+}
+.heading-xl {
+  font-size: clamp(40px, 4.45vw, 64px);
+  line-height: 1.125;
+  letter-spacing: -0.03em;
+  font-weight: 500;
+}
+.heading-xl .serif {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+}
+.gradient-text {
+  background: linear-gradient(90deg, #ffffff 0%, #ffffff 45%, rgb(255 255 255 / 0.35) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.silver-text,
+.silver-text .roll > span {
+  background: linear-gradient(180deg, #f2f2f2 0%, #9a9a9a 55%, #4a4a4a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Pill tag used above section headings */
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  border-radius: 100px;
+  border: 1px solid var(--color-line-strong);
+  background: rgb(255 255 255 / 0.04);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-soft);
+}
+
+/* Text roll on hover: two stacked copies slide up */
+.roll {
+  position: relative;
+  display: inline-flex;
+  overflow: hidden;
+  vertical-align: top;
+}
+.roll > span {
+  display: block;
+  transition: transform 0.6s var(--ease-out-expo);
+}
+.roll > span + span {
+  position: absolute;
+  inset: 0;
+  transform: translateY(100%);
+}
+.group:hover .roll > span:first-child,
+.group:focus-visible .roll > span:first-child { transform: translateY(-100%); }
+.group:hover .roll > span + span,
+.group:focus-visible .roll > span + span { transform: translateY(0); }
+
+/* Marquee */
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee var(--marquee-duration, 40s) linear infinite;
+}
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+}
+
+/* Slow drifting light used behind panels */
+@keyframes drift {
+  0% { transform: translate3d(-6%, -4%, 0) scale(1); }
+  50% { transform: translate3d(6%, 4%, 0) scale(1.12); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1); }
+}
+.drift { animation: drift 18s ease-in-out infinite; }
+
+@keyframes wave {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.wave-track { animation: wave 24s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .drift,
+  .wave-track { animation: none; }
+  .roll > span { transition: none; }
+}
