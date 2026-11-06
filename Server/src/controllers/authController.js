@@ -114,6 +114,32 @@ async function checkPassword(user, password) {
   }
 }
 
+// Changing the password while logged in: the current one first. Every other login is ended
+// and this browser gets a fresh one. Google/Apple-only accounts have no password to change.
+export async function changePassword(req, res) {
+  const user = req.user;
+  if (!user.passwordHash) {
+    throw new HttpError(400, `This account signs in with ${providerNames(user) || 'Google'}, so it has no password to change.`, 'no-password');
+  }
+  await checkPassword(user, req.body?.currentPassword);
+  const next = String(req.body?.newPassword ?? '');
+  if (next.length < 8) throw new HttpError(400, 'Use at least 8 characters for your new password.');
+  if (next.length > 128) throw new HttpError(400, 'Keep your password under 128 characters.');
+  if (await bcrypt.compare(next, user.passwordHash)) throw new HttpError(400, 'Choose a password that’s different from your current one.');
+  user.passwordHash = await bcrypt.hash(next, 12);
+  user.passwordChangedAt = new Date();
+  user.sessions = [];
+  await user.save();
+  await startSession(res, user);
+  const { sendEmail, isEmailConfigured } = await import('../services/emailService.js');
+  const { passwordChangedHtml } = await import('../services/emailTemplates.js');
+  if (isEmailConfigured()) {
+    sendEmail({ to: user.email, subject: 'Your Momento password was changed', html: passwordChangedHtml(user) })
+      .catch((err) => console.error(`Password-changed email to ${user.email} failed: ${err.message}`));
+  }
+  res.json({ user: user.toPublic() });
+}
+
 export async function requestEmailChange(req, res) {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'Enter an email address like name@example.com.');

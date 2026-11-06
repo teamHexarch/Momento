@@ -12,7 +12,7 @@ export function cors(req, res, next) {
     res.vary('Origin');
     if (req.method === 'OPTIONS') {
       res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
-      res.set('Access-Control-Allow-Headers', 'Content-Type');
+      res.set('Access-Control-Allow-Headers', 'Content-Type, X-Momento-Location');
       res.set('Access-Control-Max-Age', '86400');
       return res.sendStatus(204);
     }

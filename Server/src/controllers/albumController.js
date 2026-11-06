@@ -35,6 +35,15 @@ export function lifecycle(date) {
     : today <= closes ? 'wrapping' : 'kept';
   return { status, closes, open: status !== 'kept' };
 }
+// Albums with event times: photos can be added from uploadLeadMin before the start until the end,
+// then the album is kept (still there to look at and download).
+export function albumLifecycle(album, now = Date.now()) {
+  if (!album.startsAt || !album.endsAt) return lifecycle(album.date);
+  const opensAt = album.startsAt.getTime() - (album.uploadLeadMin || 0) * 60000;
+  const endsAt = album.endsAt.getTime();
+  const status = now < opensAt ? 'upcoming' : now <= endsAt ? 'live' : 'kept';
+  return { status, closes: day(endsAt), open: status === 'live', opensAt: new Date(opensAt).toISOString() };
+}
 const closesLabel = (closes) => new Date(`${closes}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 
 // The caller's membership of an album, or a 404 (not 403, so album ids can't be probed)
@@ -80,9 +89,13 @@ function summary(album, role, stats) {
     name: album.name,
     date: album.date,
     place: album.place,
+    venue: album.venue?.address || album.venue?.placeId ? { address: album.venue.address, placeId: album.venue.placeId } : undefined,
+    startsAt: album.startsAt || undefined,
+    endsAt: album.endsAt || undefined,
+    uploadLeadMin: album.startsAt ? album.uploadLeadMin || 0 : undefined,
     role,
-    ...lifecycle(album.date),
-    live: lifecycle(album.date).status === 'live',
+    ...albumLifecycle(album),
+    live: albumLifecycle(album).status === 'live',
     // Only the host sees the join code, to print or share
     code: role === 'host' ? album.displayCode : undefined,
     zone: album.zone?.radiusM ? album.zone : undefined,
@@ -102,11 +115,39 @@ function readAlbumFields(body) {
   const z = body?.zone;
   if (z && z.lat != null && z.lng != null) {
     const lat = Number(z.lat), lng = Number(z.lng), radiusM = Number(z.radiusM) || 150;
-    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && radiusM >= 10 && radiusM <= 5000)) throw new HttpError(400, 'That sharing zone isn’t valid.');
+    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && radiusM >= 10 && radiusM <= 10000)) throw new HttpError(400, 'That sharing zone isn’t valid.');
     zone = { lat, lng, radiusM };
   }
   return { name, date, place, zone };
 }
+
+// A new album's event: start and end times, how early uploads open, the venue and a 1 to 10 km zone
+function readEventFields(body) {
+  const startsAt = new Date(body?.startsAt), endsAt = new Date(body?.endsAt);
+  if (Number.isNaN(startsAt.getTime())) throw new HttpError(400, 'Pick the time the event starts.');
+  if (Number.isNaN(endsAt.getTime())) throw new HttpError(400, 'Pick the time the event ends.');
+  if (endsAt <= startsAt) throw new HttpError(400, 'The event has to end after it starts.');
+  if (endsAt - startsAt > 7 * 86400000) throw new HttpError(400, 'Keep the event under a week long.');
+  if (endsAt < Date.now()) throw new HttpError(400, 'That event has already finished. Check the date and times.');
+  const uploadLeadMin = Math.round(Number(body?.uploadLeadMin ?? 0));
+  if (!(uploadLeadMin >= 0 && uploadLeadMin <= 1440)) throw new HttpError(400, 'Uploads can open up to 24 hours before the event.');
+  const z = body?.zone || {};
+  const lat = Number(z.lat), lng = Number(z.lng), radiusM = Number(z.radiusM);
+  if (z.lat == null || z.lng == null || !(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) throw new HttpError(400, 'Choose the venue on the map.');
+  if (!(Number.isInteger(radiusM) && radiusM >= 1000 && radiusM <= 10000)) throw new HttpError(400, 'Choose a zone between 1 km and 10 km.');
+  const address = String(body?.venue?.address ?? '').trim().slice(0, 300);
+  const placeId = String(body?.venue?.placeId ?? '').trim().slice(0, 300);
+  return { startsAt, endsAt, uploadLeadMin, zone: { lat, lng, radiusM }, venue: { address, placeId } };
+}
+
+// Metres between two points (haversine)
+export function distanceM(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const kmLabel = (m) => `${+(m / 1000).toFixed(1)} km`;
 
 // ---- Listing, creating, joining ----
 
@@ -183,7 +224,7 @@ export async function list(req, res) {
 }
 
 export async function create(req, res) {
-  const fields = readAlbumFields(req.body);
+  const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body) };
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -290,8 +331,30 @@ export async function leave(req, res) {
 // receiving any file data
 export async function checkMember(req, res, next) {
   req.membership = await membershipOf(req, req.params.id);
-  const { open, closes } = lifecycle(req.membership.album.date);
-  if (!open) throw new HttpError(403, `This album closed to new photos on ${closesLabel(closes)}. You can still look at it and download everything.`);
+  const album = req.membership.album;
+  const { open, closes, status, opensAt } = albumLifecycle(album);
+  // The host can always add photos to an album with event times (from home afterwards, say);
+  // the time window and the zone are for guests
+  const host = req.membership.role === 'host';
+  if (!open && !(host && album.startsAt)) {
+    if (status === 'upcoming' && opensAt) throw new HttpError(403, `Photos can be added from ${new Date(opensAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })} UTC.`, 'not-open-yet');
+    throw new HttpError(403, `This album closed to new photos on ${closesLabel(closes)}. You can still look at it and download everything.`, 'closed');
+  }
+  if (!host && album.startsAt && album.zone?.radiusM && album.zone.lat != null) {
+    // The browser sends where the guest is as "lat,lng,accuracy" in a header, so it's known before
+    // any file data is read. Like any browser location it can be faked: it keeps honest guests to
+    // the event, it isn't proof.
+    const [lat, lng, acc] = String(req.get('X-Momento-Location') || '').split(',').map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      throw new HttpError(403, 'Momento needs your location to check you’re at the event. Allow location access and try again.', 'location-needed');
+    }
+    const away = distanceM({ lat, lng }, album.zone);
+    // A phone's fix can be off by its accuracy; up to 200 m of that is allowed for
+    const slack = Math.min(Number.isFinite(acc) && acc > 0 ? acc : 0, 200);
+    if (away - slack > album.zone.radiusM) {
+      throw new HttpError(403, `You’re about ${kmLabel(away)} from the venue. Photos can be added within ${kmLabel(album.zone.radiusM)} of it.`, 'outside-zone');
+    }
+  }
   next();
 }
 
@@ -355,8 +418,8 @@ async function hostedAlbum(req) {
 // Emails the guests who haven't added a photo yet, once a day at most
 export async function remind(req, res) {
   const album = await hostedAlbum(req);
-  const { open, closes } = lifecycle(album.date);
-  if (!open) throw new HttpError(400, 'This album has closed, so there’s nothing to add any more.');
+  const { closes, status } = albumLifecycle(album);
+  if (status === 'kept') throw new HttpError(400, 'This album has closed, so there’s nothing to add any more.');
   const waiting = await waitingGuests([album._id]);
   if (!waiting.get(String(album._id))) throw new HttpError(400, 'Every guest has added photos already.');
   // Claim today's reminder in one step, so two quick clicks can't both send
@@ -390,7 +453,7 @@ export async function invite(req, res) {
   const album = await hostedAlbum(req);
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'Enter an email address like name@example.com.');
-  if (!lifecycle(album.date).open) throw new HttpError(400, 'This album has closed, so new guests can’t add photos.');
+  if (albumLifecycle(album).status === 'kept') throw new HttpError(400, 'This album has closed, so new guests can’t add photos.');
   const existing = await User.findOne({ email }, '_id');
   if (existing && await Membership.exists({ album: album._id, user: existing._id })) {
     throw new HttpError(409, 'They’re already in this album.');

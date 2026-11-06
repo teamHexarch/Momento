@@ -50,6 +50,9 @@ export const config = {
     bucket: env.R2_BUCKET || '',
   },
   google: { clientId: env.GOOGLE_CLIENT_ID || '', clientSecret: env.GOOGLE_CLIENT_SECRET || '' },
+  // Google Maps JavaScript API key for picking the venue (a browser key: restrict it to your site's
+  // address in Google Cloud). Without it, hosts set the venue from their current location instead.
+  mapsApiKey: env.GOOGLE_MAPS_API_KEY || '',
   apple: { clientId: env.APPLE_CLIENT_ID || '' },
   email: {
     // Resend (used when RESEND_API_KEY and EMAIL_FROM are set)

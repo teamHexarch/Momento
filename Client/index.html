@@ -4,6 +4,7 @@
   <script src="assets/api.js"></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
+  <script src="assets/event.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -3141,7 +3142,50 @@
         catch (err) { error.textContent = err.message; }
       });
 
-      form.querySelectorAll('.auth-alt').forEach((b) => { b.hidden = true; });
+      // Google, on both Sign up and Log in. Google's popup hands back a one-time code, which the
+      // server swaps for the account (POST /api/auth/google): a new account, or the existing one
+      // with that email. Apple isn't set up yet, so its button stays hidden.
+      form.querySelector('.auth-alt[data-provider="Apple"]').hidden = true;
+      const googleBtn = form.querySelector('.auth-alt[data-provider="Google"]');
+      let googleId = null, gsiP = null;
+      const loadGsi = () => (gsiP ||= new Promise((resolve, reject) => {
+        if (window.google?.accounts?.oauth2) return resolve();
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => { gsiP = null; reject(new Error('Google sign-in couldn’t load. Check your connection and try again.')); };
+        document.head.append(s);
+      }));
+      // Loaded ahead of the click, so the popup opens straight from it (browsers block late popups)
+      momentoApi('/api/config').then((c) => { googleId = c.googleClientId || null; if (googleId) loadGsi().catch(() => {}); }).catch(() => {});
+      googleBtn.addEventListener('click', async () => {
+        error.textContent = '';
+        if (!googleId) { error.textContent = 'Google sign-in isn’t switched on yet. Use your email for now.'; return; }
+        try { await loadGsi(); } catch (err) { error.textContent = err.message; return; }
+        const idle = () => (form.dataset.mode === 'signup' ? 'Create account' : 'Log in');
+        window.google.accounts.oauth2.initCodeClient({
+          client_id: googleId,
+          scope: 'openid email profile',
+          ux_mode: 'popup',
+          callback: async (resp) => {
+            if (resp.error || !resp.code) { error.textContent = 'Google sign-in was cancelled.'; return; }
+            googleBtn.disabled = submit.disabled = true;
+            setBusy('Signing in with Google…');
+            try {
+              const { user } = await momentoApi('/api/auth/google', momentoJson('POST', { code: resp.code }));
+              Momento.account.set(user);
+              setBusy('Opening your albums…');
+              location.href = nextPage();
+            } catch (err) {
+              error.textContent = err.message;
+              googleBtn.disabled = submit.disabled = false;
+              setBusy(null, idle());
+            }
+          },
+          error_callback: (e) => { if (e?.type !== 'popup_closed') error.textContent = 'Google’s window didn’t open. Allow pop-ups for this site and try again.'; },
+        }).requestCode();
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (submit.disabled) return;
@@ -3644,7 +3688,7 @@
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        if (email !== current.email) { say('Use your current email here. Contact support to change your email address.', true); return; }
+        if (email !== current.email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
         try {
           const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name, notify }));
           Momento.account.set(user);
@@ -3899,11 +3943,14 @@
         const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
         if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
         if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
+        // Times, venue and zone (assets/event.js)
+        const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
+        if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
         form.dataset.busy = 'true';
         const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
         try {
-          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place })));
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields })));
           document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
@@ -3934,6 +3981,7 @@
       d.launch = () => {
         form.reset(); made = null; say('');
         form.date.value = isoToday();
+        Momento.event?.mount(form);
         showView('form');
         launch();
         form.name.focus();

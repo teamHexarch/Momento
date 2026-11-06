@@ -6,6 +6,7 @@
   <script src="assets/api.js"></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
+  <script src="assets/event.js" defer></script>
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
   <script>
   // Runs before first paint, so the page never flashes the wrong theme
@@ -1920,14 +1921,23 @@
       const showView = (v) => views.forEach((x) => { x.hidden = x.dataset.view !== v; });
       const say = (msg) => { status.textContent = msg; status.classList.toggle('is-error', !!msg); };
       let made = null;
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (form.dataset.busy) return;
         const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
         if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
         if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
+        // Times, venue and zone (assets/event.js)
+        const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
+        if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
-        made = { id: `a-${Date.now().toString(36)}`, name, date, place, code: Store.code(), role: 'host', created: Date.now() };
-        Store.add(made);
+        form.dataset.busy = 'true';
+        const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+        try {
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields })));
+          document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
+        } catch (err) { say(err.message); return; }
+        finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
         d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}. Share this code so guests can join and add their photos.`;
         d.querySelector('.m-code b').textContent = made.code;
@@ -1955,6 +1965,7 @@
       d.launch = () => {
         form.reset(); made = null; say('');
         form.date.value = isoToday();
+        Momento.event?.mount(form);
         showView('form');
         launch();
         form.name.focus();

@@ -32,6 +32,7 @@ app.get('/api/config', (req, res) => {
     turnstileSiteKey: config.turnstile.secretKey ? config.turnstile.siteKey : null,
     googleClientId: config.google.clientId && config.google.clientSecret ? config.google.clientId : null,
     apple: !!config.apple.clientId,
+    mapsApiKey: config.mapsApiKey || null,
   });
 });
 app.get('/api/health', (req, res) => res.json({ ok: true }));

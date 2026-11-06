@@ -52,7 +52,7 @@ try {
   const replay = await call('/api/auth/verify-email?token=' + token, 303);
   assert.ok(replay.headers.get('location').includes('invalid'));
   await call('/api/auth/me', 200, h, 'PATCH', { name: 'Updated', notify: { photos: false } });
-  const album = (await (await call('/api/albums', 201, h, 'POST', { name: 'Test album', date: new Date().toISOString().slice(0, 10), place: 'Test' })).json()).album;
+  const album = (await (await call('/api/albums', 201, h, 'POST', { name: 'Test album', date: new Date().toISOString().slice(0, 10), place: 'Test', startsAt: new Date(Date.now() - 3600000).toISOString(), endsAt: new Date(Date.now() + 3600000).toISOString(), uploadLeadMin: 0, zone: { lat: -33.8688, lng: 151.2093, radiusM: 1000 }, venue: { address: 'Test venue' } })).json()).album;
   await call('/api/albums/' + album.id, 404, v);
   await call('/api/albums/join', 201, g, 'POST', { code: album.code });
   await call('/api/albums/' + album.id, 403, g, 'DELETE');

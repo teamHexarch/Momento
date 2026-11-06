@@ -4,6 +4,7 @@
   <script src="assets/api.js"></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
+  <script src="assets/event.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -658,6 +659,7 @@
     @media (prefers-reduced-motion: reduce) { .upload-track i { transition: none; } .upload.is-processing .upload-track::after { animation: none; } }
     .album-head { padding: 1.3rem .7rem 0; }
     .album-head .modal-sub { margin-bottom: 0; }
+    .album-window { margin: .45rem 0 0; color: var(--slate); font-size: .88rem; line-height: 1.5; }
     .thumbs { display: grid; grid-template-columns: repeat(9, 1fr); gap: .45rem; padding: 1.1rem .7rem 0; }
     .thumb { position: relative; padding: 0; border: none; background: none; border-radius: 10px; cursor: pointer; transition: transform .4s var(--spring); }
     .thumb img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; background: var(--line); }
@@ -1520,6 +1522,7 @@
         <p class="album-host" id="albumHost" hidden><span class="album-host-tag">Host</span><b id="albumHostName"></b><span class="album-host-you" id="albumHostYou" hidden>You</span></p>
         <h2 id="albumTitle"></h2>
         <p class="modal-sub" id="albumSub"></p>
+        <p class="album-window" id="albumWindow" hidden></p>
         <div class="album-code" id="albumCode" hidden><small>Album code</small><b id="albumCodeText"></b><button type="button" id="albumCodeCopy">Copy code</button></div>
       </div>
       <div class="thumbs" id="thumbs"></div>
@@ -1534,6 +1537,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn btn-dark" type="button" id="albumAdd">Add your photos</button>
+        <button class="btn btn-light" type="button" id="albumCamera">Take a photo</button>
         <button class="btn btn-light" type="button" id="albumDownload">Download all</button>
         <button class="btn btn-light" type="button" id="photoDownload">Download photo</button>
         <button class="btn btn-light" type="button" id="albumLink" hidden>Copy album link</button>
@@ -2002,15 +2006,29 @@
       document.getElementById('albumDownload').hidden = !a.photos;
       document.getElementById('photoDownload').hidden = !a.photos;
       albumRemove.hidden = false;
-      document.getElementById('albumAdd').disabled = !a.open;
+      // Albums with event times take photos in their window; the host can add at any time
+      const can = canAdd(a);
+      document.getElementById('albumAdd').disabled = !can;
+      document.getElementById('albumCamera').disabled = !can;
+      const win = document.getElementById('albumWindow');
+      win.textContent = Momento.event?.windowText(a) || '';
+      win.hidden = !win.textContent;
       albumRemove.textContent = a.role === 'host' ? 'Delete album' : 'Leave album';
     }
+    const canAdd = (a) => !!a && (a.open || (a.role === 'host' && !!a.startsAt));
     document.getElementById('albumAdd').addEventListener('click', () => albumFiles.click());
+    // Momento's own camera: the photos go straight into the upload, never into the device's gallery
+    document.getElementById('albumCamera').addEventListener('click', async () => {
+      if (!M.a || uploading || !Momento.event) return;
+      const files = await Momento.event.camera();
+      if (files.length) uploadFiles(files);
+    });
     // fetch can't report upload progress, so photos go up with XMLHttpRequest (same cookie, same errors)
-    function sendWithProgress(path, body, onProgress) {
+    function sendWithProgress(path, body, onProgress, headers = {}) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', window.MOMENTO_API + path);
+        for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
         xhr.withCredentials = true;
         xhr.responseType = 'json';
         xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); });
@@ -2042,14 +2060,17 @@
       if (label) uploadLabel.textContent = label;
     }
     let uploading = false;
-    albumFiles.addEventListener('change', async () => {
-      const a = M.a, files = [...albumFiles.files];
-      albumFiles.value = '';
+    albumFiles.addEventListener('change', () => { const files = [...albumFiles.files]; albumFiles.value = ''; uploadFiles(files); });
+    async function uploadFiles(files) {
+      const a = M.a;
       if (!a || !files.length || uploading) return;
       const note = document.getElementById('albumNote');
       if (files.length > 30) { note.textContent = 'Choose up to 30 photos at a time.'; return; }
+      // Ask first (and get the guest's location when the album has a zone): assets/event.js
+      const ok = Momento.event ? await Momento.event.confirmUpload(a, files) : { location: '' };
+      if (!ok || M.a !== a || uploading) return;
       uploading = true;
-      const add = document.getElementById('albumAdd'); add.disabled = true;
+      const add = document.getElementById('albumAdd'); add.disabled = true; document.getElementById('albumCamera').disabled = true;
       note.textContent = '';
       const count = `${files.length} ${files.length === 1 ? 'photo' : 'photos'}`;
       const size = files.reduce((t, f) => t + f.size, 0);
@@ -2062,7 +2083,7 @@
         await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => {
           if (p >= 1) setUpload('processing', 1, `Finishing ${count}, removing location data…`);
           else setUpload('sending', p, `Uploading ${count}, ${mb(size * p)} of ${mb(size)}`);
-        });
+        }, ok.location ? { 'X-Momento-Location': ok.location } : {});
         setUpload('done', 1, `${count[0].toUpperCase() + count.slice(1)} uploaded`);
         await loadAlbums();
         await fetchAlbum(a);
@@ -2074,8 +2095,8 @@
         uploadPct.textContent = '';
         note.textContent = err.message + ' Refresh the album before retrying; some photos may have uploaded.';
         try { await fetchAlbum(a); photosChanged(a, 0); } catch {}
-      } finally { uploading = false; add.disabled = !M.a?.open; }
-    });
+      } finally { uploading = false; add.disabled = !canAdd(M.a); document.getElementById('albumCamera').disabled = !canAdd(M.a); }
+    }
     // A link to share: hosts get a join link (it carries the album code); guests get a link back to the album
     const albumLinkFor = (a) => {
       const url = new URL('albums.html', location.href);
@@ -2933,7 +2954,7 @@
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        if (email !== current.email) { say('Use your current email here. Contact support to change your email address.', true); return; }
+        if (email !== current.email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
         try {
           const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name, notify }));
           Momento.account.set(user);
@@ -3188,11 +3209,14 @@
         const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
         if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
         if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
+        // Times, venue and zone (assets/event.js)
+        const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
+        if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
         form.dataset.busy = 'true';
         const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
         try {
-          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place })));
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields })));
           document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
@@ -3223,6 +3247,7 @@
       d.launch = () => {
         form.reset(); made = null; say('');
         form.date.value = isoToday();
+        Momento.event?.mount(form);
         showView('form');
         launch();
         form.name.focus();

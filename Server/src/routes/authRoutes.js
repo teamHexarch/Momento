@@ -19,6 +19,7 @@ authRoutes.get('/me', auth.me);
 authRoutes.patch('/me', requireUser, auth.updateMe);
 authRoutes.delete('/me', requireUser, signInLimit, auth.deleteMe);
 authRoutes.post('/email', requireUser, emailLimit, auth.requestEmailChange);
+authRoutes.post('/password', requireUser, signInLimit, auth.changePassword);
 authRoutes.get('/email/confirm', auth.confirmEmailChange);
 
 authRoutes.get('/verify-email', auth.verifyEmail);

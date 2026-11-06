@@ -6,6 +6,7 @@
   <script src="assets/api.js"></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
+  <script src="assets/event.js" defer></script>
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
   <script>
   // Runs before first paint, so the page never flashes the wrong theme
@@ -337,6 +338,9 @@
     .s-profile .btn { justify-self: start; margin-top: .25rem; }
     .s-note { min-height: 1.2rem; margin: 0 0 .5rem; color: var(--slate); font-size: .85rem; font-weight: 500; }
     .s-note.is-error { color: #9A3D3D; }
+    .s-profile [hidden], .s-group[hidden] { display: none !important; }
+    .s-now { margin: 0 0 .9rem; color: var(--slate); font-size: .92rem; line-height: 1.5; }
+    .s-now b { color: var(--dusk); font-weight: 650; word-break: break-all; }
     .btn-sm { min-height: 2.5rem; padding: 0 1.15rem; font-size: .88rem; }
 
     .s-seg { padding: .85rem 1rem; }
@@ -1128,9 +1132,30 @@
             <h2 id="g-profile">Profile</h2>
             <form class="s-list panel s-profile" id="profileForm" novalidate>
               <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name" placeholder="For example Priya Shah"></label>
-              <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
               <p class="s-note" id="profileNote" role="status"></p>
-              <button class="btn btn-dark btn-sm" type="submit">Save profile</button>
+              <button class="btn btn-dark btn-sm" type="submit">Save name</button>
+            </form>
+          </section>
+
+          <section class="s-group" style="--d: .27s" aria-labelledby="g-email">
+            <h2 id="g-email">Email</h2>
+            <form class="s-list panel s-profile" id="emailForm" novalidate>
+              <p class="s-now">Signed in as <b id="emailNow">…</b><span id="emailVia"></span></p>
+              <label class="acct-field"><span>New email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
+              <label class="acct-field" id="emailPassField"><span>Your password</span><input name="password" type="password" autocomplete="current-password"></label>
+              <p class="s-note" id="emailNote" role="status"></p>
+              <button class="btn btn-dark btn-sm" type="submit">Change email</button>
+            </form>
+          </section>
+
+          <section class="s-group" style="--d: .29s" aria-labelledby="g-password" id="passwordGroup" hidden>
+            <h2 id="g-password">Password</h2>
+            <form class="s-list panel s-profile" id="passwordForm" novalidate>
+              <label class="acct-field"><span>Current password</span><input name="current" type="password" autocomplete="current-password"></label>
+              <label class="acct-field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="8"></label>
+              <label class="acct-field"><span>Type the new password again</span><input name="again" type="password" autocomplete="new-password"></label>
+              <p class="s-note" id="passwordNote" role="status"></p>
+              <button class="btn btn-dark btn-sm" type="submit">Change password</button>
             </form>
           </section>
 
@@ -1474,20 +1499,87 @@
       }));
       dests.find((r) => r.dataset.dest === S.dest).querySelector('small').textContent = 'Connected · photos land in /Momento';
 
-      // Profile: the same name and email the account menu shows
+      // Profile, email and password: saved to the account on the server.
+      // Accounts made with Google (no password) can change their email but have no password to change.
       const form = document.getElementById('profileForm'), note = document.getElementById('profileNote');
-      const fill = () => { const a = M.account.get(); form.name.value = a ? a.name : ''; form.email.value = a ? a.email : ''; };
+      const emailForm = document.getElementById('emailForm'), emailNote = document.getElementById('emailNote');
+      const passForm = document.getElementById('passwordForm'), passNote = document.getElementById('passwordNote');
+      const sayIn = (el) => (msg, bad) => { el.textContent = msg; el.classList.toggle('is-error', !!bad); };
+      const say = sayIn(note), sayEmail = sayIn(emailNote), sayPass = sayIn(passNote);
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const busy = (f, on) => { const b = f.querySelector('[type="submit"]'); b.disabled = on; f.toggleAttribute('aria-busy', on); };
+      const fill = () => {
+        const a = M.account.get();
+        if (!form.contains(document.activeElement)) form.name.value = a ? a.name : '';
+        document.getElementById('emailNow').textContent = a?.email || 'not logged in';
+        const google = a?.providers?.includes('google'), apple = a?.providers?.includes('apple');
+        document.getElementById('emailVia').textContent = google ? ' (with Google)' : apple ? ' (with Apple)' : '';
+        // No password on the account (Google or Apple sign-up): no password box, no password section
+        const hasPassword = !!a?.hasPassword;
+        document.getElementById('emailPassField').hidden = !hasPassword;
+        document.getElementById('passwordGroup').hidden = !a || !hasPassword;
+      };
       fill();
-      M.account.onChange(() => { if (!form.contains(document.activeElement)) fill(); });
-      const say = (msg, bad) => { note.textContent = msg; note.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      M.account.onChange(fill);
+      // This page's account comes from the server (it may be opened in a fresh tab)
+      momentoApi('/api/auth/me').then(({ user }) => { if (user) M.account.set(user); else M.account.clear(); fill(); }, () => {});
+      const needLogin = () => { if (M.account.get()) return false; location.href = 'index.html?login=1'; return true; };
+
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = form.name.value.trim(), email = form.email.value.trim();
+        if (needLogin()) return;
+        const name = form.name.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
-        // A first save creates the account, carrying over the notification choices already made here
-        M.account.set(M.account.get() ? { name, email } : { name, email, notify: S.notify });
-        say(''); toast('Profile saved', name);
+        busy(form, true);
+        try {
+          const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name }));
+          M.account.set(user);
+          say(''); toast('Name saved', name);
+        } catch (err) { say(err.message, true); }
+        finally { busy(form, false); }
+      });
+
+      // A new email takes effect when the link sent to it is opened (it comes back here with ?email=…)
+      emailForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (needLogin()) return;
+        const a = M.account.get(), email = emailForm.email.value.trim().toLowerCase();
+        if (!EMAIL_RE.test(email)) { sayEmail('Enter an email address like name@example.com.', true); emailForm.email.focus(); return; }
+        if (email === a.email) { sayEmail('That’s already your email.', true); return; }
+        if (a.hasPassword && !emailForm.password.value) { sayEmail('Enter your password to change your email.', true); emailForm.password.focus(); return; }
+        busy(emailForm, true);
+        try {
+          await momentoApi('/api/auth/email', momentoJson('POST', { email, password: emailForm.password.value || undefined }));
+          emailForm.reset();
+          sayEmail(`We sent a link to ${email}. Your email changes when you open it.`);
+          toast('Check your new inbox', email);
+        } catch (err) { sayEmail(err.message, true); }
+        finally { busy(emailForm, false); }
+      });
+      const emailResult = new URLSearchParams(location.search).get('email');
+      if (emailResult) {
+        const msg = { changed: ['Email changed', 'Use your new address to log in from now on.'], taken: ['Email not changed', 'Another account already uses that address.'], invalid: ['That link has expired', 'Ask for a new one below.'] }[emailResult];
+        if (msg) setTimeout(() => toast(msg[0], msg[1]), 600);
+        history.replaceState(null, '', location.pathname + location.hash);
+      }
+
+      // Password (only for accounts that have one). Other devices are logged out.
+      passForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (needLogin()) return;
+        const current = passForm.current.value, next = passForm.next.value, again = passForm.again.value;
+        if (!current) { sayPass('Enter your current password.', true); passForm.current.focus(); return; }
+        if (next.length < 8) { sayPass('Use at least 8 characters for your new password.', true); passForm.next.focus(); return; }
+        if (next !== again) { sayPass('The two new passwords don’t match.', true); passForm.again.focus(); return; }
+        busy(passForm, true);
+        try {
+          const { user } = await momentoApi('/api/auth/password', momentoJson('POST', { currentPassword: current, newPassword: next }));
+          M.account.set(user);
+          passForm.reset();
+          sayPass('Password changed. Other devices have been logged out.');
+          toast('Password changed', 'Other devices have been logged out.');
+        } catch (err) { sayPass(err.message, true); }
+        finally { busy(passForm, false); }
       });
 
       // Appearance: shares the choice with the account menu and every other page
@@ -2000,14 +2092,23 @@
       const showView = (v) => views.forEach((x) => { x.hidden = x.dataset.view !== v; });
       const say = (msg) => { status.textContent = msg; status.classList.toggle('is-error', !!msg); };
       let made = null;
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (form.dataset.busy) return;
         const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
         if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
         if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
+        // Times, venue and zone (assets/event.js)
+        const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
+        if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
-        made = { id: `a-${Date.now().toString(36)}`, name, date, place, code: Store.code(), role: 'host', created: Date.now() };
-        Store.add(made);
+        form.dataset.busy = 'true';
+        const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+        try {
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields })));
+          document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
+        } catch (err) { say(err.message); return; }
+        finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
         d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}. Share this code so guests can join and add their photos.`;
         d.querySelector('.m-code b').textContent = made.code;
@@ -2035,6 +2136,7 @@
       d.launch = () => {
         form.reset(); made = null; say('');
         form.date.value = isoToday();
+        Momento.event?.mount(form);
         showView('form');
         launch();
         form.name.focus();
