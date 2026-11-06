@@ -3,6 +3,7 @@
 <head>
   <script src="assets/api.js"></script>
   <script src="assets/guard.js"></script>
+  <script src="assets/qr.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -555,6 +556,10 @@
     .modal-card h2 { margin: 0; font-size: 1.7rem; line-height: 1.15; letter-spacing: -.03em; }
     .modal-sub { margin: .45rem 0 1.3rem; color: var(--slate); line-height: 1.55; }
     .modal-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.4rem; }
+    .join-scan { display: block; margin: .9rem auto 0; padding: .45rem .8rem; border: none; border-radius: 100px; background: none; color: var(--slate); font: 600 .9rem var(--font-main); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+    .join-scan:hover { background: rgba(127, 120, 150, .12); color: var(--dusk); }
+    .join-scan:active { background: rgba(127, 120, 150, .2); }
+    .join-scan:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
     .note { min-height: 1.2rem; margin: .9rem 0 0; color: var(--slate); font-size: .85rem; }
     .field span { display: block; margin-bottom: .3rem; font-size: .82rem; font-weight: 600; color: var(--slate); }
     .field input {
@@ -688,6 +693,7 @@
       .album.wide .cover { aspect-ratio: 4 / 3; }
       .album.wide .name { font-size: 1.4rem; }
       .actions .btn { flex: 1; }
+      .actions #scanOpen { order: 3; flex-basis: 100%; }
       .tabs { width: 100%; box-sizing: border-box; }
       .tab { flex: 1; justify-content: center; padding: .6rem .5rem; }
       .thumbs { grid-template-columns: repeat(5, 1fr); }
@@ -766,6 +772,7 @@
     .m-done .acct-sub { max-width: 22rem; }
     .m-done-ic { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; margin-bottom: 1rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
     .m-done .acct-actions { width: 100%; }
+    .m-done .m-showqr { width: 100%; margin: .2rem 0 .6rem; }
     .m-code {
       display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; box-sizing: border-box;
       margin: 0 0 1.2rem; padding: .75rem .75rem .75rem 1.1rem; border-radius: 18px; background: rgba(46, 44, 58, .06); text-align: left;
@@ -1454,6 +1461,7 @@
           <p class="lede intro" id="lede" style="--d: .3s"></p>
           <div class="actions intro" style="--d: .42s">
             <button class="btn btn-pearl" type="button" id="joinOpen">Join with a code</button>
+            <button class="btn btn-light" type="button" id="scanOpen" data-qr-scan>Scan a QR code</button>
             <a class="btn btn-dark" href="index.html#for-hosts" data-create>Create an album</a>
           </div>
         </div>
@@ -1529,6 +1537,7 @@
         <button class="btn btn-light" type="button" id="albumDownload">Download all</button>
         <button class="btn btn-light" type="button" id="photoDownload">Download photo</button>
         <button class="btn btn-light" type="button" id="albumLink" hidden>Copy album link</button>
+        <button class="btn btn-light" type="button" id="albumQr" hidden>Show QR code</button>
         <button class="album-remove" type="button" id="albumRemove">Delete album</button>
       </div>
       <p class="note" id="albumNote" role="status"></p>
@@ -1555,6 +1564,7 @@
       </div>
       <p class="note" id="joinNote" role="status"></p>
       <div class="modal-actions"><button class="btn btn-dark" type="submit" style="width: 100%">Join album</button></div>
+      <button class="join-scan" type="button" id="joinScan">Or scan the host’s QR code</button>
     </form>
   </dialog>
 
@@ -1981,6 +1991,7 @@
       document.getElementById('albumCode').hidden = !isHost;
       document.getElementById('albumCodeText').textContent = isHost ? a.code : '';
       document.getElementById('albumLink').hidden = !isHost;
+      document.getElementById('albumQr').hidden = !isHost;
       document.getElementById('albumSub').textContent = `${[`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place].filter(Boolean).join(', ')}. ${who}`;
       thumbsEl.innerHTML = a.pics.map((p, n) => `<button class="thumb" type="button" data-n="${n}" aria-label="Photo ${n + 1}"><img src="${a.photoItems?.[n]?.thumbnailUrl || pic(p, 200, 200)}" alt=""></button>`).join('');
       albumCard.classList.toggle('is-empty', empty);
@@ -2189,6 +2200,13 @@
       showModal(joinModal); focusOtp();
     }
     document.getElementById('joinOpen').addEventListener('click', () => openJoin());
+    // QR codes (assets/qr.js): the scanner's "Type the code" opens this window, and a scanned code joins here
+    // (this runs before the shared script, so window.Momento may not exist yet)
+    const MQ = (window.Momento ||= {});
+    MQ.openJoin = (code) => openJoin(code);
+    MQ.joinFromQr = (code) => joinFromLink(code);
+    document.getElementById('joinScan').addEventListener('click', async (e) => { await softClose(joinModal); Momento.qr?.scan(document.getElementById('joinOpen')); });
+    document.getElementById('albumQr').addEventListener('click', (e) => { if (M.a?.code) Momento.qr?.show(M.a, e.currentTarget); });
     // The footer's "Join with a code" link arrives as albums.html#join
     const joinFromHash = () => {
       if (location.hash !== '#join') return;
@@ -3154,6 +3172,7 @@
             <p class="acct-sub"></p>
             <div class="m-code"><span><small>Guest code</small><b></b></span><button class="m-copy" type="button">Copy code</button></div>
             <div class="m-code"><span><small>Invite link</small><em class="m-link"></em></span><button class="m-copy" type="button" data-copy-link>Copy link</button></div>
+            <div class="acct-actions m-showqr"><button class="acct-primary" type="button" data-show-qr>Show QR code</button></div>
             <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Done</button><button class="acct-primary" type="button" data-view-album>View album</button></div>
             <button class="m-del" type="button" data-delete>Delete this album</button>
           </div>
@@ -3196,6 +3215,7 @@
       });
       d.querySelector('[data-copy-link]').addEventListener('click', (e) => Momento.shareInvite(made, e.currentTarget, 'Copy link'));
       d.querySelector('[data-view-album]').addEventListener('click', async () => { const id = made.id; await d.dismiss(); viewAlbum(id); });
+      d.querySelector('[data-show-qr]').addEventListener('click', (e) => { if (made) Momento.qr?.show(made, e.currentTarget); });
       d.querySelector('[data-delete]').addEventListener('click', async (e) => {
         if (await Momento.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) d.dismiss();
       });

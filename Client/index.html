@@ -3,6 +3,7 @@
 <head>
   <script src="assets/api.js"></script>
   <script src="assets/guard.js"></script>
+  <script src="assets/qr.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1156,6 +1157,7 @@
     .m-done .acct-sub { max-width: 22rem; }
     .m-done-ic { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; margin-bottom: 1rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
     .m-done .acct-actions { width: 100%; }
+    .m-done .m-showqr { width: 100%; margin: .2rem 0 .6rem; }
     .m-code {
       display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; box-sizing: border-box;
       margin: 0 0 1.2rem; padding: .75rem .75rem .75rem 1.1rem; border-radius: 18px; background: rgba(46, 44, 58, .06); text-align: left;
@@ -1930,7 +1932,7 @@
             <div class="qr-found" role="status" aria-live="polite"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></i><span>Album found</span></div>
           </div>
           <p class="qr-note">Guests point their phone camera here.<br>Try it: scan to open the album.</p>
-          <button class="btn btn-dark" type="button" id="qrScan">Scan the code</button>
+          <button class="btn btn-dark" type="button" id="qrScan" data-qr-scan>Scan the code</button>
         </div>
 
         <!-- Built by the script from ALBUM; hidden until the code is scanned -->
@@ -3881,6 +3883,7 @@
             <p class="acct-sub"></p>
             <div class="m-code"><span><small>Guest code</small><b></b></span><button class="m-copy" type="button">Copy code</button></div>
             <div class="m-code"><span><small>Invite link</small><em class="m-link"></em></span><button class="m-copy" type="button" data-copy-link>Copy link</button></div>
+            <div class="acct-actions m-showqr"><button class="acct-primary" type="button" data-show-qr>Show QR code</button></div>
             <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Done</button><button class="acct-primary" type="button" data-view-album>View album</button></div>
             <button class="m-del" type="button" data-delete>Delete this album</button>
           </div>
@@ -3923,6 +3926,7 @@
       });
       d.querySelector('[data-copy-link]').addEventListener('click', (e) => Momento.shareInvite(made, e.currentTarget, 'Copy link'));
       d.querySelector('[data-view-album]').addEventListener('click', async () => { const id = made.id; await d.dismiss(); viewAlbum(id); });
+      d.querySelector('[data-show-qr]').addEventListener('click', (e) => { if (made) Momento.qr?.show(made, e.currentTarget); });
       d.querySelector('[data-delete]').addEventListener('click', async (e) => {
         if (await Momento.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) d.dismiss();
       });
