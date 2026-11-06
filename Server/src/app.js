@@ -13,8 +13,9 @@ import { supportRoutes } from './routes/supportRoutes.js';
 
 export const app = express();
 app.disable('x-powered-by');
-// Behind a proxy (Render, Railway, nginx) this makes rate limits see the real client IP
-app.set('trust proxy', 1);
+// How many proxies sit in front of the server, so rate limits see the visitor's real IP.
+// 1 on the AWS Lightsail server (Caddy); add 1 for each extra proxy in front of it.
+app.set('trust proxy', config.trustProxy);
 
 app.use((req, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');
@@ -26,12 +27,12 @@ app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser(config.jwtSecret));
 app.use(loadUser);
 
-// What the browser needs to start Google and Apple sign-in (all public values)
+// What the browser needs for Google sign-in, the sign-up check and maps (all public values)
 app.get('/api/config', (req, res) => {
   res.json({
-    turnstileSiteKey: config.turnstile.secretKey ? config.turnstile.siteKey : null,
+    // The reCAPTCHA site key for the sign-up check (never the secret)
+    captcha: config.captcha.siteKey && config.captcha.secretKey ? { provider: 'recaptcha', siteKey: config.captcha.siteKey } : null,
     googleClientId: config.google.clientId && config.google.clientSecret ? config.google.clientId : null,
-    apple: !!config.apple.clientId,
     mapsApiKey: config.mapsApiKey || null,
   });
 });

@@ -1,12 +1,10 @@
-import crypto from 'node:crypto';
 import { verifySignupCaptcha } from '../services/captchaService.js';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { config } from '../config/env.js';
 import { User } from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
-import { startSession, endSession, setTempCookie, clearTempCookie } from '../utils/session.js';
+import { startSession, endSession } from '../utils/session.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, finishEmailChange, deleteAccount } from '../services/accountService.js';
@@ -30,7 +28,7 @@ function readCredentials(body, { needName }) {
 }
 
 function providerNames(user) {
-  return [user.googleId && 'Google', user.appleId && 'Apple'].filter(Boolean).join(' or ');
+  return user.googleId ? 'Google' : '';
 }
 
 async function signedIn(res, user, status = 200) {
@@ -43,7 +41,7 @@ async function signedIn(res, user, status = 200) {
 // ---- Email and password ----
 
 export async function signup(req, res) {
-  await verifySignupCaptcha(req.body?.captchaToken, config.turnstile);
+  await verifySignupCaptcha(req.body?.captchaToken, config.captcha);
   const { name, email, password } = readCredentials(req.body, { needName: true });
   const existing = await User.findOne({ email }).select('+passwordHash');
   if (existing) {
@@ -106,7 +104,7 @@ export async function updateMe(req, res) {
 }
 
 // Accounts with a password confirm it before big changes, so a borrowed, logged-in browser
-// can't take the account away. Google/Apple-only accounts have no password to give.
+// can't take the account away. Google-only accounts have no password to give.
 async function checkPassword(user, password) {
   if (!user.passwordHash) return;
   if (!password || !(await bcrypt.compare(String(password), user.passwordHash))) {
@@ -115,7 +113,7 @@ async function checkPassword(user, password) {
 }
 
 // Changing the password while logged in: the current one first. Every other login is ended
-// and this browser gets a fresh one. Google/Apple-only accounts have no password to change.
+// and this browser gets a fresh one. Google-only accounts have no password to change.
 export async function changePassword(req, res) {
   const user = req.user;
   if (!user.passwordHash) {
@@ -214,7 +212,7 @@ export async function resendVerification(req, res) {
 // ---- Forgotten password ----
 
 // Always the same answer, whether or not the address has an account, so this can't be used
-// to find out who uses Momento. Accounts that only use Google or Apple get a link too: it
+// to find out who uses Momento. Accounts that only use Google get a link too: it
 // lets them add a password.
 export async function forgotPassword(req, res) {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
@@ -237,12 +235,12 @@ export async function resetPassword(req, res) {
   await signedIn(res, user);
 }
 
-// ---- Google and Apple ----
+// ---- Google ----
 
-// One account per email: a verified Google or Apple email signs into (and links to) an
+// One account per email: a verified Google email signs into (and links to) an
 // existing account with that address instead of creating a second one.
 async function socialSignIn(res, { provider, providerId, email, emailVerified, name, avatarUrl }) {
-  const idField = provider === 'google' ? 'googleId' : 'appleId';
+  const idField = { google: 'googleId' }[provider];
   let user = await User.findOne({ [idField]: providerId });
 
   if (!user) {
@@ -293,42 +291,5 @@ export async function google(req, res) {
     emailVerified: payload.email_verified === true,
     name: payload.name,
     avatarUrl: payload.picture,
-  });
-}
-
-// Apple: the server hands out a nonce, Apple's popup signs it into an ID token, and the
-// server checks the token against Apple's public keys and that nonce
-const APPLE_NONCE = 'momento_apple_nonce';
-const appleKeys = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
-
-export function appleStart(req, res) {
-  if (!config.apple.clientId) throw new HttpError(503, 'Apple sign-in isn’t set up on this server yet.');
-  const nonce = crypto.randomBytes(16).toString('base64url');
-  setTempCookie(res, APPLE_NONCE, nonce);
-  res.json({ clientId: config.apple.clientId, redirectURI: config.frontendUrl, nonce });
-}
-
-export async function apple(req, res) {
-  if (!config.apple.clientId) throw new HttpError(503, 'Apple sign-in isn’t set up on this server yet.');
-  const idToken = String(req.body?.idToken || '');
-  const expected = req.signedCookies?.[APPLE_NONCE];
-  clearTempCookie(res, APPLE_NONCE);
-  if (!idToken || !expected) throw new HttpError(400, 'Apple sign-in expired. Try again.');
-  let payload;
-  try {
-    ({ payload } = await jwtVerify(idToken, appleKeys, { issuer: 'https://appleid.apple.com', audience: config.apple.clientId }));
-  } catch {
-    throw new HttpError(401, 'Apple sign-in didn’t go through. Try again.');
-  }
-  if (payload.nonce !== expected) throw new HttpError(401, 'Apple sign-in didn’t go through. Try again.');
-  // Apple sends the person's name only the first time, from the browser, not in the token
-  const n = req.body?.name || {};
-  const name = [n.firstName, n.lastName].filter(Boolean).join(' ').trim().slice(0, 80);
-  await socialSignIn(res, {
-    provider: 'apple',
-    providerId: payload.sub,
-    email: typeof payload.email === 'string' ? payload.email.toLowerCase() : '',
-    emailVerified: payload.email_verified === true || payload.email_verified === 'true',
-    name,
   });
 }

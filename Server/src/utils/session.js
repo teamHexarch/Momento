@@ -46,11 +46,3 @@ export function readSession(req) {
     return null;
   }
 }
-
-// Short-lived cookie for one-off values such as the Apple sign-in nonce
-export function setTempCookie(res, name, value, minutes = 10) {
-  res.cookie(name, value, { ...cookieOptions(), signed: true, maxAge: minutes * 60000 });
-}
-export function clearTempCookie(res, name) {
-  res.clearCookie(name, { ...cookieOptions(), signed: true });
-}

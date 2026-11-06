@@ -6,14 +6,12 @@ import { sanitizePhoto } from './imageService.js';
 
 // Where photo files live. Everything outside this file only knows about storage keys
 // ("<albumId>/<random>.jpg"), so drivers can change without touching routes.
-// Cloudflare R2 when its four settings are filled in, otherwise this machine's disk.
+// Amazon S3 when S3_BUCKET is set, otherwise this machine's disk (local development).
 
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif', 'image/avif': '.avif', 'image/gif': '.gif' };
 
-const { accountId, accessKeyId, secretAccessKey, bucket } = config.r2;
-const useR2 = Boolean(accountId && accessKeyId && secretAccessKey && bucket);
-// Loaded only when used, so local development needs no Cloudflare settings
-const driver = useR2 ? await import('./storage/r2Storage.js') : disk;
+// Loaded only when used, so local development needs no AWS settings
+const driver = config.aws.s3Bucket ? await import('./storage/s3Storage.js') : disk;
 
 export const storageName = driver.name;
 export const initStorage = () => driver.init();

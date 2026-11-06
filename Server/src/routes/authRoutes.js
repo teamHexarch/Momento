@@ -29,5 +29,3 @@ authRoutes.post('/password/forgot', emailLimit, auth.forgotPassword);
 authRoutes.post('/password/reset', signInLimit, auth.resetPassword);
 
 authRoutes.post('/google', signInLimit, auth.google);
-authRoutes.get('/apple/start', auth.appleStart);
-authRoutes.post('/apple', signInLimit, auth.apple);

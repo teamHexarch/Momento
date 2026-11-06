@@ -9,7 +9,7 @@ import sharp from 'sharp';
 
 // Run without .env. Every write is confined to a disposable database and directory.
 for (const key of Object.keys(process.env)) {
-  if (/^(R2_|MS_|RESEND_|TURNSTILE_|EMAIL_|MONGODB_|FRONTEND_|CORS_|PUBLIC_)/.test(key)) delete process.env[key];
+  if (/^(AWS_|S3_|RECAPTCHA_|CAPTCHA_|EMAIL_|MONGODB_|FRONTEND_|CORS_|PUBLIC_)/.test(key)) delete process.env[key];
 }
 const folder = await mkdtemp(path.join(os.tmpdir(), 'momento-flow-'));
 const mongo = await MongoMemoryServer.create();

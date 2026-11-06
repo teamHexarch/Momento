@@ -6,10 +6,11 @@ import { app } from './app.js';
 
 await connectDb();
 await initStorage();
-console.log(storageName === 'r2' ? `Photos: Cloudflare R2 bucket "${config.r2.bucket}"` : `Photos: on disk in ${config.uploadDir}`);
+console.log(storageName === 's3' ? `Photos: Amazon S3 bucket "${config.aws.s3Bucket}" (${config.aws.region})`
+  : `Photos: on disk in ${config.uploadDir}`);
 if (storageName === 'disk' && config.isProduction) {
-  console.warn('Photos are on this machine’s disk. On Render that is wiped on every deploy: set the R2_* settings.');
+  console.warn('Photos are on this machine’s disk, which a hosting provider can wipe on every deploy: set S3_BUCKET.');
 }
 if (isEmailConfigured()) console.log(`Email: ${emailProviderName}, from ${emailFrom}`);
-else console.warn('Email isn’t set up (RESEND_API_KEY + EMAIL_FROM, or the MS_* settings, in .env); confirm links will be printed here instead.');
+else console.warn('Email isn’t set up (EMAIL_FROM + the AWS keys); confirm links will be printed here instead.');
 app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));

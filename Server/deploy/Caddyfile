@@ -1,0 +1,12 @@
+# HTTPS for the Momento API. Caddy gets and renews the certificates by itself once the domain's
+# DNS points at this server. API_DOMAINS can list several, comma-separated.
+{$API_DOMAINS} {
+	encode gzip
+	reverse_proxy api:8080 {
+		# Photo uploads (up to 30 photos at once) can take a while on slow connections
+		transport http {
+			read_timeout 5m
+			write_timeout 5m
+		}
+	}
+}

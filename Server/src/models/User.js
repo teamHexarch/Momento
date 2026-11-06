@@ -3,14 +3,13 @@ import mongoose from 'mongoose';
 const userSchema = new mongoose.Schema({
   name: { type: String, trim: true, maxlength: 80, default: '' },
   email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254, unique: true },
-  // Absent for people who only ever used Google or Apple
+  // Absent for people who only ever used Google
   passwordHash: { type: String, select: false },
   avatarUrl: { type: String, default: '' },
-  // Google and Apple vouch for the address; email/password signups start unverified
+  // Google vouches for the address; email/password signups start unverified
   emailVerified: { type: Boolean, default: false },
   plan: { type: String, enum: ['free', 'plus'], default: 'free' },
   googleId: { type: String, unique: true, sparse: true },
-  appleId: { type: String, unique: true, sparse: true },
   lastLoginAt: Date,
   verificationResendAt: Date,
   // The album code from the invite link they signed up through. Joined (and cleared) once they
@@ -44,7 +43,7 @@ userSchema.methods.toPublic = function () {
     plan: this.plan,
     hasPassword: !!this.passwordHash,
     notify: { photos: this.notify?.photos ?? true, closing: this.notify?.closing ?? true, recap: this.notify?.recap ?? false },
-    providers: [this.googleId && 'google', this.appleId && 'apple'].filter(Boolean),
+    providers: this.googleId ? ['google'] : [],
   };
 };
 

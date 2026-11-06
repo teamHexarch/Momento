@@ -1,0 +1,40 @@
+# Momento API on one AWS Lightsail server: the API in a container, with Caddy in front for HTTPS
+# (free Let's Encrypt certificates that renew themselves). See "Moving the API to AWS" in README.md.
+# Run by deploy/update.sh; settings come from /opt/momento-config/server.env (never in Git).
+services:
+  api:
+    build: ..
+    restart: unless-stopped
+    env_file: /opt/momento-config/server.env
+    environment:
+      NODE_ENV: production
+      PORT: '8080'
+      # Caddy is the one proxy in front of the API
+      TRUST_PROXY: '1'
+    expose:
+      - '8080'
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # The address(es) this server answers on, e.g. "api.hexarch.org" (set in /opt/momento-config/domains)
+      API_DOMAINS: ${API_DOMAINS:-api.hexarch.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+volumes:
+  caddy_data:
+  caddy_config:

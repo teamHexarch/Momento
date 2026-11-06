@@ -15,7 +15,7 @@ async function photoFor(req) {
 
 export async function file(req, res) {
   const { photo } = await photoFor(req);
-  // From disk: the file itself. From R2: a short-lived link straight to Cloudflare.
+  // From disk: the file itself. From S3: a short-lived link straight to the bucket.
   const thumbnail = req.query.size === 'thumb' && await ensureThumbnail(photo);
   const preview = req.query.size === 'preview' && photo.previewKey;
   if (!(await sendPhoto(res, thumbnail || preview || photo.storageKey, thumbnail ? 'image/webp' : preview ? photo.previewMimeType : photo.mimeType))) throw new HttpError(404, 'Photo file is missing.');

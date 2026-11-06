@@ -385,7 +385,7 @@ export async function download(req, res) {
   zip.on('error', (err) => res.destroy(err));
   zip.pipe(res);
   try {
-    // One photo at a time: each is fetched (from disk or R2) only when the zip is ready for it
+    // One photo at a time: each is fetched (from disk or S3) only when the zip is ready for it
     for (const [i, p] of photos.entries()) {
       const ext = p.storageKey.slice(p.storageKey.lastIndexOf('.'));
       zip.append(await openPhoto(p.storageKey), { name: `${String(i + 1).padStart(4, '0')}${ext}` });
@@ -402,7 +402,7 @@ export async function download(req, res) {
 // ---- Host actions: nudging guests, inviting people ----
 
 const REMIND_EVERY_MS = 24 * 3600000;
-// Each reminder is real email (Resend's free plan allows 100 a day), so one goes to at most this many
+// Each reminder is real email, so one goes to at most this many
 const REMIND_MAX = 25;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

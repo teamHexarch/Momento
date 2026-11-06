@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.*
+uploads/*
+docs
+deploy
+*.zip
+.gitattributes
+Dockerfile
+.dockerignore

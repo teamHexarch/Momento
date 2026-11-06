@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../../config/env.js';
 
-// Photos in a folder on this machine (UPLOAD_DIR). Used locally and whenever R2 isn't set up.
+// Photos in a folder on this machine (UPLOAD_DIR). Used locally, whenever S3_BUCKET isn't set.
 
 const fullPath = (key) => {
   const p = path.resolve(config.uploadDir, key);

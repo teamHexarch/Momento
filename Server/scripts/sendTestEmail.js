@@ -1,5 +1,5 @@
-// Sends a sample "confirm your email" message through the configured sender (Resend or
-// Microsoft Graph), to check the email settings without signing anyone up. The button is a dummy link.
+// Sends a sample "confirm your email" message through Amazon SES, to check the email settings without
+// signing anyone up. The button is a dummy link.
 //
 //   npm run email:test -- you@example.com
 import { config } from '../src/config/env.js';
@@ -12,7 +12,7 @@ if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
   process.exit(1);
 }
 if (!isEmailConfigured()) {
-  console.error('Email isn’t set up. Fill in RESEND_API_KEY and EMAIL_FROM (or the MS_* settings) in Server/.env.');
+  console.error('Email isn’t set up. Fill in EMAIL_FROM, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Server/.env.');
   process.exit(1);
 }
 

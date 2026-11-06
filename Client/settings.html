@@ -1512,9 +1512,8 @@
         const a = M.account.get();
         if (!form.contains(document.activeElement)) form.name.value = a ? a.name : '';
         document.getElementById('emailNow').textContent = a?.email || 'not logged in';
-        const google = a?.providers?.includes('google'), apple = a?.providers?.includes('apple');
-        document.getElementById('emailVia').textContent = google ? ' (with Google)' : apple ? ' (with Apple)' : '';
-        // No password on the account (Google or Apple sign-up): no password box, no password section
+        document.getElementById('emailVia').textContent = a?.providers?.includes('google') ? ' (with Google)' : '';
+        // No password on the account (Google sign-up): no password box, no password section
         const hasPassword = !!a?.hasPassword;
         document.getElementById('emailPassField').hidden = !hasPassword;
         document.getElementById('passwordGroup').hidden = !a || !hasPassword;

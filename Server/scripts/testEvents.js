@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
 import sharp from 'sharp';
 
 for (const key of Object.keys(process.env)) {
-  if (/^(R2_|MS_|RESEND_|TURNSTILE_|EMAIL_|MONGODB_|FRONTEND_|CORS_|PUBLIC_|GOOGLE_)/.test(key)) delete process.env[key];
+  if (/^(AWS_|S3_|RECAPTCHA_|CAPTCHA_|EMAIL_|MONGODB_|FRONTEND_|CORS_|PUBLIC_|GOOGLE_)/.test(key)) delete process.env[key];
 }
 const folder = await mkdtemp(path.join(os.tmpdir(), 'momento-events-'));
 const mongo = await MongoMemoryServer.create();
