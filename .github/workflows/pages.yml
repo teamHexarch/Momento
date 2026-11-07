@@ -33,7 +33,7 @@ jobs:
       - name: Collect the public site files
         run: |
           mkdir -p _site/assets
-          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/CNAME _site/
+          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/privacy.html Client/CNAME _site/
           cp Client/assets/*.js Client/assets/momento-icon.png _site/assets/
           mkdir -p _site/assets/vendor && cp Client/assets/vendor/*.js _site/assets/vendor/
           ls -R _site

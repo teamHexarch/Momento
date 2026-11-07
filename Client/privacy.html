@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy | Momento</title>
+  <meta name="description" content="What Momento collects, why, where it's kept and how to have it deleted.">
+  <link rel="icon" href="assets/momento-icon.png">
+  <script>
+    // Same theme choice as the rest of the site
+    (() => {
+      let pref = 'system';
+      try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
+      const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <style>
+    :root {
+      --paper: #F8F7FA; --surface: #FFFFFF; --dusk: #2E2C3A; --slate: #5C596B; --line: #E3E0EA;
+      --accent: #9A603D; --tint: rgba(111, 152, 150, .12);
+      --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', sans-serif;
+    }
+    :root[data-theme="dark"] {
+      --paper: #121119; --surface: #1C1B25; --dusk: #ECEAF4; --slate: #B4AFC8; --line: #2C2A38;
+      --accent: #B8AEF5; --tint: rgba(143, 168, 232, .12);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); }
+    body { margin: 0; background: var(--paper); color: var(--dusk); font: 400 1rem/1.7 var(--font); -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 46rem; margin: 0 auto; padding: 1.5rem 16px 0; }
+    .brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--dusk); font-weight: 750; letter-spacing: -.02em; text-decoration: none; font-size: 1.1rem; }
+    .brand img { width: 2rem; height: 2rem; border-radius: 9px; }
+    .back { font-size: .92rem; font-weight: 600; }
+    main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 16px 4rem; }
+    h1 { margin: 0; font-size: clamp(2rem, 6vw, 2.8rem); line-height: 1.1; letter-spacing: -.035em; }
+    .updated { margin: .6rem 0 2rem; color: var(--slate); font-size: .92rem; }
+    .lede { margin: 0 0 2rem; padding: 1.1rem 1.25rem; border-radius: 18px; background: var(--tint); font-size: 1.02rem; }
+    h2 { margin: 2.4rem 0 .6rem; font-size: 1.3rem; letter-spacing: -.02em; line-height: 1.3; }
+    p { margin: 0 0 1rem; }
+    ul { margin: 0 0 1rem; padding-left: 1.25rem; }
+    li { margin: .3rem 0; }
+    table { width: 100%; border-collapse: collapse; margin: .4rem 0 1.2rem; font-size: .95rem; }
+    th, td { text-align: left; vertical-align: top; padding: .65rem .5rem; border-bottom: 1px solid var(--line); }
+    th { color: var(--slate); font-weight: 600; font-size: .85rem; }
+    td:first-child { font-weight: 600; white-space: nowrap; padding-right: 1rem; }
+    footer { max-width: 46rem; margin: 0 auto; padding: 1.5rem 16px 3rem; border-top: 1px solid var(--line); color: var(--slate); font-size: .9rem; }
+    @media (max-width: 560px) {
+      table, tbody, tr, td { display: block; }
+      thead { display: none; }
+      tr { padding: .5rem 0; border-bottom: 1px solid var(--line); }
+      td { border: none; padding: .15rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="index.html"><img src="assets/momento-icon.png" alt="">Momento</a>
+    <a class="back" href="index.html">Back to Momento</a>
+  </header>
+
+  <main>
+    <h1>Privacy policy</h1>
+    <p class="updated">Last updated 7 November 2026</p>
+
+    <p class="lede">Momento (hexarch.org) is a shared photo album for events, run by HexArch Limited. This page explains what we collect, why, where it's kept and how to have it deleted. We don't sell your information, we don't show ads, and we don't use your photos for anything except showing them to the people in your album.</p>
+
+    <h2>What we collect</h2>
+    <table>
+      <thead><tr><th>What</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Your name and email</td><td>To create your account, show other album members who added each photo, and send you account emails.</td></tr>
+        <tr><td>Your password</td><td>Stored only as a one-way scrambled hash; we can never see it.</td></tr>
+        <tr><td>Google account details</td><td>If you use “Continue with Google”: your name, email, profile picture and Google account ID, so you can sign in. We don't get your Google password or anything else in your Google account.</td></tr>
+        <tr><td>Photos you upload</td><td>To share them with the people in that album. Before storing a photo we remove its hidden details (EXIF, XMP and IPTC), including any GPS location.</td></tr>
+        <tr><td>Albums you create</td><td>The album's name, date and times, the venue you choose on the map and its sharing zone, so guests can join and add photos at the event.</td></tr>
+        <tr><td>Your location, when uploading</td><td>For albums with a sharing zone, your browser asks before sharing your location with us, and we use it only to check you're near the venue. We don't store it.</td></tr>
+        <tr><td>Camera</td><td>Used only while you take a photo or scan a QR code in Momento. Photos taken in Momento go straight to the album; nothing is recorded or kept otherwise.</td></tr>
+        <tr><td>Login records</td><td>When you last logged in and which devices are logged in, so you can stay signed in and we can sign out old devices.</td></tr>
+        <tr><td>Messages to support</td><td>What you send through the support form, so we can reply.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Who can see your photos</h2>
+    <p>Only people who have joined the album (with its code or QR code) can see and download its photos. Anyone you give the code to can join, so share it with care. The album's host can remove any photo in their album, and you can remove the photos you added.</p>
+
+    <h2>Cookies and storage in your browser</h2>
+    <ul>
+      <li><strong>A login cookie</strong>, so you stay signed in. It can't be read by the page's scripts and is only sent to Momento.</li>
+      <li><strong>Small settings</strong> saved in your browser, such as light or dark mode.</li>
+    </ul>
+    <p>We don't use advertising or tracking cookies.</p>
+
+    <h2>Services we use</h2>
+    <p>To run Momento we rely on these providers, who handle data only to provide their service to us:</p>
+    <ul>
+      <li><strong>Amazon Web Services</strong> (Sydney, Australia): runs Momento's server, stores the photos and sends our emails.</li>
+      <li><strong>MongoDB Atlas</strong>: stores accounts, albums and photo details (not the photo files).</li>
+      <li><strong>Google</strong>: “Continue with Google” sign-in, the reCAPTCHA “I'm not a robot” check on sign-up, and the map for choosing a venue. Google's <a href="https://policies.google.com/privacy" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" rel="noopener">Terms of Service</a> apply to those.</li>
+      <li><strong>GitHub Pages</strong>: delivers the website's pages.</li>
+    </ul>
+
+    <h2>Emails</h2>
+    <p>We send account emails (confirming your address, resetting your password, changing your email) and album emails a host triggers (invites and reminders). You can choose which album notifications you get in Settings. We don't send marketing emails.</p>
+
+    <h2>How long we keep things</h2>
+    <ul>
+      <li>Your account and its details stay until you delete it.</li>
+      <li>Albums and their photos stay until the host deletes the album or their account. After an event, albums stop taking new photos but stay available to view and download.</li>
+      <li>One-time links in emails (confirm, reset) stop working after use or after they expire.</li>
+    </ul>
+
+    <h2>Deleting your account</h2>
+    <p>You can delete your account in Settings. That permanently removes your account, the albums you host (with all their photos) and the photos you added to other albums. This can't be undone, so download anything you want to keep first.</p>
+
+    <h2>Your choices and rights</h2>
+    <p>You can see and change your name and email in Settings, and ask us for a copy of your information, a correction, or its deletion, by emailing <a href="mailto:team@hexarch.org">team@hexarch.org</a>. We'll reply as soon as we can.</p>
+
+    <h2>Children</h2>
+    <p>Momento isn't meant for children under 13, and they shouldn't create an account.</p>
+
+    <h2>Changes</h2>
+    <p>If we change this policy, we'll update this page and the date at the top. For bigger changes we'll let account holders know by email.</p>
+
+    <h2>Contact</h2>
+    <p>HexArch Limited, <a href="mailto:team@hexarch.org">team@hexarch.org</a>, or use the <a href="support.html">support page</a>.</p>
+  </main>
+
+  <footer>© 2026 HexArch Limited · <a href="index.html">Momento</a> · <a href="support.html">Support</a></footer>
+</body>
+</html>
