@@ -2225,23 +2225,43 @@
     liveEl.hidden = true;
     const story = { paused: false };
     function updateStory() {}
+    // The big card beside "My albums": the album that's live now; otherwise the most recent one
+    // with photos (wrapping up first), then the next one coming up, then the latest. So the spot is
+    // never left empty while there are albums.
+    function featuredAlbum() {
+      const byDateDesc = (a, b) => (b.date || '').localeCompare(a.date || '');
+      const live = ALBUMS.find((a) => a.status === 'live');
+      if (live) return { album: live, label: 'Live now', live: true };
+      const withPhotos = (s) => ALBUMS.filter((a) => a.status === s && a.pics.length).sort(byDateDesc)[0];
+      const wrapping = withPhotos('wrapping');
+      if (wrapping) return { album: wrapping, label: 'Wrapping up' };
+      const kept = withPhotos('kept');
+      if (kept) return { album: kept, label: 'Latest album' };
+      const soon = ALBUMS.filter((a) => a.status === 'new').sort((a, b) => (a.date || '').localeCompare(b.date || ''))[0];
+      if (soon) return { album: soon, label: `Coming up · ${fmtDate(soon.date)}` };
+      const latest = [...ALBUMS].sort(byDateDesc)[0];
+      return latest ? { album: latest, label: 'Latest album' } : null;
+    }
     function renderLive() {
-      const album = ALBUMS.find((a) => a.status === 'live');
-      liveEl.hidden = !album;
-      if (!album) { liveEl.replaceChildren(); return; }
+      const pick = featuredAlbum();
+      liveEl.hidden = !pick;
+      if (!pick) { liveEl.replaceChildren(); return; }
+      const { album, label, live } = pick;
+      // "Add your photos" only while photos can still be added (the host can always add)
+      const canAddHere = album.open !== false || (album.role === 'host' && !!album.startsAt);
       liveEl.innerHTML = `
         <div class="live-media" role="button" tabindex="0" aria-label="Open ${esc(album.name)}">
           ${album.pics.length ? `<img class="live-img is-on" src="${esc(album.pics[0])}" alt="">` : '<div class="cover-new"><small>No photos yet</small></div>'}
-          <span class="live-pill"><i></i>Live now</span>
-          <div class="live-over"><h2 id="liveTitle">${esc(album.name)}</h2><p>${esc(album.place)} · ${num(album.photos)} photos</p></div>
+          <span class="live-pill">${live ? '<i></i>' : ''}${esc(label)}</span>
+          <div class="live-over"><h2 id="liveTitle">${esc(album.name)}</h2><p>${esc([album.place, `${num(album.photos)} photos`].filter(Boolean).join(' · '))}</p></div>
         </div>
-        <div class="live-actions"><button class="btn btn-dark" type="button">Open album</button><button class="btn btn-light" type="button">Add your photos</button></div>`;
+        <div class="live-actions"><button class="btn btn-dark" type="button">Open album</button>${canAddHere ? '<button class="btn btn-light" type="button">Add your photos</button>' : ''}</div>`;
       const media = liveEl.querySelector('.live-media');
       media.addEventListener('click', () => openAlbum(album.id));
       media.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAlbum(album.id); } });
       const [open, add] = liveEl.querySelectorAll('button');
       open.addEventListener('click', () => openAlbum(album.id));
-      add.addEventListener('click', () => openAlbum(album.id, 0, null, true));
+      add?.addEventListener('click', () => openAlbum(album.id, 0, null, true));
     }
 
     // ---- The archive: albums built once, then regrouped by year as filters change ----
