@@ -15,6 +15,8 @@ const approveLimit = rateLimit({ windowMs: 15 * 60000, limit: 20, standardHeader
 // The code and new-password steps: counted per account (each code also dies after 5 wrong tries)
 const passwordStepLimit = rateLimit({ windowMs: 15 * 60000, limit: 30, keyGenerator: (req) => 'user:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false, message: tooMany(15) });
 
+// Each code is a real email: at most 5 an hour per account (on top of the per-address email limit)
+const codeSendLimit = rateLimit({ windowMs: 60 * 60000, limit: 5, keyGenerator: (req) => 'user:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false, message: tooMany(60) });
 export const authRoutes = Router();
 
 authRoutes.post('/signup', signInLimit, auth.signup);
@@ -25,7 +27,7 @@ authRoutes.patch('/me', requireUser, auth.updateMe);
 authRoutes.delete('/me', requireUser, signInLimit, auth.deleteMe);
 authRoutes.post('/email', requireUser, emailLimit, auth.requestEmailChange);
 // Changing the password from Settings: current password → emailed code → new password
-authRoutes.post('/password/code', requireUser, emailLimit, auth.startPasswordChange);
+authRoutes.post('/password/code', requireUser, emailLimit, codeSendLimit, auth.startPasswordChange);
 authRoutes.post('/password/code/verify', requireUser, passwordStepLimit, auth.verifyPasswordCode);
 authRoutes.post('/password', requireUser, passwordStepLimit, auth.changePassword);
 authRoutes.get('/email/confirm', auth.confirmEmailChange);

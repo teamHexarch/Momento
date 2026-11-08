@@ -161,21 +161,31 @@ export async function verifyPasswordCode(req, res) {
   canChangePassword(user);
   const code = String(req.body?.code ?? '').replace(/\D/g, '');
   if (code.length !== 6) throw new HttpError(400, 'Enter the 6-digit code from the email.', 'bad-code');
-  const pc = (await User.findById(user._id).select('+passwordChange'))?.passwordChange;
-  if (!pc?.codeHash || !pc.codeExpiresAt || pc.codeExpiresAt < new Date()) {
+  // Count this try BEFORE comparing, in one atomic step: it only succeeds while the code is live and
+  // has tries left, so many guesses sent at the same moment can't get past the limit
+  const now = new Date();
+  const counted = await User.findOneAndUpdate(
+    { _id: user._id, 'passwordChange.codeHash': { $exists: true }, 'passwordChange.codeExpiresAt': { $gt: now }, 'passwordChange.tries': { $lt: MAX_CODE_TRIES } },
+    { $inc: { 'passwordChange.tries': 1 } },
+    { returnDocument: 'after' },
+  ).select('+passwordChange');
+  if (!counted) {
+    const pc = (await User.findById(user._id).select('+passwordChange'))?.passwordChange;
+    if (pc?.codeHash && pc.codeExpiresAt > now) throw new HttpError(429, 'Too many wrong codes. Send a new one.', 'code-expired');
     throw new HttpError(400, 'This code has expired. Send a new one.', 'code-expired');
   }
-  if ((pc.tries || 0) >= MAX_CODE_TRIES) throw new HttpError(429, 'Too many wrong codes. Send a new one.', 'code-expired');
+  const pc = counted.passwordChange;
   if (!sameHash(sha256(`${user.id}:${code}`), pc.codeHash)) {
-    await User.updateOne({ _id: user._id }, { $inc: { 'passwordChange.tries': 1 } });
-    const left = MAX_CODE_TRIES - (pc.tries || 0) - 1;
+    const left = MAX_CODE_TRIES - pc.tries;
     throw new HttpError(400, left > 0 ? `That code isn’t right. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong codes. Send a new one.', left > 0 ? 'bad-code' : 'code-expired');
   }
-  // The code is used up; a ticket lets the new password be set for the next few minutes
+  // Right code: use it up atomically (only if it's still this code), so two requests at the same
+  // moment can't both get a ticket. The ticket lets the new password be set for a few minutes.
   const ticket = crypto.randomBytes(24).toString('base64url');
-  await User.updateOne({ _id: user._id }, { $set: { passwordChange: {
+  const used = await User.updateOne({ _id: user._id, 'passwordChange.codeHash': pc.codeHash }, { $set: { passwordChange: {
     ticketHash: sha256(ticket), ticketExpiresAt: new Date(Date.now() + TICKET_MINUTES * 60000), tries: 0,
   } } });
+  if (!used.modifiedCount) throw new HttpError(400, 'This code has already been used. Send a new one.', 'code-expired');
   res.json({ ticket, minutes: TICKET_MINUTES });
 }
 

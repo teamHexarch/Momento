@@ -140,7 +140,12 @@ try {
   const wrong = code1 === '000000' ? '111111' : '000000';
   assert.match((await json(await call('/api/auth/password/code/verify', 400, h, 'POST', { code: wrong }))).error, /4 tries left/);
   await call('/api/auth/password/code/verify', 400, h, 'POST', { code: '12' });
-  const { ticket } = await json(await call('/api/auth/password/code/verify', 200, h, 'POST', { code: code1 }));
+  // The right code sent three times at the same moment: exactly one gets a ticket
+  const same = await Promise.all([1, 2, 3].map(() => fetch('http://localhost:4106/api/auth/password/code/verify', { method: 'POST', headers: { cookie: h, 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code1 }) })));
+  const winners = same.filter((r) => r.status === 200);
+  assert.equal(winners.length, 1, 'only one ticket for one code');
+  checks++;
+  const { ticket } = await winners[0].json();
   assert.ok(ticket);
   assert.equal((await json(await call('/api/auth/password/code/verify', 400, h, 'POST', { code: code1 }))).code, 'code-expired');
   // Step 3: the two passwords must match, be long enough and differ from the current one
@@ -158,8 +163,11 @@ try {
   const nowPassword = 'New-password-456!';
   await call('/api/auth/password/code', 200, fresh, 'POST', { currentPassword: nowPassword });
   const code2 = codes.at(-1), bad = code2 === '000000' ? '111111' : '000000';
-  for (let k = 0; k < 4; k++) await call('/api/auth/password/code/verify', 400, fresh, 'POST', { code: bad });
-  assert.equal((await json(await call('/api/auth/password/code/verify', 400, fresh, 'POST', { code: bad }))).code, 'code-expired');
+  // Twelve wrong guesses at the same moment: no more than five are ever counted as tries
+  const burst = await Promise.all(Array.from({ length: 12 }, () => fetch('http://localhost:4106/api/auth/password/code/verify', { method: 'POST', headers: { cookie: fresh, 'Content-Type': 'application/json' }, body: JSON.stringify({ code: bad }) })));
+  assert.equal(burst.filter((r) => r.status === 400).length, 5, 'exactly five guesses counted');
+  assert.equal(burst.filter((r) => r.status === 429).length, 7);
+  checks++;
   assert.equal((await json(await call('/api/auth/password/code/verify', 429, fresh, 'POST', { code: code2 }))).code, 'code-expired');
   console.log = realLog;
   void askCode;
