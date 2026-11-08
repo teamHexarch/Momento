@@ -23,6 +23,19 @@ const userSchema = new mongoose.Schema({
   },
   // Logins issued before this moment are refused (set when the password is reset)
   passwordChangedAt: Date,
+  // Changing the password from Settings, in steps: the current password emails a 6-digit code
+  // (stored only as a hash), the right code gives a short-lived ticket, and the ticket lets the
+  // new password be set. Cleared once the password changes.
+  passwordChange: {
+    type: new mongoose.Schema({
+      codeHash: String,
+      codeExpiresAt: Date,
+      tries: { type: Number, default: 0 },
+      ticketHash: String,
+      ticketExpiresAt: Date,
+    }, { _id: false }),
+    select: false,
+  },
   // Which emails they want (only the choice is stored; sending them comes later)
   notify: {
     photos: { type: Boolean, default: true },    // someone adds photos to an album I'm in

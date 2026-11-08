@@ -121,15 +121,53 @@ try {
   const wide = (await json(await call('/api/albums', 201, h, 'POST', { ...base, name: 'Wide', zone: { ...venue, radiusM: 7500 } }))).album;
   assert.equal(wide.zone.radiusM, 7500);
 
-  // Changing the password: needs the current one, logs other devices out, not for Google-only accounts
+  // Changing the password: current password → 6-digit code by email → new password (twice).
+  // Without email settings the server prints the code; the test reads it from there.
+  const codes = [];
+  const realLog = console.log;
+  console.log = (...a) => { const m = String(a[0]).match(/Password change code for \S+: (\d{6})/); if (m) codes.push(m[1]); else realLog(...a); };
+  const askCode = async (cookie) => { await call('/api/auth/password/code', 200, cookie, 'POST', { currentPassword: password }); return codes.at(-1); };
   const other = await login('host@example.invalid');
-  await call('/api/auth/password', 401, h, 'POST', { currentPassword: 'wrong-password', newPassword: 'New-password-456!' });
-  await call('/api/auth/password', 400, h, 'POST', { currentPassword: password, newPassword: 'short' });
-  const changed = await call('/api/auth/password', 200, h, 'POST', { currentPassword: password, newPassword: 'New-password-456!' });
+  // Step 1: the current password must be right
+  await call('/api/auth/password/code', 401, h, 'POST', { currentPassword: 'wrong-password' });
+  // Step 3 can't be reached without a verified code
+  assert.equal((await json(await call('/api/auth/password', 403, h, 'POST', { ticket: 'made-up', newPassword: 'New-password-456!', newPasswordAgain: 'New-password-456!' }))).code, 'code-needed');
+  const sent = await json(await call('/api/auth/password/code', 200, h, 'POST', { currentPassword: password }));
+  assert.match(sent.sentTo, /^h\*\*\*@example\.invalid$/);
+  const code1 = codes.at(-1);
+  assert.match(code1, /^\d{6}$/);
+  // Step 2: wrong codes count down, the right one gives a ticket and is then used up
+  const wrong = code1 === '000000' ? '111111' : '000000';
+  assert.match((await json(await call('/api/auth/password/code/verify', 400, h, 'POST', { code: wrong }))).error, /4 tries left/);
+  await call('/api/auth/password/code/verify', 400, h, 'POST', { code: '12' });
+  const { ticket } = await json(await call('/api/auth/password/code/verify', 200, h, 'POST', { code: code1 }));
+  assert.ok(ticket);
+  assert.equal((await json(await call('/api/auth/password/code/verify', 400, h, 'POST', { code: code1 }))).code, 'code-expired');
+  // Step 3: the two passwords must match, be long enough and differ from the current one
+  assert.equal((await json(await call('/api/auth/password', 400, h, 'POST', { ticket, newPassword: 'New-password-456!', newPasswordAgain: 'New-password-457!' }))).code, 'mismatch');
+  await call('/api/auth/password', 400, h, 'POST', { ticket, newPassword: 'short', newPasswordAgain: 'short' });
+  assert.equal((await json(await call('/api/auth/password', 400, h, 'POST', { ticket, newPassword: password, newPasswordAgain: password }))).code, 'same-password');
+  const changed = await call('/api/auth/password', 200, h, 'POST', { ticket, newPassword: 'New-password-456!', newPasswordAgain: 'New-password-456!' });
   const fresh = cookieOf(changed);
   await call('/api/auth/me', 200, fresh).then(async (res) => assert.equal((await res.json()).user.hasPassword, true));
   assert.equal((await json(await call('/api/auth/me', 200, other))).user, null);
   await call('/api/auth/login', 200, '', 'POST', { email: 'host@example.invalid', password: 'New-password-456!' });
+  // The ticket only works once
+  assert.equal((await json(await call('/api/auth/password', 403, fresh, 'POST', { ticket, newPassword: 'Third-password-789!', newPasswordAgain: 'Third-password-789!' }))).code, 'code-needed');
+  // Five wrong codes and that code is dead, even if the right one comes next
+  const nowPassword = 'New-password-456!';
+  await call('/api/auth/password/code', 200, fresh, 'POST', { currentPassword: nowPassword });
+  const code2 = codes.at(-1), bad = code2 === '000000' ? '111111' : '000000';
+  for (let k = 0; k < 4; k++) await call('/api/auth/password/code/verify', 400, fresh, 'POST', { code: bad });
+  assert.equal((await json(await call('/api/auth/password/code/verify', 400, fresh, 'POST', { code: bad }))).code, 'code-expired');
+  assert.equal((await json(await call('/api/auth/password/code/verify', 429, fresh, 'POST', { code: code2 }))).code, 'code-expired');
+  console.log = realLog;
+  void askCode;
+  // An account whose email isn't confirmed can't start a password change
+  await User.create({ name: 'Unconfirmed', email: 'unconfirmed@example.invalid', passwordHash, emailVerified: false });
+  const uc = await login('unconfirmed@example.invalid');
+  assert.equal((await json(await call('/api/auth/password/code', 403, uc, 'POST', { currentPassword: password }))).code, 'unverified');
+  await call('/api/auth/login', 200, '', 'POST', { email: 'unconfirmed@example.invalid', password });
   const gUser = await User.create({ name: 'Google person', email: 'g@example.invalid', googleId: 'google-123', emailVerified: true });
   const { startSession } = await import('../src/utils/session.js');
   let gCookie = '';

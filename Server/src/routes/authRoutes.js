@@ -12,6 +12,9 @@ const emailLimit = rateLimit({ windowMs: 60 * 60000, limit: 5, standardHeaders: 
 // The email-change approval page: links can't be guessed, but this still caps anyone trying
 const approveLimit = rateLimit({ windowMs: 15 * 60000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, message: tooMany(15) });
 
+// The code and new-password steps: counted per account (each code also dies after 5 wrong tries)
+const passwordStepLimit = rateLimit({ windowMs: 15 * 60000, limit: 30, keyGenerator: (req) => 'user:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false, message: tooMany(15) });
+
 export const authRoutes = Router();
 
 authRoutes.post('/signup', signInLimit, auth.signup);
@@ -21,7 +24,10 @@ authRoutes.get('/me', auth.me);
 authRoutes.patch('/me', requireUser, auth.updateMe);
 authRoutes.delete('/me', requireUser, signInLimit, auth.deleteMe);
 authRoutes.post('/email', requireUser, emailLimit, auth.requestEmailChange);
-authRoutes.post('/password', requireUser, signInLimit, auth.changePassword);
+// Changing the password from Settings: current password → emailed code → new password
+authRoutes.post('/password/code', requireUser, emailLimit, auth.startPasswordChange);
+authRoutes.post('/password/code/verify', requireUser, passwordStepLimit, auth.verifyPasswordCode);
+authRoutes.post('/password', requireUser, passwordStepLimit, auth.changePassword);
 authRoutes.get('/email/confirm', auth.confirmEmailChange);
 // The approval page (opened from the email sent to the current address): no login needed, the token is the proof
 authRoutes.get('/email/approve-info', approveLimit, auth.emailApproveInfo);

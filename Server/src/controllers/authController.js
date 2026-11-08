@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { verifySignupCaptcha } from '../services/captchaService.js';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
@@ -112,22 +113,91 @@ async function checkPassword(user, password) {
   }
 }
 
-// Changing the password while logged in: the current one first. Every other login is ended
-// and this browser gets a fresh one. Google-only accounts have no password to change.
-export async function changePassword(req, res) {
-  const user = req.user;
+// ---- Changing the password from Settings, in three steps ----
+// 1. POST /password/code     { currentPassword }        → a 6-digit code is emailed
+// 2. POST /password/code/verify { code }                → a ticket (the code is used up)
+// 3. POST /password          { ticket, newPassword, newPasswordAgain } → the password changes
+// Every other login is then ended and this browser gets a fresh one.
+// Google-only accounts have no password to change; the email must be confirmed first, so the code
+// (and the "password changed" warning) reach the real owner.
+const CODE_MINUTES = 10;
+const TICKET_MINUTES = 10;
+const MAX_CODE_TRIES = 5;
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const sameHash = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length
+  && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+
+function canChangePassword(user) {
   if (!user.passwordHash) {
     throw new HttpError(400, `This account signs in with ${providerNames(user) || 'Google'}, so it has no password to change.`, 'no-password');
   }
+  if (!user.emailVerified) {
+    throw new HttpError(403, `Confirm your email first. We sent a link to ${user.email}; open it, then change your password.`, 'unverified');
+  }
+}
+
+// Step 1: the current password, then a 6-digit code by email (a new one replaces any older one)
+export async function startPasswordChange(req, res) {
+  const user = req.user;
+  canChangePassword(user);
   await checkPassword(user, req.body?.currentPassword);
+  const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  await User.updateOne({ _id: user._id }, { $set: { passwordChange: {
+    codeHash: sha256(`${user.id}:${code}`), codeExpiresAt: new Date(Date.now() + CODE_MINUTES * 60000), tries: 0,
+  } } });
+  const { sendEmail, isEmailConfigured } = await import('../services/emailService.js');
+  const { passwordCodeHtml } = await import('../services/emailTemplates.js');
+  if (!isEmailConfigured() && !config.isProduction) {
+    console.log(`[email not set up] Password change code for ${user.email}: ${code}`);
+  } else {
+    await sendEmail({ to: user.email, subject: 'Your Momento code to change your password', html: passwordCodeHtml(user, code, CODE_MINUTES) });
+  }
+  res.json({ ok: true, sentTo: maskEmail(user.email), minutes: CODE_MINUTES });
+}
+
+// Step 2: the code from the email. Five wrong tries and a new code is needed.
+export async function verifyPasswordCode(req, res) {
+  const user = req.user;
+  canChangePassword(user);
+  const code = String(req.body?.code ?? '').replace(/\D/g, '');
+  if (code.length !== 6) throw new HttpError(400, 'Enter the 6-digit code from the email.', 'bad-code');
+  const pc = (await User.findById(user._id).select('+passwordChange'))?.passwordChange;
+  if (!pc?.codeHash || !pc.codeExpiresAt || pc.codeExpiresAt < new Date()) {
+    throw new HttpError(400, 'This code has expired. Send a new one.', 'code-expired');
+  }
+  if ((pc.tries || 0) >= MAX_CODE_TRIES) throw new HttpError(429, 'Too many wrong codes. Send a new one.', 'code-expired');
+  if (!sameHash(sha256(`${user.id}:${code}`), pc.codeHash)) {
+    await User.updateOne({ _id: user._id }, { $inc: { 'passwordChange.tries': 1 } });
+    const left = MAX_CODE_TRIES - (pc.tries || 0) - 1;
+    throw new HttpError(400, left > 0 ? `That code isn’t right. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong codes. Send a new one.', left > 0 ? 'bad-code' : 'code-expired');
+  }
+  // The code is used up; a ticket lets the new password be set for the next few minutes
+  const ticket = crypto.randomBytes(24).toString('base64url');
+  await User.updateOne({ _id: user._id }, { $set: { passwordChange: {
+    ticketHash: sha256(ticket), ticketExpiresAt: new Date(Date.now() + TICKET_MINUTES * 60000), tries: 0,
+  } } });
+  res.json({ ticket, minutes: TICKET_MINUTES });
+}
+
+// Step 3: the new password, typed twice, different from the current one
+export async function changePassword(req, res) {
+  const user = req.user;
+  canChangePassword(user);
+  const ticket = String(req.body?.ticket ?? '');
+  const pc = (await User.findById(user._id).select('+passwordChange'))?.passwordChange;
+  if (!ticket || !pc?.ticketHash || !pc.ticketExpiresAt || pc.ticketExpiresAt < new Date() || !sameHash(sha256(ticket), pc.ticketHash)) {
+    throw new HttpError(403, 'Confirm the code from your email first. If it’s been more than 10 minutes, start again.', 'code-needed');
+  }
   const next = String(req.body?.newPassword ?? '');
+  if (next !== String(req.body?.newPasswordAgain ?? '')) throw new HttpError(400, 'The two new passwords don’t match.', 'mismatch');
   if (next.length < 8) throw new HttpError(400, 'Use at least 8 characters for your new password.');
   if (next.length > 128) throw new HttpError(400, 'Keep your password under 128 characters.');
-  if (await bcrypt.compare(next, user.passwordHash)) throw new HttpError(400, 'Choose a password that’s different from your current one.');
+  if (await bcrypt.compare(next, user.passwordHash)) throw new HttpError(400, 'Your new password must be different from your current one.', 'same-password');
   user.passwordHash = await bcrypt.hash(next, 12);
   user.passwordChangedAt = new Date();
   user.sessions = [];
   await user.save();
+  await User.updateOne({ _id: user._id }, { $unset: { passwordChange: 1 } });
   // A pending email change can't outlive a password change
   await dropEmailChange(user);
   await startSession(res, user);

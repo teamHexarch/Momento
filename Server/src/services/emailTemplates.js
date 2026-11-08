@@ -8,7 +8,7 @@ const firstName = (user) => (user?.name || '').trim().split(/\s+/)[0];
  * heading and paragraphs are plain text (escaped here). With a button, the link is
  * also printed underneath for mail apps that block buttons.
  */
-function layout({ heading, paragraphs, button, footer }) {
+function layout({ heading, paragraphs, button, footer, code }) {
   const para = (t) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#5C596B">${esc(t)}</p>`;
   return `<!doctype html>
 <html><body style="margin:0;padding:32px 16px;background:#F8F7FA;font-family:-apple-system,'Segoe UI',Inter,Arial,sans-serif;color:#2E2C3A">
@@ -18,6 +18,7 @@ function layout({ heading, paragraphs, button, footer }) {
         <p style="margin:0 0 24px;font-size:20px;font-weight:700;letter-spacing:-0.02em">Momento</p>
         <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;letter-spacing:-0.03em">${esc(heading)}</h1>
         ${paragraphs.map(para).join('\n        ')}
+        ${code ? `<p style="margin:8px 0 20px;padding:16px 0;border-radius:16px;background:#F3F1F7;text-align:center;font-size:34px;font-weight:700;letter-spacing:0.3em;color:#2E2C3A;font-family:'SF Mono',Menlo,Consolas,monospace">${esc(code)}</p>` : ''}
         ${button ? `<a href="${esc(button.href)}" style="display:inline-block;margin-top:12px;padding:14px 28px;border-radius:100px;background:#2E2C3A;color:#F8F7FA;font-size:15px;font-weight:600;text-decoration:none">${esc(button.label)}</a>` : ''}
         ${footer ? `<p style="margin:28px 0 0;font-size:13px;line-height:1.6;color:#8A8697">${esc(footer)}</p>` : ''}
         ${button ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#8A8697;word-break:break-all">Button not working? Paste this into your browser:<br>${esc(button.href)}</p>` : ''}
@@ -44,6 +45,17 @@ export function resetHtml(user, link, minutes = 60) {
     paragraphs: [`${first ? `Hi ${first}, someone` : 'Someone'} asked to reset the password for your Momento account. If it was you, tap the button to choose a new one.`],
     button: { href: link, label: 'Choose a new password' },
     footer: `The link works once, for ${minutes} minutes. If you didn’t ask for this, ignore this email: your password stays the same.`,
+  });
+}
+
+// The 6-digit code for changing the password from Settings
+export function passwordCodeHtml(user, code, minutes = 10) {
+  const first = firstName(user);
+  return layout({
+    heading: 'Your code to change your password',
+    paragraphs: [`${first ? `Hi ${first}, enter` : 'Enter'} this code in Momento to choose a new password:`],
+    code,
+    footer: `It works for ${minutes} minutes. If you didn’t ask to change your password, someone may know it: change it straight away, or use “Forgot your password?” on the log in screen.`,
   });
 }
 

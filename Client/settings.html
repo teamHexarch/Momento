@@ -449,6 +449,8 @@
     .s-profile .acct-field input { min-height: 3.2rem; font-size: 1.05rem; }
     .s-form-acts { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
     .s-form-acts .btn { margin: 0; min-height: 2.9rem; padding: 0 1.4rem; font-size: 1rem; }
+    #passwordForm[hidden], #passwordCodeForm[hidden], #passwordVerify[hidden] { display: none !important; }
+    .s-code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 1.35rem !important; letter-spacing: .45em; text-align: center; }
     .s-help { margin: 0 0 .8rem; color: var(--slate); font-size: .95rem; line-height: 1.55; }
     .s-dests { display: grid; gap: .3rem; padding-top: .1rem; }
     .s-dests .s-row { min-height: 3.8rem; padding: .75rem 1rem; border-radius: 18px; background: rgba(46, 44, 58, .04); }
@@ -1511,17 +1513,40 @@
               <div class="s-item" id="passwordGroup" hidden>
                 <div class="s-line"><span class="s-text"><b>Password</b><small>••••••••</small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="passwordPanel">Change</button></div>
                 <div class="s-panel" id="passwordPanel" hidden>
+                  <div id="passwordVerify" hidden>
+                    <p class="s-help">Confirm your email before changing your password. Open the link we sent to <b data-verify-email></b>.</p>
+                    <p class="s-note" id="passwordVerifyNote" role="status"></p>
+                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="button" id="passwordVerifySend">Send the link again</button></div>
+                  </div>
                   <form class="s-profile" id="passwordForm" novalidate>
+                    <p class="s-help">First enter your current password. We’ll email you a 6-digit code to make sure it’s you.</p>
                     <label class="acct-field"><span>Current password</span><input name="current" type="password" autocomplete="current-password"></label>
-                    <label class="acct-field"><span>New password <i>(at least 8 characters)</i></span><input name="next" type="password" autocomplete="new-password" minlength="8"></label>
-                    <label class="acct-field"><span>New password again</span><input name="again" type="password" autocomplete="new-password"></label>
                     <p class="s-note" id="passwordNote" role="status"></p>
-                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="submit">Change password</button><button class="s-cancel" type="button" data-cancel>Cancel</button></div>
+                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="submit">Send code</button><button class="s-cancel" type="button" data-cancel>Cancel</button></div>
+                  </form>
+                  <form class="s-profile" id="passwordCodeForm" novalidate hidden>
+                    <p class="s-help">We sent a 6-digit code to <b data-code-to></b>. Enter it below; it works for 10 minutes.</p>
+                    <label class="acct-field"><span>6-digit code</span><input class="s-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" spellcheck="false"></label>
+                    <p class="s-note" id="passwordCodeNote" role="status"></p>
+                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="submit">Continue</button><button class="s-cancel" type="button" data-new-code>Send a new code</button><button class="s-cancel" type="button" data-cancel>Cancel</button></div>
                   </form>
                 </div>
               </div>
             </div>
           </section>
+
+          <!-- Step 3 of changing the password: opens once the emailed code is right -->
+          <dialog class="acct-dialog" id="newPassDialog" aria-labelledby="newPassTitle">
+            <form class="acct-card" id="newPassForm" novalidate>
+              <button class="acct-x" type="button" aria-label="Close" data-np-close><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+              <h2 id="newPassTitle">Choose a new password</h2>
+              <p class="acct-sub">At least 8 characters, and different from your current password.</p>
+              <label class="acct-field"><span>New password</span><input name="next" type="password" autocomplete="new-password"></label>
+              <label class="acct-field"><span>New password again</span><input name="again" type="password" autocomplete="new-password"></label>
+              <p class="acct-status" role="status"></p>
+              <div class="acct-actions"><button class="acct-ghost" type="button" data-np-close>Cancel</button><button class="acct-primary" type="submit">Change password</button></div>
+            </form>
+          </dialog>
 
           <!-- Uploading: the two everyday switches and where photos are saved; the rest folded away -->
           <section class="s-group" style="--d: .26s" aria-labelledby="g-uploads">
@@ -1918,6 +1943,9 @@
       const form = document.getElementById('profileForm'), note = document.getElementById('profileNote');
       const emailForm = document.getElementById('emailForm'), emailNote = document.getElementById('emailNote');
       const passForm = document.getElementById('passwordForm'), passNote = document.getElementById('passwordNote');
+      const codeForm = document.getElementById('passwordCodeForm');
+      // Changing the password: 1 current password, 2 emailed code, 3 new password (popup)
+      let pwStep = 1;
       const sayIn = (el) => (msg, bad) => { el.textContent = msg; el.classList.toggle('is-error', !!bad); };
       const say = sayIn(note), sayEmail = sayIn(emailNote), sayPass = sayIn(passNote);
       const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1932,6 +1960,12 @@
         const hasPassword = !!a?.hasPassword;
         document.getElementById('emailPassField').hidden = !hasPassword;
         document.getElementById('passwordGroup').hidden = !a || !hasPassword;
+        // The password can only be changed once the email is confirmed (the server checks too)
+        const verified = !!a?.emailVerified;
+        document.getElementById('passwordVerify').hidden = !a || verified;
+        passForm.hidden = !verified || pwStep !== 1;
+        codeForm.hidden = !verified || pwStep !== 2;
+        document.querySelector('#passwordVerify [data-verify-email]').textContent = a?.email || 'your email';
       };
       fill();
       M.account.onChange(fill);
@@ -1981,23 +2015,94 @@
         history.replaceState(null, '', location.pathname + location.hash);
       }
 
-      // Password (only for accounts that have one). Other devices are logged out.
+      // Password (only for accounts that have one): current password → emailed code → new password.
+      // Other devices are logged out at the end.
+      const sayCode = sayIn(document.getElementById('passwordCodeNote'));
+      const npDialog = document.getElementById('newPassDialog'), npForm = document.getElementById('newPassForm'), npStatus = npForm.querySelector('.acct-status');
+      const sayNp = (msg, bad) => { npStatus.textContent = msg; npStatus.classList.toggle('is-error', !!bad); };
+      let ticket = '';
+      const goStep = (n, msg = '', bad = false) => {
+        pwStep = n;
+        if (n === 1) { ticket = ''; codeForm.reset(); sayCode(''); }
+        fill();
+        if (n === 1) { sayPass(msg, bad); if (!passForm.hidden) passForm.current.focus(); }
+        if (n === 2) { sayCode(msg, bad); codeForm.code.focus(); }
+      };
+      // Step 1: the current password; the server emails a code
       passForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (needLogin()) return;
-        const current = passForm.current.value, next = passForm.next.value, again = passForm.again.value;
+        const current = passForm.current.value;
         if (!current) { sayPass('Enter your current password.', true); passForm.current.focus(); return; }
-        if (next.length < 8) { sayPass('Use at least 8 characters for your new password.', true); passForm.next.focus(); return; }
-        if (next !== again) { sayPass('The two new passwords don’t match.', true); passForm.again.focus(); return; }
         busy(passForm, true);
         try {
-          const { user } = await momentoApi('/api/auth/password', momentoJson('POST', { currentPassword: current, newPassword: next }));
-          M.account.set(user);
-          passForm.reset();
-          sayPass('Password changed. Other devices have been logged out.');
-          toast('Password changed', 'Other devices have been logged out.');
-        } catch (err) { sayPass(err.message, true); }
+          const r = await momentoApi('/api/auth/password/code', momentoJson('POST', { currentPassword: current }));
+          passForm.reset(); sayPass('');
+          codeForm.querySelector('[data-code-to]').textContent = r.sentTo || 'your email';
+          goStep(2);
+        } catch (err) {
+          sayPass(err.message, true);
+          if (err.code === 'unverified') { M.account.set({ emailVerified: false }); fill(); }
+        }
         finally { busy(passForm, false); }
+      });
+      // Step 2: the 6-digit code; the server gives a ticket and the new-password popup opens
+      codeForm.code.addEventListener('input', () => { codeForm.code.value = codeForm.code.value.replace(/\D/g, '').slice(0, 6); });
+      codeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = codeForm.code.value.replace(/\D/g, '');
+        if (code.length !== 6) { sayCode('Enter the 6-digit code from the email.', true); codeForm.code.focus(); return; }
+        busy(codeForm, true);
+        try {
+          ({ ticket } = await momentoApi('/api/auth/password/code/verify', momentoJson('POST', { code })));
+          sayCode('');
+          npForm.reset(); sayNp('');
+          npDialog.showModal();
+          npForm.next.focus();
+        } catch (err) {
+          sayCode(err.message + (err.code === 'code-expired' ? ' Use “Send a new code”.' : ''), true);
+          codeForm.code.select();
+        }
+        finally { busy(codeForm, false); }
+      });
+      // A new code needs the current password again
+      codeForm.querySelector('[data-new-code]').addEventListener('click', () => goStep(1, 'Enter your current password again and we’ll send a new code.'));
+      codeForm.querySelector('[data-cancel]').addEventListener('click', () => goStep(1));
+      passForm.querySelector('[data-cancel]').addEventListener('click', () => goStep(1));
+      // Step 3 (popup): the new password twice, then it's changed
+      const closeNp = (msg) => { if (npDialog.open) npDialog.close(); npForm.reset(); goStep(1, msg || ''); };
+      npDialog.querySelectorAll('[data-np-close]').forEach((b) => b.addEventListener('click', () => closeNp('Password not changed.')));
+      npDialog.addEventListener('cancel', (e) => { e.preventDefault(); closeNp('Password not changed.'); });
+      npForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const next = npForm.next.value, again = npForm.again.value;
+        if (next.length < 8) { sayNp('Use at least 8 characters for your new password.', true); npForm.next.focus(); return; }
+        if (next !== again) { sayNp('The two new passwords don’t match.', true); npForm.again.focus(); return; }
+        busy(npForm, true);
+        try {
+          const { user } = await momentoApi('/api/auth/password', momentoJson('POST', { ticket, newPassword: next, newPasswordAgain: again }));
+          M.account.set(user);
+          npDialog.close(); npForm.reset();
+          goStep(1, 'Password changed. Other devices have been logged out.');
+          closePanelOf(passForm);
+          toast('Password changed', 'Other devices have been logged out.');
+        } catch (err) {
+          // The code step timed out: start again from the current password
+          if (err.code === 'code-needed') { closeNp(err.message); return; }
+          sayNp(err.message, true);
+          (err.code === 'same-password' ? npForm.next : npForm.again).focus();
+        }
+        finally { busy(npForm, false); }
+      });
+      const verifySend = document.getElementById('passwordVerifySend'), sayVerify = sayIn(document.getElementById('passwordVerifyNote'));
+      verifySend.addEventListener('click', async () => {
+        if (needLogin()) return;
+        verifySend.disabled = true;
+        try {
+          await momentoApi('/api/auth/verify-email/resend', { method: 'POST' });
+          sayVerify(`Sent. Check ${M.account.get()?.email || 'your inbox'}, including spam.`);
+        } catch (err) { sayVerify(err.message, true); }
+        finally { verifySend.disabled = false; }
       });
 
       // Appearance: shares the choice with the account menu and every other page
