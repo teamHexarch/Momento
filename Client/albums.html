@@ -2,12 +2,14 @@
 <html lang="en" data-page="albums">
 <head>
   <script src="assets/api.js"></script>
+  <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
   <script src="assets/event.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
   <script>
   // Runs before first paint, so the page never flashes the wrong theme
@@ -19,6 +21,18 @@
     root.dataset.theme = dark ? 'dark' : 'light';
     root.dataset.themePref = pref;
     window.__theme = { target: +dark, a: +dark, b: +dark };   // read by the silk shader
+
+    // Pages opened straight from the folder (file://) can't cross-fade into each other, so the page
+    // that was left marks it, and this one rises in instead (see "Leaving a page")
+    try {
+      if (sessionStorage.getItem('momento-pt') === '1') {
+        sessionStorage.removeItem('momento-pt');
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          root.classList.add('is-arriving');
+          setTimeout(() => root.classList.remove('is-arriving'), 900);
+        }
+      }
+    } catch (e) {}
   
     // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
     // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
@@ -50,7 +64,7 @@
       --paper: #F8F7FA;
       --dusk: #2E2C3A;
       --slate: #5C596B;
-      --stone: #8A8697;
+      --stone: #6F6B7D;
       --copper: #9A603D;
       --blush: #E6CDD6;
       --lavender: #D9D0EA;
@@ -75,9 +89,10 @@
     }
 
     /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
-    .has-cursor, .has-cursor * { cursor: none !important; }
+    /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
     .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
-    .has-cursor .cursor { opacity: 1; }
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
       background: var(--dusk);
@@ -305,6 +320,35 @@
     .pulse .head { margin-bottom: .9rem; }
     .todo-list, .feed-list { display: grid; margin: 0; padding: 0; list-style: none; }
 
+    /* Sort photos: every album with photos by other people, one tap into the sorter */
+    .pulse .sorter { grid-column: 1 / -1; padding-bottom: 1.6rem; }
+    .sorter[hidden] { display: none !important; }
+    .sorter-lede { max-width: 40rem; margin: -.2rem 0 1.1rem; color: var(--slate); font-size: .95rem; line-height: 1.55; }
+    .sorter-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr)); gap: .7rem; }
+    .sorter-item {
+      display: grid; grid-template-columns: 3.6rem minmax(0, 1fr) auto; align-items: center; gap: .9rem; padding: .7rem .9rem .7rem .7rem;
+      border-radius: 20px; color: var(--dusk); text-decoration: none; background: rgba(255, 255, 255, .45); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .08);
+      transition: transform .35s var(--spring), background-color .2s ease, box-shadow .2s ease;
+    }
+    .sorter-item:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .7); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .12), 0 10px 22px -16px rgba(46, 44, 58, .5); }
+    .sorter-item:active { transform: scale(.98); }
+    .sorter-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .sorter-pic { position: relative; width: 3.6rem; height: 3.6rem; }
+    .sorter-pic img, .sorter-pic .todo-initial { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 14px; object-fit: cover; }
+    /* a second print peeking out behind the cover, like a little stack to swipe through */
+    .sorter-pic::before { content: ""; position: absolute; inset: 3px -4px -3px 4px; border-radius: 14px; background: rgba(46, 44, 58, .12); rotate: 6deg; }
+    .sorter-text { display: grid; gap: .1rem; min-width: 0; }
+    .sorter-text b { overflow: hidden; font-size: .98rem; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; text-overflow: ellipsis; }
+    .sorter-text small { overflow: hidden; color: var(--slate); font-size: .84rem; white-space: nowrap; text-overflow: ellipsis; }
+    .sorter-go { display: grid; place-items: center; width: 2.3rem; height: 2.3rem; border-radius: 50%; background: rgba(46, 44, 58, .07); color: var(--dusk); transition: transform .35s var(--spring), background-color .2s ease; }
+    .sorter-item:hover .sorter-go { transform: translateX(2px); background: var(--dusk); color: var(--paper); }
+    :root[data-theme="dark"] .sorter-item { background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .sorter-item:hover { background: rgba(255, 255, 255, .09); }
+    :root[data-theme="dark"] .sorter-pic::before { background: rgba(255, 255, 255, .12); }
+    :root[data-theme="dark"] .sorter-go { background: rgba(255, 255, 255, .09); }
+    :root[data-theme="dark"] .sorter-item:hover .sorter-go { background: #F2EFF8; color: #1C1A26; }
+    @media (prefers-reduced-motion: reduce) { .sorter-item, .sorter-go { transition: none; } }
+
     /* Waiting on you: a cover, one sentence, one action */
     .todo-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; align-items: center; gap: .95rem; padding: .95rem 0; }
     .todo-row + .todo-row, .burst + .burst { box-shadow: inset 0 1px 0 rgba(46,44,58,.08); }
@@ -357,6 +401,8 @@
     .feed-list .bt { flex: none; width: 4.75rem; height: 4.75rem; border-radius: 12px; box-shadow: 0 1px 2px rgba(46,44,58,.08), 0 6px 14px -8px rgba(46,44,58,.35); }
     .feed-list .bt-more { border-radius: inherit; }
     @media (max-width: 560px) { .feed-list .bt { width: 3.7rem; height: 3.7rem; } }
+    /* The narrowest phones: the four prints share the width instead of running off the edge */
+    @media (max-width: 360px) { .feed-list .burst-thumbs { gap: .35rem; } .feed-list .bt { flex: 1 1 0; width: auto; max-width: 3.7rem; height: auto; aspect-ratio: 1; } }
     /* Waiting on you: more kinds of to-do, and a proper "all caught up" state */
     .todo-row[data-kind="closing"] { --dot: #C0563F; }
     .todo-row[data-kind="share"] { --dot: var(--tide); }
@@ -391,6 +437,8 @@
         linear-gradient(135deg, rgba(252,251,254,.94), rgba(246,244,251,.9)) padding-box,
         linear-gradient(140deg, #fff 0%, rgba(255,255,255,.3) 32%, rgba(203,194,240,.6) 64%, rgba(255,255,255,.95) 100%) border-box;
     }
+    /* Albums scroll under the filter bar: a real blur keeps them from showing through its labels */
+    .tools { -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5); }
     .tabs { position: relative; display: flex; }
     .tab-pill {
       position: absolute; top: 0; bottom: 0; left: 0; z-index: 0; border-radius: 100px; background: var(--surface);
@@ -461,8 +509,11 @@
     .tag.soon { background: rgba(255,255,255,.92); color: var(--copper); box-shadow: inset 0 0 0 1px rgba(154,96,61,.35); }
     .tag.kept { background: rgba(255,255,255,.78); color: var(--slate); }
     .tag.kept i { background: var(--tide); }
-    .role { margin-left: auto; padding: .22rem .65rem; border-radius: 100px; background: rgba(46,44,58,.06); color: var(--slate); font-size: .75rem; font-weight: 650; }
-    .role.host { background: linear-gradient(120deg, rgba(201,192,226,.55), rgba(230,205,214,.55) 55%, rgba(166,204,200,.55)); color: #3B3848; }
+    .role { margin-left: auto; padding: .22rem .65rem; border-radius: 100px; background: rgba(46,44,58,.08); color: var(--dusk); font-size: .75rem; font-weight: 650; }
+    .role.host { background: linear-gradient(120deg, #D9D0EE, #EDD6DF 55%, #CFE3E0); color: #2E2C3A; box-shadow: inset 0 0 0 1px rgba(255,255,255,.6); }
+    /* Solid enough to read on the dark card (the .foot-row prefix beats the daylight-object tokens) */
+    :root[data-theme="dark"] .foot-row .role:not(.host) { background: rgba(255,255,255,.14); color: #ECEAF4; }
+    :root[data-theme="dark"] .foot-row .role.host { background: rgba(184,174,245,.3); color: #F4F1FF; box-shadow: inset 0 0 0 1px rgba(184,174,245,.4); }
     .fan { position: absolute; right: 18px; bottom: -26px; z-index: 2; width: 130px; height: 64px; pointer-events: none; }
     .album.wide .fan { width: 170px; height: 84px; bottom: -32px; }
     .fp {
@@ -504,15 +555,19 @@
     .todo-row[hidden], .burst[hidden] { display: none; }
     /* Delete, shown on the stage only for photos you added */
     .stage-del {
-      position: absolute; right: 1rem; bottom: .8rem; z-index: 2; display: inline-flex; align-items: center; gap: .45rem;
-      padding: .55rem .95rem .55rem .8rem; border: none; border-radius: 100px; background: rgba(24,20,34,.6); color: #fff;
-      font: 600 .86rem var(--font-main); cursor: pointer; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-      transition: background-color .2s ease, transform .3s var(--spring);
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .55rem .95rem .55rem .8rem; border-radius: 100px;
+      font: 600 .86rem var(--font-main); cursor: pointer;
+      transition: background-color .2s ease, border-color .2s ease, color .2s ease, transform .3s var(--spring);
     }
     .stage-del[hidden] { display: none; }
-    .stage-del:hover { background: rgba(154,61,61,.92); }
     .stage-del:active { transform: scale(.95); }
     .stage-del:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    /* Photo tools on the stage: download (anyone), delete (your own photos) */
+    .stage-tools { position: absolute; right: 1rem; bottom: .8rem; z-index: 2; display: flex; align-items: center; gap: .45rem; }
+    .stage-dl { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; padding: 0; border-radius: 50%; cursor: pointer; transition: background-color .2s ease, transform .3s var(--spring); }
+    .stage-dl:active { transform: scale(.92); }
+    .stage-dl:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .album-card.is-empty .stage, .album-card.is-empty .thumbs { display: none; }
     .album-card.is-empty .album-head { padding-top: 2.6rem; padding-right: 3.5rem; }
     .album-empty {
@@ -536,15 +591,11 @@
 
     /* ---------- Windows ---------- */
     .modal { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
-    .modal::backdrop { background: rgba(46,44,58,.34); }
     .modal[open] .modal-card.small { animation: pop-in .45s var(--spring); }
     @keyframes pop-in { from { opacity: 0; scale: .94; translate: 0 12px; } }
     .modal-card {
       position: relative; box-sizing: border-box; width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto;
       padding: 1.9rem; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
-      background:
-        linear-gradient(135deg, rgba(255,255,255,.95) 0%, rgba(250,249,253,.88) 50%, rgba(244,242,252,.93) 100%) padding-box,
-        linear-gradient(140deg, #fff 0%, rgba(255,255,255,.35) 32%, rgba(203,194,240,.7) 64%, #fff 100%) border-box;
     }
     .modal-card.small { width: min(420px, calc(100vw - 32px)); }
     .close {
@@ -565,8 +616,8 @@
     .field span { display: block; margin-bottom: .3rem; font-size: .82rem; font-weight: 600; color: var(--slate); }
     .field input {
       width: 100%; box-sizing: border-box; height: 3rem; padding: 0 1rem; border: none; border-radius: 14px;
-      background: rgba(255,255,255,.9); color: var(--dusk); font: 600 1.05rem var(--font-main); letter-spacing: .06em; text-transform: uppercase;
-      box-shadow: inset 0 0 0 1px rgba(46,44,58,.14); transition: box-shadow .2s ease;
+      background: rgba(255,255,255,.55); color: var(--dusk); font: 600 1.05rem var(--font-main); letter-spacing: .06em; text-transform: uppercase;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.12); transition: box-shadow .2s ease;
     }
     .field input::placeholder { letter-spacing: .02em; text-transform: none; font-weight: 500; color: var(--stone); }
     .field input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
@@ -577,14 +628,14 @@
     .otp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto repeat(4, minmax(0, 1fr)); align-items: center; gap: .4rem; }
     .otp input {
       width: 100%; min-width: 0; box-sizing: border-box; height: 3.4rem; padding: 0; border: none; border-radius: 14px;
-      background: rgba(255,255,255,.9); color: var(--dusk); text-align: center; caret-color: transparent;
+      background: rgba(255,255,255,.55); color: var(--dusk); text-align: center; caret-color: transparent;
       font: 700 1.35rem/1 ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; text-transform: uppercase;
-      box-shadow: inset 0 0 0 1px rgba(46,44,58,.14), 0 1px 2px rgba(46,44,58,.06);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.12), 0 1px 2px rgba(46,44,58,.06);
       transition: box-shadow .2s ease, transform .35s cubic-bezier(.34,1.56,.64,1), background-color .2s ease;
     }
     .otp input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
     .otp input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); transform: translateY(-2px); }
-    .otp input.is-filled { background: #fff; box-shadow: inset 0 0 0 1.5px rgba(46,44,58,.38), 0 4px 12px -6px rgba(46,44,58,.3); }
+    .otp input.is-filled { background: rgba(255,255,255,.82); box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1.5px rgba(46,44,58,.38), 0 4px 12px -6px rgba(46,44,58,.3); }
     .otp input.is-filled:focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
     .otp input::placeholder { color: rgba(46,44,58,.18); }
     .otp-dash { width: .7rem; height: 2px; border-radius: 2px; background: var(--stone, #A9A5B4); }
@@ -596,12 +647,180 @@
     :root[data-theme="dark"] .otp input { background: rgba(255,255,255,.06); color: var(--dusk); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
     :root[data-theme="dark"] .otp input.is-filled { background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
     :root[data-theme="dark"] .otp input::placeholder { color: rgba(255,255,255,.18); }
+    :root[data-theme="dark"] .error { color: #F0A3A3; }
+    :root[data-theme="dark"] .otp.is-error input { box-shadow: inset 0 0 0 1.5px #F0A3A3; }
+    :root[data-theme="dark"] .upload.is-failed .upload-track i { background: #F0A3A3; }
 
-    /* Album window: who hosts it, and (for the host) the code to share */
-    .album-host { display: flex; align-items: center; gap: .5rem; margin: 0 0 .55rem; font-size: .92rem; color: var(--slate); }
-    .album-host-tag { padding: .22rem .6rem; border-radius: 100px; background: var(--dusk); color: var(--paper, #fff); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-    .album-host b { color: var(--dusk); font-weight: 650; }
-    .album-host-you { padding: .18rem .5rem; border-radius: 100px; background: rgba(188,178,236,.35); color: var(--dusk); font-size: .74rem; font-weight: 650; }
+    /* Album window: a stats line with the upload-window chip, and (for the host) the code to share */
+    .album-stats { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; margin: .35rem 0 0; color: var(--slate); font-size: .9rem; }
+    .album-open { display: inline-flex; align-items: center; gap: .4rem; padding: .22rem .65rem; border-radius: 100px; font-size: .8rem; font-weight: 650; color: #355a58; background: rgba(111,152,150,.16); }
+    .album-open::before { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; }
+    .album-open[hidden] { display: none; }
+    /* The expand button, top left of the photo, in the same glass as the other photo buttons */
+    .stage-full { position: absolute; top: 1rem; left: 1rem; z-index: 2; }
+    .album-card.is-flying .stage-full { opacity: 0; }
+
+    /* ---------- Full size ----------
+       Always dark, like any photo viewer, so the picture is the only bright thing on screen */
+    .viewer { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #0A090E; color: #F2EFF8; overflow: hidden; font-family: var(--font-main); }
+    .viewer::backdrop { background: rgba(9, 8, 13, .6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .vw-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: max(.9rem, env(safe-area-inset-top)) 1rem .9rem 1.4rem; background: linear-gradient(to bottom, rgba(9, 8, 13, .7), transparent); transition: opacity .25s ease; }
+    .vw-count { margin: 0; overflow: hidden; font-size: .95rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+    .vw-count small { margin-left: .55rem; font-size: .88rem; font-weight: 500; opacity: .75; }
+    .vw-tools { display: flex; gap: .45rem; flex: none; }
+    .vw-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-width: 2.75rem; height: 2.75rem; padding: 0 .75rem; border: 1px solid rgba(255, 255, 255, .16); border-radius: 100px;
+      background: rgba(255, 255, 255, .1); color: #F2EFF8; font: 650 .9rem var(--font-main); font-variant-numeric: tabular-nums; cursor: pointer;
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); transition: background-color .2s ease, transform .3s var(--spring);
+    }
+    .vw-btn:hover { background: rgba(255, 255, 255, .18); }
+    .vw-btn:active { transform: scale(.93); }
+    .vw-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .vw-btn span:empty { display: none; }
+    .vw-like[aria-pressed="true"] { color: #FF8FA6; }
+    .vw-like[aria-pressed="true"] svg { fill: currentColor; }
+    .vw-stage { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; touch-action: pan-y pinch-zoom; }
+    .vw-stage img { display: block; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 9rem); object-fit: contain; border-radius: 6px; cursor: zoom-in; user-select: none; -webkit-user-select: none; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); }
+    /* Zoomed: the photo at its real size; drag (or scroll) to look around, click to fit it again */
+    .vw-stage.is-zoomed { display: block; overflow: auto; touch-action: auto; scrollbar-width: none; }
+    .vw-stage.is-zoomed::-webkit-scrollbar { display: none; }
+    .vw-stage.is-zoomed img { max-width: none; max-height: none; margin: auto; border-radius: 0; cursor: grab; }
+    .vw-stage.is-dragging img { cursor: grabbing; }
+    .viewer.is-zoomed .vw-nav, .viewer.is-zoomed .vw-hint { opacity: 0; pointer-events: none; }
+    .vw-nav {
+      position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 3.2rem; height: 3.2rem; margin-top: -1.6rem; padding: 0; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%;
+      background: rgba(255, 255, 255, .1); color: #F2EFF8; cursor: pointer; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      transition: background-color .2s ease, transform .3s var(--spring), opacity .25s ease;
+    }
+    .vw-nav:hover { background: rgba(255, 255, 255, .2); }
+    .vw-nav:active { transform: scale(.92); }
+    .vw-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .vw-nav.prev { left: 1.2rem; }
+    .vw-nav.next { right: 1.2rem; }
+    .vw-hint { position: absolute; left: 50%; bottom: max(1.2rem, env(safe-area-inset-bottom)); z-index: 2; margin: 0; padding: .45rem .9rem; translate: -50% 0; border-radius: 100px; background: rgba(255, 255, 255, .1); color: rgba(242, 239, 248, .8); font-size: .82rem; white-space: nowrap; pointer-events: none; transition: opacity .25s ease; }
+    @media (max-width: 600px) {
+      .vw-nav { width: 2.7rem; height: 2.7rem; margin-top: -1.35rem; }
+      .vw-nav.prev { left: .6rem; } .vw-nav.next { right: .6rem; }
+      .vw-stage img { max-width: 100vw; border-radius: 0; }
+      .vw-top { padding-left: 1rem; }
+    }
+    @media (hover: none) { .vw-hint { display: none; } }
+
+    /* ---------- Likes and comments ----------
+       A slim bar under the photo: a heart and a speech bubble with their counts, and a quiet star when
+       the photo is the album's cover (its most-liked). Comments open beneath, in a soft well */
+    .photo-bar { display: flex; align-items: center; gap: .45rem; padding: .75rem .25rem 0; }
+    .album-card.is-empty .photo-bar, .album-card.is-empty .pb-comments { display: none; }
+    .pb-btn {
+      display: inline-flex; align-items: center; gap: .45rem; min-height: 2.6rem; padding: 0 .95rem 0 .8rem; border: none; border-radius: 100px;
+      background: rgba(46, 44, 58, .06); color: var(--dusk); font: 650 .92rem var(--font-main); font-variant-numeric: tabular-nums; cursor: pointer;
+      transition: background-color .2s ease, color .2s ease, transform .35s var(--spring);
+    }
+    .pb-btn:hover { background: rgba(46, 44, 58, .1); }
+    .pb-btn:active { transform: scale(.94); }
+    .pb-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .pb-btn svg { flex: none; transition: transform .45s var(--spring); }
+    .pb-like[aria-pressed="true"] { color: #D9415F; background: rgba(217, 65, 95, .1); }
+    .pb-like[aria-pressed="true"] svg { fill: currentColor; }
+    .pb-talk[aria-expanded="true"] { background: var(--dusk); color: var(--paper); }
+    .pb-cover { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; padding: .35rem .75rem; border-radius: 100px; color: #9A6A2E; background: rgba(214, 168, 90, .14); font-size: .8rem; font-weight: 650; }
+    .pb-cover[hidden] { display: none; }
+    /* The big heart that blooms on a double-click or double-tap */
+    .pb-burst { position: absolute; left: 50%; top: 50%; z-index: 3; width: 96px; height: 96px; margin: -48px 0 0 -48px; color: #fff; opacity: 0; pointer-events: none; filter: drop-shadow(0 6px 18px rgba(217, 65, 95, .55)); }
+    .pb-burst svg { display: block; }
+    .pb-comments { margin: .65rem .25rem 0; padding: .45rem; border-radius: 22px; background: rgba(46, 44, 58, .045); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .06); }
+    .pb-comments[hidden] { display: none; }
+    .pb-list { display: grid; gap: .15rem; max-height: 16rem; margin: 0; padding: .25rem; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: rgba(127, 120, 150, .4) transparent; }
+    .pb-item { display: grid; grid-template-columns: 2.1rem minmax(0, 1fr) auto; gap: .65rem; align-items: start; padding: .5rem .4rem; border-radius: 14px; }
+    .pb-av { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--c, #D9D0EA); color: #2E2C3A; font-size: .82rem; font-weight: 700; }
+    .pb-body { min-width: 0; }
+    .pb-body b { font-size: .88rem; font-weight: 700; }
+    .pb-body small { margin-left: .4rem; color: var(--stone); font-size: .76rem; }
+    .pb-body p { margin: .1rem 0 0; color: var(--dusk); font-size: .93rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .pb-del { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; padding: 0; border: none; border-radius: 50%; background: none; color: var(--slate); opacity: .55; cursor: pointer; transition: opacity .2s ease, background-color .2s ease; }
+    .pb-del:hover { opacity: 1; background: rgba(46, 44, 58, .08); }
+    .pb-del:active { background: rgba(46, 44, 58, .14); }
+    .pb-del:focus-visible { opacity: 1; outline: 2px solid var(--dusk); outline-offset: 1px; }
+    .pb-empty { padding: .9rem .5rem; color: var(--slate); font-size: .9rem; text-align: center; }
+    .pb-acts { display: flex; align-items: center; gap: .15rem; margin: .2rem 0 0 -.45rem; }
+    .pb-act {
+      display: inline-flex; align-items: center; gap: .3rem; min-height: 1.9rem; padding: 0 .55rem; border: none; border-radius: 100px; background: none;
+      color: var(--slate); font: 650 .78rem var(--font-main); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .2s ease, color .2s ease;
+    }
+    .pb-act:hover { background: rgba(46, 44, 58, .07); color: var(--dusk); }
+    .pb-act:active { background: rgba(46, 44, 58, .12); }
+    .pb-act:focus-visible { outline: 2px solid var(--dusk); outline-offset: 1px; }
+    .pb-act svg { flex: none; transition: transform .4s var(--spring); }
+    .pb-c-like[aria-pressed="true"] { color: #D9415F; }
+    .pb-c-like[aria-pressed="true"] svg { fill: currentColor; }
+    .pb-replies { grid-column: 2 / -1; display: grid; gap: .1rem; margin: .15rem 0 0; padding: 0; list-style: none; }
+    .pb-replies:empty { display: none; }
+    .pb-item.is-reply { grid-template-columns: 1.75rem minmax(0, 1fr) auto; gap: .55rem; padding: .4rem .2rem .3rem; }
+    .pb-item.is-reply .pb-av { width: 1.75rem; height: 1.75rem; font-size: .72rem; }
+    .pb-item.is-target > .pb-body p { color: var(--dusk); }
+    .pb-item.is-target { background: rgba(46, 44, 58, .05); }
+    .pb-replying { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .35rem .25rem 0; padding: .2rem .25rem .2rem .85rem; border-radius: 100px; background: rgba(46, 44, 58, .06); color: var(--slate); font-size: .82rem; }
+    .pb-replying[hidden] { display: none; }
+    .pb-replying b { color: var(--dusk); }
+    .pb-replying button { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; padding: 0; border: none; border-radius: 50%; background: none; color: var(--slate); cursor: pointer; }
+    .pb-replying button:hover { background: rgba(46, 44, 58, .08); color: var(--dusk); }
+    .pb-replying button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 1px; }
+    :root[data-theme="dark"] .pb-act:hover { background: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .pb-c-like[aria-pressed="true"] { color: #FF8FA6; }
+    :root[data-theme="dark"] .pb-item.is-target { background: rgba(255, 255, 255, .05); }
+    :root[data-theme="dark"] .pb-replying { background: rgba(255, 255, 255, .07); }
+    .pb-form { display: flex; gap: .45rem; margin-top: .35rem; }
+    .pb-form input {
+      flex: 1; min-width: 0; min-height: 2.8rem; box-sizing: border-box; padding: 0 1.1rem; border: none; border-radius: 100px;
+      background: rgba(255, 255, 255, .85); color: var(--dusk); font: 500 .95rem var(--font-main); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .1);
+    }
+    .pb-form input::placeholder { color: var(--stone); }
+    .pb-form input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 1px; }
+    .pb-send { display: grid; place-items: center; flex: none; width: 2.8rem; height: 2.8rem; padding: 0; border: none; border-radius: 50%; background: var(--dusk); color: var(--paper); cursor: pointer; transition: transform .3s var(--spring), opacity .2s ease; }
+    .pb-send:hover { transform: translateY(-1px); }
+    .pb-send:active { transform: scale(.92); }
+    .pb-send:disabled { opacity: .4; cursor: default; transform: none; }
+    .pb-send:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    :root[data-theme="dark"] .pb-btn { background: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .pb-btn:hover { background: rgba(255, 255, 255, .13); }
+    :root[data-theme="dark"] .pb-like[aria-pressed="true"] { color: #FF8FA6; background: rgba(255, 120, 150, .14); }
+    :root[data-theme="dark"] .pb-talk[aria-expanded="true"] { background: #F2EFF8; color: #1C1A26; }
+    :root[data-theme="dark"] .pb-cover { color: #E8C48A; background: rgba(232, 196, 138, .12); }
+    :root[data-theme="dark"] .pb-comments { background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+    :root[data-theme="dark"] .pb-form input { background: rgba(255, 255, 255, .08); color: #F2EFF8; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+    :root[data-theme="dark"] .pb-send { background: #F2EFF8; color: #1C1A26; }
+    :root[data-theme="dark"] .pb-del:hover { background: rgba(255, 255, 255, .08); }
+    @media (prefers-reduced-motion: reduce) { .pb-btn, .pb-btn svg, .pb-send { transition: none; } }
+
+    /* Photos you've hidden (Sort photos): a quiet line that brings them back */
+    .album-unhide { padding: .3rem .1rem; border: none; background: none; color: var(--slate); font: 600 .84rem var(--font-main); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; border-radius: 6px; transition: color .2s ease; }
+    .album-unhide[hidden] { display: none; }
+    .album-unhide:hover { color: var(--dusk); }
+    .album-unhide:active { opacity: .7; }
+    .album-unhide:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    /* Everyone: a small glass chip into the swipe-to-sort page */
+    .album-sort {
+      margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; min-height: 2.3rem; padding: 0 .95rem; border: 1px solid transparent; border-radius: 100px;
+      color: var(--dusk); font-size: .84rem; font-weight: 650; text-decoration: none;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.3) 100%) padding-box,
+        linear-gradient(rgba(255,255,255,.26), rgba(255,255,255,.26)) padding-box,
+        linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.35) 60%, rgba(255,255,255,.85)) border-box;
+      box-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.12), 0 6px 14px -10px rgba(46,44,58,.4);
+      transition: transform .35s var(--spring), box-shadow .25s ease;
+    }
+    .album-sort[hidden] { display: none; }
+    .album-sort:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.12), 0 6px 14px -10px rgba(46,44,58,.4), inset 0 0 0 999px rgba(255,255,255,.07); }
+    .album-sort:active { transform: scale(.96); }
+    .album-sort:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    :root[data-theme="dark"] .album-sort {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.06) 100%) padding-box,
+        linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.08)) padding-box,
+        linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1) 45%, rgba(255,255,255,.06) 60%, rgba(255,255,255,.2)) border-box;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 6px 14px -10px rgba(0,0,0,.6);
+    }
+    :root[data-theme="dark"] .album-open { color: #A8D4D0; background: rgba(127,176,173,.18); }
     .album-code { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin: .9rem 0 0; padding: .6rem .6rem .6rem 1rem; border-radius: 16px; background: rgba(46,44,58,.06); }
     .album-code small { color: var(--slate); font-size: .78rem; font-weight: 600; }
     .album-code b { font: 700 1.2rem ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; letter-spacing: .12em; color: var(--dusk); }
@@ -609,36 +828,75 @@
     .album-code button:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.32); }
     .album-code button:active { transform: scale(.95); }
     .album-code button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
-    :root[data-theme="dark"] .album-host-tag { background: #F3F0EA; color: #24222D; }
+    .album-card > .album-code { margin: .9rem .7rem 0; padding: .5rem .5rem .5rem 1rem; }
+    .album-share { display: flex; flex-wrap: wrap; gap: .4rem; margin-left: auto; }
+    .album-code .album-share button { margin-left: 0; display: inline-flex; align-items: center; gap: .35rem; }
+    .album-code .album-share button.icon { width: 2.4rem; height: 2.4rem; padding: 0; justify-content: center; }
+    .album-actions { align-items: center; }
+    .album-card .album-actions { margin-top: 1.2rem; }
+    .album-actions .grow { flex: 1; }
+    .album-actions .album-remove { margin-left: 0; }
+    .btn-icon { width: 3rem; padding: 0; }
+    @media (max-width: 600px) {
+      /* Two tidy lines: Add photos + camera, then Download all + Delete */
+      .album-actions .grow { display: none; }
+      .album-actions #albumAdd { flex: 1 1 calc(100% - 3.6rem); }
+      .album-actions #albumDownload { flex: 1 1 auto; }
+      .album-actions .album-remove { flex: 0 0 auto; }
+      /* On a narrow photo, Delete photo is an icon like Download, so neither covers the caption */
+      .stage-del { width: 2.4rem; height: 2.4rem; padding: 0; justify-content: center; gap: 0; font-size: 0; }
+    }
     :root[data-theme="dark"] .album-code { background: rgba(255,255,255,.08); }
     :root[data-theme="dark"] .album-code button { background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
 
     /* The album window: a big stage you can flip through, and every photo below it */
     .album-card { width: min(800px, calc(100vw - 32px)); padding: .9rem .9rem 1.4rem; border-radius: 32px; }
-    .album-card .close { top: 1.7rem; right: 1.7rem; background: rgba(255,255,255,.88); transition: opacity .3s ease, background-color .2s ease, scale .3s var(--spring); }
+    .album-card .close { top: 1.7rem; right: 1.7rem; transition: opacity .3s ease, background-color .2s ease, scale .3s var(--spring); }
     /* While the photo is flying in it is drawn above the window, so the X waits until it has landed */
     .album-card.is-flying .close { opacity: 0; pointer-events: none; }
     /* On short screens the photo gives up height, so the window fits without scrolling */
     .album-card .stage { width: 100%; max-height: max(12rem, calc(100dvh - 21.5rem)); }
-    .album-card { scrollbar-width: thin; }
+    /* The window's frame stays put and only the inside scrolls, clipped to the photo's own rounded
+       corners, so a photo scrolling up tucks under a curve instead of running into the border */
+    .album-card { display: flex; flex-direction: column; overflow: hidden; padding-bottom: .9rem; }
+    .album-scroll {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+      padding-bottom: .5rem; border-radius: 22px;
+    }
+    /* No scrollbar inside the window: one appearing would narrow it and resize the photo */
+    .album-scroll::-webkit-scrollbar { display: none; }
     .album-card .note:empty { display: none; }
-    .album-card .close:hover { background: #fff; }
     .stage { position: relative; aspect-ratio: 16 / 10; border-radius: 22px; overflow: hidden; background: var(--line); touch-action: pan-y; }
     .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to top, rgba(30,26,40,.5), transparent 32%); }
     .is-flying .stage { opacity: 0; }
     .stage-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.06) translateX(var(--from, 0%)); transition: opacity .55s ease, transform .9s var(--out); }
     .stage-img.is-on { opacity: 1; transform: none; }
     .stage.no-anim .stage-img { transition: none; }
+    .stage.is-sharpen .stage-img { transform: none; transition: opacity .45s ease; }
     .stage-nav {
       position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 2.9rem; height: 2.9rem; margin-top: -1.45rem;
-      border: none; border-radius: 50%; background: rgba(255,255,255,.85); color: var(--dusk); cursor: pointer;
-      box-shadow: 0 6px 16px -6px rgba(30,26,40,.4); transition: scale .35s var(--spring), background-color .2s ease;
+      border-radius: 50%; cursor: pointer;
+      transition: scale .35s var(--spring), background-color .2s ease;
     }
-    .stage-nav:hover { scale: 1.1; background: #fff; }
+    .stage-nav:hover { scale: 1.1; }
     .stage-nav:active { scale: .92; }
     .stage-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .stage-nav.prev { left: 1rem; }
     .stage-nav.next { right: 1rem; }
+    /* Buttons over the photo: small clear glass that reads on any picture */
+    .album-card .close, .stage-nav, .stage-dl, .stage-del {
+      box-sizing: border-box; border: 1px solid rgba(255,255,255,.6); background-color: rgba(255,255,255,.5); color: #2E2C3A;
+      -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), 0 6px 16px -6px rgba(30,26,40,.4);
+    }
+    .album-card .close:hover, .stage-nav:hover, .stage-dl:hover { background-color: rgba(255,255,255,.72); }
+    .stage-del:hover { background-color: rgba(154,61,61,.78); border-color: rgba(255,200,200,.5); color: #fff; }
+    :root[data-theme="dark"] :is(.album-card .close, .stage-nav, .stage-dl, .stage-del) {
+      border-color: rgba(200,192,240,.3); background-color: rgba(26,25,34,.5); color: #ECEAF4;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.12), 0 6px 16px -6px rgba(0,0,0,.6);
+    }
+    :root[data-theme="dark"] :is(.album-card .close, .stage-nav, .stage-dl):hover { background-color: rgba(40,38,52,.72); }
+    :root[data-theme="dark"] .stage-del:hover { background-color: rgba(154,61,61,.78); border-color: rgba(255,200,200,.5); color: #fff; }
     .stage-count { position: absolute; left: 1.2rem; bottom: 1rem; z-index: 2; color: #fff; font-size: .88rem; font-weight: 650; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
     .stage-count small { margin-left: .55rem; font-size: .84rem; font-weight: 550; opacity: .85; }
     /* Upload progress: bytes sent fill the bar; then a soft sweep while the server finishes the photos */
@@ -658,9 +916,10 @@
     :root[data-theme="dark"] .upload-track { background: rgba(255,255,255,.1); }
     @media (prefers-reduced-motion: reduce) { .upload-track i { transition: none; } .upload.is-processing .upload-track::after { animation: none; } }
     .album-head { padding: 1.3rem .7rem 0; }
-    .album-head .modal-sub { margin-bottom: 0; }
-    .album-window { margin: .45rem 0 0; color: var(--slate); font-size: .88rem; line-height: 1.5; }
-    .thumbs { display: grid; grid-template-columns: repeat(9, 1fr); gap: .45rem; padding: 1.1rem .7rem 0; }
+    .album-head .modal-sub { margin: .3rem 0 0; }
+    /* One scrolling strip of photos instead of a growing grid */
+    .thumbs { position: relative; display: flex; gap: .45rem; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding: 1rem .7rem .5rem; scrollbar-width: thin; scrollbar-color: rgba(127, 120, 150, .4) transparent; }
+    .thumbs .thumb { flex: 0 0 4.2rem; scroll-snap-align: start; }
     .thumb { position: relative; padding: 0; border: none; background: none; border-radius: 10px; cursor: pointer; transition: transform .4s var(--spring); }
     .thumb img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; background: var(--line); }
     .thumb::after { content: ""; position: absolute; inset: -3px; border-radius: 13px; box-shadow: 0 0 0 2px var(--dusk); opacity: 0; transition: opacity .25s ease; }
@@ -690,6 +949,13 @@
       .search { width: 100%; }
       .hint { display: none; }
     }
+    /* Tablets held upright: keep the live album beside the heading, as on a laptop, instead of a
+       lone card with empty space to its right */
+    @media (min-width: 701px) and (max-width: 900px) {
+      .hero { grid-template-columns: minmax(0, 1fr) minmax(250px, 320px); gap: var(--s4); }
+      .live { max-width: none; }
+      .title { font-size: clamp(3.4rem, 7.4vw, 8rem); }
+    }
     @media (max-width: 600px) {
       .grid { grid-template-columns: 1fr; }
       .album.wide .cover { aspect-ratio: 4 / 3; }
@@ -698,7 +964,7 @@
       .actions #scanOpen { order: 3; flex-basis: 100%; }
       .tabs { width: 100%; box-sizing: border-box; }
       .tab { flex: 1; justify-content: center; padding: .6rem .5rem; }
-      .thumbs { grid-template-columns: repeat(5, 1fr); }
+      .thumbs .thumb { flex-basis: 3.6rem; }
       .stage-nav { width: 2.5rem; height: 2.5rem; margin-top: -1.25rem; }
       .tools { position: static; --radius: 26px; }
       /* The corner prints move to the top of the cover so names get the full width */
@@ -733,13 +999,22 @@
       .nav { gap: .1rem; padding: .25rem; }
       .nav-item { padding: .5rem .7rem; }
       .brand svg.glyph { width: 1.6rem; height: 1.6rem; }
+      /* Button labels stay on one line instead of wrapping or being cut off */
+      .actions .btn, .live-actions .btn { padding: 0 .9rem; font-size: .9rem; white-space: nowrap; }
+    }
+    @media (max-width: 380px) {
+      /* Too narrow for two buttons side by side: each gets the full width */
+      .actions .btn { flex-basis: 100%; }
+      .live-actions { flex-wrap: wrap; }
+      .live-actions .btn { flex-basis: 100%; }
     }
 
     /* ---------- Confirmations ----------
        A toast answers every action (with Undo where something was removed), a short dialog asks
        before anything is deleted, and creating an album ends on its own "created" screen */
     .m-toast {
-      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: none; overflow: visible;
+      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: 1.5px solid transparent; overflow: visible;
+      -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
       display: flex; align-items: center; gap: .75rem; width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
       padding: .55rem .55rem .55rem .6rem; border-radius: 100px; color: var(--dusk); font: 500 .92rem var(--font-main);
       translate: -50% 0;
@@ -801,6 +1076,9 @@
     :root[data-theme="dark"] .m-toast-act:hover { background: rgba(255, 255, 255, .15); }
     :root[data-theme="dark"] .m-copy { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
     :root[data-theme="dark"] .m-del { color: #F0A3A3; }
+    :root[data-theme="dark"] .m-toast.is-danger .m-toast-ic { background: rgba(240, 163, 163, .18); color: #F0A3A3; }
+    :root[data-theme="dark"] .acct-primary.is-danger { background: #F0A3A3; color: #2A1416; }
+    :root[data-theme="dark"] .acct-primary.is-danger:hover { background: #F5B8B8; }
     :root[data-theme="dark"] .m-del:hover { background: rgba(240, 163, 163, .1); }
     :root[data-theme="dark"] .m-warn-ic { background: rgba(240, 163, 163, .12); color: #F0A3A3; }
     :root[data-theme="dark"] .acct-field input[type="date"] { color-scheme: dark; }
@@ -837,18 +1115,18 @@
       :root[data-theme="dark"] .grain { opacity: .14; }
   
       /* Things that are objects, not interface, keep their daylight colours */
-      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav {
+      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host {
         --fog: #ECEAF0; --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #8A8697; --copper: #9A603D; --copper-soft: #C08A66;
         --blush: #E6CDD6; --lavender: #D9D0EA; --tide: #6F9896; --line: #D6D2DE; --surface: #FFFFFF; --glass: rgba(248, 247, 250, .8);
         color: var(--dusk);
       }
       /* In dark their accent is a deeper lavender, so no copper is left anywhere at night */
-      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav) {
+      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
         --copper: #6C5FC7; --copper-soft: #9A8FE0;
       }
   
       /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
-      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .auth-card, .modal-card, .nav-menu) {
+      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .nav-menu) {
         background:
           linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
           linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
@@ -867,12 +1145,6 @@
           linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
           linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
       }
-      :root[data-theme="dark"] .auth-card, :root[data-theme="dark"] .modal-card {
-        background:
-          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
-      }
-      :root[data-theme="dark"] :is(.auth-dialog, .modal)::backdrop { background: rgba(6, 5, 10, .62); }
       :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
       :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
   
@@ -919,7 +1191,7 @@
   
       /* Strokes, rails and tints that were ink on paper */
       :root[data-theme="dark"] .steps::before { background: rgba(255, 255, 255, .12); }
-      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .5); }
+      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .66); }
       :root[data-theme="dark"] .step.is-on .step-body b, :root[data-theme="dark"] .step button:hover .step-body b { color: var(--dusk); }
       :root[data-theme="dark"] .step-no { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
       :root[data-theme="dark"] .host-controls li + li, :root[data-theme="dark"] .qa + .qa, :root[data-theme="dark"] .feat-item + .feat-item { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -958,13 +1230,28 @@
         :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
       }
   
-      /* ---------- Settings item in the main nav: its name on wide screens, a small icon on phones ---------- */
-      .nav-settings { display: inline-flex; align-items: center; justify-content: center; }
-      .nav-settings svg { display: none; }
+      /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
+      :is(.nav-settings, .nav-events) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-settings, .nav-events) svg { display: none; }
       @media (max-width: 520px) {
-        .nav-settings .nav-label { display: none; }
-        .nav-settings svg { display: block; }
-        .nav-settings { padding-left: .8rem; padding-right: .8rem; }
+        :is(.nav-settings, .nav-events) .nav-label { display: none; }
+        :is(.nav-settings, .nav-events) svg { display: block; }
+        :is(.nav-settings, .nav-events) { padding-left: .8rem; padding-right: .8rem; }
+      }
+      /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
+         logo, the menu and your account button all fit on one line */
+      @media (max-width: 380px) {
+        .header { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
+        .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
+        .nav { gap: 0 !important; padding: .22rem !important; }
+        .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
+        .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
+        :is(.nav-settings, .nav-events) { padding-left: .58rem !important; padding-right: .58rem !important; }
+        :is(.nav-settings, .nav-events) svg { width: 16px; height: 16px; }
+      }
+      @media (max-width: 340px) {
+        .nav-item { padding: .45rem .42rem !important; }
+        :is(.nav-settings, .nav-events) { padding-left: .45rem !important; padding-right: .45rem !important; }
       }
   
       /* ---------- The thread ----------
@@ -1111,16 +1398,26 @@
       /* Support: a chat bubble pops up, its dots bounce, and it carries on into the message form */
       .intro-chat {
         position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6rem; padding: 1.5rem 2rem;
-        border-radius: 34px 34px 34px 10px; background: #fff; opacity: 0; transform-origin: 50% 50%;
-        box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(60, 50, 90, .14), 0 24px 44px -20px rgba(60, 50, 90, .5);
+        border: 1.5px solid transparent; border-radius: 34px 34px 34px 10px; opacity: 0; transform-origin: 50% 50%;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .78) 50%, rgba(244, 242, 252, .86) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .95), 0 0 44px -8px rgba(188, 178, 236, .55), 0 24px 44px -20px rgba(60, 50, 90, .5);
       }
       .intro-chat i { width: .95rem; height: .95rem; border-radius: 50%; background: #6C5FC7; }
+      :root[data-theme="dark"] .intro-chat {
+        background:
+          linear-gradient(135deg, rgba(58, 52, 88, .75) 0%, rgba(28, 26, 40, .85) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 40%, rgba(200, 192, 240, .5) 100%) border-box;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .13), 0 0 40px -12px rgba(120, 100, 190, .3), 0 24px 44px -20px rgba(0, 0, 0, .7);
+      }
+      :root[data-theme="dark"] .intro-chat i { background: #B8AEF5; }
   
       /* ---------- Site footer ----------
          The same on every page: the brand, three short columns of links, and a base row with the
          small print, the theme switch and a way back to the top. */
       .site-foot { width: min(1180px, 100%); margin: 5rem auto 0; padding: 3.2rem 1.5rem 1.6rem; box-sizing: border-box; border-top: 1px solid var(--line); color: var(--slate); font-size: .92rem; text-align: left; }
-      .sf-grid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 2.5rem 2rem; }
+      .sf-grid { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 2.5rem 2rem; }
       .sf-logo { display: inline-flex; align-items: center; gap: .6rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
       .sf-logo svg.glyph { width: 1.8rem; height: 1.8rem; transition: transform .35s var(--spring); }
       .sf-logo:hover svg.glyph { transform: scale(1.08) rotate(-4deg); }
@@ -1151,15 +1448,19 @@
       .sf-top::after { right: 1.4rem; }
       @media (max-width: 900px) {
         .site-foot { margin-top: 3.5rem; }
-        .sf-grid { grid-template-columns: repeat(3, 1fr); }
+        .sf-grid { grid-template-columns: repeat(4, 1fr); }
         .sf-brand { grid-column: 1 / -1; }
       }
       @media (max-width: 600px) {
-        .sf-grid { grid-template-columns: 1fr 1fr; }
-        .sf-col:last-child { grid-column: 1 / -1; }
-        .sf-base { flex-direction: column; align-items: stretch; }
+        .site-foot { padding: 2.6rem 20px calc(1.4rem + env(safe-area-inset-bottom, 0px)); }
+        .sf-grid { grid-template-columns: 1fr 1fr; gap: 2.1rem 1.5rem; }
+        .sf-col ul { gap: .8rem; }
+        /* Phones: the four groups sit in a 2 x 2 grid */
+
+        .sf-base { flex-direction: column; align-items: stretch; gap: 1.2rem; margin-top: 2.4rem; }
         .site-foot .acct-seg { width: 100%; }
-        .sf-top { align-self: flex-start; }
+        .sf-top { align-self: center; padding: .4rem .6rem; }
+        .sf-top::after { left: .6rem; right: 2rem; bottom: .3rem; }
       }
       @media (prefers-reduced-motion: reduce) { .sf-link::after, .sf-top svg, .sf-logo svg.glyph { transition: none; } }
   
@@ -1171,7 +1472,6 @@
       :root[data-theme="dark"] .s-sw[aria-checked="true"] { background: var(--copper); }
       :root[data-theme="dark"] .s-bar { background: rgba(255, 255, 255, .08); }
       :root[data-theme="dark"] :is(.s-note.is-error, .s-row.is-danger .s-text b) { color: #F0A3A3; }
-      :root[data-theme="dark"] .s-toast i { color: var(--fog); }
   
       /* The albums page: lists, chips and rows that were ink on paper */
       :root[data-theme="dark"] :is(.todo-row + .todo-row, .burst + .burst) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -1204,9 +1504,6 @@
       .acct-menu {
         --radius: 26px; position: absolute; top: calc(100% + .6rem); right: 0; z-index: 5; width: 17.5rem; box-sizing: border-box; padding: .45rem;
         border-radius: var(--radius); transform-origin: calc(100% - 2.5rem) top;
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, .97) 0%, rgba(250, 249, 253, .95) 50%, rgba(244, 242, 252, .96) 100%) padding-box,
-          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
         opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden;
         transition: opacity .25s ease, transform .5s var(--spring), visibility 0s .5s;
       }
@@ -1248,14 +1545,9 @@
       .acct-seg [aria-checked="true"] .scr-dot { opacity: 1; scale: 1; }
   
       .acct-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
-      .acct-dialog::backdrop { background: rgba(46, 44, 58, .3); }
       .acct-card {
         position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: 0;
-        padding: 2rem 1.9rem 1.5rem; border: 1.5px solid transparent; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, .96) 0%, rgba(250, 249, 253, .9) 50%, rgba(244, 242, 252, .95) 100%) padding-box,
-          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .35) 32%, rgba(203, 194, 240, .7) 64%, #fff 100%) border-box;
-        box-shadow: 0 30px 80px -30px rgba(60, 50, 90, .5);
+        padding: 2rem 1.9rem 1.5rem; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
       }
       .acct-card h2 { margin: 0; padding-right: 2rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
       .acct-sub { margin: .45rem 0 1.3rem; color: var(--slate); font-size: .95rem; line-height: 1.5; }
@@ -1269,12 +1561,12 @@
       .acct-field { display: block; margin-bottom: .75rem; }
       .acct-field span { display: block; margin-bottom: .3rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
       .acct-field input, .acct-field textarea {
-        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .9); color: var(--dusk);
-        font: 500 1rem var(--font-main); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .14); transition: box-shadow .2s ease;
+        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .55); color: var(--dusk);
+        font: 500 1rem var(--font-main); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .12); transition: box-shadow .2s ease;
       }
       .acct-field textarea { display: block; height: auto; min-height: 8.5rem; padding: .8rem 1rem; line-height: 1.5; resize: vertical; }
       .acct-field input::placeholder, .acct-field textarea::placeholder { color: var(--stone); opacity: 1; }
-      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .3); }
+      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .3); }
       .acct-field input:focus, .acct-field textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188, 178, 236, .45); }
       .acct-group { margin: 1.1rem 0 .4rem; }
       .acct-group > b { display: block; margin-bottom: .1rem; font-size: .82rem; color: var(--slate); }
@@ -1330,18 +1622,6 @@
         .acct-seg-pill, .acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot, .acct-menu, .acct-chev, .acct-sw::after { transition: none; }
       }
   
-      :root[data-theme="dark"] .acct-menu {
-        background:
-          linear-gradient(135deg, rgba(58, 53, 80, .96) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
-      }
-      :root[data-theme="dark"] .acct-card {
-        background:
-          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
-        box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8);
-      }
-      :root[data-theme="dark"] .acct-dialog::backdrop { background: rgba(6, 5, 10, .62); }
       :root[data-theme="dark"] :is(.acct-item:hover, .acct-item:focus-visible) { background: rgba(255, 255, 255, .08); }
       :root[data-theme="dark"] .acct-item:active { background: rgba(255, 255, 255, .14); }
       :root[data-theme="dark"] .acct-sep { background: rgba(255, 255, 255, .1); }
@@ -1378,6 +1658,243 @@
       /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
       html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
       html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
+      /* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
+      html.pt-file.is-leaving .header { opacity: 1; }
+      html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+
+      /* ---------- Popup glass ----------
+         Popups float over a dimmed page, so unlike the page panels they get a real blur behind them.
+         Only one or two are ever on screen, and only while open, so the blur cost stays small. */
+      .auth-card, .modal-card, .acct-card, .vgate-card {
+        --mx: 50%; --my: 0px; --shine: 0;
+        position: relative; border: 1.5px solid transparent;
+        background:
+          linear-gradient(135deg, rgba(255,255,255,.74) 0%, rgba(255,255,255,.52) 46%, rgba(244,242,252,.66) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255,255,255,.3) 32%, rgba(203,194,240,.6) 64%, rgba(255,255,255,.95) 100%) border-box;
+        -webkit-backdrop-filter: blur(24px) saturate(1.7);
+        backdrop-filter: blur(24px) saturate(1.7);
+        box-shadow:
+          inset 0 1px 1px rgba(255,255,255,.95),
+          inset 0 -12px 26px -16px rgba(255,255,255,.75),
+          inset 0 0 32px rgba(255,255,255,.22),
+          0 0 0 .5px rgba(46,44,58,.05),
+          0 0 44px -8px rgba(188,178,236,.55),
+          0 26px 60px -30px rgba(60,50,90,.35);
+      }
+      /* The rim catches the pointer, as on the page panels */
+      .auth-card::after, .modal-card::after, .acct-card::after, .vgate-card::after {
+        content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; padding: 1.5px;
+        opacity: var(--shine); transition: opacity .4s ease;
+        background: radial-gradient(160px circle at var(--mx) var(--my), #fff, rgba(255,255,255,.7) 35%, transparent 75%);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+      }
+      :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card) {
+        background:
+          linear-gradient(135deg, rgba(58,52,88,.58) 0%, rgba(28,26,40,.7) 46%, rgba(18,17,26,.78) 100%) padding-box,
+          linear-gradient(140deg, rgba(200,192,240,.55) 0%, rgba(150,142,196,.12) 32%, rgba(120,110,176,.3) 64%, rgba(200,192,240,.5) 100%) border-box;
+        box-shadow:
+          inset 0 1px 1px rgba(255,255,255,.13),
+          inset 0 0 26px rgba(150,140,210,.05),
+          0 0 0 .5px rgba(0,0,0,.4),
+          0 0 40px -12px rgba(120,100,190,.25),
+          0 26px 60px -30px rgba(0,0,0,.75);
+      }
+      :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card)::after {
+        background: radial-gradient(160px circle at var(--mx) var(--my), rgba(220,212,255,.75), rgba(200,192,240,.3) 35%, transparent 75%);
+      }
+      /* Browsers without backdrop blur keep a fuller fill so text stays readable */
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .auth-card, .modal-card, .acct-card, .vgate-card { background:
+          linear-gradient(135deg, rgba(255,255,255,.95) 0%, rgba(250,249,253,.88) 50%, rgba(244,242,252,.93) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255,255,255,.35) 32%, rgba(203,194,240,.7) 64%, #fff 100%) border-box; }
+        :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card) { background:
+          linear-gradient(135deg, rgba(48,44,66,.98) 0%, rgba(34,31,46,.97) 50%, rgba(28,26,38,.98) 100%) padding-box,
+          linear-gradient(140deg, rgba(200,192,240,.55) 0%, rgba(150,142,196,.12) 32%, rgba(120,110,176,.3) 64%, rgba(200,192,240,.5) 100%) border-box; }
+      }
+      /* One dim for every popup */
+      :is(.auth-dialog, .acct-dialog, .modal, .vgate)::backdrop { background: rgba(46,44,58,.32); }
+      :root[data-theme="dark"] :is(.auth-dialog, .acct-dialog, .modal, .vgate)::backdrop { background: rgba(6,5,10,.62); }
+      /* The two dropdowns sit over page content, so they blur it too */
+      .acct-menu, .nav-menu { -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
+      /* The header keeps these menus from blurring the page (it isolates its backdrop for page transitions),
+         so they get a fuller frosted fill instead: nothing behind can fight the text */
+      .acct-menu, .nav-menu { background:
+          linear-gradient(180deg, rgba(255,255,255,.95), rgba(248,247,252,.92)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(203,194,240,.5) 70%, rgba(255,255,255,.8)) border-box; }
+      :root[data-theme="dark"] :is(.acct-menu, .nav-menu) { background:
+          linear-gradient(180deg, rgba(36,33,50,.95), rgba(24,22,34,.94)) padding-box,
+          linear-gradient(180deg, rgba(200,192,240,.5), rgba(150,142,196,.12) 45%, rgba(120,110,176,.2) 70%, rgba(200,192,240,.35)) border-box; }
+
+      /* ---------- Liquid-glass buttons ----------
+         One glass for every button, lit from above: a bright top edge, a soft horizon across the middle,
+         a faint bounce of light at the bottom and a thin rim. Deep smoke for the main action, clear glass for
+         the rest, red for anything destructive. Each tier keeps its shadow in --g-shadow so hover can brighten
+         the whole pane evenly. */
+      :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost,
+          .auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        box-sizing: border-box; border: 1px solid transparent;
+        -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
+      }
+      /* Deep smoke */
+      :is(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary) {
+        color: var(--paper);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%) padding-box,
+          linear-gradient(rgba(40,38,52,.88), rgba(40,38,52,.88)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.14) 45%, rgba(255,255,255,.08) 60%, rgba(255,255,255,.3)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(20,18,30,.5);
+        box-shadow: var(--g-shadow);
+      }
+      /* Clear glass */
+      :is(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+          .album-code button, .modal-card:not(.album-card) .close, .vgate-actions .vgate-ghost) {
+        color: var(--dusk);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.3) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.26), rgba(255,255,255,.26)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.35) 60%, rgba(255,255,255,.85)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.45), 0 0 0 .5px rgba(46,44,58,.12), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(46,44,58,.35);
+        box-shadow: var(--g-shadow);
+      }
+      /* The selected pill in a tab bar: a brighter pane of the same glass */
+      :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.25) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.35) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.78), rgba(255,255,255,.78)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.55) 45%, rgba(255,255,255,.45) 60%, rgba(255,255,255,.9)) border-box;
+        box-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 2px 8px -2px rgba(46,44,58,.22);
+      }
+      /* Red, for deleting */
+      .acct-actions .acct-primary.is-danger {
+        color: #fff;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%) padding-box,
+          linear-gradient(rgba(150,56,56,.88), rgba(150,56,56,.88)) padding-box,
+          linear-gradient(180deg, rgba(255,225,225,.7), rgba(255,255,255,.15) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.35)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(90,30,30,.5);
+        box-shadow: var(--g-shadow);
+      }
+      /* Pearl keeps its pastel colours inside the same glass */
+      .btn-pearl {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.18) 100%) padding-box,
+          linear-gradient(120deg, rgba(214,205,236,.9) 0%, rgba(235,211,220,.86) 52%, rgba(198,222,218,.9) 100%) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.85)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(60,50,90,.4);
+        box-shadow: var(--g-shadow);
+      }
+      /* The colour that floods in on hover is glass too */
+      .btn-dark { --fill: color-mix(in srgb, var(--copper) 70%, transparent); }
+      .btn-light { --fill: rgba(46,44,58,.78); }
+      :is(.todo-act, .acct-actions .acct-primary):disabled { opacity: .5; }
+
+      /* Dark mode: deep smoke turns to frosted pale glass with dark text; clear glass stays clear.
+         (The QR card keeps its daylight colours, so its button keeps the light-mode glass.) */
+      :root[data-theme="dark"] :is(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary):not(.qr-card *) {
+        color: var(--paper);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.25) 100%) padding-box,
+          linear-gradient(rgba(238,236,246,.88), rgba(238,236,246,.88)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.75)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.4), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] :is(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+          .album-code button, .modal-card:not(.album-card) .close, .vgate-actions .vgate-ghost) {
+        color: var(--dusk);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.06) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.08)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1) 45%, rgba(255,255,255,.06) 60%, rgba(255,255,255,.2)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.16)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.14) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.28)) border-box;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 8px -2px rgba(0,0,0,.5);
+      }
+      :root[data-theme="dark"] .acct-actions .acct-primary.is-danger {
+        color: #2A1416;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.15) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.2) 100%) padding-box,
+          linear-gradient(rgba(240,163,163,.88), rgba(240,163,163,.88)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.7)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.06);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] .btn-pearl {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box,
+          linear-gradient(120deg, rgba(63,56,128,.85) 0%, rgba(90,77,176,.8) 52%, rgba(58,81,153,.85) 100%) padding-box,
+          linear-gradient(180deg, rgba(220,212,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,.08) 60%, rgba(220,212,255,.4)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] .btn-light { --fill: rgba(236,234,244,.85); }
+      :root[data-theme="dark"] .btn-dark:not(.qr-card *) { --fill: color-mix(in srgb, var(--copper) 80%, transparent); }
+      /* Hover: the whole pane brightens a touch (the inset spread sits under the label) */
+      :root :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost):hover:not(:disabled) {
+        box-shadow: var(--g-shadow), inset 0 0 0 999px var(--g-lift, rgba(255,255,255,.07));
+      }
+
+      /* ---------- Glass switches ----------
+         The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
+         glass bead with a bright top and a soft shadow underneath. */
+      :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+        border: 1px solid transparent;
+        background:
+          linear-gradient(180deg, rgba(46,44,58,.1) 0%, rgba(46,44,58,.04) 100%) padding-box,
+          linear-gradient(140deg, rgba(46,44,58,.18) 0%, rgba(255,255,255,.6) 60%, #fff 100%) border-box;
+        box-shadow: inset 0 1px 3px rgba(46,44,58,.22), 0 1px 0 rgba(255,255,255,.7);
+        -webkit-backdrop-filter: blur(8px) saturate(1.5); backdrop-filter: blur(8px) saturate(1.5);
+        transition: box-shadow .3s ease;
+      }
+      :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 60%) padding-box,
+          linear-gradient(135deg, color-mix(in srgb, var(--copper) 85%, transparent), color-mix(in srgb, var(--copper) 70%, transparent)) padding-box,
+          linear-gradient(140deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.6) 100%) border-box;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.18), 0 0 14px -4px color-mix(in srgb, var(--copper) 70%, transparent);
+      }
+      :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+        top: calc(.18rem - 1px); left: calc(.18rem - 1px);
+        background: radial-gradient(circle at 35% 28%, #fff 0%, rgba(255,255,255,.92) 45%, rgba(236,233,246,.85) 100%);
+        box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.12), 0 0 0 .5px rgba(46,44,58,.14), 0 2px 6px rgba(46,44,58,.28);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.03) 100%) padding-box,
+          linear-gradient(140deg, rgba(0,0,0,.4) 0%, rgba(200,192,240,.25) 60%, rgba(200,192,240,.4) 100%) border-box;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 60%) padding-box,
+          linear-gradient(135deg, color-mix(in srgb, var(--copper) 88%, transparent), color-mix(in srgb, var(--copper) 72%, transparent)) padding-box,
+          linear-gradient(140deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.5) 100%) border-box;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.3), 0 0 16px -4px color-mix(in srgb, var(--copper) 75%, transparent);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+        box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.18), 0 2px 8px rgba(0,0,0,.55);
+      }
+      /* Touch screens: grow the tap area of small controls to about 44px without changing how they look */
+      @media (pointer: coarse) {
+        .tab, .todo-act, .nav-caret { position: relative; }
+        :is(.nav-item, .nav-caret, .tab, .acct-seg button, .todo-act)::before { content: ""; position: absolute; inset: -6px 0; }
+        :is(.sw, .s-sw, .acct-sw)[role="switch"]::before { content: ""; position: absolute; inset: -8px -4px; }
+      }
     </style>
   <!-- /@shared:css -->
 </head>
@@ -1440,6 +1957,7 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item" aria-current="page">My albums</a>
+        <a href="events.html" class="nav-item nav-events" aria-label="Events"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
       <div class="nav-menu glass" id="navMenu" aria-label="Home page sections">
@@ -1480,6 +1998,11 @@
           <div class="head"><span class="label glass" id="feedLabel">Just added</span><span class="rule" aria-hidden="true"></span><span class="hint">Newest first</span></div>
           <div class="feed-list" id="feed"></div>
         </div>
+        <div class="sorter panel" aria-labelledby="sorterLabel" id="sorter" hidden>
+          <div class="head"><span class="label glass" id="sorterLabel">Sort photos</span><span class="rule" aria-hidden="true"></span><span class="hint">Only changes what you see</span></div>
+          <p class="sorter-lede">Pick an album and swipe through other people’s photos. Hide the ones you don’t want to see. Everyone else still sees them.</p>
+          <div class="sorter-row" id="sorterRow"></div>
+        </div>
       </section>
 
       <section aria-label="All your albums">
@@ -1510,42 +2033,83 @@
   <dialog class="modal" id="albumModal" aria-labelledby="albumTitle">
     <div class="modal-card album-card">
       <button class="close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+      <div class="album-scroll">
       <div class="stage" id="stage">
         <img class="stage-img" alt="">
         <img class="stage-img" alt="">
         <button class="stage-nav prev" type="button" data-step="-1" aria-label="Previous photo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+        <button class="stage-dl stage-full" type="button" id="stageFull" aria-label="View full size" title="View full size"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
         <button class="stage-nav next" type="button" data-step="1" aria-label="Next photo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
         <span class="stage-count" id="stageCount" aria-live="polite"></span>
-        <button class="stage-del" type="button" id="stageDel" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Delete photo</button>
+        <div class="stage-tools">
+          <button class="stage-dl" type="button" id="photoDownload" aria-label="Download this photo" title="Download this photo" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+          <button class="stage-del" type="button" id="stageDel" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Delete photo</button>
+        </div>
+        <span class="pb-burst" id="pbBurst" aria-hidden="true"><svg viewBox="0 0 24 24" width="96" height="96" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 7.8 2.6c0 5.8-7.8 10.4-7.8 10.4Z"/></svg></span>
+      </div>
+      <!-- Likes and comments for the photo on show -->
+      <div class="photo-bar" id="photoBar">
+        <button class="pb-btn pb-like" type="button" id="pbLike" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 7.8 2.6c0 5.8-7.8 10.4-7.8 10.4Z"/></svg><span id="pbLikes">Like</span></button>
+        <button class="pb-btn pb-talk" type="button" id="pbTalk" aria-expanded="false" aria-controls="pbComments"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-11.1 6.6L4 19.5l1.4-4.6A7.5 7.5 0 1 1 20 11.5Z"/></svg><span id="pbTalkN">Comment</span></button>
+        <span class="pb-cover" id="pbCover" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 3.8l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8Z"/></svg>Album cover</span>
+      </div>
+      <div class="pb-comments" id="pbComments" hidden>
+        <ul class="pb-list" id="pbList" aria-live="polite"></ul>
+        <div class="pb-replying" id="pbReplying" hidden><span>Replying to <b></b></span><button type="button" id="pbReplyCancel" aria-label="Cancel reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
+        <form class="pb-form" id="pbForm" novalidate>
+          <input id="pbInput" maxlength="500" placeholder="Add a comment…" aria-label="Add a comment" autocomplete="off">
+          <button class="pb-send" type="submit" aria-label="Post comment"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button>
+        </form>
       </div>
       <div class="album-head">
-        <p class="album-host" id="albumHost" hidden><span class="album-host-tag">Host</span><b id="albumHostName"></b><span class="album-host-you" id="albumHostYou" hidden>You</span></p>
         <h2 id="albumTitle"></h2>
         <p class="modal-sub" id="albumSub"></p>
-        <p class="album-window" id="albumWindow" hidden></p>
-        <div class="album-code" id="albumCode" hidden><small>Album code</small><b id="albumCodeText"></b><button type="button" id="albumCodeCopy">Copy code</button></div>
+        <p class="album-stats"><span id="albumStats"></span><span class="album-open" id="albumWindow" hidden></span><button class="album-unhide" type="button" id="albumUnhide" hidden></button><a class="album-sort" id="albumSort" href="sort.html" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="4" width="10" height="14" rx="2"/><path d="M4 8v8M20 8v8"/></svg>Sort photos</a></p>
       </div>
       <div class="thumbs" id="thumbs"></div>
       <div class="album-empty" id="albumEmpty" hidden>
         <b>No photos yet</b>
         <span id="albumEmptyText"></span>
       </div>
+      <div class="album-code" id="albumCode" hidden>
+        <small>Album code</small><b id="albumCodeText"></b>
+        <span class="album-share">
+          <button class="icon" type="button" id="albumCodeCopy" aria-label="Copy code" title="Copy code"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button>
+          <button class="icon" type="button" id="albumLink" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
+          <button class="icon" type="button" id="albumQr" aria-label="Show QR code" title="Show QR code"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2M20 14v6h-6"/></svg></button>
+        </span>
+      </div>
       <input type="file" id="albumFiles" accept="image/*" multiple hidden>
       <div class="upload" id="upload" hidden>
         <div class="upload-top"><span id="uploadLabel">Uploading</span><span id="uploadPct">0%</span></div>
         <div class="upload-track" id="uploadTrack" role="progressbar" aria-labelledby="uploadLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="uploadFill"></i></div>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-dark" type="button" id="albumAdd">Add your photos</button>
-        <button class="btn btn-light" type="button" id="albumCamera">Take a photo</button>
+      <div class="modal-actions album-actions">
+        <button class="btn btn-dark" type="button" id="albumAdd">Add photos</button>
+        <button class="btn btn-light btn-icon" type="button" id="albumCamera" aria-label="Take a photo" title="Take a photo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+        <span class="grow" aria-hidden="true"></span>
         <button class="btn btn-light" type="button" id="albumDownload">Download all</button>
-        <button class="btn btn-light" type="button" id="photoDownload">Download photo</button>
-        <button class="btn btn-light" type="button" id="albumLink" hidden>Copy album link</button>
-        <button class="btn btn-light" type="button" id="albumQr" hidden>Show QR code</button>
         <button class="album-remove" type="button" id="albumRemove">Delete album</button>
       </div>
       <p class="note" id="albumNote" role="status"></p>
+      </div>
     </div>
+  </dialog>
+
+  <!-- Full size: the photo as large as the screen allows; click it to see it at its real size -->
+  <dialog class="viewer" id="viewer" aria-label="Photo at full size">
+    <div class="vw-top">
+      <p class="vw-count" id="vwCount"></p>
+      <div class="vw-tools">
+        <button class="vw-btn vw-like" type="button" id="vwLike" aria-pressed="false"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 7.8 2.6c0 5.8-7.8 10.4-7.8 10.4Z"/></svg><span></span></button>
+        <button class="vw-btn" type="button" id="vwDownload" aria-label="Download this photo" title="Download"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg></button>
+        <button class="vw-btn" type="button" id="vwClose" aria-label="Close full size" title="Close (Esc)"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+    </div>
+    <div class="vw-stage" id="vwStage"><img id="vwImg" alt="" draggable="false"></div>
+    <button class="vw-nav prev" type="button" id="vwPrev" aria-label="Previous photo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button class="vw-nav next" type="button" id="vwNext" aria-label="Next photo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    <p class="vw-hint" id="vwHint">Click the photo to zoom in</p>
   </dialog>
 
   <dialog class="modal" id="joinModal" aria-labelledby="joinTitle">
@@ -1588,8 +2152,34 @@
     addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
     const cursorEl = document.getElementById('cursor');
     const useCursor = finePointer && !still;
+    // The dot starts where the mouse was on the last page (clicking a link doesn't move the mouse),
+    // not in the middle of the screen. Until the mouse has been seen, the dot stays hidden and the
+    // normal pointer shows
+    try {
+      const at = JSON.parse(sessionStorage.getItem('momento-pointer') || 'null');
+      if (at && Date.now() - at.t < 15000 && at.x <= innerWidth && at.y <= innerHeight) {
+        pointer.x = at.x; pointer.y = at.y;
+        document.documentElement.classList.add('cursor-seen');
+      }
+    } catch (e) {}
+    addEventListener('pagehide', () => {
+      try { if (document.documentElement.classList.contains('cursor-seen')) sessionStorage.setItem('momento-pointer', JSON.stringify({ x: pointer.x, y: pointer.y, t: Date.now() })); } catch (e) {}
+    });
     let rx = pointer.x, ry = pointer.y;
     if (useCursor) root.classList.add('has-cursor');
+    // Touch, a pen, or Chrome's mobile preview (switched on without a reload) send no mouse moves
+    // between taps, so the bead would sit stuck beside the real touch point. Hide it and give the
+    // normal pointer back until a mouse moves again.
+    {
+      const fineMq = matchMedia('(pointer: fine)'), rootCl = document.documentElement.classList;
+      const sync = (e) => {
+        rootCl.toggle('cursor-off', !fineMq.matches || (!!e && e.pointerType !== 'mouse'));
+        if (e && e.pointerType === 'mouse') rootCl.add('cursor-seen');
+      };
+      addEventListener('pointermove', sync, { passive: true, capture: true });
+      addEventListener('pointerdown', sync, { passive: true, capture: true });
+      fineMq.addEventListener('change', () => sync());
+    }
     addEventListener('pointermove', (e) => {
       if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
       else { rx = e.clientX; ry = e.clientY; }
@@ -1860,18 +2450,32 @@
       const req = ++M.req;
       const next = stageImgs[1 - M.cur], prev = stageImgs[M.cur];
       const big = M.a.photoItems?.[M.i]?.url || pic(M.a.pics[M.i], 1200, 750);
-      if (instant && M.from?.complete) {
-        // Start with the photo that was clicked (already loaded), then sharpen it once the big one arrives
+      const bigReady = !!M.ready && M.ready.naturalWidth > 0 && M.ready.src === new URL(big, location.href).href;
+      if (instant && !bigReady && M.from?.complete) {
+        // The full photo isn't here yet: start with the one that was clicked, then cross-fade to the full
+        // one when it arrives (swapping the picture in place made it visibly jump)
         next.src = M.from.currentSrc || M.from.src;
         const pre = new Image();
         pre.src = big;
-        pre.decode().then(() => { if (req === M.req) next.src = big; }).catch(() => {});
+        pre.decode().then(() => {
+          if (req !== M.req) return;
+          const shown = stageImgs[M.cur], sharp = stageImgs[1 - M.cur];
+          sharp.src = big;
+          stage.classList.add('is-sharpen');
+          sharp.classList.add('is-on'); shown.classList.remove('is-on');
+          M.cur = 1 - M.cur;
+          setTimeout(() => stage.classList.remove('is-sharpen'), 520);
+        }).catch(() => {});
       } else next.src = big;
       const countEl = document.getElementById('stageCount'), by = M.a.photoItems?.[M.i]?.by;
       countEl.textContent = `${M.i + 1} of ${total}`;
       if (by) { const s = document.createElement('small'); s.textContent = `Added by ${by}`; countEl.append(s); }
       document.getElementById('stageDel').hidden = !(M.a.role === 'host' || M.a.photoItems?.[M.i]?.mine);
+      renderSocial();
       thumbsEl.querySelectorAll('.thumb').forEach((t, n) => t.setAttribute('aria-current', n === M.i));
+      // Keep the current photo in view in the strip (scrolls the strip only, never the window)
+      const cur = thumbsEl.querySelector('.thumb[aria-current="true"]');
+      if (cur) thumbsEl.scrollTo({ left: cur.offsetLeft - thumbsEl.clientWidth / 2 + cur.offsetWidth / 2, behavior: still ? 'auto' : 'smooth' });
       const swap = () => {
         if (req !== M.req) return;
         if (instant) stage.classList.add('no-anim');
@@ -1884,14 +2488,14 @@
     }
     // The clicked photo grows into the stage. It is drawn at its own proportions, scaled evenly and clipped
     // to the shape of the box it is passing through, so it crops cleanly instead of stretching
-    function fly(fromImg, big) {
+    function fly(fromImg, big, src = fromImg) {
       const small = fromImg.getBoundingClientRect();
-      const ratio = (fromImg.naturalWidth || small.width) / (fromImg.naturalHeight || small.height);
+      const ratio = (src.naturalWidth || small.width) / (src.naturalHeight || small.height);
       const cover = (w, h) => (w / h > ratio ? [w, w / ratio] : [h * ratio, h]);
       const [W, H] = cover(big.width, big.height), [w0] = cover(small.width, small.height);
       const s0 = w0 / W;
       const im = new Image();
-      im.src = fromImg.currentSrc || fromImg.src; im.className = 'fly'; im.alt = '';
+      im.src = src.currentSrc || src.src; im.className = 'fly'; im.alt = '';
       Object.assign(im.style, { left: `${big.left + big.width / 2 - W / 2}px`, top: `${big.top + big.height / 2 - H / 2}px`, width: `${W}px`, height: `${H}px` });
       albumModal.append(im);
       const dx = small.left + small.width / 2 - (big.left + big.width / 2), dy = small.top + small.height / 2 - (big.top + big.height / 2);
@@ -1914,7 +2518,17 @@
         const pid = (i.match(/\/photos\/([^/?#]+)/) || [])[1];
         i = Math.max(0, (a.photoItems || []).findIndex((p) => p.id === pid));
       }
-      M.a = a; M.i = i; M.from = fromImg;
+      // Get the full-size photo before the window opens, so it doesn't change once it's showing
+      const firstUrl = a.photoItems?.[i]?.url || (a.pics[i] != null ? pic(a.pics[i], 1200, 750) : '');
+      let ready = null;
+      if (firstUrl) {
+        const im = new Image();
+        im.src = firstUrl;
+        await Promise.race([im.decode().catch(() => {}), new Promise((r) => setTimeout(r, 350))]);
+        if (request !== opening) return;
+        if (im.complete && im.naturalWidth) ready = im;
+      }
+      M.a = a; M.i = i; M.from = fromImg; M.ready = ready;
       document.getElementById('albumTitle').textContent = a.name;
       fillAlbum(a);
       document.getElementById('albumNote').textContent = '';
@@ -1929,22 +2543,49 @@
       const flying = fromImg && !still && fromImg.complete && a.pics.length;
       albumCard.classList.toggle('is-flying', !!flying);
       showModal(albumModal);
-      albumCard.scrollTop = 0;
+      albumCard.querySelector('.album-scroll').scrollTop = 0;
       if (still) return;
-      albumCard.animate([{ opacity: 0, transform: 'translateY(18px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 520, easing: OUT });
-      thumbsEl.querySelectorAll('.thumb').forEach((t, n) => t.animate(
-        [{ opacity: 0, transform: 'translateY(16px) scale(.85)' }, { opacity: 1, transform: 'none' }],
-        { duration: 600, delay: 260 + n * 45, easing: 'cubic-bezier(.34, 1.4, .64, 1)', fill: 'backwards' }));
+      // Where the big photo will sit, measured before anything moves, so the flying photo lands
+      // exactly on it (measuring mid-animation made it land short and jump)
+      const target = stage.getBoundingClientRect();
+      const SOFT = 'cubic-bezier(.22, 1, .36, 1)';
+      // The window: a plain fade while a photo flies into it (so its spot doesn't move), or a soft rise
+      albumCard.animate(flying
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }],   // (no scaling: the photo keeps its size)
+      { duration: flying ? 420 : 480, easing: SOFT });
+      // Then everything under the photo fades up in reading order: title and details, the strip of
+      // photos (one after another), the code, and the buttons last
+      const start = flying ? 220 : 100;
+      const rise = (el, delay, from = 'translateY(10px)') => el.animate(
+        [{ opacity: 0, transform: from }, { opacity: 1, transform: 'none' }],
+        { duration: 440, delay, easing: SOFT, fill: 'backwards' });
+      let at = start;
+      const bar = document.getElementById('photoBar');
+      if (bar && !albumCard.classList.contains('is-empty')) { rise(bar, at); at += 40; }
+      const head = albumCard.querySelector('.album-head');
+      if (head) { rise(head, at); at += 50; }
+      const thumbs = [...thumbsEl.querySelectorAll('.thumb')];
+      thumbs.forEach((el, n) => { if (n < 10) rise(el, at + n * 18, 'translateY(6px)'); else rise(el, at + 10 * 18); });
+      if (thumbs.length) at += 90;   // the buttons don't wait for the whole strip
+      const code = document.getElementById('albumCode');
+      if (code && !code.hidden) { rise(code, at); at += 50; }
+      const empty = document.getElementById('albumEmpty');
+      if (empty && !empty.hidden) { rise(empty, at); at += 50; }
+      albumCard.querySelectorAll('.album-actions > button:not([hidden])').forEach((b, n) => rise(b, at + n * 40, 'translateY(8px)'));
       if (!flying) return;
       // Hide the photo it came from while it's "in the air"
       M.hidden = fromImg;
       M.hidden.style.opacity = 0;
-      const anim = fly(fromImg, stage.getBoundingClientRect());
-      anim.finished.then(() => {
+      const anim = fly(fromImg, target, M.ready || fromImg);
+      // Closing the window mid-flight cancels the animation; tidy up the same way either way
+      const landed = () => {
         albumCard.classList.remove('is-flying');
         const im = albumModal.querySelector('.fly');
-        im?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).finished.then(() => im.remove());
-      });
+        const gone = () => im.remove();
+        im?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).finished.then(gone, gone);
+      };
+      anim.finished.then(landed, landed);
     }
     // Closing (X, Esc or a click on the page behind): the window and its backdrop fade out together
     async function closeAlbum() {
@@ -1984,19 +2625,28 @@
       if (Math.abs(dx) > 40) show(M.i + (dx < 0 ? 1 : -1));
     });
     // What the window shows for an album: its line, thumbnails, an empty state, and whether it can be deleted or left
+    // A short label for albums with event times: when photos can be added (the full sentence is the tooltip)
+    function openLabel(a) {
+      if (!a.startsAt || !a.endsAt) return '';
+      const t = (d) => new Date(d).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const dd = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const zone = a.zone?.radiusM ? ` · ${a.zone.radiusM >= 1000 ? +(a.zone.radiusM / 1000).toFixed(1) + ' km' : a.zone.radiusM + ' m'}` : '';
+      if (a.status === 'live') return `Open until ${t(a.endsAt)}${zone}`;
+      if (a.status === 'new' || a.status === 'upcoming') return `Opens ${dd(a.opensAt || a.startsAt)}, ${t(a.opensAt || a.startsAt)}${zone}`;
+      return '';
+    }
     function fillAlbum(a) {
       const empty = !a.pics.length;
-      const who = a.guests ? `${num(a.photos)} photos from ${a.guests} guests, ${a.mine} of them yours.` : a.photos ? `${num(a.photos)} photos so far, all yours.` : 'No photos yet.';
-      // Everyone sees who hosts the album; only the host gets the code and the link to share
-      document.getElementById('albumHost').hidden = !a.hostName;
-      document.getElementById('albumHostName').textContent = a.hostName || '';
-      document.getElementById('albumHostYou').hidden = a.role !== 'host';
+      // One line for when, where and who hosts it; one for the numbers (and when photos can be added)
+      document.getElementById('albumStats').textContent = a.photos
+        ? [`${num(a.photos)} photos`, a.guests > 1 && `${a.guests} guests`, a.mine && `${num(a.mine)} yours`].filter(Boolean).join(' · ')
+        : 'No photos yet';
       const isHost = a.role === 'host' && !!a.code;
       document.getElementById('albumCode').hidden = !isHost;
       document.getElementById('albumCodeText').textContent = isHost ? a.code : '';
       document.getElementById('albumLink').hidden = !isHost;
       document.getElementById('albumQr').hidden = !isHost;
-      document.getElementById('albumSub').textContent = `${[`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place].filter(Boolean).join(', ')}. ${who}`;
+      document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : ''].filter(Boolean).join(' · ');
       thumbsEl.innerHTML = a.pics.map((p, n) => `<button class="thumb" type="button" data-n="${n}" aria-label="Photo ${n + 1}"><img src="${a.photoItems?.[n]?.thumbnailUrl || pic(p, 200, 200)}" alt=""></button>`).join('');
       albumCard.classList.toggle('is-empty', empty);
       document.getElementById('albumEmpty').hidden = !empty;
@@ -2011,8 +2661,16 @@
       document.getElementById('albumAdd').disabled = !can;
       document.getElementById('albumCamera').disabled = !can;
       const win = document.getElementById('albumWindow');
-      win.textContent = Momento.event?.windowText(a) || '';
+      win.textContent = openLabel(a);
+      win.title = Momento.event?.windowText(a) || '';
       win.hidden = !win.textContent;
+      // Anyone can sort other people's photos: hiding one only hides it from them
+      const sortLink = document.getElementById('albumSort');
+      sortLink.hidden = !(a.photos > (a.mine || 0) || a.hiddenCount);
+      const unhide = document.getElementById('albumUnhide');
+      unhide.hidden = !a.hiddenCount;
+      unhide.textContent = a.hiddenCount ? `${a.hiddenCount} hidden by you · Show ${a.hiddenCount === 1 ? 'it' : 'them'}` : '';
+      sortLink.href = 'sort.html?album=' + encodeURIComponent(a.id);
       albumRemove.textContent = a.role === 'host' ? 'Delete album' : 'Leave album';
     }
     const canAdd = (a) => !!a && (a.open || (a.role === 'host' && !!a.startsAt));
@@ -2117,8 +2775,8 @@
     document.getElementById('albumCodeCopy').addEventListener('click', async (e) => {
       const a = M.a, b = e.currentTarget;
       if (!a?.code) return;
-      b.textContent = await copyText(a.code) ? 'Copied' : 'Copy failed';
-      setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
+      // The button is an icon, so the answer comes as a toast
+      Momento.toast(await copyText(a.code) ? 'Code copied' : 'Copy failed', a.code);
     });
     document.getElementById('albumLink').addEventListener('click', async () => {
       const a = M.a;
@@ -2160,6 +2818,334 @@
       if (photo) location.href = photo.downloadUrl || window.MOMENTO_API + '/api/photos/' + photo.id + '/download';
     });
     albumRemove.addEventListener('click', () => Momento.removeAlbum(M.a, albumRemove));
+    // ---- Likes and comments ----
+    const pbLike = document.getElementById('pbLike'), pbTalk = document.getElementById('pbTalk');
+    const pbComments = document.getElementById('pbComments'), pbList = document.getElementById('pbList');
+    const pbForm = document.getElementById('pbForm'), pbInput = document.getElementById('pbInput');
+    const AV = ['#D9D0EA', '#C6DEDA', '#EBDCCB', '#E6CDD6', '#C9C0E2'];
+    const avColor = (name) => AV[[...name].reduce((s, ch) => s + ch.charCodeAt(0), 0) % AV.length];
+    const current = () => M.a?.photoItems?.[M.i];
+    // The album's cover is its most-liked photo (the newest wins a tie)
+    const coverOf = (a) => (a.photoItems || []).reduce((best, p) => ((p.likes || 0) > (best?.likes || 0) ? p : best), null);
+    function renderSocial() {
+      const p = current();
+      if (!p) return;
+      const likes = p.likes || 0, comments = p.comments || 0;
+      pbLike.setAttribute('aria-pressed', !!p.liked);
+      document.getElementById('pbLikes').textContent = likes ? num(likes) : 'Like';
+      pbLike.setAttribute('aria-label', `${p.liked ? 'Unlike' : 'Like'} this photo, ${plural(likes, 'like', 'likes')}`);
+      document.getElementById('pbTalkN').textContent = comments ? num(comments) : 'Comment';
+      pbTalk.setAttribute('aria-label', `Comments, ${plural(comments, 'comment', 'comments')}`);
+      const cover = coverOf(M.a);
+      document.getElementById('pbCover').hidden = !(cover && cover.id === p.id && likes > 0);
+      if (!pbComments.hidden) loadComments(p);
+      if (viewer.open) vwPaint();
+    }
+    let likeBusy = false;
+    async function setLike(want) {
+      const p = current();
+      if (!p || likeBusy || !!p.liked === want) return;
+      likeBusy = true;
+      const before = { likes: p.likes || 0, liked: !!p.liked };
+      p.liked = want; p.likes = Math.max(0, before.likes + (want ? 1 : -1));
+      M.coverDirty = true;
+      renderSocial();
+      if (want && !still) pbLike.querySelector('svg').animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+      try {
+        const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/like', momentoJson('POST', { liked: want }));
+        p.likes = r.likes; p.liked = r.liked;
+      } catch (err) { Object.assign(p, before); Momento.toast('That didn’t go through', err.message); }
+      finally { likeBusy = false; if (current() === p) renderSocial(); }
+    }
+    pbLike.addEventListener('click', () => setLike(!current()?.liked));
+    // Double-click (or double-tap) the photo to like it, with a heart that blooms in the middle
+    const burst = () => {
+      if (still) return;
+      document.getElementById('pbBurst').animate([
+        { opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1.15)', offset: .35 }, { opacity: 1, transform: 'scale(1)', offset: .6 }, { opacity: 0, transform: 'scale(1.05)' },
+      ], { duration: 820, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+    };
+    let lastTap = 0, tapTimer = 0, tapFrom = null;
+    stage.addEventListener('pointerdown', (e) => { tapFrom = { x: e.clientX, y: e.clientY }; });
+    stage.addEventListener('pointerup', (e) => {
+      if (e.target.closest('button') || e.button > 0) return;
+      // A drag (a swipe to the next photo) isn't a tap
+      if (tapFrom && Math.hypot(e.clientX - tapFrom.x, e.clientY - tapFrom.y) > 10) return;
+      const now = performance.now();
+      if (now - lastTap < 320) { lastTap = 0; clearTimeout(tapTimer); burst(); setLike(true); }
+      else { lastTap = now; clearTimeout(tapTimer); tapTimer = setTimeout(() => openViewer(), 330); }
+    });
+
+    // ---- Full size ----
+    const viewer = document.getElementById('viewer'), vwStage = document.getElementById('vwStage'), vwImg = document.getElementById('vwImg');
+    const vwLike = document.getElementById('vwLike'), vwHint = document.getElementById('vwHint');
+    const SOFT_EASE = 'cubic-bezier(.22, 1, .36, 1)';
+    let vwHinted = false;
+    function vwPaint() {
+      const p = current();
+      if (!p) return;
+      const countEl = document.getElementById('vwCount');
+      countEl.textContent = `${M.i + 1} of ${M.a.pics.length}`;
+      if (p.by) { const s = document.createElement('small'); s.textContent = `Added by ${p.by}`; countEl.append(s); }
+      vwLike.setAttribute('aria-pressed', !!p.liked);
+      vwLike.querySelector('span').textContent = p.likes ? num(p.likes) : '';
+      vwLike.setAttribute('aria-label', `${p.liked ? 'Unlike' : 'Like'} this photo, ${plural(p.likes || 0, 'like', 'likes')}`);
+      const many = M.a.pics.length > 1;
+      document.getElementById('vwPrev').hidden = !many; document.getElementById('vwNext').hidden = !many;
+    }
+    function vwLoad(fade) {
+      const p = current();
+      if (!p) return;
+      unzoom();
+      const url = p.url || pic(M.a.pics[M.i], 1600, 1000);
+      const swap = () => { vwImg.src = url; vwImg.alt = `Photo ${M.i + 1}${p.by ? ', added by ' + p.by : ''}`; };
+      vwPaint();
+      if (!fade || still) { swap(); return; }
+      const pre = new Image(); pre.src = url;
+      pre.decode().catch(() => {}).then(() => {
+        vwImg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
+          swap();
+          vwImg.getAnimations().forEach((a) => a.cancel());
+          vwImg.animate([{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: SOFT_EASE });
+        });
+      });
+    }
+    function openViewer() {
+      if (!M.a || !M.a.pics.length || viewer.open) return;
+      const from = stage.querySelector('.stage-img.is-on');
+      viewer.classList.remove('is-zoomed');
+      vwLoad(false);
+      vwHint.hidden = vwHinted; vwHinted = true;
+      viewer.showModal();
+      if (still) return;
+      viewer.animate({ opacity: [0, 1] }, { duration: 260, easing: 'ease-out' });
+      // The photo grows out of the album's photo into place
+      const go = () => {
+        const a = from?.getBoundingClientRect(), b = vwImg.getBoundingClientRect();
+        if (!a || !b.width) return;
+        vwImg.animate([
+          { transform: `translate(${a.left + a.width / 2 - (b.left + b.width / 2)}px, ${a.top + a.height / 2 - (b.top + b.height / 2)}px) scale(${Math.max(a.width / b.width, a.height / b.height)})`, borderRadius: '22px' },
+          { transform: 'none', borderRadius: '6px' },
+        ], { duration: 460, easing: SOFT_EASE });
+      };
+      vwImg.complete ? go() : vwImg.addEventListener('load', go, { once: true });
+    }
+    function closeViewer() {
+      if (!viewer.open) return;
+      if (still) { viewer.close(); return; }
+      viewer.animate({ opacity: [1, 0] }, { duration: 200, easing: 'ease-in', fill: 'forwards' }).finished.then(() => { viewer.close(); viewer.getAnimations().forEach((a) => a.cancel()); }, () => viewer.close());
+    }
+    const vwStep = (d) => { if (M.a.pics.length > 1) { show(M.i + d); vwLoad(true); } };
+    document.getElementById('stageFull').addEventListener('click', openViewer);
+    document.getElementById('vwClose').addEventListener('click', closeViewer);
+    document.getElementById('vwPrev').addEventListener('click', () => vwStep(-1));
+    document.getElementById('vwNext').addEventListener('click', () => vwStep(1));
+    document.getElementById('vwDownload').addEventListener('click', () => { const p = current(); if (p) location.href = p.downloadUrl || window.MOMENTO_API + '/api/photos/' + p.id + '/download'; });
+    vwLike.addEventListener('click', () => setLike(!current()?.liked));
+    viewer.addEventListener('cancel', (e) => { e.preventDefault(); if (viewer.classList.contains('is-zoomed')) unzoom(); else closeViewer(); });
+    viewer.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); vwStep(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); vwStep(-1); }
+    });
+    // Zoom: a click shows the photo at its real size (at least twice the fitted size), centred on the
+    // spot you clicked; drag to look around; a click without dragging fits it again
+    function unzoom() {
+      viewer.classList.remove('is-zoomed'); vwStage.classList.remove('is-zoomed', 'is-dragging');
+      vwImg.style.width = ''; vwImg.style.height = '';
+    }
+    function zoomAt(x, y) {
+      const r = vwImg.getBoundingClientRect();
+      const fx = (x - r.left) / r.width, fy = (y - r.top) / r.height;
+      const w = Math.max(vwImg.naturalWidth, r.width * 2), h = w * (r.height / r.width);
+      viewer.classList.add('is-zoomed'); vwStage.classList.add('is-zoomed');
+      vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px';
+      vwStage.scrollLeft = fx * w - innerWidth / 2;
+      vwStage.scrollTop = fy * h - innerHeight / 2;
+      if (!still) vwImg.animate([{ transform: `scale(${r.width / w})`, transformOrigin: `${fx * 100}% ${fy * 100}%` }, { transform: 'none', transformOrigin: `${fx * 100}% ${fy * 100}%` }], { duration: 320, easing: SOFT_EASE });
+      vwHint.hidden = true;
+    }
+    let pan = null, vwSwipe = null;
+    vwStage.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      if (vwStage.classList.contains('is-zoomed') && e.pointerType === 'mouse') {
+        pan = { x: e.clientX, y: e.clientY, sl: vwStage.scrollLeft, st: vwStage.scrollTop, moved: false };
+        vwStage.setPointerCapture(e.pointerId);
+      } else vwSwipe = { x: e.clientX, y: e.clientY };
+    });
+    vwStage.addEventListener('pointermove', (e) => {
+      if (!pan) return;
+      const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vwStage.classList.add('is-dragging'); }
+      vwStage.scrollLeft = pan.sl - dx; vwStage.scrollTop = pan.st - dy;
+    });
+    vwStage.addEventListener('pointerup', (e) => {
+      if (pan) { const moved = pan.moved; pan = null; vwStage.classList.remove('is-dragging'); if (!moved) unzoom(); return; }
+      const s0 = vwSwipe; vwSwipe = null;
+      if (!s0) return;
+      const dx = e.clientX - s0.x, dy = e.clientY - s0.y;
+      if (vwStage.classList.contains('is-zoomed')) { if (Math.abs(dx) + Math.abs(dy) < 6) unzoom(); return; }
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { vwStep(dx < 0 ? 1 : -1); return; }
+      if (Math.abs(dx) + Math.abs(dy) < 6) {
+        if (e.target === vwImg) zoomAt(e.clientX, e.clientY); else closeViewer();   // a tap on the dark area closes
+      }
+    });
+    addEventListener('resize', () => { if (viewer.open) unzoom(); });
+
+    // Comments: open under the photo and follow along as you flip through. Each one can be liked and
+    // replied to; replies sit under the comment they answer (one level deep, like most social apps)
+    let commentsFor = null, commentsReq = 0, replyTo = null;
+    const SMALL_HEART = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 7.8 2.6c0 5.8-7.8 10.4-7.8 10.4Z"/></svg>';
+    const setTalkCount = (n) => { document.getElementById('pbTalkN').textContent = n ? num(n) : 'Comment'; };
+    function paintCommentLike(btn, c) {
+      btn.setAttribute('aria-pressed', !!c.liked);
+      btn.querySelector('span').textContent = c.likes ? num(c.likes) : '';
+      btn.setAttribute('aria-label', `${c.liked ? 'Unlike' : 'Like'} ${c.by === 'You' ? 'your' : c.by + '’s'} comment, ${plural(c.likes || 0, 'like', 'likes')}`);
+    }
+    function commentRow(c, isReply) {
+      const li = document.createElement('li');
+      li.className = 'pb-item' + (isReply ? ' is-reply' : '');
+      li.dataset.id = c.id;
+      li.innerHTML = '<span class="pb-av"></span><div class="pb-body"><b></b><small></small><p></p><div class="pb-acts"><button class="pb-act pb-c-like" type="button">' + SMALL_HEART + '<span></span></button><button class="pb-act pb-reply" type="button">Reply</button></div></div>';
+      const av = li.querySelector('.pb-av');
+      av.textContent = (c.by.trim()[0] || '·').toUpperCase(); av.style.setProperty('--c', avColor(c.by));
+      li.querySelector('b').textContent = c.by;
+      li.querySelector('small').textContent = agoText(c.at);
+      li.querySelector('p').textContent = c.text;
+      const likeBtn = li.querySelector('.pb-c-like');
+      paintCommentLike(likeBtn, c);
+      likeBtn.addEventListener('click', () => likeComment(c, likeBtn));
+      const replyBtn = li.querySelector('.pb-reply');
+      replyBtn.setAttribute('aria-label', `Reply to ${c.by === 'You' ? 'your comment' : c.by}`);
+      replyBtn.addEventListener('click', () => setReply(c, li));
+      if (c.canDelete) {
+        const del = document.createElement('button');
+        del.className = 'pb-del'; del.type = 'button'; del.setAttribute('aria-label', 'Delete comment'); del.title = 'Delete comment';
+        del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+        del.addEventListener('click', () => removeComment(c, li));
+        li.append(del);
+      }
+      if (!isReply) { const ul = document.createElement('ul'); ul.className = 'pb-replies'; li.append(ul); }
+      return li;
+    }
+    const emptyRow = () => { const li = document.createElement('li'); li.className = 'pb-empty'; li.textContent = 'No comments yet. Say something nice.'; return li; };
+    function renderComments(list) {
+      const ids = new Set(list.map((c) => c.id));
+      const tops = list.filter((c) => !c.parent || !ids.has(c.parent));
+      const rows = tops.map((c) => {
+        const li = commentRow(c, false), ul = li.querySelector('.pb-replies');
+        list.filter((r) => r.parent === c.id).forEach((r) => ul.append(commentRow(r, true)));
+        return li;
+      });
+      pbList.replaceChildren(...(rows.length ? rows : [emptyRow()]));
+    }
+    async function loadComments(p) {
+      if (commentsFor === p.id) return;
+      commentsFor = p.id;
+      setReply(null);
+      const req = ++commentsReq;
+      pbList.innerHTML = '<li class="pb-empty">Loading comments…</li>';
+      try {
+        const { comments } = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments');
+        if (req !== commentsReq) return;
+        p.comments = comments.length;
+        renderComments(comments);
+        pbList.scrollTop = pbList.scrollHeight;
+        setTalkCount(comments.length);
+      } catch (err) { if (req === commentsReq) { commentsFor = null; pbList.innerHTML = ''; const li = emptyRow(); li.textContent = 'Comments couldn’t load. ' + err.message; pbList.append(li); } }
+    }
+    // Replying: a "Replying to Maya" line above the box, and the comment is gently highlighted
+    function setReply(c, li) {
+      pbList.querySelectorAll('.is-target').forEach((x) => x.classList.remove('is-target'));
+      const bar = document.getElementById('pbReplying');
+      replyTo = c ? { id: c.parent || c.id, by: c.by } : null;
+      bar.hidden = !c;
+      if (!c) { pbInput.placeholder = 'Add a comment…'; return; }
+      bar.querySelector('b').textContent = c.by === 'You' ? 'yourself' : c.by;
+      pbInput.placeholder = c.by === 'You' ? 'Add to your comment…' : `Reply to ${c.by}…`;
+      li?.classList.add('is-target');
+      pbInput.focus({ preventScroll: true });
+    }
+    document.getElementById('pbReplyCancel').addEventListener('click', () => { setReply(null); pbInput.focus({ preventScroll: true }); });
+    pbInput.addEventListener('keydown', (e) => { if (e.key === 'Escape' && replyTo) { e.preventDefault(); e.stopPropagation(); setReply(null); } });
+    async function likeComment(c, btn) {
+      const p = current();
+      if (!p || btn.disabled) return;
+      const want = !c.liked, before = { likes: c.likes || 0, liked: !!c.liked };
+      c.liked = want; c.likes = Math.max(0, before.likes + (want ? 1 : -1));
+      paintCommentLike(btn, c);
+      if (want && !still) btn.querySelector('svg').animate([{ transform: 'scale(1)' }, { transform: 'scale(1.4)' }, { transform: 'scale(1)' }], { duration: 380, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+      btn.disabled = true;
+      try {
+        const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments/' + encodeURIComponent(c.id) + '/like', momentoJson('POST', { liked: want }));
+        c.likes = r.likes; c.liked = r.liked;
+      } catch (err) { Object.assign(c, before); Momento.toast('That didn’t go through', err.message); }
+      finally { btn.disabled = false; paintCommentLike(btn, c); }
+    }
+    function openComments(open) {
+      pbTalk.setAttribute('aria-expanded', open);
+      pbComments.hidden = !open;
+      if (!open) { commentsFor = null; setReply(null); return; }
+      const p = current();
+      if (p) loadComments(p);
+      if (!still) pbComments.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      pbInput.focus({ preventScroll: true });
+      pbComments.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+    }
+    pbTalk.addEventListener('click', () => openComments(pbComments.hidden));
+    pbForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const p = current(), text = pbInput.value.trim();
+      if (!p || !text) return;
+      const send = pbForm.querySelector('.pb-send');
+      send.disabled = true;
+      try {
+        const { comment } = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments', momentoJson('POST', { text, ...(replyTo && { replyTo: replyTo.id }) }));
+        pbInput.value = '';
+        pbList.querySelector('.pb-empty')?.remove();
+        const thread = comment.parent && pbList.querySelector(`.pb-item[data-id="${CSS.escape(comment.parent)}"] > .pb-replies`);
+        const li = commentRow(comment, !!thread);
+        (thread || pbList).append(li);
+        if (!still) li.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 360, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+        if (thread) li.scrollIntoView({ block: 'nearest' }); else pbList.scrollTop = pbList.scrollHeight;
+        setReply(null);
+        p.comments = (p.comments || 0) + 1;
+        setTalkCount(p.comments);
+      } catch (err) { Momento.toast('Comment not posted', err.message); }
+      finally { send.disabled = false; pbInput.focus({ preventScroll: true }); }
+    });
+    async function removeComment(c, li) {
+      const p = current();
+      if (!p) return;
+      try {
+        const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments/' + encodeURIComponent(c.id), { method: 'DELETE' });
+        const gone = r.removed || 1 + (li.querySelectorAll('.pb-replies > .pb-item').length);
+        if (replyTo && (replyTo.id === c.id)) setReply(null);
+        const done = () => { li.remove(); if (!pbList.children.length) pbList.append(emptyRow()); };
+        still ? done() : li.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateX(12px)' }], { duration: 220, easing: 'ease-in' }).finished.then(done, done);
+        p.comments = Math.max(0, (p.comments || gone) - gone);
+        setTalkCount(p.comments);
+      } catch (err) { Momento.toast('Comment not deleted', err.message); }
+    }
+    // A new album opens with comments closed; when one closes, covers catch up with any new likes
+    albumModal.addEventListener('close', () => {
+      openComments(false);
+      if (M.coverDirty) { M.coverDirty = false; loadAlbums().catch(() => {}); }
+    });
+
+    // Bring back every photo you hid in this album (only your view changes)
+    document.getElementById('albumUnhide').addEventListener('click', async (e) => {
+      const a = M.a, btn = e.currentTarget;
+      if (!a) return;
+      btn.disabled = true;
+      try {
+        await momentoApi('/api/albums/' + a.id + '/hidden', momentoJson('POST', { all: true, hidden: false }));
+        try { localStorage.removeItem('momento-kept-' + a.id); } catch (err) {}   // so Sort photos starts fresh too
+        Momento.toast('Hidden photos are back', a.name);
+        await loadAlbums();
+        await fetchAlbum(a); photosChanged(a, M.i);
+      } catch (err) { Momento.toast('Couldn’t show them again', err.message); }
+      finally { btn.disabled = false; }
+    });
 
     // ---- Join an album using the server-issued guest code ----
 
@@ -2561,6 +3547,23 @@
       document.querySelector('#empty > span').textContent = ALBUMS.length ? 'Try another name or place.' : 'Create an album or join with a code to add your first photos.';
       renderFeed(result);
       renderTodo(result);
+      renderSorter();
+    }
+
+    // ---- Sort photos: each album with photos by other people, newest first, linking to the sorter ----
+    function renderSorter() {
+      const box = document.getElementById('sorter'), row = document.getElementById('sorterRow');
+      const list = kept().filter((a) => a.photos > (a.mine || 0));
+      box.hidden = !list.length;
+      const arrow = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+      row.innerHTML = list.map((a) => {
+        const others = a.photos - (a.mine || 0);
+        return `<a class="sorter-item" href="sort.html?album=${encodeURIComponent(a.id)}" aria-label="Sort ${esc(a.name)}, ${plural(others, 'photo', 'photos')} by others">
+          <span class="sorter-pic">${coverTile(a)}</span>
+          <span class="sorter-text"><b>${esc(a.name)}</b><small>${plural(others, 'photo', 'photos')} by others</small></span>
+          <span class="sorter-go">${arrow}</span>
+        </a>`;
+      }).join('');
     }
 
     // ---- Waiting on you: invites, plus what your albums need from you right now ----
@@ -3488,7 +4491,9 @@
   
     // ---- Leaving a page, in browsers that can't cross-fade between pages themselves: the page fades and
     // lifts away (CSS .is-leaving), then the next one loads ----
-    if (!('CSSViewTransitionRule' in window) && !reduced.matches) {
+    // (Also for pages opened straight from the folder: browsers only cross-fade pages served from an address)
+    const ptFile = location.protocol === 'file:';
+    if ((!('CSSViewTransitionRule' in window) || ptFile) && !reduced.matches) {
       document.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute('download')) return;
@@ -3496,6 +4501,7 @@
         if (url.origin !== location.origin || url.pathname === location.pathname) return;   // other sites, mailto:, same-page anchors
         e.preventDefault();
         root.classList.add('is-leaving');
+        if (ptFile) { root.classList.add('pt-file'); try { sessionStorage.setItem('momento-pt', '1'); } catch (err) {} }
         setTimeout(() => { location.href = url.href; }, 240);
       });
       addEventListener('pageshow', (e) => { if (e.persisted) root.classList.remove('is-leaving'); });   // back from the page cache
@@ -3589,8 +4595,17 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="sort.html">Sort photos</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfEvents">
+            <h2 id="sfEvents">Events</h2>
+            <ul>
+              <li><a class="sf-link" href="events.html">Events near you</a></li>
+              <li><a class="sf-link" href="${P}#for-hosts" data-create>Host a public event</a></li>
+              <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>
           </nav>
           <nav class="sf-col" aria-labelledby="sfHelp">
@@ -3645,6 +4660,27 @@
         onLogout: to ? () => { location.href = to; } : null,
       });
     });
+  })();
+
+  // ---- Popup cards catch the pointer light too (they're created later, so listen on the page) ----
+  (() => {
+    const SEL = '.auth-card, .modal-card, .acct-card, .vgate-card';
+    let el = null, x = 0, y = 0, queued = false;
+    addEventListener('pointermove', (e) => {
+      const card = e.target.closest ? e.target.closest(SEL) : null;
+      if (card !== el) { if (el) el.style.setProperty('--shine', 0); el = card; if (el) el.style.setProperty('--shine', 1); }
+      if (!el) return;
+      x = e.clientX; y = e.clientY;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--mx', `${x - r.left}px`);
+        el.style.setProperty('--my', `${y - r.top}px`);
+      });
+    }, { passive: true });
   })();
     </script>
   <!-- /@shared:js -->

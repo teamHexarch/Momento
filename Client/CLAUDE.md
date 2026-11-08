@@ -13,6 +13,7 @@
 - Start the dev server: `node serve.mjs` (serves the project root at `http://localhost:3000`)
 - `serve.mjs` lives in the project root. Start it in the background before taking any screenshots.
 - If the server is already running, do not start a second instance.
+- **Dev mode (no backend):** on by default for the local preview (port 3000, on this PC or a phone on the same Wi-Fi): every page acts signed in with sample albums and photos, including "Imaad's 18th" (always live, 18 photos). `?dev=off` turns it off, `?dev` back on, `?dev=reset` restarts the sample data. Through the real server (port 4000) it's off unless `?dev` is used. Code: `assets/devpreview.js`; it never loads on the live site. `Open Momento preview.cmd` (one folder up) starts the preview and opens it.
 
 ## Screenshot Workflow
 - Puppeteer is installed at `C:/Users/nateh/AppData/Local/Temp/puppeteer-test/`. Chrome cache is at `C:/Users/nateh/.cache/puppeteer/`.

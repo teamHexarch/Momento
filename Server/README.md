@@ -237,19 +237,27 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/auth/password/forgot` | `{ email }` emails a reset link; always `{ ok: true }` |
 | POST | `/api/auth/password/reset` | `{ token, password }` from the reset link; logs in and logs out other devices |
 | GET | `/api/albums` | Your albums (host and guest, with `status`, `closes`, `open`, and for hosts `waiting`), the 12 newest photos, `feed` (who added what, in batches) and `invites` waiting for you |
-| POST | `/api/albums` | `{ name, date: "YYYY-MM-DD", place?, zone? }` creates an album with a join code |
+| POST | `/api/albums` | `{ name, date: "YYYY-MM-DD", place?, zone?, visibility? }` creates an album with a join code; `visibility: "public"` also lists it on the Events map |
 | POST | `/api/albums/join` | `{ code }` joins as a guest; any case, dash optional; uses up any invite to that album |
 | POST | `/api/albums/:id/remind` | Host only: emails guests who haven't added photos (once a day per album, at most 25 people) |
 | POST | `/api/albums/:id/invites` | Host only: `{ email }` emails an invite with the code; it also shows on their albums page |
 | POST | `/api/support` | `{ name, email, topic, message }` from the Support page, emailed to `SUPPORT_EMAIL` (default `EMAIL_REPLY_TO`, then `SENDER_EMAIL`) with Reply-To set to the sender |
-| GET | `/api/albums/:id` | One album with all its photos |
+| GET | `/api/events/nearby` | `?lat&lng&km` Public events (albums made with `visibility: "public"`) that haven't finished, within `km` (25 by default, at most 100): `distanceM`, `inside` (within the zone), `joined`, a few previews |
+| POST | `/api/events/:id/join` | `{ lat, lng, accuracy }` joins a public event as a guest, only from inside its zone |
+| GET | `/api/albums/:id` | One album with its photos, minus any you've hidden (`album.hiddenCount` says how many); `?hidden=1` includes them, marked `hidden: true` |
+| POST | `/api/albums/:id/hidden` | `{ photoIds, hidden }` hides photos from your own view, or shows them again; `{ all: true, hidden: false }` shows every hidden photo. Other people still see them |
 | PATCH | `/api/albums/:id` | Host only: change name, date, place or zone |
 | DELETE | `/api/albums/:id` | Host only: deletes the album and its photos |
 | DELETE | `/api/albums/:id/membership` | A guest leaves the album |
 | POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF) |
 | GET | `/api/albums/:id/download` | Every photo as a .zip |
 | GET | `/api/photos/:id` | The image file, for album members only |
-| DELETE | `/api/photos/:id` | The person who added it, or the host |
+| DELETE | `/api/photos/:id` | The person who added it, or the host (its comments go too) |
+| POST | `/api/photos/:id/like` | `{ liked }` likes or unlikes it; returns `{ likes, liked }`. An album's most-liked photo is its cover |
+| GET | `/api/photos/:id/comments` | The comments under a photo, oldest first (`parent` for replies; `likes`, `liked`, `mine`, `canDelete` for each) |
+| POST | `/api/photos/:id/comments` | `{ text, replyTo? }` (up to 500 characters) adds a comment, or a reply (one level deep) |
+| DELETE | `/api/photos/:id/comments/:commentId` | The person who wrote it, or the host (its replies go too) |
+| POST | `/api/photos/:id/comments/:commentId/like` | `{ liked }` likes or unlikes a comment |
 
 Anyone who isn't in an album gets "not found" for it and its photos, so album ids can't be probed.
 

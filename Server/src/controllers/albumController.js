@@ -5,6 +5,7 @@ import { config } from '../config/env.js';
 import { Album } from '../models/Album.js';
 import { Membership } from '../models/Membership.js';
 import { Photo } from '../models/Photo.js';
+import { Comment } from '../models/Comment.js';
 import { Invite } from '../models/Invite.js';
 import { User } from '../models/User.js';
 import { sendEmail } from '../services/emailService.js';
@@ -55,15 +56,17 @@ export async function membershipOf(req, albumId) {
 }
 
 // Counts and the newest few photos for a set of albums, in two queries
-async function statsFor(albumIds, userId) {
+// hidden: photo ids this person has hidden (left out of their counts and previews)
+async function statsFor(albumIds, userId, hidden = []) {
   const [photoStats, memberStats, hosts] = await Promise.all([
     Photo.aggregate([
-      { $match: { album: { $in: albumIds } } },
+      { $match: { album: { $in: albumIds }, _id: { $nin: hidden } } },
       { $group: {
         _id: '$album',
         photos: { $sum: 1 },
         mine: { $sum: { $cond: [{ $eq: ['$uploader', userId] }, 1, 0] } },
-        pics: { $topN: { n: PREVIEW_PICS, sortBy: { createdAt: -1 }, output: '$_id' } },
+        // Most liked first, so the album's cover is its favourite photo (newest first among equals)
+        pics: { $topN: { n: PREVIEW_PICS, sortBy: { likeCount: -1, createdAt: -1 }, output: '$_id' } },
       } },
     ]),
     Membership.aggregate([
@@ -99,6 +102,7 @@ function summary(album, role, stats) {
     // Only the host sees the join code, to print or share
     code: role === 'host' ? album.displayCode : undefined,
     zone: album.zone?.radiusM ? album.zone : undefined,
+    visibility: album.visibility || 'invite',
     ...stats,
   };
 }
@@ -186,9 +190,10 @@ export async function list(req, res) {
   const mine = memberships.filter((m) => m.album);
   const ids = mine.map((m) => m.album._id);
   const hostedIds = mine.filter((m) => m.role === 'host').map((m) => m.album._id);
+  const hidden = mine.flatMap((m) => m.hidden || []);
   const [stats, recent, waiting, invites] = await Promise.all([
-    statsFor(ids, req.user._id),
-    Photo.find({ album: { $in: ids } }).sort({ createdAt: -1 }).limit(80).populate('uploader', 'name'),
+    statsFor(ids, req.user._id, hidden),
+    Photo.find({ album: { $in: ids }, _id: { $nin: hidden } }).sort({ createdAt: -1 }).limit(80).populate('uploader', 'name'),
     waitingGuests(hostedIds),
     // Only to someone who has proved the address is theirs: anyone can sign up with an email they
     // don't own, and an invite carries the album's join code
@@ -224,7 +229,7 @@ export async function list(req, res) {
 }
 
 export async function create(req, res) {
-  const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body) };
+  const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body), visibility: req.body?.visibility === 'public' ? 'public' : 'invite' };
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -272,7 +277,7 @@ export async function join(req, res) {
   }
   // (only for a confirmed address, so an unconfirmed sign-up can't clear the real person's invite)
   if (req.user.emailVerified) await Invite.deleteMany({ album: album._id, email: req.user.email });
-  const stats = await statsFor([album._id], req.user._id);
+  const stats = await statsFor([album._id], req.user._id, m?.hidden || []);
   res.status(already ? 200 : 201).json({ already, album: summary(album, m.role, stats.get(String(album._id))) });
 }
 
@@ -280,17 +285,45 @@ export async function join(req, res) {
 
 export async function show(req, res) {
   const m = await membershipOf(req, req.params.id);
-  const [stats, photos] = await Promise.all([
-    statsFor([m.album._id], req.user._id),
-    Photo.find({ album: m.album._id }).sort({ createdAt: -1 }).populate('uploader', 'name'),
+  const hidden = m.hidden || [];
+  const withHidden = req.query.hidden === '1';
+  const [stats, photos, hiddenCount] = await Promise.all([
+    statsFor([m.album._id], req.user._id, hidden),
+    Photo.find({ album: m.album._id, ...(!withHidden && { _id: { $nin: hidden } }) }).sort({ createdAt: -1 }).populate('uploader', 'name'),
+    hidden.length ? Photo.countDocuments({ album: m.album._id, _id: { $in: hidden } }) : 0,
   ]);
+  const hiddenSet = new Set(hidden.map(String));
   res.json({
-    album: summary(m.album, m.role, stats.get(String(m.album._id))),
+    album: { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount },
     photos: photos.map((p) => {
       const mine = p.uploader?._id.equals(req.user._id);
-      return { id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt };
+      return {
+        id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
+        likes: p.likeCount || 0, liked: (p.likes || []).some((id) => id.equals(req.user._id)), comments: p.commentCount || 0,
+        ...(withHidden && hiddenSet.has(p.id) && { hidden: true }),
+      };
     }),
   });
+}
+
+// Hide photos from your own view of an album, or show them again. Body: { photoIds: [...], hidden: true|false }
+// or { all: true, hidden: false } to show every hidden photo again. Only changes what this person sees.
+export async function setHidden(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  const hide = req.body?.hidden !== false;
+  if (req.body?.all === true && !hide) {
+    m.hidden = [];
+  } else {
+    const raw = Array.isArray(req.body?.photoIds) ? req.body.photoIds : [];
+    if (!raw.length || raw.length > 500 || !raw.every((id) => mongoose.isValidObjectId(id))) throw new HttpError(400, 'Choose the photos to hide or show.');
+    // Only photos that really are in this album
+    const ids = (await Photo.find({ album: m.album._id, _id: { $in: raw } }, '_id')).map((p) => p._id);
+    const keep = new Set(ids.map(String));
+    if (hide) m.hidden = [...(m.hidden || []).filter((id) => !keep.has(String(id))), ...ids];
+    else m.hidden = (m.hidden || []).filter((id) => !keep.has(String(id)));
+  }
+  await m.save();
+  res.json({ hiddenCount: m.hidden.length });
 }
 
 export async function update(req, res) {
@@ -298,8 +331,12 @@ export async function update(req, res) {
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the album.');
   const fields = readAlbumFields({ name: m.album.name, date: m.album.date, place: m.album.place, zone: m.album.zone, ...req.body });
   Object.assign(m.album, fields);
+  if (req.body?.visibility === 'public' || req.body?.visibility === 'invite') {
+    if (req.body.visibility === 'public' && !m.album.zone?.radiusM) throw new HttpError(400, 'A public album needs a venue, so people nearby can find it.');
+    m.album.visibility = req.body.visibility;
+  }
   await m.album.save();
-  const stats = await statsFor([m.album._id], req.user._id);
+  const stats = await statsFor([m.album._id], req.user._id, m.hidden || []);
   res.json({ album: summary(m.album, 'host', stats.get(String(m.album._id))) });
 }
 
@@ -310,6 +347,7 @@ export async function remove(req, res) {
   await deletePhotos(photos.map((p) => p.storageKey));
   await Promise.all([
     Photo.deleteMany({ album: m.album._id }),
+    Comment.deleteMany({ album: m.album._id }),
     Membership.deleteMany({ album: m.album._id }),
     Invite.deleteMany({ album: m.album._id }),
     m.album.deleteOne(),
@@ -377,7 +415,7 @@ export async function addPhotos(req, res) {
 
 export async function download(req, res) {
   const m = await membershipOf(req, req.params.id);
-  const photos = await Photo.find({ album: m.album._id }).sort({ createdAt: 1 });
+  const photos = await Photo.find({ album: m.album._id, _id: { $nin: m.hidden || [] } }).sort({ createdAt: 1 });
   if (!photos.length) throw new HttpError(404, 'This album has no photos yet.');
   const safeName = m.album.name.replace(/[^\w\- ]+/g, '').trim() || 'album';
   res.attachment(`${safeName}.zip`);

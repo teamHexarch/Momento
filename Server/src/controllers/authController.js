@@ -7,7 +7,7 @@ import { HttpError } from '../utils/httpError.js';
 import { startSession, endSession } from '../utils/session.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
-import { startEmailChange, finishEmailChange, deleteAccount } from '../services/accountService.js';
+import { startEmailChange, peekEmailApproval, approveEmailChange, cancelEmailChange, finishEmailChange, dropEmailChange, deleteAccount } from '../services/accountService.js';
 import { joinFromInvite } from './albumController.js';
 import { normaliseCode } from '../utils/albumCodes.js';
 
@@ -128,6 +128,8 @@ export async function changePassword(req, res) {
   user.passwordChangedAt = new Date();
   user.sessions = [];
   await user.save();
+  // A pending email change can't outlive a password change
+  await dropEmailChange(user);
   await startSession(res, user);
   const { sendEmail, isEmailConfigured } = await import('../services/emailService.js');
   const { passwordChangedHtml } = await import('../services/emailTemplates.js');
@@ -142,16 +144,39 @@ export async function requestEmailChange(req, res) {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'Enter an email address like name@example.com.');
   if (email === req.user.email) throw new HttpError(400, 'That’s already your email.');
+  // The current address has to approve the move, so it must be one the person really receives
+  if (!req.user.emailVerified) throw new HttpError(403, 'Confirm your current email first.', 'unverified');
   await checkPassword(req.user, req.body?.password);
   if (await User.exists({ email })) throw new HttpError(409, 'Another account already uses that email.');
   await startEmailChange(req.user, email);
-  res.json({ ok: true, pendingEmail: email });
+  res.json({ ok: true, pendingEmail: email, approveFrom: req.user.email });
 }
 
-// The link in the new address's email lands here, then goes on to Settings, which says how it went
+// p***@example.com: enough to recognise your own address on the approval page
+const maskEmail = (email) => { const [name, domain] = String(email).split('@'); return `${name.slice(0, 1)}***@${domain}`; };
+
+// The approval page asks what the link is for before anyone presses a button
+export async function emailApproveInfo(req, res) {
+  const info = await peekEmailApproval(req.query.token);
+  if (!info) throw new HttpError(400, 'This link has expired or was already used.', 'invalid');
+  res.json({ newEmail: info.newEmail, email: maskEmail(info.email) });
+}
+
+// Approve (from the current inbox): the new address gets its confirm link
+export async function approveEmail(req, res) {
+  res.json({ result: await approveEmailChange(req.body?.token) });
+}
+
+// Not me: the change is dropped and every device is logged out
+export async function cancelEmail(req, res) {
+  res.json({ result: await cancelEmailChange(req.body?.token) });
+}
+
+// The link in the new address's email lands here. The move logs every device out, so it goes on to
+// the home page's log in window, which says how it went.
 export async function confirmEmailChange(req, res) {
   const result = await finishEmailChange(req.query.token);
-  res.redirect(303, `${config.frontendUrl}/settings.html?email=${result}`);
+  res.redirect(303, `${config.frontendUrl}/?login=1&email=${result}`);
 }
 
 export async function deleteMe(req, res) {
@@ -231,6 +256,8 @@ export async function resetPassword(req, res) {
   if (password.length > 128) throw new HttpError(400, 'Keep your password under 128 characters.');
   const user = await applyNewPassword(req.body?.token, password);
   if (!user) throw new HttpError(400, 'This reset link has expired or was already used. Ask for a new one.');
+  // Taking the account back with a reset also stops any email change someone else started
+  await dropEmailChange(user);
   // Logged in here; every older login, on any device, has just stopped working
   await signedIn(res, user);
 }

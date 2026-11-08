@@ -31,9 +31,8 @@
   const fetchUser = () => window.momentoApi('/api/auth/me').then((r) => r.user).catch(() => null);
   const GATE_CSS = `
     .vgate { border: none; padding: 0; background: transparent; max-width: calc(100vw - 32px); width: 440px; color: var(--dusk, #2E2C3A); }
-    .vgate::backdrop { background: rgba(26, 24, 34, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-    .vgate-card { box-sizing: border-box; padding: 2rem 1.75rem 1.5rem; border-radius: 28px; background: var(--paper, #FBF8F3);
-      box-shadow: 0 1px 2px rgba(46, 44, 58, .08), 0 24px 60px -12px rgba(46, 44, 58, .35); text-align: center; font-family: var(--font-main, system-ui, sans-serif); }
+    .vgate-card { position: relative; box-sizing: border-box; padding: 2rem 1.75rem 1.5rem; border-radius: 30px;
+      text-align: center; font-family: var(--font-main, system-ui, sans-serif); }
     .vgate-ic { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 1rem; border-radius: 50%; background: rgba(46, 44, 58, .07); }
     .vgate h2 { margin: 0 0 .5rem; font-size: 1.5rem; letter-spacing: -.02em; }
     .vgate p { margin: 0 0 1.25rem; line-height: 1.6; color: var(--slate, #5D5A6B); }
@@ -47,15 +46,14 @@
     .vgate button:focus-visible { outline: 2px solid var(--dusk, #2E2C3A); outline-offset: 2px; }
     .vgate button:disabled { opacity: .55; cursor: default; transform: none; }
     .vgate-primary { background: var(--dusk, #2E2C3A); color: var(--paper, #FBF8F3); }
+    .vgate-primary:hover { opacity: .9; }
     .vgate-ghost { background: rgba(46, 44, 58, .07); color: inherit; }
     .vgate-link { background: none !important; color: var(--slate, #5D5A6B) !important; font-weight: 600 !important; }
+    .vgate-link:hover { color: var(--dusk, #2E2C3A) !important; }
     .vgate-ghost:hover { background: rgba(46, 44, 58, .12); }
-    :root[data-theme="dark"] .vgate { color: #F3F0EA; }
-    :root[data-theme="dark"] .vgate-card { background: #24222D; }
-    :root[data-theme="dark"] .vgate p, :root[data-theme="dark"] .vgate-link { color: #B9B5C6 !important; }
-    :root[data-theme="dark"] .vgate p b { color: #F3F0EA; }
-    :root[data-theme="dark"] .vgate-primary { background: #F3F0EA; color: #24222D; }
+    :root[data-theme="dark"] .vgate-status.is-error { color: #F0A3A3; }
     :root[data-theme="dark"] .vgate-ghost, :root[data-theme="dark"] .vgate-ic { background: rgba(255, 255, 255, .09); }
+    :root[data-theme="dark"] .vgate-ghost:hover { background: rgba(255, 255, 255, .15); }
   `;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

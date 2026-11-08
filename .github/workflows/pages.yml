@@ -1,6 +1,7 @@
 # Publishes the Client folder to https://hexarch.org (GitHub Pages) on every push that
 # changes it. Only the files the site needs are published; design-time files in Client/
 # (CLAUDE.md, serve.mjs, screenshot.mjs, screenshots) stay in the repo but aren't served.
+# assets/devpreview.js (local dev mode) is removed from the published files.
 #
 # Needs Settings > Pages > Build and deployment > Source set to "GitHub Actions".
 
@@ -33,9 +34,10 @@ jobs:
       - name: Collect the public site files
         run: |
           mkdir -p _site/assets
-          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/privacy.html Client/CNAME _site/
+          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/sort.html Client/events.html Client/privacy.html Client/CNAME _site/
           cp Client/assets/*.js Client/assets/momento-icon.png _site/assets/
           mkdir -p _site/assets/vendor && cp Client/assets/vendor/*.js _site/assets/vendor/
+          rm -f _site/assets/devpreview.js
           ls -R _site
 
       - uses: actions/configure-pages@v6

@@ -5,6 +5,9 @@ const membershipSchema = new mongoose.Schema({
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   role: { type: String, enum: ['host', 'guest'], required: true },
+  // Photos this person has hidden from their own view of the album (Sort photos). Everyone else
+  // still sees them; nothing is deleted
+  hidden: { type: [mongoose.Schema.Types.ObjectId], default: [] },
 }, { timestamps: true });
 
 membershipSchema.index({ album: 1, user: 1 }, { unique: true });

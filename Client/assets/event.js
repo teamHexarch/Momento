@@ -16,6 +16,7 @@
     pin: svgIcon('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>', 16),
     locate: svgIcon('<circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>', 16),
     flip: svgIcon('<path d="M4 7h11a5 5 0 0 1 0 10H9M7 4 4 7l3 3M17 20l3-3-3-3"/>', 18),
+    out: svgIcon('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>', 15),
     camera: svgIcon('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/>', 22),
   };
   const pad = (n) => String(n).padStart(2, '0');
@@ -55,7 +56,6 @@
     .ev-venue-search input { min-height: 2.9rem; padding: 0 .9rem; border: 1px solid var(--line, #d6d2de); border-radius: 14px; background: var(--surface, #fff); color: inherit; font: inherit; }
     .ev-map { height: 13rem; border-radius: 18px; overflow: hidden; background: rgba(127, 120, 150, .12); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .08); }
     .ev-map[hidden] { display: none; }
-    .ev-venue-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
     .ev-picked { display: flex; gap: .4rem; align-items: flex-start; margin: 0; font-size: .86rem; line-height: 1.45; color: var(--dusk, #2e2c3a); }
     .ev-picked svg { flex: none; margin-top: .1rem; }
     .ev-picked.is-empty { color: var(--slate, #5c596b); }
@@ -63,6 +63,53 @@
     .ev-link:hover { background: rgba(127, 120, 150, .24); }
     .ev-link:active { transform: scale(.96); }
     .ev-link:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    a.ev-link { text-decoration: none; }
+
+    .ev-venue-acts { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .ev-venue-search input:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+
+    /* Venue suggestions: a list that opens under the search box as you type */
+    .ev-suggest { display: grid; gap: 2px; margin: 0; padding: .35rem; list-style: none; border-radius: 18px;
+      background: var(--surface, #fff); box-shadow: 0 0 0 1px rgba(46, 44, 58, .1), 0 18px 34px -18px rgba(46, 44, 58, .45); }
+    .ev-suggest[hidden] { display: none; }
+    .ev-suggest li { display: grid; gap: 1px; padding: .6rem .75rem; border-radius: 13px; cursor: pointer; transition: background-color .15s ease; }
+    .ev-suggest li b { overflow: hidden; font-size: .9rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; color: var(--dusk, #2e2c3a); }
+    .ev-suggest li small { overflow: hidden; font-size: .78rem; white-space: nowrap; text-overflow: ellipsis; color: var(--slate, #5c596b); }
+    .ev-suggest li.is-active { background: rgba(127, 120, 150, .14); }
+    @media (hover: hover) { .ev-suggest li:hover { background: rgba(127, 120, 150, .14); } }
+    .ev-suggest li:active { background: rgba(127, 120, 150, .22); }
+    .ev-suggest .ev-suggest-note { padding: .45rem .75rem .3rem; cursor: default; font-size: .78rem; color: var(--slate, #5c596b); }
+    .ev-suggest .ev-suggest-note:hover { background: none; }
+    .ev-suggest .ev-credit { padding: .2rem .75rem .25rem; cursor: default; font-size: .68rem; color: var(--slate, #5c596b); opacity: .8; }
+    .ev-suggest .ev-credit:hover { background: none; }
+
+    /* Additional settings: when uploads open and how far away guests can be, folded away by default */
+    .ev-more { border-radius: 18px; background: rgba(127, 120, 150, .08); box-shadow: inset 0 0 0 1px rgba(127, 120, 150, .16); }
+    .ev-more > summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; border-radius: 18px; list-style: none; cursor: pointer; font-size: .9rem; font-weight: 650; color: var(--dusk, #2e2c3a); transition: background-color .2s ease; }
+    .ev-more > summary::-webkit-details-marker { display: none; }
+    .ev-more > summary small { margin-left: auto; font-size: .8rem; font-weight: 550; color: var(--slate, #5c596b); text-align: right; }
+    .ev-more > summary svg { flex: none; color: var(--slate, #5c596b); transition: transform .4s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-more[open] > summary svg { transform: rotate(180deg); }
+    .ev-more > summary:hover { background: rgba(127, 120, 150, .1); }
+    .ev-more > summary:active { background: rgba(127, 120, 150, .18); }
+    .ev-more > summary:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    .ev-more-body { display: grid; gap: 1.1rem; padding: .3rem 1rem 1rem; }
+    /* Who can join: invite only, or public (listed on the Events map) */
+    .ev-who { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .ev-who label { position: relative; display: grid; gap: .2rem; padding: .8rem .9rem .85rem 2.6rem; border-radius: 16px; cursor: pointer;
+      background: rgba(127, 120, 150, .08); box-shadow: inset 0 0 0 1px rgba(127, 120, 150, .2); transition: box-shadow .2s ease, background-color .2s ease; }
+    .ev-who label:hover { background: rgba(127, 120, 150, .13); }
+    .ev-who input { position: absolute; left: .9rem; top: .95rem; width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--dusk, #2e2c3a); cursor: pointer; }
+    .ev-who input:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    .ev-who b { font-size: .92rem; font-weight: 700; color: var(--dusk, #2e2c3a); }
+    .ev-who small { font-size: .8rem; line-height: 1.4; color: var(--slate, #5c596b); }
+    .ev-who label:has(input:checked) { background: rgba(127, 120, 150, .14); box-shadow: inset 0 0 0 2px var(--dusk, #2e2c3a); }
+    :root[data-theme="dark"] .ev-who input { accent-color: #F2EFF8; }
+    :root[data-theme="dark"] .ev-who label:has(input:checked) { box-shadow: inset 0 0 0 2px #F2EFF8; }
+    @media (max-width: 480px) { .ev-who { grid-template-columns: 1fr; } }
+    .ev-more > summary, .ev-more > summary small { white-space: nowrap; }
+    @media (max-width: 480px) { .ev-more > summary small { display: none; } }
+    @media (prefers-reduced-motion: reduce) { .ev-more > summary svg { transition: none; } }
 
     /* Momento's camera */
     .ev-cam { background: #0b0a10; color: #fff; }
@@ -141,6 +188,28 @@
     }));
   }
 
+  // ---- Venue suggestions without a Maps key ----
+  // Photon (photon.komoot.io): a free place search built on OpenStreetMap, made for search-as-you-type.
+  // Returns up to 5 { name, address, lat, lng }. 'near' (optional { lat, lng }) puts nearby places first.
+  async function suggestPlaces(q, signal, near) {
+    const u = new URL('https://photon.komoot.io/api/');
+    u.searchParams.set('q', q); u.searchParams.set('limit', '6');
+    const lang = (navigator.language || 'en').slice(0, 2);
+    if (['en', 'de', 'fr'].includes(lang)) u.searchParams.set('lang', lang);
+    if (near) { u.searchParams.set('lat', near.lat.toFixed(3)); u.searchParams.set('lon', near.lng.toFixed(3)); }
+    const r = await fetch(u, { signal });
+    if (!r.ok) throw new Error('Place search is unavailable right now.');
+    const { features = [] } = await r.json();
+    const seen = new Set();
+    return features.map(({ properties: p, geometry: g }) => {
+      const street = [p.housenumber, p.street].filter(Boolean).join(' ');
+      const name = p.name || street || p.city || '';
+      const address = [p.name ? street : '', p.district || p.locality, p.city, p.country].filter((v) => v && v !== name)
+        .filter((v, i, all) => all.indexOf(v) === i).join(', ');
+      return { name, address, lat: g.coordinates[1], lng: g.coordinates[0] };
+    }).filter((s) => s.name && !seen.has(s.name + s.address) && seen.add(s.name + s.address)).slice(0, 5);
+  }
+
   // ---- The Create album form ----
   const LEADS_H = Array.from({ length: 25 }, (_, h) => h);
   const LEADS_M = [0, 15, 30, 45];
@@ -158,29 +227,42 @@
           <label class="acct-field"><span>Ends</span><input name="evEnd" type="time" required></label>
         </div>
         <div class="ev-sec">
-          <span class="ev-label" id="evLeadLabel">Guests can add photos from</span>
-          <div class="ev-lead" role="group" aria-labelledby="evLeadLabel">
-            <select name="evLeadH" aria-label="Hours before the start">${LEADS_H.map((h) => `<option value="${h}">${h} h</option>`).join('')}</select>
-            <select name="evLeadM" aria-label="Minutes before the start">${LEADS_M.map((m) => `<option value="${m}">${m} min</option>`).join('')}</select>
-            <span>before it starts</span>
-          </div>
-          <p class="ev-hint" data-lead-hint></p>
-        </div>
-        <div class="ev-sec">
-          <span class="ev-label">Venue</span>
+          <span class="ev-label" id="evVenueLabel">Venue</span>
           <div class="ev-venue-search"></div>
           <div class="ev-map" hidden></div>
-          <div class="ev-venue-row">
-            <p class="ev-picked is-empty" data-picked>${ICON.pin}<span>No venue chosen yet</span></p>
+          <p class="ev-picked is-empty" data-picked>${ICON.pin}<span>No venue chosen yet</span></p>
+          <div class="ev-venue-acts">
+            <a class="ev-link" data-gmaps href="https://www.google.com/maps" target="_blank" rel="noopener">${ICON.out}Search in Google Maps</a>
             <button class="ev-link" type="button" data-here>${ICON.locate}Use where I am</button>
           </div>
         </div>
         <div class="ev-sec">
-          <div class="ev-range-head"><label class="ev-label" for="evRadius">Guests can add photos within</label><output class="ev-range-val" for="evRadius" data-radius-out>1 km</output></div>
-          <input class="ev-range" id="evRadius" name="evRadius" type="range" min="1" max="10" step="0.5" value="1" aria-valuetext="1 kilometre">
-          <div class="ev-range-ends" aria-hidden="true"><span>1 km</span><span>10 km</span></div>
-          <p class="ev-hint">of the venue. Momento checks a guest’s location when they upload.</p>
-        </div>`;
+          <span class="ev-label" id="evWhoLabel">Who can join?</span>
+          <div class="ev-who" role="radiogroup" aria-labelledby="evWhoLabel">
+            <label><input type="radio" name="evVisibility" value="invite" checked><b>Invite only</b><small>People with the QR code, link or code</small></label>
+            <label><input type="radio" name="evVisibility" value="public"><b>Public</b><small>Shown on the Events map. Anyone inside the zone can join</small></label>
+          </div>
+        </div>
+        <details class="ev-more">
+          <summary>Additional settings<small data-more-sum></small>${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</summary>
+          <div class="ev-more-body">
+            <div class="ev-sec">
+              <span class="ev-label" id="evLeadLabel">Guests can add photos from</span>
+              <div class="ev-lead" role="group" aria-labelledby="evLeadLabel">
+                <select name="evLeadH" aria-label="Hours before the start">${LEADS_H.map((h) => `<option value="${h}">${h} h</option>`).join('')}</select>
+                <select name="evLeadM" aria-label="Minutes before the start">${LEADS_M.map((m) => `<option value="${m}">${m} min</option>`).join('')}</select>
+                <span>before it starts</span>
+              </div>
+              <p class="ev-hint" data-lead-hint></p>
+            </div>
+            <div class="ev-sec">
+              <div class="ev-range-head"><label class="ev-label" for="evRadius">Guests can add photos within</label><output class="ev-range-val" for="evRadius" data-radius-out>1 km</output></div>
+              <input class="ev-range" id="evRadius" name="evRadius" type="range" min="1" max="10" step="0.5" value="1" aria-valuetext="1 kilometre">
+              <div class="ev-range-ends" aria-hidden="true"><span>1 km</span><span>10 km</span></div>
+              <p class="ev-hint">of the venue. Momento checks a guest’s location when they upload.</p>
+            </div>
+          </div>
+        </details>`;
       view.querySelector('.acct-status')?.before(box);
       wire(form, box);
     }
@@ -207,10 +289,18 @@
       state.venue = v;
       if (form.place) form.place.value = (v?.name || v?.address || '').slice(0, 60);
       showPicked(); drawZone();
+      state.onVenue?.(v);
     };
 
     // Uploads-open hint, e.g. "Uploads open at 6:30 pm, close at 11:00 pm"
+    const moreSum = box.querySelector('[data-more-sum]');
+    const syncSum = () => {
+      const m = Number(form.evLeadH.value) * 60 + Number(form.evLeadM.value);
+      const lead = m ? `${Math.floor(m / 60) ? `${Math.floor(m / 60)} h ` : ''}${m % 60 ? `${m % 60} min` : ''}`.trim() + ' early' : 'At the start';
+      moreSum.textContent = `${lead}, ${Number(form.evRadius.value)} km`;
+    };
     const syncLead = () => {
+      syncSum();
       const t = times(form);
       leadHint.textContent = t ? `Uploads open ${fmtWhen(new Date(t.startsAt.getTime() - t.leadMin * 60000))} and close ${fmtTime(t.endsAt)}${t.endsAt.getDate() !== t.startsAt.getDate() ? ' the next day' : ''}.` : '';
     };
@@ -225,6 +315,7 @@
       rangeOut.textContent = `${k} km`;
       range.setAttribute('aria-valuetext', `${k} kilometre${k === 1 ? '' : 's'}`);
       range.style.setProperty('--fill', `${((k - 1) / 9) * 100}%`);
+      syncSum();
       drawZone();
     };
     range.addEventListener('input', syncRadius);
@@ -243,31 +334,88 @@
       finally { here.lastChild.textContent = label; }
     });
 
-    // Without Google Maps: a name for the venue, located with "Use where I am"
+    // "Search in Google Maps" opens Google Maps on whatever venue has been typed or picked
+    const gmaps = box.querySelector('[data-gmaps]');
+    const syncGmaps = (typed) => {
+      const q = (typed ?? '').trim() || (state.venue ? [state.venue.name, state.venue.address].filter(Boolean).join(', ') : '');
+      gmaps.href = state.venue && !typed
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || `${state.venue.lat},${state.venue.lng}`)}`
+        : q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : 'https://www.google.com/maps';
+    };
+    state.onVenue = () => syncGmaps();
+
+    // Without a Maps key: type the venue and pick it from the suggestions that open underneath
     const plain = (why) => {
-      search.innerHTML = `<input type="text" maxlength="60" placeholder="Venue name, e.g. The Grand Hall" aria-label="Venue name" autocomplete="off">`;
-      const input = search.querySelector('input');
+      search.innerHTML = `
+        <input type="text" maxlength="60" placeholder="Search for the venue, e.g. The Grand Hall" autocomplete="off" spellcheck="false"
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="evSuggest" aria-labelledby="evVenueLabel">
+        <ul class="ev-suggest" id="evSuggest" role="listbox" aria-label="Places" hidden></ul>`;
+      const input = search.querySelector('input'), list = search.querySelector('ul');
+      let results = [], active = -1, timer = 0, ctrl = null, near = null;
+      // Places near the host come first, if they have already allowed location (no new prompt)
+      navigator.permissions?.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') locate().then((l) => { near = l; }, () => {}); }, () => {});
+      const open = (v) => { list.hidden = !v; input.setAttribute('aria-expanded', v); if (!v) { active = -1; input.removeAttribute('aria-activedescendant'); } };
+      const note = (text) => { list.innerHTML = `<li class="ev-suggest-note" role="presentation">${esc(text)}</li>`; open(true); };
+      const paint = () => {
+        list.innerHTML = results.map((s, i) => `<li role="option" id="evSug${i}" data-i="${i}" aria-selected="${i === active}" class="${i === active ? 'is-active' : ''}"><b>${esc(s.name)}</b>${s.address ? `<small>${esc(s.address)}</small>` : ''}</li>`).join('')
+          + '<li class="ev-credit" role="presentation">Places from OpenStreetMap</li>';
+        if (active >= 0) input.setAttribute('aria-activedescendant', 'evSug' + active); else input.removeAttribute('aria-activedescendant');
+        open(true);
+      };
+      const choose = (s) => {
+        input.value = s.name.slice(0, 60);
+        setVenue({ lat: s.lat, lng: s.lng, name: s.name, address: s.address, placeId: '' });
+        open(false);
+      };
       input.addEventListener('input', () => {
-        if (form.place) form.place.value = input.value.trim();
-        if (state.venue) { state.venue.name = input.value.trim(); showPicked(); }
+        const q = input.value.trim();
+        if (form.place) form.place.value = q;
+        // Typing again means the earlier pick no longer matches
+        if (state.venue && q !== state.venue.name) setVenue(null);
+        syncGmaps(q);
+        clearTimeout(timer); ctrl?.abort();
+        if (q.length < 2) { results = []; open(false); return; }
+        timer = setTimeout(async () => {
+          ctrl = new AbortController();
+          try {
+            results = await suggestPlaces(q, ctrl.signal, near);
+            active = results.length ? 0 : -1;
+            if (results.length) paint(); else note('No places found. Try the town too, or search in Google Maps.');
+          } catch (err) { if (err.name !== 'AbortError') note('Place search isn’t working right now. Use where you are, or search in Google Maps.'); }
+        }, 250);
       });
+      input.addEventListener('keydown', (e) => {
+        if (list.hidden || !results.length) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); active = (active + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length; paint(); }
+        else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(results[active]); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); open(false); }
+      });
+      // pointerdown, not click, so the pick lands before the input loses focus and the list closes
+      list.addEventListener('pointerdown', (e) => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); choose(results[+li.dataset.i]); } });
+      input.addEventListener('blur', () => setTimeout(() => open(false), 120));
+      input.addEventListener('focus', () => { if (results.length && !state.venue) paint(); });
       mapEl.hidden = true;
-      if (why) box.querySelector('.ev-venue-row').insertAdjacentHTML('afterend', `<p class="ev-hint">${esc(why)}</p>`);
+      if (why) box.querySelector('.ev-venue-acts').insertAdjacentHTML('afterend', `<p class="ev-hint">${esc(why)}</p>`);
     };
 
     box._reset = () => {
       form.evStart.value = '19:00'; form.evEnd.value = '23:00';
       form.evLeadH.value = '0'; form.evLeadM.value = '30';
       form.evRadius.value = '1';
+      const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true;
       box._syncRadius();
       setVenue(null);
       const input = search.querySelector('input'); if (input) input.value = '';
+      const list = search.querySelector('.ev-suggest'); if (list) list.hidden = true;
+      box.querySelector('.ev-more').open = false;
+      syncGmaps('');
       syncLead();
     };
 
     // Google Maps: search for the venue, then fine-tune by dragging the pin or tapping the map
     getConfig().then(async ({ mapsApiKey }) => {
-      if (!mapsApiKey) return plain('Type the venue’s name, then use “Use where I am” while you’re there, or ask for the Google Maps key to be added so you can search for it.');
+      // No Maps key: the venue comes from the suggestions list (see plain)
+      if (!mapsApiKey) return plain('');
       try {
         await loadMaps(mapsApiKey);
         const [{ Map, Circle }, { PlaceAutocompleteElement }, { AdvancedMarkerElement }] = await Promise.all(
@@ -323,8 +471,8 @@
     if (!form.evEnd.value) return { error: 'Pick the time the event ends.', focus: form.evEnd };
     if (!t) return { error: 'Pick the date of the event.', focus: form.date };
     if (t.endsAt < new Date()) return { error: 'That event has already finished. Check the date and times.', focus: form.evEnd };
-    if (t.leadMin > 1440) return { error: 'Uploads can open up to 24 hours before the event.', focus: form.evLeadH };
-    if (!st.venue) return { error: 'Choose the venue: search for it, tap the map, or use where you are.', focus: box.querySelector('gmp-place-autocomplete, .ev-venue-search input, [data-here]') };
+    if (t.leadMin > 1440) { form.evLeadH.closest('details')?.setAttribute('open', ''); return { error: 'Uploads can open up to 24 hours before the event.', focus: form.evLeadH }; }
+    if (!st.venue) return { error: 'Choose the venue: start typing its name and pick it from the list, or use where you are.', focus: box.querySelector('gmp-place-autocomplete, .ev-venue-search input, [data-here]') };
     const name = (box.querySelector('.ev-venue-search input')?.value || st.venue.name || '').trim();
     return {
       fields: {
@@ -334,6 +482,7 @@
         uploadLeadMin: t.leadMin,
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
+        visibility: form.evVisibility?.value === 'public' ? 'public' : 'invite',
       },
     };
   }

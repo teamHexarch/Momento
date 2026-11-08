@@ -37,7 +37,7 @@ try {
   const guest = await User.create({ name: 'Guest', email: 'guest@example.invalid', passwordHash, emailVerified: true });
   const pending = await User.create({ name: 'Pending', email: 'pending@example.invalid', passwordHash });
   const login = async email => cookieOf(await call('/api/auth/login', 200, '', 'POST', { email, password }));
-  for (const page of ['/', '/albums.html', '/settings.html', '/support.html', '/api/health']) await call(page, 200);
+  for (const page of ['/', '/albums.html', '/settings.html', '/support.html', '/sort.html', '/privacy.html', '/api/health']) await call(page, 200);
   await call('/api/albums', 401);
   await call('/api/auth/login', 401, '', 'POST', { email: host.email, password: 'wrong-password' });
   const h = await login(host.email), g = await login(guest.email), p = await login(pending.email);
@@ -80,9 +80,27 @@ try {
   await call('/api/auth/login', 409, '', 'POST', { email: guest.email, password });
   await call('/api/auth/password/reset', 200, '', 'POST', { token: reset, password: 'New-password-123!' });
   assert.equal((await (await call('/api/auth/me', 200, g)).json()).user, null);
+  // Email change: the current inbox approves, the new inbox confirms, then every device is logged out
+  const json = async (r) => (await r).json();
+  const h2 = await login(host.email);
+  await call('/api/auth/email', 200, h2, 'POST', { email: 'changed@example.invalid', password });
+  assert.equal((await User.findById(host.id)).email, host.email);   // nothing changes before approval
+  const notMe = await issueToken(host, 'email-approve', 10, { newEmail: 'changed@example.invalid' });
+  assert.equal((await json(call('/api/auth/email/approve-info?token=' + notMe, 200))).newEmail, 'changed@example.invalid');
+  assert.equal((await json(call('/api/auth/email/cancel', 200, '', 'POST', { token: notMe }))).result, 'cancelled');
+  assert.equal((await json(call('/api/auth/me', 200, h2))).user, null);   // "Not me" logged everyone out
+  const approve = await issueToken(host, 'email-approve', 10, { newEmail: 'changed@example.invalid' });
+  assert.equal((await json(call('/api/auth/email/approve', 200, '', 'POST', { token: approve }))).result, 'approved');
+  await call('/api/auth/email/approve-info?token=' + approve, 400);   // used up
   const changedToken = await issueToken(host, 'email', 10, { newEmail: 'changed@example.invalid' });
+  const h3 = await login(host.email);
   await call('/api/auth/email/confirm?token=' + changedToken, 303);
   assert.equal((await User.findById(host.id)).email, 'changed@example.invalid');
+  assert.equal((await json(call('/api/auth/me', 200, h3))).user, null);   // the move logged every device out
+  // Resetting the password drops an email change someone else started
+  const pendingChange = await issueToken(guest, 'email-approve', 10, { newEmail: 'other@example.invalid' });
+  await call('/api/auth/password/reset', 200, '', 'POST', { token: await issueToken(guest, 'reset', 10), password: 'Another-password-123!' });
+  await call('/api/auth/email/approve-info?token=' + pendingChange, 400);
   const changedCookie = await login('changed@example.invalid');
   await call('/api/auth/me', 200, changedCookie, 'DELETE', { password });
   assert.equal(await User.findById(host.id), null);

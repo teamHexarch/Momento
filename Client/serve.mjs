@@ -2,6 +2,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -29,4 +30,10 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file).toLowerCase()] || 'application/octet-stream' });
     res.end(data);
   });
-}).listen(port, () => console.log(`Serving ${root} at http://localhost:${port}`));
+}).listen(port, () => {
+  console.log(`Serving ${root} at http://localhost:${port}`);
+  // The address a phone on the same Wi-Fi can open
+  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) {
+    if (a.family === 'IPv4' && !a.internal) console.log(`On your phone (same Wi-Fi): http://${a.address}:${port}/albums.html`);
+  }
+});

@@ -2,12 +2,14 @@
 <html lang="en" data-page="home">
 <head>
   <script src="assets/api.js"></script>
+  <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
   <script src="assets/event.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
   <script>
   // Runs before first paint, so the page never flashes the wrong theme
@@ -19,6 +21,18 @@
     root.dataset.theme = dark ? 'dark' : 'light';
     root.dataset.themePref = pref;
     window.__theme = { target: +dark, a: +dark, b: +dark };   // read by the silk shader
+
+    // Pages opened straight from the folder (file://) can't cross-fade into each other, so the page
+    // that was left marks it, and this one rises in instead (see "Leaving a page")
+    try {
+      if (sessionStorage.getItem('momento-pt') === '1') {
+        sessionStorage.removeItem('momento-pt');
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          root.classList.add('is-arriving');
+          setTimeout(() => root.classList.remove('is-arriving'), 900);
+        }
+      }
+    } catch (e) {}
   
     // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
     // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
@@ -50,7 +64,7 @@
       --paper: #F8F7FA;          /* raised surfaces */
       --dusk: #2E2C3A;           /* primary text */
       --slate: #5C596B;          /* secondary text */
-      --stone: #8A8697;          /* tertiary text */
+      --stone: #6F6B7D;          /* tertiary text (dark enough to read on glass) */
       --copper: #9A603D;         /* accent */
       --copper-soft: #C08A66;
       --blush: #E6CDD6;
@@ -83,11 +97,12 @@
     .page-wrap { position: relative; z-index: 1; }
 
     /* ---------- Cursor ---------- */
-    .has-cursor, .has-cursor * { cursor: none !important; }
+    /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
     /* One droplet: a dusk bead with a lavender glow that stretches along the way it moves,
        and swells into a clear glass lens over anything you can click or drag */
     .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
-    .has-cursor .cursor { opacity: 1; }
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
       background: var(--dusk);
@@ -144,8 +159,8 @@
         0 12px 32px rgba(46,44,58,.12);
     }
 
-    /* Light that follows the pointer: a soft halo, and a bright arc on the rim */
-    .glass::before, .glass::after {
+    /* Light that follows the pointer: a bright arc on the rim */
+    .glass::after {
       content: "";
       position: absolute;
       inset: 0;
@@ -153,12 +168,6 @@
       pointer-events: none;
       opacity: var(--shine);
       transition: opacity .4s ease;
-    }
-    .glass::before {
-      inset: -14px;
-      border-radius: calc(var(--radius) + 14px);
-      background: radial-gradient(150px circle at calc(var(--mx) + 14px) calc(var(--my) + 14px),
-        rgba(186,176,222,.45), rgba(230,205,214,.25) 40%, rgba(230,205,214,0) 76%);
     }
     .glass::after {
       z-index: 2;
@@ -302,11 +311,17 @@
       --page-h: calc(var(--page-w) * 1.28);
     }
 
+    /* The headline block fills the height under the header and centres itself, so it lines up with
+       the QR card (centred at 50% + 2.2rem); on wide screens both stay inside a centred 1200px column */
     .hero-left {
       position: absolute;
-      left: clamp(24px, 4vw, 72px);
-      top: calc(7rem + 4vh);
+      left: max(clamp(24px, 4vw, 72px), calc(50% - 600px));
+      top: 4.4rem;
+      bottom: 0;
       z-index: 4;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       max-width: 30rem;
     }
 
@@ -609,7 +624,7 @@
     .pa-count { min-width: 4.5rem; text-align: center; font-size: .85rem; font-weight: 600; color: var(--slate); font-variant-numeric: tabular-nums; }
 
     @media (max-width: 900px) {
-      .hero-left { max-width: 86%; top: 6rem; }
+      .hero-left { max-width: 86%; top: 6rem; bottom: auto; display: block; }
       .stage { --page-w: min(400px, 44vw, calc((100svh - 230px) / 1.28)); }
       .album { top: calc(62% + 2.2rem); }
       .page-arrows { top: calc(62% + 2.2rem + var(--page-h) / 2 + 1rem); }
@@ -640,7 +655,7 @@
     .section-lede { margin: 1.1rem 0 0; max-width: 30rem; font-size: 1.08rem; line-height: 1.6; color: var(--slate); }
 
     /* How it works */
-    /* Scrolls like any other section; the steps advance as the panel passes through the screen */
+    /* Scrolls like any other section; the steps advance with the wheel while the pointer is over the panel */
     .hiw { position: relative; z-index: 3; }
     .hiw-sticky { display: grid; place-items: center; padding: 14vh 4% 2rem; box-sizing: border-box; }
     .hiw-panel {
@@ -664,7 +679,7 @@
     .step.is-done .step-no { background: var(--blush); color: var(--dusk); box-shadow: none; }
     .step.is-on .step-no { background: var(--dusk); color: var(--paper); box-shadow: 0 0 0 5px rgba(154,96,61,.18); scale: 1.08; }
     .step-body { display: flex; flex-direction: column; padding-top: .35rem; }
-    .step-body b { font-size: 1.12rem; font-weight: 650; letter-spacing: -.015em; color: rgba(46,44,58,.5); transition: color .4s ease; }
+    .step-body b { font-size: 1.12rem; font-weight: 650; letter-spacing: -.015em; color: rgba(46,44,58,.62); transition: color .4s ease; }
     .step.is-on .step-body b, .step button:hover .step-body b { color: var(--dusk); }
     .step-more { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .55s cubic-bezier(.2,.8,.2,1), opacity .4s ease; }
     .step-more > span { overflow: hidden; max-width: 27rem; font-size: .98rem; line-height: 1.55; color: var(--slate); }
@@ -923,7 +938,7 @@
        light (bright top-left and bottom-right, a lavender tint through the middle), a soft
        inner glow and a halo of light around it. No backdrop blur, so it stays cheap over
        the moving silk. */
-    .glass, .panel, .qr-card, .plan, .zone-ctrl, .auth-card {
+    .glass, .panel, .qr-card, .plan, .zone-ctrl {
       border: 1.5px solid transparent;
       background:
         linear-gradient(135deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.4) 46%, rgba(244,242,252,.58) 100%) padding-box,
@@ -946,15 +961,10 @@
         linear-gradient(140deg, #fff, rgba(255,255,255,.3) 40%, rgba(255,255,255,.9)) border-box;
     }
     .glass { box-shadow: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 18px rgba(255,255,255,.25), 0 0 26px -6px rgba(188,178,236,.55), 0 12px 30px -14px rgba(60,50,90,.3); }
-    /* The pointer-following light also plays across the big panels and the QR card */
-    .panel::before, .panel::after, .qr-card::before, .qr-card::after {
+    /* The pointer-following rim light also plays across the big panels and the QR card */
+    .panel::after, .qr-card::after {
       content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
       opacity: var(--shine); transition: opacity .4s ease;
-    }
-    .panel::before, .qr-card::before {
-      inset: -14px; border-radius: calc(var(--radius) + 14px); z-index: -1;
-      background: radial-gradient(220px circle at calc(var(--mx) + 14px) calc(var(--my) + 14px), rgba(186,176,222,.4), rgba(255,246,232,.22) 45%, transparent 72%);
-      filter: blur(8px);
     }
     .panel::after, .qr-card::after {
       z-index: 2; padding: 1.5px;
@@ -983,7 +993,6 @@
     }
 
     .auth-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
-    .auth-dialog::backdrop { background: rgba(46,44,58,.3); }
     /* reCAPTCHA's picture puzzle, moved into the window (see prepareCaptcha) */
     .auth-dialog > .rc-puzzle { top: 12px !important; left: 0 !important; right: 0 !important; width: 100% !important; }
     #signupCaptcha { display: flex; justify-content: center; min-height: 78px; margin: .2rem 0 .6rem; }
@@ -993,10 +1002,6 @@
       position: relative; width: min(420px, calc(100vw - 32px)); box-sizing: border-box; margin: 0;
       padding: 2rem 1.9rem 1.4rem; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
     }
-    /* Over the dimmed page the glass needs more body to stay readable */
-    .auth-card { background:
-      linear-gradient(135deg, rgba(255,255,255,.94) 0%, rgba(250,249,253,.86) 50%, rgba(244,242,252,.92) 100%) padding-box,
-      linear-gradient(140deg, #fff 0%, rgba(255,255,255,.35) 32%, rgba(203,194,240,.7) 64%, #fff 100%) border-box; }
     .auth-close {
       position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.2rem; height: 2.2rem;
       border: none; border-radius: 50%; background: rgba(46,44,58,.06); color: var(--dusk); cursor: pointer; transition: background-color .2s ease;
@@ -1016,15 +1021,15 @@
     .auth-tabs button[aria-selected="true"] { color: var(--dusk); }
     .auth-tabs button:hover { color: var(--dusk); }
     .auth-tabs button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 1px; }
-    .auth-tab-pill { position: absolute; top: .25rem; bottom: .25rem; left: .25rem; width: calc(50% - .25rem); border-radius: 100px; background: #fff; box-shadow: 0 1px 2px rgba(46,44,58,.1), 0 4px 12px rgba(46,44,58,.1); transition: translate .45s var(--out); }
+    .auth-tab-pill { position: absolute; top: .25rem; bottom: .25rem; left: .25rem; width: calc(50% - .25rem); border-radius: 100px; background: rgba(255,255,255,.78); box-shadow: inset 0 1px 1px #fff, 0 1px 2px rgba(46,44,58,.1), 0 4px 12px rgba(46,44,58,.1); transition: translate .45s var(--out); }
     .auth-card[data-mode="login"] .auth-tab-pill { translate: 100% 0; }
     .auth-social { display: grid; gap: .55rem; margin-top: 1.1rem; }
     .auth-alt {
       display: flex; align-items: center; justify-content: center; gap: .6rem; min-height: 3rem; border: none; border-radius: 100px;
-      background: #fff; color: var(--dusk); font: 600 .92rem var(--font-main); cursor: pointer;
-      box-shadow: inset 0 0 0 1px rgba(46,44,58,.12); transition: box-shadow .2s ease, transform .3s var(--spring);
+      background: rgba(255,255,255,.5); color: var(--dusk); font: 600 .92rem var(--font-main); cursor: pointer;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.1); transition: box-shadow .2s ease, transform .3s var(--spring);
     }
-    .auth-alt:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
+    .auth-alt:hover { box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.3); }
     .auth-alt:active { transform: scale(.98); }
     .auth-alt:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
     .auth-or { display: flex; align-items: center; gap: .8rem; margin: 1.1rem 0 .9rem; color: var(--stone); font-size: .8rem; }
@@ -1033,15 +1038,24 @@
     .auth-field span { display: block; margin-bottom: .3rem; font-size: .82rem; font-weight: 600; color: var(--slate); }
     .auth-field input {
       width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px;
-      background: rgba(255,255,255,.9); color: var(--dusk); font: 500 1rem var(--font-main);
-      box-shadow: inset 0 0 0 1px rgba(46,44,58,.14); transition: box-shadow .2s ease;
+      background: rgba(255,255,255,.55); color: var(--dusk); font: 500 1rem var(--font-main);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.12); transition: box-shadow .2s ease;
     }
-    .auth-field input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
+    .auth-field input:hover { box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.3); }
     .auth-field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
     .auth-card[data-mode="login"] [data-only="signup"], .auth-card[data-mode="signup"] [data-only="login"] { display: none; }
     .auth-forgot { display: inline-block; margin-bottom: .4rem; color: var(--slate); font-size: .85rem; text-underline-offset: .2em; }
     .auth-forgot:hover { color: var(--dusk); }
     .auth-error { min-height: 1.2rem; margin: .1rem 0 .5rem; color: #9A3D3D; font-size: .85rem; font-weight: 500; }
+    #captchaStatus { margin: .2rem 0 .5rem; color: var(--slate); font-size: .85rem; font-weight: 500; }
+    #captchaStatus:empty { display: none; }
+    /* Popups for links from emails (reset password, approve a new email): the QR slab, left-aligned */
+    .mq-pop .mq-slab.email-slab { width: min(380px, calc(100vw - 32px)); padding: 1.7rem 1.5rem 1.4rem; text-align: left; justify-items: stretch; display: block; }
+    .email-slab h2 { margin: 0 2.6rem .5rem 0; font-size: 1.45rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; color: var(--dusk); }
+    .email-slab-lede { margin: 0 0 1rem; color: var(--slate); font-size: .95rem; line-height: 1.55; }
+    .email-slab-lede b { color: var(--dusk); font-weight: 650; overflow-wrap: anywhere; }
+    .email-slab-note { margin: -.4rem 0 .6rem; color: var(--slate); font-size: .85rem; line-height: 1.5; }
+    .email-slab .acct-actions { margin-top: .4rem; }
     .auth-submit { width: 100%; }
     /* While logging in: the label says so, with a small turning ring, and the button holds still */
     .auth-submit.is-busy { cursor: progress; }
@@ -1096,13 +1110,14 @@
       /* Hero: no stray floating prints, the two buttons share one row, and the QR card sits at
          the bottom of the screen, sized to whatever room is left under the buttons */
       .floaters { display: none; }
-      .hero-left { left: 20px; right: 20px; max-width: none; top: 5.5rem; }
+      /* fitHero() centres the headline and the QR card together in the space under the header */
+      .hero-left { left: 20px; right: 20px; max-width: none; top: var(--hero-top, 5.5rem); }
       .hero-copy { margin-top: 1rem; font-size: 1.1rem; }
       .hero-cta { flex-wrap: nowrap; gap: .6rem; margin-top: 1.5rem; }
       .hero-cta .btn { flex: 1 1 0; min-width: 0; padding-left: .8rem; padding-right: .8rem; font-size: .9rem; }
       .qr-card {
-        top: calc(100% - 1.25rem);
-        translate: calc(-50% + var(--shift)) calc(-100% + var(--bob));
+        top: var(--qr-top, calc(100% - 1.25rem));
+        translate: calc(-50% + var(--shift)) calc(var(--qr-ty, -100%) + var(--bob));
         width: clamp(170px, calc((100svh - 450px) / 1.4), 240px);
       }
       .qr-title { margin-bottom: .8rem; }
@@ -1126,7 +1141,8 @@
        A toast answers every action (with Undo where something was removed), a short dialog asks
        before anything is deleted, and creating an album ends on its own "created" screen */
     .m-toast {
-      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: none; overflow: visible;
+      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: 1.5px solid transparent; overflow: visible;
+      -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
       display: flex; align-items: center; gap: .75rem; width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
       padding: .55rem .55rem .55rem .6rem; border-radius: 100px; color: var(--dusk); font: 500 .92rem var(--font-main);
       translate: -50% 0;
@@ -1188,6 +1204,9 @@
     :root[data-theme="dark"] .m-toast-act:hover { background: rgba(255, 255, 255, .15); }
     :root[data-theme="dark"] .m-copy { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
     :root[data-theme="dark"] .m-del { color: #F0A3A3; }
+    :root[data-theme="dark"] .m-toast.is-danger .m-toast-ic { background: rgba(240, 163, 163, .18); color: #F0A3A3; }
+    :root[data-theme="dark"] .acct-primary.is-danger { background: #F0A3A3; color: #2A1416; }
+    :root[data-theme="dark"] .acct-primary.is-danger:hover { background: #F5B8B8; }
     :root[data-theme="dark"] .m-del:hover { background: rgba(240, 163, 163, .1); }
     :root[data-theme="dark"] .m-warn-ic { background: rgba(240, 163, 163, .12); color: #F0A3A3; }
     :root[data-theme="dark"] .acct-field input[type="date"] { color-scheme: dark; }
@@ -1224,18 +1243,18 @@
       :root[data-theme="dark"] .grain { opacity: .14; }
   
       /* Things that are objects, not interface, keep their daylight colours */
-      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav {
+      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host {
         --fog: #ECEAF0; --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #8A8697; --copper: #9A603D; --copper-soft: #C08A66;
         --blush: #E6CDD6; --lavender: #D9D0EA; --tide: #6F9896; --line: #D6D2DE; --surface: #FFFFFF; --glass: rgba(248, 247, 250, .8);
         color: var(--dusk);
       }
       /* In dark their accent is a deeper lavender, so no copper is left anywhere at night */
-      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav) {
+      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
         --copper: #6C5FC7; --copper-soft: #9A8FE0;
       }
   
       /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
-      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .auth-card, .modal-card, .nav-menu) {
+      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .nav-menu) {
         background:
           linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
           linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
@@ -1254,12 +1273,6 @@
           linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
           linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
       }
-      :root[data-theme="dark"] .auth-card, :root[data-theme="dark"] .modal-card {
-        background:
-          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
-      }
-      :root[data-theme="dark"] :is(.auth-dialog, .modal)::backdrop { background: rgba(6, 5, 10, .62); }
       :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
       :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
   
@@ -1306,7 +1319,7 @@
   
       /* Strokes, rails and tints that were ink on paper */
       :root[data-theme="dark"] .steps::before { background: rgba(255, 255, 255, .12); }
-      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .5); }
+      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .66); }
       :root[data-theme="dark"] .step.is-on .step-body b, :root[data-theme="dark"] .step button:hover .step-body b { color: var(--dusk); }
       :root[data-theme="dark"] .step-no { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
       :root[data-theme="dark"] .host-controls li + li, :root[data-theme="dark"] .qa + .qa, :root[data-theme="dark"] .feat-item + .feat-item { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -1326,6 +1339,7 @@
       :root[data-theme="dark"] .auth-skip:hover { background: rgba(255, 255, 255, .07); }
       :root[data-theme="dark"] .auth-scan { color: #A8D4D0; background: rgba(127, 176, 173, .16); }
       :root[data-theme="dark"] .auth-error { color: #F0A3A3; }
+      :root[data-theme="dark"] .auth-done i { color: var(--fog); }
   
       /* Copper tints written as plain colours (not through the token) become lavender at night */
       :root[data-theme="dark"] .step.is-on .step-no { box-shadow: 0 0 0 5px rgba(184, 174, 245, .2); }
@@ -1341,13 +1355,28 @@
         :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
       }
   
-      /* ---------- Settings item in the main nav: its name on wide screens, a small icon on phones ---------- */
-      .nav-settings { display: inline-flex; align-items: center; justify-content: center; }
-      .nav-settings svg { display: none; }
+      /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
+      :is(.nav-settings, .nav-events) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-settings, .nav-events) svg { display: none; }
       @media (max-width: 520px) {
-        .nav-settings .nav-label { display: none; }
-        .nav-settings svg { display: block; }
-        .nav-settings { padding-left: .8rem; padding-right: .8rem; }
+        :is(.nav-settings, .nav-events) .nav-label { display: none; }
+        :is(.nav-settings, .nav-events) svg { display: block; }
+        :is(.nav-settings, .nav-events) { padding-left: .8rem; padding-right: .8rem; }
+      }
+      /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
+         logo, the menu and your account button all fit on one line */
+      @media (max-width: 380px) {
+        .header { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
+        .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
+        .nav { gap: 0 !important; padding: .22rem !important; }
+        .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
+        .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
+        :is(.nav-settings, .nav-events) { padding-left: .58rem !important; padding-right: .58rem !important; }
+        :is(.nav-settings, .nav-events) svg { width: 16px; height: 16px; }
+      }
+      @media (max-width: 340px) {
+        .nav-item { padding: .45rem .42rem !important; }
+        :is(.nav-settings, .nav-events) { padding-left: .45rem !important; padding-right: .45rem !important; }
       }
   
       /* ---------- The thread ----------
@@ -1494,16 +1523,26 @@
       /* Support: a chat bubble pops up, its dots bounce, and it carries on into the message form */
       .intro-chat {
         position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6rem; padding: 1.5rem 2rem;
-        border-radius: 34px 34px 34px 10px; background: #fff; opacity: 0; transform-origin: 50% 50%;
-        box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(60, 50, 90, .14), 0 24px 44px -20px rgba(60, 50, 90, .5);
+        border: 1.5px solid transparent; border-radius: 34px 34px 34px 10px; opacity: 0; transform-origin: 50% 50%;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .78) 50%, rgba(244, 242, 252, .86) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .95), 0 0 44px -8px rgba(188, 178, 236, .55), 0 24px 44px -20px rgba(60, 50, 90, .5);
       }
       .intro-chat i { width: .95rem; height: .95rem; border-radius: 50%; background: #6C5FC7; }
+      :root[data-theme="dark"] .intro-chat {
+        background:
+          linear-gradient(135deg, rgba(58, 52, 88, .75) 0%, rgba(28, 26, 40, .85) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 40%, rgba(200, 192, 240, .5) 100%) border-box;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .13), 0 0 40px -12px rgba(120, 100, 190, .3), 0 24px 44px -20px rgba(0, 0, 0, .7);
+      }
+      :root[data-theme="dark"] .intro-chat i { background: #B8AEF5; }
   
       /* ---------- Site footer ----------
          The same on every page: the brand, three short columns of links, and a base row with the
          small print, the theme switch and a way back to the top. */
       .site-foot { width: min(1180px, 100%); margin: 5rem auto 0; padding: 3.2rem 1.5rem 1.6rem; box-sizing: border-box; border-top: 1px solid var(--line); color: var(--slate); font-size: .92rem; text-align: left; }
-      .sf-grid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 2.5rem 2rem; }
+      .sf-grid { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 2.5rem 2rem; }
       .sf-logo { display: inline-flex; align-items: center; gap: .6rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
       .sf-logo svg.glyph { width: 1.8rem; height: 1.8rem; transition: transform .35s var(--spring); }
       .sf-logo:hover svg.glyph { transform: scale(1.08) rotate(-4deg); }
@@ -1534,15 +1573,19 @@
       .sf-top::after { right: 1.4rem; }
       @media (max-width: 900px) {
         .site-foot { margin-top: 3.5rem; }
-        .sf-grid { grid-template-columns: repeat(3, 1fr); }
+        .sf-grid { grid-template-columns: repeat(4, 1fr); }
         .sf-brand { grid-column: 1 / -1; }
       }
       @media (max-width: 600px) {
-        .sf-grid { grid-template-columns: 1fr 1fr; }
-        .sf-col:last-child { grid-column: 1 / -1; }
-        .sf-base { flex-direction: column; align-items: stretch; }
+        .site-foot { padding: 2.6rem 20px calc(1.4rem + env(safe-area-inset-bottom, 0px)); }
+        .sf-grid { grid-template-columns: 1fr 1fr; gap: 2.1rem 1.5rem; }
+        .sf-col ul { gap: .8rem; }
+        /* Phones: the four groups sit in a 2 x 2 grid */
+
+        .sf-base { flex-direction: column; align-items: stretch; gap: 1.2rem; margin-top: 2.4rem; }
         .site-foot .acct-seg { width: 100%; }
-        .sf-top { align-self: flex-start; }
+        .sf-top { align-self: center; padding: .4rem .6rem; }
+        .sf-top::after { left: .6rem; right: 2rem; bottom: .3rem; }
       }
       @media (prefers-reduced-motion: reduce) { .sf-link::after, .sf-top svg, .sf-logo svg.glyph { transition: none; } }
   
@@ -1554,7 +1597,6 @@
       :root[data-theme="dark"] .s-sw[aria-checked="true"] { background: var(--copper); }
       :root[data-theme="dark"] .s-bar { background: rgba(255, 255, 255, .08); }
       :root[data-theme="dark"] :is(.s-note.is-error, .s-row.is-danger .s-text b) { color: #F0A3A3; }
-      :root[data-theme="dark"] .s-toast i { color: var(--fog); }
   
       /* The albums page: lists, chips and rows that were ink on paper */
       :root[data-theme="dark"] :is(.todo-row + .todo-row, .burst + .burst) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -1587,9 +1629,6 @@
       .acct-menu {
         --radius: 26px; position: absolute; top: calc(100% + .6rem); right: 0; z-index: 5; width: 17.5rem; box-sizing: border-box; padding: .45rem;
         border-radius: var(--radius); transform-origin: calc(100% - 2.5rem) top;
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, .97) 0%, rgba(250, 249, 253, .95) 50%, rgba(244, 242, 252, .96) 100%) padding-box,
-          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
         opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden;
         transition: opacity .25s ease, transform .5s var(--spring), visibility 0s .5s;
       }
@@ -1631,14 +1670,9 @@
       .acct-seg [aria-checked="true"] .scr-dot { opacity: 1; scale: 1; }
   
       .acct-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
-      .acct-dialog::backdrop { background: rgba(46, 44, 58, .3); }
       .acct-card {
         position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: 0;
-        padding: 2rem 1.9rem 1.5rem; border: 1.5px solid transparent; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, .96) 0%, rgba(250, 249, 253, .9) 50%, rgba(244, 242, 252, .95) 100%) padding-box,
-          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .35) 32%, rgba(203, 194, 240, .7) 64%, #fff 100%) border-box;
-        box-shadow: 0 30px 80px -30px rgba(60, 50, 90, .5);
+        padding: 2rem 1.9rem 1.5rem; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
       }
       .acct-card h2 { margin: 0; padding-right: 2rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
       .acct-sub { margin: .45rem 0 1.3rem; color: var(--slate); font-size: .95rem; line-height: 1.5; }
@@ -1652,12 +1686,12 @@
       .acct-field { display: block; margin-bottom: .75rem; }
       .acct-field span { display: block; margin-bottom: .3rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
       .acct-field input, .acct-field textarea {
-        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .9); color: var(--dusk);
-        font: 500 1rem var(--font-main); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .14); transition: box-shadow .2s ease;
+        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .55); color: var(--dusk);
+        font: 500 1rem var(--font-main); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .12); transition: box-shadow .2s ease;
       }
       .acct-field textarea { display: block; height: auto; min-height: 8.5rem; padding: .8rem 1rem; line-height: 1.5; resize: vertical; }
       .acct-field input::placeholder, .acct-field textarea::placeholder { color: var(--stone); opacity: 1; }
-      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .3); }
+      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .3); }
       .acct-field input:focus, .acct-field textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188, 178, 236, .45); }
       .acct-group { margin: 1.1rem 0 .4rem; }
       .acct-group > b { display: block; margin-bottom: .1rem; font-size: .82rem; color: var(--slate); }
@@ -1713,18 +1747,6 @@
         .acct-seg-pill, .acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot, .acct-menu, .acct-chev, .acct-sw::after { transition: none; }
       }
   
-      :root[data-theme="dark"] .acct-menu {
-        background:
-          linear-gradient(135deg, rgba(58, 53, 80, .96) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
-      }
-      :root[data-theme="dark"] .acct-card {
-        background:
-          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
-        box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8);
-      }
-      :root[data-theme="dark"] .acct-dialog::backdrop { background: rgba(6, 5, 10, .62); }
       :root[data-theme="dark"] :is(.acct-item:hover, .acct-item:focus-visible) { background: rgba(255, 255, 255, .08); }
       :root[data-theme="dark"] .acct-item:active { background: rgba(255, 255, 255, .14); }
       :root[data-theme="dark"] .acct-sep { background: rgba(255, 255, 255, .1); }
@@ -1761,6 +1783,243 @@
       /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
       html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
       html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
+      /* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
+      html.pt-file.is-leaving .header { opacity: 1; }
+      html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+
+      /* ---------- Popup glass ----------
+         Popups float over a dimmed page, so unlike the page panels they get a real blur behind them.
+         Only one or two are ever on screen, and only while open, so the blur cost stays small. */
+      .auth-card, .modal-card, .acct-card, .vgate-card {
+        --mx: 50%; --my: 0px; --shine: 0;
+        position: relative; border: 1.5px solid transparent;
+        background:
+          linear-gradient(135deg, rgba(255,255,255,.74) 0%, rgba(255,255,255,.52) 46%, rgba(244,242,252,.66) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255,255,255,.3) 32%, rgba(203,194,240,.6) 64%, rgba(255,255,255,.95) 100%) border-box;
+        -webkit-backdrop-filter: blur(24px) saturate(1.7);
+        backdrop-filter: blur(24px) saturate(1.7);
+        box-shadow:
+          inset 0 1px 1px rgba(255,255,255,.95),
+          inset 0 -12px 26px -16px rgba(255,255,255,.75),
+          inset 0 0 32px rgba(255,255,255,.22),
+          0 0 0 .5px rgba(46,44,58,.05),
+          0 0 44px -8px rgba(188,178,236,.55),
+          0 26px 60px -30px rgba(60,50,90,.35);
+      }
+      /* The rim catches the pointer, as on the page panels */
+      .auth-card::after, .modal-card::after, .acct-card::after, .vgate-card::after {
+        content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; padding: 1.5px;
+        opacity: var(--shine); transition: opacity .4s ease;
+        background: radial-gradient(160px circle at var(--mx) var(--my), #fff, rgba(255,255,255,.7) 35%, transparent 75%);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+      }
+      :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card) {
+        background:
+          linear-gradient(135deg, rgba(58,52,88,.58) 0%, rgba(28,26,40,.7) 46%, rgba(18,17,26,.78) 100%) padding-box,
+          linear-gradient(140deg, rgba(200,192,240,.55) 0%, rgba(150,142,196,.12) 32%, rgba(120,110,176,.3) 64%, rgba(200,192,240,.5) 100%) border-box;
+        box-shadow:
+          inset 0 1px 1px rgba(255,255,255,.13),
+          inset 0 0 26px rgba(150,140,210,.05),
+          0 0 0 .5px rgba(0,0,0,.4),
+          0 0 40px -12px rgba(120,100,190,.25),
+          0 26px 60px -30px rgba(0,0,0,.75);
+      }
+      :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card)::after {
+        background: radial-gradient(160px circle at var(--mx) var(--my), rgba(220,212,255,.75), rgba(200,192,240,.3) 35%, transparent 75%);
+      }
+      /* Browsers without backdrop blur keep a fuller fill so text stays readable */
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .auth-card, .modal-card, .acct-card, .vgate-card { background:
+          linear-gradient(135deg, rgba(255,255,255,.95) 0%, rgba(250,249,253,.88) 50%, rgba(244,242,252,.93) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255,255,255,.35) 32%, rgba(203,194,240,.7) 64%, #fff 100%) border-box; }
+        :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card) { background:
+          linear-gradient(135deg, rgba(48,44,66,.98) 0%, rgba(34,31,46,.97) 50%, rgba(28,26,38,.98) 100%) padding-box,
+          linear-gradient(140deg, rgba(200,192,240,.55) 0%, rgba(150,142,196,.12) 32%, rgba(120,110,176,.3) 64%, rgba(200,192,240,.5) 100%) border-box; }
+      }
+      /* One dim for every popup */
+      :is(.auth-dialog, .acct-dialog, .modal, .vgate)::backdrop { background: rgba(46,44,58,.32); }
+      :root[data-theme="dark"] :is(.auth-dialog, .acct-dialog, .modal, .vgate)::backdrop { background: rgba(6,5,10,.62); }
+      /* The two dropdowns sit over page content, so they blur it too */
+      .acct-menu, .nav-menu { -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
+      /* The header keeps these menus from blurring the page (it isolates its backdrop for page transitions),
+         so they get a fuller frosted fill instead: nothing behind can fight the text */
+      .acct-menu, .nav-menu { background:
+          linear-gradient(180deg, rgba(255,255,255,.95), rgba(248,247,252,.92)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(203,194,240,.5) 70%, rgba(255,255,255,.8)) border-box; }
+      :root[data-theme="dark"] :is(.acct-menu, .nav-menu) { background:
+          linear-gradient(180deg, rgba(36,33,50,.95), rgba(24,22,34,.94)) padding-box,
+          linear-gradient(180deg, rgba(200,192,240,.5), rgba(150,142,196,.12) 45%, rgba(120,110,176,.2) 70%, rgba(200,192,240,.35)) border-box; }
+
+      /* ---------- Liquid-glass buttons ----------
+         One glass for every button, lit from above: a bright top edge, a soft horizon across the middle,
+         a faint bounce of light at the bottom and a thin rim. Deep smoke for the main action, clear glass for
+         the rest, red for anything destructive. Each tier keeps its shadow in --g-shadow so hover can brighten
+         the whole pane evenly. */
+      :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost,
+          .auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        box-sizing: border-box; border: 1px solid transparent;
+        -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
+      }
+      /* Deep smoke */
+      :is(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary) {
+        color: var(--paper);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%) padding-box,
+          linear-gradient(rgba(40,38,52,.88), rgba(40,38,52,.88)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.14) 45%, rgba(255,255,255,.08) 60%, rgba(255,255,255,.3)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(20,18,30,.5);
+        box-shadow: var(--g-shadow);
+      }
+      /* Clear glass */
+      :is(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+          .album-code button, .modal-card:not(.album-card) .close, .vgate-actions .vgate-ghost) {
+        color: var(--dusk);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.3) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.26), rgba(255,255,255,.26)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.35) 60%, rgba(255,255,255,.85)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.45), 0 0 0 .5px rgba(46,44,58,.12), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(46,44,58,.35);
+        box-shadow: var(--g-shadow);
+      }
+      /* The selected pill in a tab bar: a brighter pane of the same glass */
+      :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.25) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.35) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.78), rgba(255,255,255,.78)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.55) 45%, rgba(255,255,255,.45) 60%, rgba(255,255,255,.9)) border-box;
+        box-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 2px 8px -2px rgba(46,44,58,.22);
+      }
+      /* Red, for deleting */
+      .acct-actions .acct-primary.is-danger {
+        color: #fff;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%) padding-box,
+          linear-gradient(rgba(150,56,56,.88), rgba(150,56,56,.88)) padding-box,
+          linear-gradient(180deg, rgba(255,225,225,.7), rgba(255,255,255,.15) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.35)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(90,30,30,.5);
+        box-shadow: var(--g-shadow);
+      }
+      /* Pearl keeps its pastel colours inside the same glass */
+      .btn-pearl {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.18) 100%) padding-box,
+          linear-gradient(120deg, rgba(214,205,236,.9) 0%, rgba(235,211,220,.86) 52%, rgba(198,222,218,.9) 100%) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.85)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(60,50,90,.4);
+        box-shadow: var(--g-shadow);
+      }
+      /* The colour that floods in on hover is glass too */
+      .btn-dark { --fill: color-mix(in srgb, var(--copper) 70%, transparent); }
+      .btn-light { --fill: rgba(46,44,58,.78); }
+      :is(.todo-act, .acct-actions .acct-primary):disabled { opacity: .5; }
+
+      /* Dark mode: deep smoke turns to frosted pale glass with dark text; clear glass stays clear.
+         (The QR card keeps its daylight colours, so its button keeps the light-mode glass.) */
+      :root[data-theme="dark"] :is(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary):not(.qr-card *) {
+        color: var(--paper);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.25) 100%) padding-box,
+          linear-gradient(rgba(238,236,246,.88), rgba(238,236,246,.88)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.75)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.4), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] :is(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+          .album-code button, .modal-card:not(.album-card) .close, .vgate-actions .vgate-ghost) {
+        color: var(--dusk);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.06) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.08)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1) 45%, rgba(255,255,255,.06) 60%, rgba(255,255,255,.2)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.16)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.14) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.28)) border-box;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 8px -2px rgba(0,0,0,.5);
+      }
+      :root[data-theme="dark"] .acct-actions .acct-primary.is-danger {
+        color: #2A1416;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.15) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.2) 100%) padding-box,
+          linear-gradient(rgba(240,163,163,.88), rgba(240,163,163,.88)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.7)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.06);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] .btn-pearl {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box,
+          linear-gradient(120deg, rgba(63,56,128,.85) 0%, rgba(90,77,176,.8) 52%, rgba(58,81,153,.85) 100%) padding-box,
+          linear-gradient(180deg, rgba(220,212,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,.08) 60%, rgba(220,212,255,.4)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] .btn-light { --fill: rgba(236,234,244,.85); }
+      :root[data-theme="dark"] .btn-dark:not(.qr-card *) { --fill: color-mix(in srgb, var(--copper) 80%, transparent); }
+      /* Hover: the whole pane brightens a touch (the inset spread sits under the label) */
+      :root :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost):hover:not(:disabled) {
+        box-shadow: var(--g-shadow), inset 0 0 0 999px var(--g-lift, rgba(255,255,255,.07));
+      }
+
+      /* ---------- Glass switches ----------
+         The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
+         glass bead with a bright top and a soft shadow underneath. */
+      :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+        border: 1px solid transparent;
+        background:
+          linear-gradient(180deg, rgba(46,44,58,.1) 0%, rgba(46,44,58,.04) 100%) padding-box,
+          linear-gradient(140deg, rgba(46,44,58,.18) 0%, rgba(255,255,255,.6) 60%, #fff 100%) border-box;
+        box-shadow: inset 0 1px 3px rgba(46,44,58,.22), 0 1px 0 rgba(255,255,255,.7);
+        -webkit-backdrop-filter: blur(8px) saturate(1.5); backdrop-filter: blur(8px) saturate(1.5);
+        transition: box-shadow .3s ease;
+      }
+      :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 60%) padding-box,
+          linear-gradient(135deg, color-mix(in srgb, var(--copper) 85%, transparent), color-mix(in srgb, var(--copper) 70%, transparent)) padding-box,
+          linear-gradient(140deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.6) 100%) border-box;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.18), 0 0 14px -4px color-mix(in srgb, var(--copper) 70%, transparent);
+      }
+      :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+        top: calc(.18rem - 1px); left: calc(.18rem - 1px);
+        background: radial-gradient(circle at 35% 28%, #fff 0%, rgba(255,255,255,.92) 45%, rgba(236,233,246,.85) 100%);
+        box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.12), 0 0 0 .5px rgba(46,44,58,.14), 0 2px 6px rgba(46,44,58,.28);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.03) 100%) padding-box,
+          linear-gradient(140deg, rgba(0,0,0,.4) 0%, rgba(200,192,240,.25) 60%, rgba(200,192,240,.4) 100%) border-box;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 60%) padding-box,
+          linear-gradient(135deg, color-mix(in srgb, var(--copper) 88%, transparent), color-mix(in srgb, var(--copper) 72%, transparent)) padding-box,
+          linear-gradient(140deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.5) 100%) border-box;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.3), 0 0 16px -4px color-mix(in srgb, var(--copper) 75%, transparent);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+        box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.18), 0 2px 8px rgba(0,0,0,.55);
+      }
+      /* Touch screens: grow the tap area of small controls to about 44px without changing how they look */
+      @media (pointer: coarse) {
+        .tab, .todo-act, .nav-caret { position: relative; }
+        :is(.nav-item, .nav-caret, .tab, .acct-seg button, .todo-act)::before { content: ""; position: absolute; inset: -6px 0; }
+        :is(.sw, .s-sw, .acct-sw)[role="switch"]::before { content: ""; position: absolute; inset: -8px -4px; }
+      }
     </style>
   <!-- /@shared:css -->
 </head>
@@ -1848,6 +2107,7 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of this page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item">My albums</a>
+        <a href="events.html" class="nav-item nav-events" aria-label="Events"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
       <div class="nav-menu glass" id="navMenu" aria-label="Sections on this page">
@@ -2396,8 +2656,34 @@
     // ---- Cursor ----
     const cursorEl = document.getElementById('cursor');
     const useCursor = finePointer && !still;
+    // The dot starts where the mouse was on the last page (clicking a link doesn't move the mouse),
+    // not in the middle of the screen. Until the mouse has been seen, the dot stays hidden and the
+    // normal pointer shows
+    try {
+      const at = JSON.parse(sessionStorage.getItem('momento-pointer') || 'null');
+      if (at && Date.now() - at.t < 15000 && at.x <= innerWidth && at.y <= innerHeight) {
+        pointer.x = at.x; pointer.y = at.y;
+        document.documentElement.classList.add('cursor-seen');
+      }
+    } catch (e) {}
+    addEventListener('pagehide', () => {
+      try { if (document.documentElement.classList.contains('cursor-seen')) sessionStorage.setItem('momento-pointer', JSON.stringify({ x: pointer.x, y: pointer.y, t: Date.now() })); } catch (e) {}
+    });
     let rx = pointer.x, ry = pointer.y;
     if (useCursor) document.documentElement.classList.add('has-cursor');
+    // Touch, a pen, or Chrome's mobile preview (switched on without a reload) send no mouse moves
+    // between taps, so the bead would sit stuck beside the real touch point. Hide it and give the
+    // normal pointer back until a mouse moves again.
+    {
+      const fineMq = matchMedia('(pointer: fine)'), rootCl = document.documentElement.classList;
+      const sync = (e) => {
+        rootCl.toggle('cursor-off', !fineMq.matches || (!!e && e.pointerType !== 'mouse'));
+        if (e && e.pointerType === 'mouse') rootCl.add('cursor-seen');
+      };
+      addEventListener('pointermove', sync, { passive: true, capture: true });
+      addEventListener('pointerdown', sync, { passive: true, capture: true });
+      fineMq.addEventListener('change', () => sync());
+    }
     addEventListener('pointermove', (e) => {
       // Movement since the last event drags the silk; the first event only places the cursor
       if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
@@ -2591,27 +2877,101 @@
     rings.style.transform = `translateZ(${(n + 3) * STEP}px)`;
     album.append(board, lastPage, edge, ...leaves, rings);
 
-    // Floating photos around the closed album; they dodge the pointer and scatter as it opens
-    const FLOATERS = [
-      { p: 8, x: 46, y: 16, size: 96, depth: .6, rot: -7, front: false },
-      { p: 7, x: 85, y: 14, size: 118, depth: 1.1, rot: 6, front: true },
-      { p: 11, x: 87, y: 56, size: 104, depth: 1.2, rot: -5, front: true },
-      { p: 12, x: 57, y: 79, size: 82, depth: .5, rot: -10, front: false },
-    ];
-    const floaters = FLOATERS.filter((f) => vw > 700 || f.front).map((f) => {
+    // Floating photos around the QR card: spread evenly on an ellipse around it, kept clear of the
+    // headline. They dodge the pointer and scatter as the album opens. Signed in, they become photos
+    // from your own albums (see the end of this script); otherwise sample photos.
+    const FLOAT_COUNT = vw > 900 ? 10 : 6;
+    const SIZES = [108, 88, 118, 94, 112, 82, 102, 90, 116, 86], ROTS = [-7, 6, -4, 8, -9, 5, -6, 7, -3, 9];
+    const floaters = Array.from({ length: FLOAT_COUNT }, (_, i) => {
+      const f = { p: i % PICSUM.length, x: 50, y: 50, size: SIZES[i % SIZES.length], depth: .5 + (i % 4) * .23, rot: ROTS[i % ROTS.length], front: i % 2 === 0 };
       const d = el('floater', `<img src="${photo(f.p, 240)}" alt="">`);
-      d.style.cssText = `--size:${f.size}px; left:${f.x}%; top:${f.y}%`;
+      d.style.setProperty('--size', f.size + 'px');
       document.querySelector(f.front ? '.floaters-front' : '.floaters-back').append(d);
       return { ...f, el: d, rx: 0, ry: 0, cx: 0, cy: 0 };
     });
+    // Where the QR card settles (the per-frame code adds the same shift), then evenly spaced slots on an
+    // ellipse around it, dropping any that would sit on the headline, under the header or off screen
+    function layoutFloaters() {
+      const sw = stage.clientWidth, sh = stage.clientHeight;
+      if (!sw || !floaters.length) return;
+      const card = document.getElementById('qrCard');
+      const cw = card.offsetWidth, ch = card.offsetHeight;
+      const cx = sw / 2 + (vw > 900 ? Math.min(vw * .18, 360) : 0);
+      const cy = (vw > 900 ? sh * .5 : sh * .62) + 35;
+      const rx = cw / 2 + Math.min(200, sw * .15), ry = ch / 2 + Math.min(120, sh * .13);
+      const hero = heroLeft.getBoundingClientRect(), so = stage.getBoundingClientRect();
+      // (the headline's own box, not the full-height column it is centred in)
+      const tb = heroLeft.firstElementChild.getBoundingClientRect(), lb = heroLeft.lastElementChild.getBoundingClientRect();
+      const heroBox = { l: hero.left - so.left - 24, r: Math.max(tb.right, lb.right) - so.left + 24, t: tb.top - so.top - 24, b: lb.bottom - so.top + 24 };
+      const usable = [];
+      const N = 72, half = 58;
+      for (let k = 0; k < N; k++) {
+        const a = (k / N) * Math.PI * 2 - Math.PI / 2;
+        const x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry;
+        if (x - half < 8 || x + half > sw - 8 || y - half < 86 || y + half > sh - 8) continue;
+        if (x + half > heroBox.l && x - half < heroBox.r && y + half > heroBox.t && y - half < heroBox.b) continue;
+        usable.push({ x, y });
+      }
+      // Every spot round the whole ellipse that is at least a print's width from the others, then an even
+      // pick from those: spread all the way round, never stacked. Prints that don't fit are left out.
+      const gap = 130, spots = [];
+      for (const s of usable) if (spots.every((c) => Math.hypot(c.x - s.x, c.y - s.y) >= gap)) spots.push(s);
+      const want = Math.min(floaters.length, spots.length);
+      const chosen = Array.from({ length: want }, (_, i) => spots[Math.floor((i * spots.length) / want)]);
+      floaters.forEach((f, i) => {
+        if (i >= chosen.length) { f.el.style.display = 'none'; return; }
+        const s = chosen[i];
+        f.el.style.display = '';
+        f.x = (s.x / sw) * 100; f.y = (s.y / sh) * 100;
+        f.el.style.left = `calc(${f.x}% - ${f.size / 2}px)`;
+        f.el.style.top = `calc(${f.y}% - ${f.size / 2}px)`;
+      });
+    }
 
     let W = 0;
     function measure() {
       W = album.offsetWidth;
+      layoutFloaters();
       for (const f of floaters) { f.cx = f.el.offsetLeft + f.el.offsetWidth / 2; f.cy = f.el.offsetTop + f.el.offsetHeight / 2; }
     }
-    measure();
-    addEventListener('resize', measure);
+    // Phones: the headline and the QR card are stacked, so the pair is centred in the space under the header
+    function fitHero() {
+      if (innerWidth > 600) { ['--hero-top', '--qr-top', '--qr-ty'].forEach((p) => stage.style.removeProperty(p)); return; }
+      const card = document.getElementById('qrCard');
+      const head = document.getElementById('header').getBoundingClientRect().bottom + 8;
+      const h1 = heroLeft.offsetHeight, h2 = card.offsetHeight, gap = 28;
+      const avail = stage.clientHeight - head - 16;
+      const start = head + Math.max(0, (avail - (h1 + gap + h2)) / 2);
+      stage.style.setProperty('--hero-top', `${start}px`);
+      if (h1 + gap + h2 <= avail) { stage.style.setProperty('--qr-top', `${start + h1 + gap}px`); stage.style.setProperty('--qr-ty', '0%'); }
+      else { stage.style.removeProperty('--qr-top'); stage.style.removeProperty('--qr-ty'); }
+    }
+    const relayout = () => { fitHero(); measure(); };
+    relayout();
+    addEventListener('resize', relayout);
+    document.fonts?.ready.then(relayout);
+    addEventListener('load', relayout);
+
+    // Signed in: the prints show photos from your own albums
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const user = await window.Momento?.sessionReady;
+        if (!user?.emailVerified) return;
+        const { albums = [], recent = [] } = await momentoApi('/api/albums');
+        const pics = [...new Set([...recent.map((r) => r.url), ...albums.flatMap((a) => a.pics || [])].filter(Boolean))];
+        if (!pics.length) return;
+        floaters.forEach((f, i) => {
+          const img = f.el.querySelector('img'), next = new Image();
+          next.onload = () => {
+            img.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: 'forwards' }).finished.then(() => {
+              img.src = next.src;
+              img.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 380, fill: 'forwards' });
+            });
+          };
+          next.src = pics[i % pics.length];
+        });
+      } catch (err) { /* sample photos stay */ }
+    });
 
     // Timeline
     const turnStart = (k) => T.hero + T.intro + k * (T.turn + T.hold);
@@ -2824,7 +3184,8 @@
       const pop = 1 + 2.4 * Math.pow(pp - 1, 3) + 1.4 * Math.pow(pp - 1, 2);
       const sc = lerp(.86, 1, intro) * lerp(.3, 1, pop);
       const cx = (W / 2) * (1 - open);
-      const shift = vw > 900 ? vw * .18 * hero : 0;
+      // (capped, so the card stays next to the headline on very wide screens)
+      const shift = vw > 900 ? Math.min(vw * .18, 360) * hero : 0;
       if (opened) {
         album.style.transformOrigin = `${cx}px 50%`;
         album.style.transform = `translate3d(${shift - cx}px, ${bob + (1 - pop) * 40}px, 0) rotateX(${rxA}deg) rotateY(${ryA}deg) rotateZ(${rzA}deg) scale(${sc})`;
@@ -3145,9 +3506,25 @@
         if (useCursor) document.documentElement.classList.add('has-cursor');
         finish();
       });
-      form.querySelector('[data-close]').addEventListener('click', () => dialog.close());
-      skip.addEventListener('click', () => dialog.close());
-      dialog.addEventListener('pointerdown', (e) => { dialog._downOutside = e.target === dialog; }); dialog.addEventListener('click', (e) => { if (e.target === dialog && dialog._downOutside) dialog.close(); });   // click outside the card
+      // Closing by hand fades the card out first (success and redirects still close straight away)
+      let closingAuth = false;
+      async function dismissAuth() {
+        if (closingAuth || !dialog.open) return;
+        closingAuth = true;
+        let anim = null;
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          anim = form.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px) scale(.96)' }],
+            { duration: 200, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
+          try { await anim.finished; } catch (e) {}
+        }
+        dialog.close();
+        if (anim) anim.cancel();
+        closingAuth = false;
+      }
+      dialog.addEventListener('cancel', (e) => { e.preventDefault(); dismissAuth(); });
+      form.querySelector('[data-close]').addEventListener('click', dismissAuth);
+      skip.addEventListener('click', dismissAuth);
+      dialog.addEventListener('pointerdown', (e) => { dialog._downOutside = e.target === dialog; }); dialog.addEventListener('click', (e) => { if (e.target === dialog && dialog._downOutside) dismissAuth(); });   // click outside the card
       tabs.forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
       form.querySelector('.auth-forgot').addEventListener('click', async (e) => {
         e.preventDefault();
@@ -3231,8 +3608,154 @@
       document.querySelectorAll('[data-auth]').forEach((b) => b.addEventListener('click', () => window.openAuth({ mode: b.dataset.auth })));
       // From an invite link most people are new, so it opens on Sign up (Log in is one tap away)
       document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).has('login')) window.openAuth({ mode: fromInvite ? 'signup' : 'login' }); });
+      // ---- Links from emails: password reset, approving an email change, and how a link went ----
+      // Tokens are taken out of the address bar straight away (the referrer meta also keeps them
+      // from ever reaching another site)
+      const linkParams = new URLSearchParams(location.search);
+      const resetToken = linkParams.get('reset'), approveToken = linkParams.get('email-approve');
+      const emailResult = linkParams.get('email'), verified = linkParams.get('verified');
+      if (resetToken || approveToken || emailResult || verified) {
+        ['reset', 'email-approve', 'email', 'verified'].forEach((k) => linkParams.delete(k));
+        history.replaceState(null, '', location.pathname + (linkParams.size ? '?' + linkParams : '') + location.hash);
+      }
+      const ICON_X = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      // A small slab of the popup glass, the same as the QR code's
+      function emailSlab(titleId) {
+        const d = document.createElement('dialog');
+        d.className = 'acct-dialog mq-pop';
+        d.setAttribute('aria-labelledby', titleId);
+        d.innerHTML = `<div class="acct-card mq-slab email-slab"><button class="acct-x" type="button" aria-label="Close" data-close>${ICON_X}</button><div class="email-slab-in"></div></div>`;
+        document.body.append(d);
+        const card = d.querySelector('.email-slab'), inner = d.querySelector('.email-slab-in');
+        const close = () => { if (d.open) d.close(); };
+        d.addEventListener('close', () => d.remove());
+        d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) close(); });
+        // Each step swaps the slab's contents; the card settles in again so the change is seen
+        const view = (html) => {
+          inner.innerHTML = html;
+          if (!matchMedia('(prefers-reduced-motion: reduce)').matches) inner.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+          inner.querySelector('[autofocus]')?.focus();
+        };
+        const open = () => {
+          d.showModal();
+          if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            card.animate([{ opacity: 0, transform: 'translateY(14px) scale(.95)' }, { opacity: 1, transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.25, .64, 1)' });
+            try { d.animate({ opacity: [0, 1] }, { duration: 300, pseudoElement: '::backdrop' }); } catch (e) {}
+          }
+        };
+        return { d, inner, view, open, close };
+      }
+      const text = (el, s) => { el.textContent = s; return el; };
+
+      // The reset link from "Forgot your password?" (also how a Google-only account adds a password)
+      function openReset(token) {
+        const s = emailSlab('rsTitle');
+        const showForm = () => {
+          s.view(`
+            <h2 id="rsTitle">Choose a new password</h2>
+            <p class="email-slab-lede">Use at least 8 characters. Every other device will be logged out.</p>
+            <form novalidate>
+              <label class="acct-field"><span>New password</span><input name="pw" type="password" autocomplete="new-password" minlength="8" autofocus></label>
+              <label class="acct-field"><span>Type it again</span><input name="again" type="password" autocomplete="new-password"></label>
+              <p class="acct-status" role="status"></p>
+              <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Set password</button></div>
+            </form>`);
+          const f = s.inner.querySelector('form'), say = (msg) => { const st = f.querySelector('.acct-status'); st.textContent = msg; st.classList.toggle('is-error', !!msg); };
+          f.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pw = f.pw.value, again = f.again.value;
+            if (pw.length < 8) { say('Use at least 8 characters for your password.'); f.pw.focus(); return; }
+            if (pw !== again) { say('The two passwords don’t match.'); f.again.focus(); return; }
+            const go = f.querySelector('[type="submit"]'); go.disabled = true; go.textContent = 'Setting password…'; say('');
+            try {
+              const { user } = await momentoApi('/api/auth/password/reset', momentoJson('POST', { token, password: pw }));
+              Momento.account.set(user);
+              Momento.flash?.('Password set', 'You’re logged in.');
+              location.href = 'albums.html';
+            } catch (err) {
+              go.disabled = false; go.textContent = 'Set password';
+              if (err.status === 400 && /expired|used/i.test(err.message)) showExpired(); else say(err.message);
+            }
+          });
+        };
+        const showExpired = () => {
+          s.view(`
+            <h2 id="rsTitle">This link has expired</h2>
+            <p class="email-slab-lede">Reset links work for an hour and only once. Ask for a new one and use the newest email.</p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Close</button><button class="acct-primary" type="button" data-again autofocus>Send a new link</button></div>`);
+          s.inner.querySelector('[data-again]').addEventListener('click', async () => {
+            s.close();
+            await window.openAuth({ mode: 'login' });
+            error.textContent = 'Enter your email, then choose “Forgot your password?” for a new link.';
+            field('email').focus();
+          });
+        };
+        showForm();
+        s.open();
+      }
+
+      // The approval link sent to the CURRENT address when someone asks to move the account
+      async function openApprove(token) {
+        const s = emailSlab('eaTitle');
+        const expired = () => s.view(`
+          <h2 id="eaTitle">This link has expired</h2>
+          <p class="email-slab-lede">It may already have been used. Nothing about your account has changed.</p>
+          <div class="acct-actions"><button class="acct-primary" type="button" data-close autofocus>Close</button></div>`);
+        s.view('<h2 id="eaTitle">Checking the link…</h2>');
+        s.open();
+        let info;
+        try { info = await momentoApi('/api/auth/email/approve-info?token=' + encodeURIComponent(token)); }
+        catch (err) { expired(); return; }
+        s.view(`
+          <h2 id="eaTitle">Approve your new email?</h2>
+          <p class="email-slab-lede">Someone signed in to your account asked to move it from <b data-from></b> to <b data-to></b>.</p>
+          <p class="email-slab-note">Not you? Choose Not me: the change stops and every device is logged out.</p>
+          <p class="acct-status" role="status"></p>
+          <div class="acct-actions"><button class="acct-primary is-danger" type="button" data-no>Not me</button><button class="acct-primary" type="button" data-yes autofocus>Approve</button></div>`);
+        text(s.inner.querySelector('[data-from]'), info.email);
+        text(s.inner.querySelector('[data-to]'), info.newEmail);
+        const say = (msg) => { const st = s.inner.querySelector('.acct-status'); st.textContent = msg; st.classList.toggle('is-error', !!msg); };
+        const decide = async (path, b) => {
+          s.inner.querySelectorAll('.acct-actions button').forEach((x) => { x.disabled = true; });
+          b.textContent = path === 'approve' ? 'Approving…' : 'Stopping…';
+          try {
+            const { result } = await momentoApi('/api/auth/email/' + path, momentoJson('POST', { token }));
+            if (result === 'approved') {
+              s.view(`
+                <h2 id="eaTitle">One last step</h2>
+                <p class="email-slab-lede">We sent a confirm link to <b data-to></b>. Open it there to finish moving your account. Every device will then log in again with the new address.</p>
+                <div class="acct-actions"><button class="acct-primary" type="button" data-close autofocus>Done</button></div>`);
+              text(s.inner.querySelector('[data-to]'), info.newEmail);
+            } else if (result === 'cancelled') {
+              Momento.account.clear();
+              s.view(`
+                <h2 id="eaTitle">Change stopped</h2>
+                <p class="email-slab-lede">Your email stays the same and every device has been logged out. Log in again, and change your password if you think someone else had access.</p>
+                <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Close</button><button class="acct-primary" type="button" data-login autofocus>Log in</button></div>`);
+              s.inner.querySelector('[data-login]').addEventListener('click', () => { s.close(); window.openAuth({ mode: 'login' }); });
+            } else if (result === 'taken') {
+              s.view(`
+                <h2 id="eaTitle">That email is taken</h2>
+                <p class="email-slab-lede">Another account started using that address, so nothing was changed.</p>
+                <div class="acct-actions"><button class="acct-primary" type="button" data-close autofocus>Close</button></div>`);
+            } else expired();
+          } catch (err) {
+            s.inner.querySelectorAll('.acct-actions button').forEach((x) => { x.disabled = false; });
+            b.textContent = path === 'approve' ? 'Approve' : 'Not me';
+            say(err.message);
+          }
+        };
+        s.inner.querySelector('[data-yes]').addEventListener('click', (e) => decide('approve', e.currentTarget));
+        s.inner.querySelector('[data-no]').addEventListener('click', (e) => decide('cancel', e.currentTarget));
+      }
+
       document.addEventListener('DOMContentLoaded', () => {
-        const verified = new URLSearchParams(location.search).get('verified');
+        if (resetToken) openReset(resetToken);
+        else if (approveToken) openApprove(approveToken);
+        // The confirm link from the new address lands here (the move logged every device out, so ?login opens Log in)
+        if (emailResult === 'changed') Momento.toast('Email changed', 'Log in with your new address.');
+        if (emailResult === 'taken') Momento.toast('Email not changed', 'Another account already uses that address.');
+        if (emailResult === 'invalid') Momento.toast('That link has expired', 'Start the change again from Settings.');
         if (verified === 'session_limit') Momento.toast('Your email is verified', 'Log out on another device to free a login slot, then sign in here.');
         if (verified === 'invalid') Momento.toast('This verification link has expired', 'It may already have been used. Sign in to check your account or request a new link.');
       });
@@ -3271,7 +3794,7 @@
         requestAnimationFrame(tick);
       }, { threshold: .4 }).observe(document.getElementById('live'));
 
-      // How it works: scroll picks the step, the phone shows its screen
+      // How it works: the wheel (over the panel) picks the step, the phone shows its screen
       const hiw = document.querySelector('.hiw');
       const stepsEl = hiw.querySelector('.steps');
       const steps = [...hiw.querySelectorAll('.step')];
@@ -3286,23 +3809,34 @@
         screensEls.forEach((s, k) => { s.classList.toggle('is-on', k === i); s.classList.toggle('is-past', k < i); });
         stepsEl.style.setProperty('--rail', (i / (steps.length - 1)).toFixed(3));
       }
-      // Step follows how far the panel has travelled up the screen; a clicked step holds
-      // until the visitor scrolls on
-      let picked = -1;
-      window.updateSteps = () => {
+      // The steps no longer follow page scroll. With the pointer over the panel, each wheel gesture
+      // moves one step; at the first or last step the wheel carries on scrolling the page, and
+      // everywhere else the page scrolls normally. Clicking or tapping a step still works.
+      window.updateSteps = () => {};
+      setStep(0);
+      const stacked = matchMedia('(max-width: 900px)');
+      let wheelAcc = 0, wheelLock = 0;
+      panel.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || stacked.matches) return;          // pinch-zoom, or the stacked phone layout: normal scroll
         const r = panel.getBoundingClientRect();
-        if (r.bottom < 0 || r.top > innerHeight) return;
-        const p = Math.min(Math.max((innerHeight * .8 - r.top) / (r.height * .95), 0), .999);
-        const i = Math.floor(p * steps.length);
-        if (picked >= 0 && Math.abs(i - picked) < 2) return;
-        picked = -1;
-        setStep(i);
-      };
+        const shown = (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) / Math.min(r.height, innerHeight);
+        if (shown < .8) return;                             // bring the panel into view first
+        const dir = Math.sign(e.deltaY);
+        if (!dir) return;
+        const next = current + dir;
+        if (next < 0 || next >= steps.length) { wheelAcc = 0; return; }   // at an end: let the page move on
+        e.preventDefault();
+        const now = performance.now();
+        if (now < wheelLock) return;                        // one step per gesture, even with trackpad momentum
+        wheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        if (Math.abs(wheelAcc) < 40) return;
+        wheelAcc = 0; wheelLock = now + 450;
+        setStep(next);
+      }, { passive: false });
+      panel.addEventListener('pointerleave', () => { wheelAcc = 0; });
       hiw.addEventListener('click', (e) => {
         const b = e.target.closest('.step button');
-        if (!b) return;
-        picked = Number(b.dataset.i);
-        setStep(picked);
+        if (b) setStep(Number(b.dataset.i));
       });
       function fitPhone() {
         const pad = parseFloat(getComputedStyle(panel).paddingTop) * 2;
@@ -3334,7 +3868,9 @@
       });
       function update() {
         const v = Number(range.value);
-        const half = map.clientWidth / 2;
+        // On a small map the outer guests' "… out" tags would run off its edge, so everything is
+        // drawn a little closer to the middle there (the zone and the guests together)
+        const half = map.clientWidth / 2 * (map.clientWidth < 380 ? .84 : 1);
         map.style.setProperty('--r', `${radius(v) * half}px`);
         range.style.setProperty('--fill', `${v}%`);
         out.textContent = label(metres(v));
@@ -4236,7 +4772,9 @@
   
     // ---- Leaving a page, in browsers that can't cross-fade between pages themselves: the page fades and
     // lifts away (CSS .is-leaving), then the next one loads ----
-    if (!('CSSViewTransitionRule' in window) && !reduced.matches) {
+    // (Also for pages opened straight from the folder: browsers only cross-fade pages served from an address)
+    const ptFile = location.protocol === 'file:';
+    if ((!('CSSViewTransitionRule' in window) || ptFile) && !reduced.matches) {
       document.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute('download')) return;
@@ -4244,6 +4782,7 @@
         if (url.origin !== location.origin || url.pathname === location.pathname) return;   // other sites, mailto:, same-page anchors
         e.preventDefault();
         root.classList.add('is-leaving');
+        if (ptFile) { root.classList.add('pt-file'); try { sessionStorage.setItem('momento-pt', '1'); } catch (err) {} }
         setTimeout(() => { location.href = url.href; }, 240);
       });
       addEventListener('pageshow', (e) => { if (e.persisted) root.classList.remove('is-leaving'); });   // back from the page cache
@@ -4337,8 +4876,17 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="sort.html">Sort photos</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfEvents">
+            <h2 id="sfEvents">Events</h2>
+            <ul>
+              <li><a class="sf-link" href="events.html">Events near you</a></li>
+              <li><a class="sf-link" href="${P}#for-hosts" data-create>Host a public event</a></li>
+              <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>
           </nav>
           <nav class="sf-col" aria-labelledby="sfHelp">
@@ -4393,6 +4941,27 @@
         onLogout: to ? () => { location.href = to; } : null,
       });
     });
+  })();
+
+  // ---- Popup cards catch the pointer light too (they're created later, so listen on the page) ----
+  (() => {
+    const SEL = '.auth-card, .modal-card, .acct-card, .vgate-card';
+    let el = null, x = 0, y = 0, queued = false;
+    addEventListener('pointermove', (e) => {
+      const card = e.target.closest ? e.target.closest(SEL) : null;
+      if (card !== el) { if (el) el.style.setProperty('--shine', 0); el = card; if (el) el.style.setProperty('--shine', 1); }
+      if (!el) return;
+      x = e.clientX; y = e.clientY;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--mx', `${x - r.left}px`);
+        el.style.setProperty('--my', `${y - r.top}px`);
+      });
+    }, { passive: true });
   })();
     </script>
   <!-- /@shared:js -->

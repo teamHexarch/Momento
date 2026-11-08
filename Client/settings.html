@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <style>[hidden] { display: none !important; }</style>
   <script src="assets/api.js"></script>
+  <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
   <script src="assets/event.js" defer></script>
@@ -18,6 +21,18 @@
     root.dataset.theme = dark ? 'dark' : 'light';
     root.dataset.themePref = pref;
     window.__theme = { target: +dark, a: +dark, b: +dark };   // read by the silk shader
+
+    // Pages opened straight from the folder (file://) can't cross-fade into each other, so the page
+    // that was left marks it, and this one rises in instead (see "Leaving a page")
+    try {
+      if (sessionStorage.getItem('momento-pt') === '1') {
+        sessionStorage.removeItem('momento-pt');
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          root.classList.add('is-arriving');
+          setTimeout(() => root.classList.remove('is-arriving'), 900);
+        }
+      }
+    } catch (e) {}
   
     // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
     // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
@@ -84,7 +99,7 @@
       --paper: #F8F7FA;
       --dusk: #2E2C3A;
       --slate: #5C596B;
-      --stone: #8A8697;
+      --stone: #6F6B7D;
       --copper: #9A603D;
       --blush: #E6CDD6;
       --lavender: #D9D0EA;
@@ -109,9 +124,10 @@
     }
 
     /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
-    .has-cursor, .has-cursor * { cursor: none !important; }
+    /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
     .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
-    .has-cursor .cursor { opacity: 1; }
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
       background: var(--dusk);
@@ -343,6 +359,7 @@
     .s-delete[hidden] { display: none !important; }
     .s-now { margin: 0 0 .9rem; color: var(--slate); font-size: .92rem; line-height: 1.5; }
     .s-now b { color: var(--dusk); font-weight: 650; word-break: break-all; }
+    .s-now.s-now-how { margin-top: -.4rem; font-size: .85rem; line-height: 1.55; }
     .btn-sm { min-height: 2.5rem; padding: 0 1.15rem; font-size: .88rem; }
 
     .s-seg { padding: .85rem 1rem; }
@@ -360,15 +377,6 @@
     .s-legend span.is-cleared { opacity: .45; text-decoration: line-through; }
 
 
-    /* A small confirmation after every change */
-    .s-toast {
-      position: fixed; left: 50%; bottom: 1.6rem; z-index: 120; display: flex; align-items: center; gap: .7rem; padding: .65rem 1.2rem .65rem .75rem;
-      border-radius: 100px; font-size: .9rem; pointer-events: none; opacity: 0; translate: -50% 26px; transition: translate .5s var(--spring), opacity .3s ease;
-    }
-    .s-toast.show { opacity: 1; translate: -50% 0; }
-    .s-toast i { display: grid; place-items: center; flex: none; width: 1.55rem; height: 1.55rem; border-radius: 50%; background: var(--copper); color: #fff; }
-    .s-toast b { font-weight: 650; }
-    .s-toast small { margin-left: .35rem; color: var(--slate); font-size: .85rem; }
     .s-profile .acct-field input::placeholder { color: var(--stone); opacity: 1; }
 
     @media (max-width: 900px) {
@@ -386,8 +394,108 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .s-group { opacity: 1; translate: none; transition: none; }
-      .s-sw::after, .s-check, .s-toast, .s-bar i { transition: none; }
+      .s-sw::after, .s-check, .s-bar i { transition: none; }
     }
+
+    /* ---------- Simple settings ----------
+       One column, larger text, plain words. Each row says what it does and what it's set to; forms
+       stay closed until Change is pressed; every switch spells out On or Off beside it */
+    .s-cols { display: block; max-width: 40rem; margin-inline: auto; }
+    .s-head { max-width: 40rem; margin-inline: auto; box-sizing: border-box; }
+    .s-stack { gap: 2.4rem; }
+    .s-head { padding-bottom: 2.2rem; }
+    .s-lede { font-size: 1.2rem; }
+    .s-group > h2 { margin: 0 0 .75rem; padding: 0 .4rem; color: var(--dusk); font-size: 1.2rem; font-weight: 700; letter-spacing: -.02em; }
+    .s-list { padding: .35rem 0; }
+    .s-row, .s-line, .s-more > summary { min-height: 4.4rem; padding: 1rem 1.35rem; gap: 1rem; }
+    .s-text b { font-size: 1.1rem; line-height: 1.3; }
+    .s-text small { font-size: .98rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .s-row + .s-row::before, .s-item + .s-row::before, .s-row + .s-item::before, .s-item + .s-item::before, .s-item + .s-more::before {
+      content: ""; position: absolute; top: 0; left: 1.35rem; right: 1.35rem; height: 1px; background: rgba(46, 44, 58, .09);
+    }
+    .s-item, .s-more { position: relative; }
+    .s-line { display: flex; align-items: center; box-sizing: border-box; }
+
+    /* Bigger switches, with the word On or Off next to them */
+    .s-sw { width: 3.6rem; height: 2.15rem; }
+    .s-sw::after { width: 1.75rem; height: 1.75rem; top: .2rem; left: .2rem; }
+    .s-sw[aria-checked="true"]::after { translate: 1.45rem 0; }
+    .s-sw[aria-checked="true"]:active::after { translate: 1.05rem 0; }
+    .s-sw:active::after { width: 2.1rem; }
+    .s-state { order: -1; flex: none; min-width: 1.9rem; margin-left: auto; text-align: right; font-size: .95rem; font-weight: 700; color: var(--slate); }
+    .s-row .s-text + .s-sw { order: 1; }
+    .s-state::before { content: "Off"; }
+    .s-sw[aria-checked="true"] + .s-state::before { content: "On"; }
+    .s-sw[aria-checked="true"] + .s-state { color: var(--copper); }
+    .s-row .s-text { order: -2; }
+
+    /* Change: a clear pill button; the form opens underneath */
+    .s-change, .s-cancel {
+      flex: none; min-height: 2.75rem; padding: 0 1.25rem; border: none; border-radius: 100px; font: 650 1rem var(--font-main); cursor: pointer;
+      transition: background-color .2s ease, transform .3s var(--spring);
+    }
+    .s-change { margin-left: auto; background: rgba(46, 44, 58, .08); color: var(--dusk); }
+    .s-change:hover { background: rgba(46, 44, 58, .13); }
+    .s-change:active, .s-cancel:active { transform: scale(.96); }
+    .s-change:focus-visible, .s-cancel:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .s-change[aria-expanded="true"] { background: #2E2C3A; color: #fff; }
+    .s-cancel { background: none; color: var(--slate); }
+    .s-cancel:hover { background: rgba(46, 44, 58, .07); color: var(--dusk); }
+    .s-panel { padding: 0 1.35rem 1.2rem; }
+    .s-panel[hidden] { display: none !important; }
+    .s-panel .s-profile { display: grid; padding: 0; }
+    .s-profile .acct-field span { font-size: .95rem; }
+    .s-profile .acct-field span i { font-style: normal; font-weight: 500; color: var(--stone); }
+    .s-profile .acct-field input { min-height: 3.2rem; font-size: 1.05rem; }
+    .s-form-acts { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+    .s-form-acts .btn { margin: 0; min-height: 2.9rem; padding: 0 1.4rem; font-size: 1rem; }
+    .s-help { margin: 0 0 .8rem; color: var(--slate); font-size: .95rem; line-height: 1.55; }
+    .s-dests { display: grid; gap: .3rem; padding-top: .1rem; }
+    .s-dests .s-row { min-height: 3.8rem; padding: .75rem 1rem; border-radius: 18px; background: rgba(46, 44, 58, .04); }
+    .s-dests .s-row[aria-checked="true"] { background: rgba(154, 96, 61, .1); box-shadow: inset 0 0 0 2px var(--copper); }
+    .s-dests .s-row + .s-row::before { display: none; }
+
+    /* More photo options: folded away */
+    .s-more > summary { display: flex; align-items: center; box-sizing: border-box; list-style: none; cursor: pointer; border-radius: 22px; color: var(--dusk); transition: background-color .25s ease; }
+    .s-more > summary::-webkit-details-marker { display: none; }
+    .s-more > summary svg { flex: none; margin-left: auto; color: var(--slate); transition: transform .4s var(--spring); }
+    .s-more[open] > summary svg { transform: rotate(180deg); }
+    .s-more > summary:hover { background: rgba(46, 44, 58, .04); }
+    .s-more > summary:focus-visible { outline: 2px solid var(--dusk); outline-offset: -3px; }
+    .s-more > .s-row { padding-left: 2rem; }
+
+    .s-seg { padding: 1rem 1.2rem; }
+    .s-seg .acct-seg button { min-height: 3rem; font-size: 1rem; }
+    .s-seg-help { margin: .7rem .2rem 0; }
+    .s-store-top { align-items: center; }
+    .s-store-top b { font-size: 1.25rem; }
+    .s-store-top .btn { flex: none; min-height: 2.9rem; font-size: 1rem; }
+    .s-legend { font-size: .9rem; }
+
+    .s-leave { display: grid; justify-items: center; gap: .9rem; padding-top: .5rem; }
+    .s-logout { width: 100%; min-height: 3.5rem; font-size: 1.1rem; }
+    .s-delete-btn { padding: .6rem 1rem; border: none; border-radius: 100px; background: none; color: #9A3D3D; font: 650 .98rem var(--font-main); cursor: pointer; transition: background-color .2s ease; }
+    .s-delete-btn:hover { background: rgba(154, 61, 61, .08); }
+    .s-delete-btn:active { background: rgba(154, 61, 61, .14); }
+    .s-delete-btn:focus-visible { outline: 2px solid #9A3D3D; outline-offset: 2px; }
+    .s-leave .s-delete { width: 100%; box-sizing: border-box; padding: 1.2rem 1.35rem .6rem; border-radius: 24px; }
+
+    :root[data-theme="dark"] .s-change { background: rgba(255, 255, 255, .1); }
+    :root[data-theme="dark"] .s-change:hover { background: rgba(255, 255, 255, .16); }
+    :root[data-theme="dark"] .s-change[aria-expanded="true"] { background: rgba(255, 255, 255, .9); color: #1C1A26; }
+    :root[data-theme="dark"] .s-cancel:hover { background: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] :is(.s-row + .s-row, .s-item + .s-row, .s-row + .s-item, .s-item + .s-item, .s-item + .s-more)::before { background: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .s-dests .s-row { background: rgba(255, 255, 255, .05); }
+    :root[data-theme="dark"] .s-dests .s-row[aria-checked="true"] { background: rgba(184, 174, 245, .12); }
+    :root[data-theme="dark"] .s-more > summary:hover { background: rgba(255, 255, 255, .05); }
+    :root[data-theme="dark"] .s-delete-btn { color: #F0A3A3; }
+    @media (max-width: 600px) {
+      .s-row, .s-line, .s-more > summary { padding: .95rem 1.1rem; }
+      .s-panel { padding: 0 1.1rem 1.1rem; }
+      .s-more > .s-row { padding-left: 1.6rem; }
+      .s-store-top { flex-wrap: wrap; }
+    }
+    @media (prefers-reduced-motion: reduce) { .s-more > summary svg { transition: none; } }
 
     /* ---------- Phones: keep it simple and keep things apart ----------
        The background thread is dropped (it crossed text on a narrow screen), and the header
@@ -407,7 +515,8 @@
        A toast answers every action (with Undo where something was removed), a short dialog asks
        before anything is deleted, and creating an album ends on its own "created" screen */
     .m-toast {
-      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: none; overflow: visible;
+      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: 1.5px solid transparent; overflow: visible;
+      -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
       display: flex; align-items: center; gap: .75rem; width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
       padding: .55rem .55rem .55rem .6rem; border-radius: 100px; color: var(--dusk); font: 500 .92rem var(--font-main);
       translate: -50% 0;
@@ -469,6 +578,9 @@
     :root[data-theme="dark"] .m-toast-act:hover { background: rgba(255, 255, 255, .15); }
     :root[data-theme="dark"] .m-copy { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
     :root[data-theme="dark"] .m-del { color: #F0A3A3; }
+    :root[data-theme="dark"] .m-toast.is-danger .m-toast-ic { background: rgba(240, 163, 163, .18); color: #F0A3A3; }
+    :root[data-theme="dark"] .acct-primary.is-danger { background: #F0A3A3; color: #2A1416; }
+    :root[data-theme="dark"] .acct-primary.is-danger:hover { background: #F5B8B8; }
     :root[data-theme="dark"] .m-del:hover { background: rgba(240, 163, 163, .1); }
     :root[data-theme="dark"] .m-warn-ic { background: rgba(240, 163, 163, .12); color: #F0A3A3; }
     :root[data-theme="dark"] .acct-field input[type="date"] { color-scheme: dark; }
@@ -505,18 +617,18 @@
       :root[data-theme="dark"] .grain { opacity: .14; }
   
       /* Things that are objects, not interface, keep their daylight colours */
-      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav {
+      .qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host {
         --fog: #ECEAF0; --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #8A8697; --copper: #9A603D; --copper-soft: #C08A66;
         --blush: #E6CDD6; --lavender: #D9D0EA; --tide: #6F9896; --line: #D6D2DE; --surface: #FFFFFF; --glass: rgba(248, 247, 250, .8);
         color: var(--dusk);
       }
       /* In dark their accent is a deeper lavender, so no copper is left anywhere at night */
-      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host, .album-card .close, .stage-nav) {
+      :root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .host-panel .live, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
         --copper: #6C5FC7; --copper-soft: #9A8FE0;
       }
   
       /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
-      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .auth-card, .modal-card, .nav-menu) {
+      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .nav-menu) {
         background:
           linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
           linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
@@ -535,12 +647,6 @@
           linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
           linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
       }
-      :root[data-theme="dark"] .auth-card, :root[data-theme="dark"] .modal-card {
-        background:
-          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
-      }
-      :root[data-theme="dark"] :is(.auth-dialog, .modal)::backdrop { background: rgba(6, 5, 10, .62); }
       :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
       :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
   
@@ -587,7 +693,7 @@
   
       /* Strokes, rails and tints that were ink on paper */
       :root[data-theme="dark"] .steps::before { background: rgba(255, 255, 255, .12); }
-      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .5); }
+      :root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .66); }
       :root[data-theme="dark"] .step.is-on .step-body b, :root[data-theme="dark"] .step button:hover .step-body b { color: var(--dusk); }
       :root[data-theme="dark"] .step-no { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
       :root[data-theme="dark"] .host-controls li + li, :root[data-theme="dark"] .qa + .qa, :root[data-theme="dark"] .feat-item + .feat-item { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -622,13 +728,28 @@
         :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
       }
   
-      /* ---------- Settings item in the main nav: its name on wide screens, a small icon on phones ---------- */
-      .nav-settings { display: inline-flex; align-items: center; justify-content: center; }
-      .nav-settings svg { display: none; }
+      /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
+      :is(.nav-settings, .nav-events) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-settings, .nav-events) svg { display: none; }
       @media (max-width: 520px) {
-        .nav-settings .nav-label { display: none; }
-        .nav-settings svg { display: block; }
-        .nav-settings { padding-left: .8rem; padding-right: .8rem; }
+        :is(.nav-settings, .nav-events) .nav-label { display: none; }
+        :is(.nav-settings, .nav-events) svg { display: block; }
+        :is(.nav-settings, .nav-events) { padding-left: .8rem; padding-right: .8rem; }
+      }
+      /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
+         logo, the menu and your account button all fit on one line */
+      @media (max-width: 380px) {
+        .header { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
+        .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
+        .nav { gap: 0 !important; padding: .22rem !important; }
+        .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
+        .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
+        :is(.nav-settings, .nav-events) { padding-left: .58rem !important; padding-right: .58rem !important; }
+        :is(.nav-settings, .nav-events) svg { width: 16px; height: 16px; }
+      }
+      @media (max-width: 340px) {
+        .nav-item { padding: .45rem .42rem !important; }
+        :is(.nav-settings, .nav-events) { padding-left: .45rem !important; padding-right: .45rem !important; }
       }
   
       /* ---------- The thread ----------
@@ -775,16 +896,26 @@
       /* Support: a chat bubble pops up, its dots bounce, and it carries on into the message form */
       .intro-chat {
         position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6rem; padding: 1.5rem 2rem;
-        border-radius: 34px 34px 34px 10px; background: #fff; opacity: 0; transform-origin: 50% 50%;
-        box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(60, 50, 90, .14), 0 24px 44px -20px rgba(60, 50, 90, .5);
+        border: 1.5px solid transparent; border-radius: 34px 34px 34px 10px; opacity: 0; transform-origin: 50% 50%;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .78) 50%, rgba(244, 242, 252, .86) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .95), 0 0 44px -8px rgba(188, 178, 236, .55), 0 24px 44px -20px rgba(60, 50, 90, .5);
       }
       .intro-chat i { width: .95rem; height: .95rem; border-radius: 50%; background: #6C5FC7; }
+      :root[data-theme="dark"] .intro-chat {
+        background:
+          linear-gradient(135deg, rgba(58, 52, 88, .75) 0%, rgba(28, 26, 40, .85) 100%) padding-box,
+          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 40%, rgba(200, 192, 240, .5) 100%) border-box;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, .13), 0 0 40px -12px rgba(120, 100, 190, .3), 0 24px 44px -20px rgba(0, 0, 0, .7);
+      }
+      :root[data-theme="dark"] .intro-chat i { background: #B8AEF5; }
   
       /* ---------- Site footer ----------
          The same on every page: the brand, three short columns of links, and a base row with the
          small print, the theme switch and a way back to the top. */
       .site-foot { width: min(1180px, 100%); margin: 5rem auto 0; padding: 3.2rem 1.5rem 1.6rem; box-sizing: border-box; border-top: 1px solid var(--line); color: var(--slate); font-size: .92rem; text-align: left; }
-      .sf-grid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 2.5rem 2rem; }
+      .sf-grid { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 2.5rem 2rem; }
       .sf-logo { display: inline-flex; align-items: center; gap: .6rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
       .sf-logo svg.glyph { width: 1.8rem; height: 1.8rem; transition: transform .35s var(--spring); }
       .sf-logo:hover svg.glyph { transform: scale(1.08) rotate(-4deg); }
@@ -815,15 +946,19 @@
       .sf-top::after { right: 1.4rem; }
       @media (max-width: 900px) {
         .site-foot { margin-top: 3.5rem; }
-        .sf-grid { grid-template-columns: repeat(3, 1fr); }
+        .sf-grid { grid-template-columns: repeat(4, 1fr); }
         .sf-brand { grid-column: 1 / -1; }
       }
       @media (max-width: 600px) {
-        .sf-grid { grid-template-columns: 1fr 1fr; }
-        .sf-col:last-child { grid-column: 1 / -1; }
-        .sf-base { flex-direction: column; align-items: stretch; }
+        .site-foot { padding: 2.6rem 20px calc(1.4rem + env(safe-area-inset-bottom, 0px)); }
+        .sf-grid { grid-template-columns: 1fr 1fr; gap: 2.1rem 1.5rem; }
+        .sf-col ul { gap: .8rem; }
+        /* Phones: the four groups sit in a 2 x 2 grid */
+
+        .sf-base { flex-direction: column; align-items: stretch; gap: 1.2rem; margin-top: 2.4rem; }
         .site-foot .acct-seg { width: 100%; }
-        .sf-top { align-self: flex-start; }
+        .sf-top { align-self: center; padding: .4rem .6rem; }
+        .sf-top::after { left: .6rem; right: 2rem; bottom: .3rem; }
       }
       @media (prefers-reduced-motion: reduce) { .sf-link::after, .sf-top svg, .sf-logo svg.glyph { transition: none; } }
   
@@ -835,7 +970,6 @@
       :root[data-theme="dark"] .s-sw[aria-checked="true"] { background: var(--copper); }
       :root[data-theme="dark"] .s-bar { background: rgba(255, 255, 255, .08); }
       :root[data-theme="dark"] :is(.s-note.is-error, .s-row.is-danger .s-text b) { color: #F0A3A3; }
-      :root[data-theme="dark"] .s-toast i { color: var(--fog); }
   
       /* The albums page: lists, chips and rows that were ink on paper */
       :root[data-theme="dark"] :is(.todo-row + .todo-row, .burst + .burst) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -868,9 +1002,6 @@
       .acct-menu {
         --radius: 26px; position: absolute; top: calc(100% + .6rem); right: 0; z-index: 5; width: 17.5rem; box-sizing: border-box; padding: .45rem;
         border-radius: var(--radius); transform-origin: calc(100% - 2.5rem) top;
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, .97) 0%, rgba(250, 249, 253, .95) 50%, rgba(244, 242, 252, .96) 100%) padding-box,
-          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
         opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden;
         transition: opacity .25s ease, transform .5s var(--spring), visibility 0s .5s;
       }
@@ -912,14 +1043,9 @@
       .acct-seg [aria-checked="true"] .scr-dot { opacity: 1; scale: 1; }
   
       .acct-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
-      .acct-dialog::backdrop { background: rgba(46, 44, 58, .3); }
       .acct-card {
         position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: 0;
-        padding: 2rem 1.9rem 1.5rem; border: 1.5px solid transparent; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, .96) 0%, rgba(250, 249, 253, .9) 50%, rgba(244, 242, 252, .95) 100%) padding-box,
-          linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .35) 32%, rgba(203, 194, 240, .7) 64%, #fff 100%) border-box;
-        box-shadow: 0 30px 80px -30px rgba(60, 50, 90, .5);
+        padding: 2rem 1.9rem 1.5rem; border-radius: 30px; color: var(--dusk); font-family: var(--font-main);
       }
       .acct-card h2 { margin: 0; padding-right: 2rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
       .acct-sub { margin: .45rem 0 1.3rem; color: var(--slate); font-size: .95rem; line-height: 1.5; }
@@ -933,12 +1059,12 @@
       .acct-field { display: block; margin-bottom: .75rem; }
       .acct-field span { display: block; margin-bottom: .3rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
       .acct-field input, .acct-field textarea {
-        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .9); color: var(--dusk);
-        font: 500 1rem var(--font-main); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .14); transition: box-shadow .2s ease;
+        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem; border: none; border-radius: 14px; background: rgba(255, 255, 255, .55); color: var(--dusk);
+        font: 500 1rem var(--font-main); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .12); transition: box-shadow .2s ease;
       }
       .acct-field textarea { display: block; height: auto; min-height: 8.5rem; padding: .8rem 1rem; line-height: 1.5; resize: vertical; }
       .acct-field input::placeholder, .acct-field textarea::placeholder { color: var(--stone); opacity: 1; }
-      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .3); }
+      .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .3); }
       .acct-field input:focus, .acct-field textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188, 178, 236, .45); }
       .acct-group { margin: 1.1rem 0 .4rem; }
       .acct-group > b { display: block; margin-bottom: .1rem; font-size: .82rem; color: var(--slate); }
@@ -994,18 +1120,6 @@
         .acct-seg-pill, .acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot, .acct-menu, .acct-chev, .acct-sw::after { transition: none; }
       }
   
-      :root[data-theme="dark"] .acct-menu {
-        background:
-          linear-gradient(135deg, rgba(58, 53, 80, .96) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
-      }
-      :root[data-theme="dark"] .acct-card {
-        background:
-          linear-gradient(135deg, rgba(48, 44, 66, .98) 0%, rgba(34, 31, 46, .97) 50%, rgba(28, 26, 38, .98) 100%) padding-box,
-          linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 32%, rgba(120, 110, 176, .3) 64%, rgba(200, 192, 240, .5) 100%) border-box;
-        box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8);
-      }
-      :root[data-theme="dark"] .acct-dialog::backdrop { background: rgba(6, 5, 10, .62); }
       :root[data-theme="dark"] :is(.acct-item:hover, .acct-item:focus-visible) { background: rgba(255, 255, 255, .08); }
       :root[data-theme="dark"] .acct-item:active { background: rgba(255, 255, 255, .14); }
       :root[data-theme="dark"] .acct-sep { background: rgba(255, 255, 255, .1); }
@@ -1042,6 +1156,243 @@
       /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
       html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
       html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
+      /* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
+      html.pt-file.is-leaving .header { opacity: 1; }
+      html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+
+      /* ---------- Popup glass ----------
+         Popups float over a dimmed page, so unlike the page panels they get a real blur behind them.
+         Only one or two are ever on screen, and only while open, so the blur cost stays small. */
+      .auth-card, .modal-card, .acct-card, .vgate-card {
+        --mx: 50%; --my: 0px; --shine: 0;
+        position: relative; border: 1.5px solid transparent;
+        background:
+          linear-gradient(135deg, rgba(255,255,255,.74) 0%, rgba(255,255,255,.52) 46%, rgba(244,242,252,.66) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255,255,255,.3) 32%, rgba(203,194,240,.6) 64%, rgba(255,255,255,.95) 100%) border-box;
+        -webkit-backdrop-filter: blur(24px) saturate(1.7);
+        backdrop-filter: blur(24px) saturate(1.7);
+        box-shadow:
+          inset 0 1px 1px rgba(255,255,255,.95),
+          inset 0 -12px 26px -16px rgba(255,255,255,.75),
+          inset 0 0 32px rgba(255,255,255,.22),
+          0 0 0 .5px rgba(46,44,58,.05),
+          0 0 44px -8px rgba(188,178,236,.55),
+          0 26px 60px -30px rgba(60,50,90,.35);
+      }
+      /* The rim catches the pointer, as on the page panels */
+      .auth-card::after, .modal-card::after, .acct-card::after, .vgate-card::after {
+        content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; padding: 1.5px;
+        opacity: var(--shine); transition: opacity .4s ease;
+        background: radial-gradient(160px circle at var(--mx) var(--my), #fff, rgba(255,255,255,.7) 35%, transparent 75%);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+      }
+      :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card) {
+        background:
+          linear-gradient(135deg, rgba(58,52,88,.58) 0%, rgba(28,26,40,.7) 46%, rgba(18,17,26,.78) 100%) padding-box,
+          linear-gradient(140deg, rgba(200,192,240,.55) 0%, rgba(150,142,196,.12) 32%, rgba(120,110,176,.3) 64%, rgba(200,192,240,.5) 100%) border-box;
+        box-shadow:
+          inset 0 1px 1px rgba(255,255,255,.13),
+          inset 0 0 26px rgba(150,140,210,.05),
+          0 0 0 .5px rgba(0,0,0,.4),
+          0 0 40px -12px rgba(120,100,190,.25),
+          0 26px 60px -30px rgba(0,0,0,.75);
+      }
+      :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card)::after {
+        background: radial-gradient(160px circle at var(--mx) var(--my), rgba(220,212,255,.75), rgba(200,192,240,.3) 35%, transparent 75%);
+      }
+      /* Browsers without backdrop blur keep a fuller fill so text stays readable */
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .auth-card, .modal-card, .acct-card, .vgate-card { background:
+          linear-gradient(135deg, rgba(255,255,255,.95) 0%, rgba(250,249,253,.88) 50%, rgba(244,242,252,.93) 100%) padding-box,
+          linear-gradient(140deg, #fff 0%, rgba(255,255,255,.35) 32%, rgba(203,194,240,.7) 64%, #fff 100%) border-box; }
+        :root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card) { background:
+          linear-gradient(135deg, rgba(48,44,66,.98) 0%, rgba(34,31,46,.97) 50%, rgba(28,26,38,.98) 100%) padding-box,
+          linear-gradient(140deg, rgba(200,192,240,.55) 0%, rgba(150,142,196,.12) 32%, rgba(120,110,176,.3) 64%, rgba(200,192,240,.5) 100%) border-box; }
+      }
+      /* One dim for every popup */
+      :is(.auth-dialog, .acct-dialog, .modal, .vgate)::backdrop { background: rgba(46,44,58,.32); }
+      :root[data-theme="dark"] :is(.auth-dialog, .acct-dialog, .modal, .vgate)::backdrop { background: rgba(6,5,10,.62); }
+      /* The two dropdowns sit over page content, so they blur it too */
+      .acct-menu, .nav-menu { -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
+      /* The header keeps these menus from blurring the page (it isolates its backdrop for page transitions),
+         so they get a fuller frosted fill instead: nothing behind can fight the text */
+      .acct-menu, .nav-menu { background:
+          linear-gradient(180deg, rgba(255,255,255,.95), rgba(248,247,252,.92)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(203,194,240,.5) 70%, rgba(255,255,255,.8)) border-box; }
+      :root[data-theme="dark"] :is(.acct-menu, .nav-menu) { background:
+          linear-gradient(180deg, rgba(36,33,50,.95), rgba(24,22,34,.94)) padding-box,
+          linear-gradient(180deg, rgba(200,192,240,.5), rgba(150,142,196,.12) 45%, rgba(120,110,176,.2) 70%, rgba(200,192,240,.35)) border-box; }
+
+      /* ---------- Liquid-glass buttons ----------
+         One glass for every button, lit from above: a bright top edge, a soft horizon across the middle,
+         a faint bounce of light at the bottom and a thin rim. Deep smoke for the main action, clear glass for
+         the rest, red for anything destructive. Each tier keeps its shadow in --g-shadow so hover can brighten
+         the whole pane evenly. */
+      :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost,
+          .auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        box-sizing: border-box; border: 1px solid transparent;
+        -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
+      }
+      /* Deep smoke */
+      :is(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary) {
+        color: var(--paper);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%) padding-box,
+          linear-gradient(rgba(40,38,52,.88), rgba(40,38,52,.88)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.14) 45%, rgba(255,255,255,.08) 60%, rgba(255,255,255,.3)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(20,18,30,.5);
+        box-shadow: var(--g-shadow);
+      }
+      /* Clear glass */
+      :is(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+          .album-code button, .modal-card:not(.album-card) .close, .vgate-actions .vgate-ghost) {
+        color: var(--dusk);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.3) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.26), rgba(255,255,255,.26)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.35) 60%, rgba(255,255,255,.85)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.45), 0 0 0 .5px rgba(46,44,58,.12), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(46,44,58,.35);
+        box-shadow: var(--g-shadow);
+      }
+      /* The selected pill in a tab bar: a brighter pane of the same glass */
+      :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.25) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.35) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.78), rgba(255,255,255,.78)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.55) 45%, rgba(255,255,255,.45) 60%, rgba(255,255,255,.9)) border-box;
+        box-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 2px 8px -2px rgba(46,44,58,.22);
+      }
+      /* Red, for deleting */
+      .acct-actions .acct-primary.is-danger {
+        color: #fff;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%) padding-box,
+          linear-gradient(rgba(150,56,56,.88), rgba(150,56,56,.88)) padding-box,
+          linear-gradient(180deg, rgba(255,225,225,.7), rgba(255,255,255,.15) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.35)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(90,30,30,.5);
+        box-shadow: var(--g-shadow);
+      }
+      /* Pearl keeps its pastel colours inside the same glass */
+      .btn-pearl {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.18) 100%) padding-box,
+          linear-gradient(120deg, rgba(214,205,236,.9) 0%, rgba(235,211,220,.86) 52%, rgba(198,222,218,.9) 100%) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.85)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(60,50,90,.4);
+        box-shadow: var(--g-shadow);
+      }
+      /* The colour that floods in on hover is glass too */
+      .btn-dark { --fill: color-mix(in srgb, var(--copper) 70%, transparent); }
+      .btn-light { --fill: rgba(46,44,58,.78); }
+      :is(.todo-act, .acct-actions .acct-primary):disabled { opacity: .5; }
+
+      /* Dark mode: deep smoke turns to frosted pale glass with dark text; clear glass stays clear.
+         (The QR card keeps its daylight colours, so its button keeps the light-mode glass.) */
+      :root[data-theme="dark"] :is(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary):not(.qr-card *) {
+        color: var(--paper);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.25) 100%) padding-box,
+          linear-gradient(rgba(238,236,246,.88), rgba(238,236,246,.88)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.75)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.4), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] :is(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+          .album-code button, .modal-card:not(.album-card) .close, .vgate-actions .vgate-ghost) {
+        color: var(--dusk);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.06) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.08)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1) 45%, rgba(255,255,255,.06) 60%, rgba(255,255,255,.2)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill) {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box,
+          linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.16)) padding-box,
+          linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.14) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.28)) border-box;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 8px -2px rgba(0,0,0,.5);
+      }
+      :root[data-theme="dark"] .acct-actions .acct-primary.is-danger {
+        color: #2A1416;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.15) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.2) 100%) padding-box,
+          linear-gradient(rgba(240,163,163,.88), rgba(240,163,163,.88)) padding-box,
+          linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.7)) border-box;
+        --g-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.06);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] .btn-pearl {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box,
+          linear-gradient(120deg, rgba(63,56,128,.85) 0%, rgba(90,77,176,.8) 52%, rgba(58,81,153,.85) 100%) padding-box,
+          linear-gradient(180deg, rgba(220,212,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,.08) 60%, rgba(220,212,255,.4)) border-box;
+        --g-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+        --g-lift: rgba(255,255,255,.05);
+        box-shadow: var(--g-shadow);
+      }
+      :root[data-theme="dark"] .btn-light { --fill: rgba(236,234,244,.85); }
+      :root[data-theme="dark"] .btn-dark:not(.qr-card *) { --fill: color-mix(in srgb, var(--copper) 80%, transparent); }
+      /* Hover: the whole pane brightens a touch (the inset spread sits under the label) */
+      :root :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost):hover:not(:disabled) {
+        box-shadow: var(--g-shadow), inset 0 0 0 999px var(--g-lift, rgba(255,255,255,.07));
+      }
+
+      /* ---------- Glass switches ----------
+         The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
+         glass bead with a bright top and a soft shadow underneath. */
+      :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+        border: 1px solid transparent;
+        background:
+          linear-gradient(180deg, rgba(46,44,58,.1) 0%, rgba(46,44,58,.04) 100%) padding-box,
+          linear-gradient(140deg, rgba(46,44,58,.18) 0%, rgba(255,255,255,.6) 60%, #fff 100%) border-box;
+        box-shadow: inset 0 1px 3px rgba(46,44,58,.22), 0 1px 0 rgba(255,255,255,.7);
+        -webkit-backdrop-filter: blur(8px) saturate(1.5); backdrop-filter: blur(8px) saturate(1.5);
+        transition: box-shadow .3s ease;
+      }
+      :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 60%) padding-box,
+          linear-gradient(135deg, color-mix(in srgb, var(--copper) 85%, transparent), color-mix(in srgb, var(--copper) 70%, transparent)) padding-box,
+          linear-gradient(140deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.6) 100%) border-box;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.18), 0 0 14px -4px color-mix(in srgb, var(--copper) 70%, transparent);
+      }
+      :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+        top: calc(.18rem - 1px); left: calc(.18rem - 1px);
+        background: radial-gradient(circle at 35% 28%, #fff 0%, rgba(255,255,255,.92) 45%, rgba(236,233,246,.85) 100%);
+        box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.12), 0 0 0 .5px rgba(46,44,58,.14), 0 2px 6px rgba(46,44,58,.28);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.03) 100%) padding-box,
+          linear-gradient(140deg, rgba(0,0,0,.4) 0%, rgba(200,192,240,.25) 60%, rgba(200,192,240,.4) 100%) border-box;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 60%) padding-box,
+          linear-gradient(135deg, color-mix(in srgb, var(--copper) 88%, transparent), color-mix(in srgb, var(--copper) 72%, transparent)) padding-box,
+          linear-gradient(140deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.5) 100%) border-box;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.3), 0 0 16px -4px color-mix(in srgb, var(--copper) 75%, transparent);
+      }
+      :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+        box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.18), 0 2px 8px rgba(0,0,0,.55);
+      }
+      /* Touch screens: grow the tap area of small controls to about 44px without changing how they look */
+      @media (pointer: coarse) {
+        .tab, .todo-act, .nav-caret { position: relative; }
+        :is(.nav-item, .nav-caret, .tab, .acct-seg button, .todo-act)::before { content: ""; position: absolute; inset: -6px 0; }
+        :is(.sw, .s-sw, .acct-sw)[role="switch"]::before { content: ""; position: absolute; inset: -8px -4px; }
+      }
     </style>
   <!-- /@shared:css -->
 </head>
@@ -1104,6 +1455,7 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item">My albums</a>
+        <a href="events.html" class="nav-item nav-events" aria-label="Events"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings" aria-current="page"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
       <div class="nav-menu glass" id="navMenu" aria-label="Home page sections">
@@ -1123,118 +1475,128 @@
     <main class="page">
 
       <section class="s-head">
-        <span class="mask"><h1 class="s-title ink rise" data-text="Your upload rules">Your upload rules</h1></span>
-        <p class="s-lede intro" style="--d: .3s">Decide how Momento uploads, where your photos land and how the site looks. Changes save as you make them.</p>
+        <span class="mask"><h1 class="s-title ink rise" data-text="Settings">Settings</h1></span>
+        <p class="s-lede intro" style="--d: .3s">Everything saves by itself as you change it.</p>
       </section>
 
       <div class="s-cols">
         <div class="s-stack">
 
-          <section class="s-group" style="--d: .25s" aria-labelledby="g-profile">
-            <h2 id="g-profile">Profile</h2>
-            <form class="s-list panel s-profile" id="profileForm" novalidate>
-              <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name" placeholder="For example Priya Shah"></label>
-              <p class="s-note" id="profileNote" role="status"></p>
-              <button class="btn btn-dark btn-sm" type="submit">Save name</button>
-            </form>
-          </section>
-
-          <section class="s-group" style="--d: .27s" aria-labelledby="g-email">
-            <h2 id="g-email">Email</h2>
-            <form class="s-list panel s-profile" id="emailForm" novalidate>
-              <p class="s-now">Signed in as <b id="emailNow">…</b><span id="emailVia"></span></p>
-              <label class="acct-field"><span>New email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
-              <label class="acct-field" id="emailPassField"><span>Your password</span><input name="password" type="password" autocomplete="current-password"></label>
-              <p class="s-note" id="emailNote" role="status"></p>
-              <button class="btn btn-dark btn-sm" type="submit">Change email</button>
-            </form>
-          </section>
-
-          <section class="s-group" style="--d: .29s" aria-labelledby="g-password" id="passwordGroup" hidden>
-            <h2 id="g-password">Password</h2>
-            <form class="s-list panel s-profile" id="passwordForm" novalidate>
-              <label class="acct-field"><span>Current password</span><input name="current" type="password" autocomplete="current-password"></label>
-              <label class="acct-field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="8"></label>
-              <label class="acct-field"><span>Type the new password again</span><input name="again" type="password" autocomplete="new-password"></label>
-              <p class="s-note" id="passwordNote" role="status"></p>
-              <button class="btn btn-dark btn-sm" type="submit">Change password</button>
-            </form>
-          </section>
-
-          <section class="s-group" style="--d: .31s" aria-labelledby="g-uploads">
-            <h2 id="g-uploads">Uploads</h2>
+          <!-- Your details: each line shows what it's set to; Change opens the form under it -->
+          <section class="s-group" style="--d: .22s" aria-labelledby="g-you">
+            <h2 id="g-you">Your details</h2>
             <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.4a9.2 9.2 0 0 1 12.4 0M8.8 15.6a4.8 4.8 0 0 1 6.4 0"/><circle cx="12" cy="18.8" r="1.1" fill="currentColor" stroke="none"/></svg></span><span class="s-text"><b>Upload on Wi-Fi only</b><small>Shares wait in the queue on mobile data</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Upload on Wi-Fi only" data-key="wifiOnly"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#EBDCCB"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8Z"/></svg></span><span class="s-text"><b>Keep originals</b><small>RAW, HEIC and ProRAW are uploaded untouched</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Keep originals" data-key="originals"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg></span><span class="s-text"><b>Upload in the background</b><small>Keeps going after you close Momento</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Upload in the background" data-key="background"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10.5 21 19 10.5h-6Z"/></svg></span><span class="s-text"><b>Auto-sort by camera</b><small>Reads camera model and format from each file</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Auto-sort by camera" data-key="autosort"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg></span><span class="s-text"><b>Cameras before phones</b><small>Larger camera files start first</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Cameras before phones" data-key="camfirst"></button></div>
+              <div class="s-item">
+                <div class="s-line"><span class="s-text"><b>Name</b><small id="nameNow">…</small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="namePanel">Change</button></div>
+                <div class="s-panel" id="namePanel" hidden>
+                  <form class="s-profile" id="profileForm" novalidate>
+                    <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name" placeholder="For example Priya Shah"></label>
+                    <p class="s-note" id="profileNote" role="status"></p>
+                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="submit">Save name</button><button class="s-cancel" type="button" data-cancel>Cancel</button></div>
+                  </form>
+                </div>
+              </div>
+              <div class="s-item">
+                <div class="s-line"><span class="s-text"><b>Email</b><small><span id="emailNow">…</span><span id="emailVia"></span></small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="emailPanel">Change</button></div>
+                <div class="s-panel" id="emailPanel" hidden>
+                  <form class="s-profile" id="emailForm" novalidate>
+                    <label class="acct-field"><span>New email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
+                    <label class="acct-field" id="emailPassField"><span>Your password</span><input name="password" type="password" autocomplete="current-password"></label>
+                    <p class="s-help">We’ll email your current address first so you can approve the change, then you confirm it from the new one.</p>
+                    <p class="s-note" id="emailNote" role="status"></p>
+                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="submit">Change email</button><button class="s-cancel" type="button" data-cancel>Cancel</button></div>
+                  </form>
+                </div>
+              </div>
+              <div class="s-item" id="passwordGroup" hidden>
+                <div class="s-line"><span class="s-text"><b>Password</b><small>••••••••</small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="passwordPanel">Change</button></div>
+                <div class="s-panel" id="passwordPanel" hidden>
+                  <form class="s-profile" id="passwordForm" novalidate>
+                    <label class="acct-field"><span>Current password</span><input name="current" type="password" autocomplete="current-password"></label>
+                    <label class="acct-field"><span>New password <i>(at least 8 characters)</i></span><input name="next" type="password" autocomplete="new-password" minlength="8"></label>
+                    <label class="acct-field"><span>New password again</span><input name="again" type="password" autocomplete="new-password"></label>
+                    <p class="s-note" id="passwordNote" role="status"></p>
+                    <div class="s-form-acts"><button class="btn btn-dark btn-sm" type="submit">Change password</button><button class="s-cancel" type="button" data-cancel>Cancel</button></div>
+                  </form>
+                </div>
+              </div>
             </div>
           </section>
 
-          <section class="s-group" style="--d: .37s" aria-labelledby="g-dest">
-            <h2 id="g-dest">Where photos go</h2>
-            <div class="s-list panel" role="radiogroup" aria-label="Cloud destination">
-              <button class="s-row" type="button" role="radio" aria-checked="true" data-dest="gdrive"><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Google Drive</b><small>Connected · 2 TB plan</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="icloud"><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>iCloud Drive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="dropbox"><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>Dropbox</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-              <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="onedrive"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/></svg></span><span class="s-text"><b>OneDrive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-            </div>
-          </section>
-
-        </div>
-        <div class="s-stack">
-
-          <section class="s-group" style="--d: .28s" aria-labelledby="g-privacy">
-            <h2 id="g-privacy">Location &amp; privacy</h2>
+          <!-- Uploading: the two everyday switches and where photos are saved; the rest folded away -->
+          <section class="s-group" style="--d: .26s" aria-labelledby="g-uploads">
+            <h2 id="g-uploads">Uploading photos</h2>
             <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg></span><span class="s-text"><b>Precise location while sharing</b><small>Only used to check you’re inside the event zone</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Precise location while sharing" data-key="precise"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12 18.4 5.6"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span><span class="s-text"><b>Show me nearby albums</b><small>The search only runs when you tap it</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Show me nearby albums" data-key="nearby"></button></div>
+              <div class="s-row" data-row><span class="s-text"><b>Only upload on Wi-Fi</b><small>Saves your phone’s mobile data</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Only upload on Wi-Fi" data-key="wifiOnly"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-row" data-row><span class="s-text"><b>Keep uploading when Momento is closed</b><small>Photos finish sending on their own</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Keep uploading when Momento is closed" data-key="background"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-item">
+                <div class="s-line"><span class="s-text"><b>Photos are saved to</b><small id="destNow">Google Drive</small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="destPanel">Change</button></div>
+                <div class="s-panel s-dests" id="destPanel" role="radiogroup" aria-label="Where photos are saved" hidden>
+                  <button class="s-row" type="button" role="radio" aria-checked="true" data-dest="gdrive"><span class="s-text"><b>Google Drive</b><small>Connected · 2 TB plan</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+                  <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="icloud"><span class="s-text"><b>iCloud Drive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+                  <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="dropbox"><span class="s-text"><b>Dropbox</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+                  <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="onedrive"><span class="s-text"><b>OneDrive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
+                </div>
+              </div>
+              <details class="s-more">
+                <summary><span class="s-text"><b>More photo options</b></span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="s-row" data-row><span class="s-text"><b>Keep full quality</b><small>Photos are sent exactly as they were taken</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Keep full quality" data-key="originals"></button><span class="s-state" aria-hidden="true"></span></div>
+                <div class="s-row" data-row><span class="s-text"><b>Group photos by camera</b><small>Photos from each camera or phone stay together</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Group photos by camera" data-key="autosort"></button><span class="s-state" aria-hidden="true"></span></div>
+                <div class="s-row" data-row><span class="s-text"><b>Send camera photos first</b><small>Big camera files go before phone photos</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Send camera photos first" data-key="camfirst"></button><span class="s-state" aria-hidden="true"></span></div>
+              </details>
             </div>
           </section>
 
-          <section class="s-group" style="--d: .34s" aria-labelledby="g-notify">
-            <h2 id="g-notify">Notifications <small>by email</small></h2>
+          <section class="s-group" style="--d: .3s" aria-labelledby="g-notify">
+            <h2 id="g-notify">Emails from Momento</h2>
             <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-chip" style="--c:#EBDCCB"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4.5 1.8 6 1.8 6H4.2S6 14.5 6 10Z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></span><span class="s-text"><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Someone adds photos to an album I’m in" data-key="notify.photos"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg></span><span class="s-text"><b>An album is about to close</b><small>so I can download my photos in time</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="An album is about to close" data-key="notify.closing"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#D9D0EA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8Z"/></svg></span><span class="s-text"><b>Weekly recap</b><small>the best new photos from my albums</small></span><button class="s-sw" type="button" role="switch" aria-checked="false" aria-label="Weekly recap" data-key="notify.recap"></button></div>
-              <div class="s-row" data-row><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg></span><span class="s-text"><b>Upload finished</b><small>Tell me when a batch has uploaded</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Upload finished" data-key="uploadNotify"></button></div>
+              <div class="s-row" data-row><span class="s-text"><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Email me when someone adds photos" data-key="notify.photos"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-row" data-row><span class="s-text"><b>An album is about to close</b><small>so I can save my photos in time</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Email me when an album is about to close" data-key="notify.closing"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-row" data-row><span class="s-text"><b>My upload has finished</b><small>once all my photos have been sent</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Email me when my upload has finished" data-key="uploadNotify"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-row" data-row><span class="s-text"><b>A weekly round-up</b><small>the best new photos from my albums</small></span><button class="s-sw" type="button" role="switch" aria-checked="false" aria-label="Weekly round-up email" data-key="notify.recap"></button><span class="s-state" aria-hidden="true"></span></div>
             </div>
           </section>
 
-          <section class="s-group" style="--d: .4s" aria-labelledby="g-look">
-            <h2 id="g-look">Appearance</h2>
+          <section class="s-group" style="--d: .34s" aria-labelledby="g-privacy">
+            <h2 id="g-privacy">Location</h2>
+            <div class="s-list panel">
+              <div class="s-row" data-row><span class="s-text"><b>Use my exact location</b><small>Only to check I’m at the event when I share</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Use my exact location" data-key="precise"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-row" data-row><span class="s-text"><b>Find albums near me</b><small>Only when I ask</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Find albums near me" data-key="nearby"></button><span class="s-state" aria-hidden="true"></span></div>
+            </div>
+          </section>
+
+          <section class="s-group" style="--d: .38s" aria-labelledby="g-look">
+            <h2 id="g-look">Light or dark</h2>
             <div class="s-list panel s-seg">
-              <div class="acct-seg" id="appSeg" role="radiogroup" aria-label="Appearance">
+              <div class="acct-seg" id="appSeg" role="radiogroup" aria-label="Light or dark">
                 <span class="acct-seg-pill" aria-hidden="true"></span>
                 <button type="button" role="radio" aria-checked="false" data-theme="light"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.6"/><g class="rays"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></g></svg>Light</button>
                 <button type="button" role="radio" aria-checked="false" data-theme="dark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>Dark</button>
                 <button type="button" role="radio" aria-checked="false" data-theme="system"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/></svg>System</button>
               </div>
+              <p class="s-help s-seg-help">System follows your device’s own setting.</p>
             </div>
           </section>
 
-          <section class="s-group" style="--d: .46s" aria-labelledby="g-store">
-            <h2 id="g-store">Storage on this browser</h2>
+          <section class="s-group" style="--d: .42s" aria-labelledby="g-store">
+            <h2 id="g-store">Space on this device</h2>
             <div class="s-list panel">
               <div class="s-store">
-                <div class="s-store-top"><b id="storeTotal">2.1 GB used</b><button class="btn btn-light btn-sm" type="button" id="clearCache"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg>Clear cache</button></div>
+                <div class="s-store-top"><span class="s-text"><b id="storeTotal">2.1 GB used</b><small>Clearing it removes saved previews. Your photos stay safe.</small></span><button class="btn btn-light btn-sm" type="button" id="clearCache">Free up space</button></div>
                 <div class="s-bar" aria-hidden="true"><i style="--c:#AFC0F0;--w:58%"></i><i id="barPreviews" style="--c:#C9C0E2;--w:16%"></i><i style="--c:#C6DEDA;--w:8%"></i></div>
-                <div class="s-legend"><span style="--c:#AFC0F0">Upload queue 1.2 GB</span><span id="legPreviews" style="--c:#C9C0E2">Previews 340 MB</span><span style="--c:#C6DEDA">Offline albums 170 MB</span></div>
+                <div class="s-legend"><span style="--c:#AFC0F0">Waiting to upload 1.2 GB</span><span id="legPreviews" style="--c:#C9C0E2">Previews 340 MB</span><span style="--c:#C6DEDA">Saved for offline 170 MB</span></div>
               </div>
             </div>
           </section>
 
-          <section class="s-group" style="--d: .52s" aria-labelledby="g-account">
-            <h2 id="g-account">Account</h2>
-            <div class="s-list panel">
-              <button class="s-row" type="button" id="logOut"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10"/></svg></span><span class="s-text"><b>Log out</b><small>You can sign back in any time</small></span></button>
-              <button class="s-row is-danger" type="button" id="deleteAcct"><span class="s-chip" style="--c:#F0CFCF"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><span class="s-text"><b>Delete account</b><small>Removes your albums and photos for good</small></span></button>
-              <div class="s-delete" id="deleteConfirm" hidden>
-                <label class="acct-field"><span>Your password, to confirm</span><input type="password" id="deletePass" autocomplete="current-password"></label>
-                <p class="s-note" id="deleteNote" role="status"></p>
-              </div>
+          <!-- Leaving: a plain, big Log out; deleting the account is kept small and asks twice -->
+          <section class="s-group s-leave" style="--d: .46s" aria-label="Log out or delete account">
+            <button class="btn btn-light s-logout" type="button" id="logOut">Log out</button>
+            <button class="s-delete-btn" type="button" id="deleteAcct">Delete my account</button>
+            <div class="s-delete panel" id="deleteConfirm" hidden>
+              <p class="s-help">This removes your albums and photos for good.</p>
+              <label class="acct-field"><span>Your password, to confirm</span><input type="password" id="deletePass" autocomplete="current-password"></label>
+              <p class="s-note" id="deleteNote" role="status"></p>
             </div>
           </section>
 
@@ -1261,8 +1623,34 @@
     addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
     const cursorEl = document.getElementById('cursor');
     const useCursor = finePointer && !still;
+    // The dot starts where the mouse was on the last page (clicking a link doesn't move the mouse),
+    // not in the middle of the screen. Until the mouse has been seen, the dot stays hidden and the
+    // normal pointer shows
+    try {
+      const at = JSON.parse(sessionStorage.getItem('momento-pointer') || 'null');
+      if (at && Date.now() - at.t < 15000 && at.x <= innerWidth && at.y <= innerHeight) {
+        pointer.x = at.x; pointer.y = at.y;
+        document.documentElement.classList.add('cursor-seen');
+      }
+    } catch (e) {}
+    addEventListener('pagehide', () => {
+      try { if (document.documentElement.classList.contains('cursor-seen')) sessionStorage.setItem('momento-pointer', JSON.stringify({ x: pointer.x, y: pointer.y, t: Date.now() })); } catch (e) {}
+    });
     let rx = pointer.x, ry = pointer.y;
     if (useCursor) root.classList.add('has-cursor');
+    // Touch, a pen, or Chrome's mobile preview (switched on without a reload) send no mouse moves
+    // between taps, so the bead would sit stuck beside the real touch point. Hide it and give the
+    // normal pointer back until a mouse moves again.
+    {
+      const fineMq = matchMedia('(pointer: fine)'), rootCl = document.documentElement.classList;
+      const sync = (e) => {
+        rootCl.toggle('cursor-off', !fineMq.matches || (!!e && e.pointerType !== 'mouse'));
+        if (e && e.pointerType === 'mouse') rootCl.add('cursor-seen');
+      };
+      addEventListener('pointermove', sync, { passive: true, capture: true });
+      addEventListener('pointerdown', sync, { passive: true, capture: true });
+      fineMq.addEventListener('change', () => sync());
+    }
     addEventListener('pointermove', (e) => {
       if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
       else { rx = e.clientX; ry = e.clientY; }
@@ -1492,6 +1880,23 @@
         if (!e.target.closest('.s-sw')) row.querySelector('.s-sw').click();
       }));
 
+      // Change buttons: each opens the form under its line (one at a time) and Cancel closes it
+      const changes = [...document.querySelectorAll('.s-change')];
+      const openPanel = (btn, open) => {
+        const panel = document.getElementById(btn.getAttribute('aria-controls'));
+        btn.setAttribute('aria-expanded', open);
+        btn.textContent = open ? 'Close' : 'Change';
+        panel.hidden = !open;
+        if (open) (panel.querySelector('input, [aria-checked="true"]') || panel).focus({ preventScroll: false });
+      };
+      changes.forEach((btn) => btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        changes.forEach((other) => { if (other !== btn && other.getAttribute('aria-expanded') === 'true') openPanel(other, false); });
+        openPanel(btn, open);
+      }));
+      const closePanelOf = (el) => { const p = el.closest('.s-panel'); const btn = p && changes.find((c) => c.getAttribute('aria-controls') === p.id); if (btn) { openPanel(btn, false); btn.focus(); } };
+      document.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', () => { b.closest('form')?.reset(); b.closest('form')?.querySelector('.s-note')?.replaceChildren(); closePanelOf(b); }));
+
       // Where photos go
       const dests = [...document.querySelectorAll('[data-dest]')];
       dests.forEach((r) => r.setAttribute('aria-checked', r.dataset.dest === S.dest));
@@ -1501,8 +1906,11 @@
           x.setAttribute('aria-checked', x === r);
           x.querySelector('small').textContent = x === r ? 'Connected · photos land in /Momento' : (x.dataset.dest === 'gdrive' ? 'Connected · 2 TB plan' : 'Sign in to connect');
         });
-        toast('Destination changed', DEST_NAME[S.dest]);
+        document.getElementById('destNow').textContent = DEST_NAME[S.dest];
+        toast('Photos will be saved to', DEST_NAME[S.dest]);
+        closePanelOf(r);
       }));
+      document.getElementById('destNow').textContent = DEST_NAME[S.dest];
       dests.find((r) => r.dataset.dest === S.dest).querySelector('small').textContent = 'Connected · photos land in /Momento';
 
       // Profile, email and password: saved to the account on the server.
@@ -1517,6 +1925,7 @@
       const fill = () => {
         const a = M.account.get();
         if (!form.contains(document.activeElement)) form.name.value = a ? a.name : '';
+        document.getElementById('nameNow').textContent = a?.name || 'Not set';
         document.getElementById('emailNow').textContent = a?.email || 'not logged in';
         document.getElementById('emailVia').textContent = a?.providers?.includes('google') ? ' (with Google)' : '';
         // No password on the account (Google sign-up): no password box, no password section
@@ -1540,11 +1949,13 @@
           const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name }));
           M.account.set(user);
           say(''); toast('Name saved', name);
+          closePanelOf(form.querySelector('[type="submit"]'));
         } catch (err) { say(err.message, true); }
         finally { busy(form, false); }
       });
 
-      // A new email takes effect when the link sent to it is opened (it comes back here with ?email=…)
+      // Moving the account to a new email: the current inbox approves it first, then the new one confirms
+      // (the approval link opens on the home page; the confirm link logs every device out and opens Log in)
       emailForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (needLogin()) return;
@@ -1554,16 +1965,18 @@
         if (a.hasPassword && !emailForm.password.value) { sayEmail('Enter your password to change your email.', true); emailForm.password.focus(); return; }
         busy(emailForm, true);
         try {
-          await momentoApi('/api/auth/email', momentoJson('POST', { email, password: emailForm.password.value || undefined }));
+          const { approveFrom } = await momentoApi('/api/auth/email', momentoJson('POST', { email, password: emailForm.password.value || undefined }));
           emailForm.reset();
-          sayEmail(`We sent a link to ${email}. Your email changes when you open it.`);
-          toast('Check your new inbox', email);
+          const from = approveFrom || a.email;
+          sayEmail(`Approval link sent to ${from}. Open it there to approve moving your account to ${email}. Nothing changes until you do.`);
+          toast('Check your current inbox', from);
         } catch (err) { sayEmail(err.message, true); }
         finally { busy(emailForm, false); }
       });
       const emailResult = new URLSearchParams(location.search).get('email');
       if (emailResult) {
-        const msg = { changed: ['Email changed', 'Use your new address to log in from now on.'], taken: ['Email not changed', 'Another account already uses that address.'], invalid: ['That link has expired', 'Ask for a new one below.'] }[emailResult];
+        // (Older links came back here; the confirm link now goes to the home page's Log in)
+        const msg = { changed: ['Email changed', 'Use your new address to log in from now on.'], taken: ['Email not changed', 'Another account already uses that address.'], invalid: ['That link has expired', 'Start the change again below.'] }[emailResult];
         if (msg) setTimeout(() => toast(msg[0], msg[1]), 600);
         history.replaceState(null, '', location.pathname + location.hash);
       }
@@ -1618,7 +2031,7 @@
         // Accounts with a password confirm it first (Google-only accounts have none)
         if (a.hasPassword && !delPass.value) {
           delWrap.hidden = false;
-          sayDel('Enter your password, then press Delete account again.');
+          sayDel('Type your password, then press Delete my account again.');
           delPass.focus();
           return;
         }
@@ -1753,11 +2166,6 @@
     const accountListeners = new Set();
     const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
     let current = null;
-    try {
-      current = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
-      if (!current) { const n = sessionStorage.getItem('momento-user'); if (n) current = { name: n, email: '' }; }   // older sessions
-    } catch (e) {}
-    current = norm(current);
     const persist = () => {
       try {
         if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
@@ -1776,6 +2184,12 @@
       onChange(fn) { accountListeners.add(fn); },
     };
   
+    Momento.sessionReady = momentoApi('/api/auth/me').then(({ user }) => {
+      if (user) Momento.account.set(user); else Momento.account.clear();
+      return user;
+    });
+    Momento.sessionReady.catch(() => {});
+
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
     const ICON = {
@@ -1851,7 +2265,7 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Changes show on every page straight away. This is a preview, so nothing leaves this browser.</p>
+          <p class="acct-sub">Update your name and email notification preferences.</p>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
@@ -1869,14 +2283,18 @@
       const switches = [...d.querySelectorAll('.acct-sw')];
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = form.name.value.trim(), email = form.email.value.trim();
         if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        Momento.account.set({ name, email, notify });
+        if (email !== current.email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
+        try {
+          const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name, notify }));
+          Momento.account.set(user);
+        } catch (err) { say(err.message, true); return; }
         say('Saved');
         Momento.toast('Account settings saved', email || name);
         setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
@@ -2050,7 +2468,6 @@
     });
 
     // ---- Albums: create one (ending on a "created" screen with its guest code), and remove one ----
-    const Store = window.MomentoStore;
     const isoToday = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
     const onAlbums = /albums\.html$/.test(location.pathname);
     const viewAlbum = (id) => {
@@ -2082,11 +2499,11 @@
         ok: host ? 'Delete album' : 'Leave album',
       });
       if (!ok) return false;
-      const saved = Store.remove(a.id);
-      Momento.toast(host ? 'Album deleted' : 'You left the album', a.name, {
-        danger: true,
-        action: { label: 'Undo', run: () => { Store.restore(a.id, saved); Momento.toast(host ? 'Album restored' : 'You’re back in the album', a.name); } },
-      });
+      try {
+        await momentoApi('/api/albums/' + encodeURIComponent(a.id) + (host ? '' : '/membership'), { method: 'DELETE' });
+      } catch (err) { Momento.toast('Could not remove album', err.message); return false; }
+      document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'remove', id: a.id } }));
+      Momento.toast(host ? 'Album deleted' : 'You left the album', a.name);
       return true;
     };
 
@@ -2243,7 +2660,7 @@
           const next = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
           list[next].focus();
         });
-        menu.addEventListener('click', (e) => {
+        menu.addEventListener('click', async (e) => {
           const choice = e.target.closest('.acct-seg button');
           if (choice) { Momento.theme.set(choice.dataset.theme); return; }   // stays open so the change can be seen
           const item = e.target.closest('.acct-item');
@@ -2252,7 +2669,7 @@
           const act = item.dataset.act;
           if (act === 'settings') Momento.openSettings(btn);
           else if (act === 'help') Momento.openHelp(btn);
-          else { Momento.account.clear(); if (onLogout) { Momento.flash('You’re logged out', 'Log back in any time'); onLogout(); } else Momento.toast('You’re logged out', 'Log back in any time'); }
+          else { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (err) { Momento.toast('Could not log out', err.message); return; } Momento.account.clear(); if (onLogout) { Momento.flash('You’re logged out', 'Log back in any time'); onLogout(); } else Momento.toast('You’re logged out', 'Log back in any time'); }
         });
   
         const syncSeg = () => {
@@ -2407,7 +2824,9 @@
   
     // ---- Leaving a page, in browsers that can't cross-fade between pages themselves: the page fades and
     // lifts away (CSS .is-leaving), then the next one loads ----
-    if (!('CSSViewTransitionRule' in window) && !reduced.matches) {
+    // (Also for pages opened straight from the folder: browsers only cross-fade pages served from an address)
+    const ptFile = location.protocol === 'file:';
+    if ((!('CSSViewTransitionRule' in window) || ptFile) && !reduced.matches) {
       document.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute('download')) return;
@@ -2415,6 +2834,7 @@
         if (url.origin !== location.origin || url.pathname === location.pathname) return;   // other sites, mailto:, same-page anchors
         e.preventDefault();
         root.classList.add('is-leaving');
+        if (ptFile) { root.classList.add('pt-file'); try { sessionStorage.setItem('momento-pt', '1'); } catch (err) {} }
         setTimeout(() => { location.href = url.href; }, 240);
       });
       addEventListener('pageshow', (e) => { if (e.persisted) root.classList.remove('is-leaving'); });   // back from the page cache
@@ -2508,8 +2928,17 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="sort.html">Sort photos</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfEvents">
+            <h2 id="sfEvents">Events</h2>
+            <ul>
+              <li><a class="sf-link" href="events.html">Events near you</a></li>
+              <li><a class="sf-link" href="${P}#for-hosts" data-create>Host a public event</a></li>
+              <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>
           </nav>
           <nav class="sf-col" aria-labelledby="sfHelp">
@@ -2564,6 +2993,27 @@
         onLogout: to ? () => { location.href = to; } : null,
       });
     });
+  })();
+
+  // ---- Popup cards catch the pointer light too (they're created later, so listen on the page) ----
+  (() => {
+    const SEL = '.auth-card, .modal-card, .acct-card, .vgate-card';
+    let el = null, x = 0, y = 0, queued = false;
+    addEventListener('pointermove', (e) => {
+      const card = e.target.closest ? e.target.closest(SEL) : null;
+      if (card !== el) { if (el) el.style.setProperty('--shine', 0); el = card; if (el) el.style.setProperty('--shine', 1); }
+      if (!el) return;
+      x = e.clientX; y = e.clientY;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--mx', `${x - r.left}px`);
+        el.style.setProperty('--my', `${y - r.top}px`);
+      });
+    }, { passive: true });
   })();
     </script>
   <!-- /@shared:js -->

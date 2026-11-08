@@ -36,6 +36,8 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 albumRoutes.post('/:id/photos', albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', albums.download);
+// Sort photos: hide photos from your own view (everyone else still sees them)
+albumRoutes.post('/:id/hidden', albums.setHidden);
 
 // Host actions that send email: invites are capped at 20 an hour per account (reminders are
 // already limited to one a day per album in the controller)

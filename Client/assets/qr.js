@@ -1,5 +1,5 @@
 // Album QR codes: showing one (hosts) and scanning one (guests). Shared by every page.
-// - Momento.qr.show(album)  full-screen QR for { name, code }, on a pure white screen kept awake
+// - Momento.qr.show(album, from)  a glass slab with the QR for { name, code }, grown out of `from`; the screen stays awake
 // - Momento.qr.scan()       camera scanner; a Momento QR (or a bare code) joins that album
 // - Momento.qr.mount(el, album)  a small QR tile inside el (the "Album created" screen uses it)
 // The QR holds the album's invite link (albums.html?join=CODE), so a phone's own camera app works too.
@@ -50,19 +50,18 @@
     .mq-x:hover { transform: rotate(90deg); }
     .mq-x:active { transform: scale(.9); }
 
-    /* Showing a code: pure white, the brightest a page can make the screen */
-    .mq-show { background: #fff; color: #17161d; }
-    .mq-show .mq-x { background: rgba(23, 22, 29, .07); color: #17161d; }
-    .mq-show .mq-x:hover { background: rgba(23, 22, 29, .13); }
-    .mq-show-in { box-sizing: border-box; height: 100%; display: grid; place-content: center; justify-items: center; gap: 1rem; padding: 4.5rem 16px max(1.5rem, env(safe-area-inset-bottom)); text-align: center; }
-    .mq-eyebrow { margin: 0; font-size: .8rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #6b6878; }
-    .mq-name { margin: -.4rem 0 0; max-width: 22ch; font-size: clamp(1.5rem, 5vw, 2.2rem); font-weight: 750; letter-spacing: -.03em; line-height: 1.12; }
-    .mq-big { width: min(82vw, 50dvh, 520px); aspect-ratio: 1; }
-    .mq-big svg, .mq-tile svg { display: block; width: 100%; height: 100%; }
-    .mq-code { margin: 0; font: 750 clamp(1.6rem, 6vw, 2.4rem)/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: .12em; }
-    .mq-hint { margin: 0; max-width: 30rem; color: #5c596b; font-size: .95rem; line-height: 1.6; }
-    .mq-show .mq-btn { background: #17161d; color: #fff; }
-    .mq-show .mq-btn.is-light { background: rgba(23, 22, 29, .07); color: #17161d; }
+    /* Showing a code: a small slab of the site's popup glass that grows out of the button pressed.
+       The QR itself sits on a pure white tile, so it scans in dark mode too. */
+    .mq-pop .mq-slab { width: min(340px, calc(100vw - 32px)); padding: 1.6rem 1.4rem 1.3rem; text-align: center; display: grid; justify-items: center; gap: .55rem; }
+    .mq-slab .acct-x { top: .8rem; right: .8rem; }
+    .mq-slab-kick { margin: 0; font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--slate, #5c596b); }
+    .mq-slab-name { margin: 0 2rem; font-size: 1.35rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; color: var(--dusk, #2e2c3a); }
+    .mq-slab-qr { width: min(232px, 64vw); aspect-ratio: 1; margin: .4rem 0 .2rem; padding: .65rem; box-sizing: border-box; border-radius: 22px; background: #fff;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .75), 0 0 0 5px rgba(255, 255, 255, .18), 0 16px 34px -18px rgba(20, 18, 30, .55); }
+    .mq-slab-qr svg, .mq-tile svg { display: block; width: 100%; height: 100%; }
+    .mq-slab-qr .mq-slab-err { margin: 0; display: grid; place-items: center; height: 100%; color: #5c596b; font-size: .88rem; line-height: 1.5; }
+    .mq-slab-code { margin: 0; font: 750 1.5rem/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: .12em; color: var(--dusk, #2e2c3a); }
+    .mq-slab .acct-actions { width: 100%; margin-top: .5rem; }
     .mq-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; }
 
     /* The small tile on the "Album created" screen */
@@ -158,53 +157,89 @@
   }
 
   // ---- Showing an album's code ----
+  // The shape of the button, as a transform of the card: used to grow the card out of it and back
+  const shapeOf = (from, card) => {
+    const f = from?.isConnected && from.getBoundingClientRect(), c = card.getBoundingClientRect();
+    if (!f || !f.width || !c.width) return null;
+    const dx = f.left + f.width / 2 - (c.left + c.width / 2), dy = f.top + f.height / 2 - (c.top + c.height / 2);
+    return `translate(${dx}px, ${dy}px) scale(${Math.max(.08, f.width / c.width)}, ${Math.max(.05, f.height / c.height)})`;
+  };
+  const stillMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   async function show(album, from) {
     if (!album?.code) return;
     const url = linkFor(album.code);
-    const d = overlay('mq-show', `
-      <button class="mq-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
-      <div class="mq-show-in">
-        <p class="mq-eyebrow">Scan to join</p>
-        <h2 class="mq-name">${esc(album.name || 'Momento album')}</h2>
-        <div class="mq-big"></div>
-        <p class="mq-code">${esc(album.code)}</p>
-        <p class="mq-hint">Point a phone camera at the code, or type ${esc(album.code)} in Momento.</p>
-        <div class="mq-row">
-          <button class="mq-btn is-light" type="button" data-copy>${ICON.copy}Copy link</button>
-          <button class="mq-btn" type="button" data-close autofocus>Done</button>
+    // Built from the site's popup glass (.acct-dialog / .acct-card), so it matches every other popup
+    const d = document.createElement('dialog');
+    d.className = 'acct-dialog mq-pop';
+    d.setAttribute('aria-labelledby', 'mqPopName');
+    d.innerHTML = `
+      <div class="acct-card mq-slab">
+        <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+        <p class="mq-slab-kick">Scan to join</p>
+        <h2 class="mq-slab-name" id="mqPopName">${esc(album.name || 'Momento album')}</h2>
+        <div class="mq-slab-qr"></div>
+        <p class="mq-slab-code">${esc(album.code)}</p>
+        <div class="acct-actions">
+          <button class="acct-ghost" type="button" data-copy>Copy link</button>
+          <button class="acct-primary" type="button" data-close autofocus>Done</button>
         </div>
-      </div>`);
-    const theme = document.querySelector('meta[name="theme-color"]'), oldTheme = theme?.content;
+      </div>`;
+    document.body.append(d);
+    const card = d.querySelector('.mq-slab');
+    const rewake = () => { if (document.visibilityState === 'visible' && d.open) holdWake(); };
+    let closing = false;
+    // Closing shrinks the slab back into the button it came from
+    const dismiss = async () => {
+      if (closing || !d.open) return;
+      closing = true;
+      const shape = shapeOf(from, card);
+      if (!stillMotion()) {
+        const out = shape ? [{ transform: 'none', opacity: 1 }, { transform: shape, opacity: 0 }] : [{ opacity: 1 }, { opacity: 0, transform: 'scale(.96)' }];
+        try { await card.animate(out, { duration: shape ? 340 : 200, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished; } catch (e) {}
+      }
+      d.close();
+    };
     d.addEventListener('close', () => {
       dropWake();
-      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-      if (theme) theme.content = oldTheme;
       document.removeEventListener('visibilitychange', rewake);
+      d.remove();
       from?.focus?.();
     });
-    const rewake = () => { if (document.visibilityState === 'visible' && d.open) holdWake(); };
-    document.addEventListener('visibilitychange', rewake);
-    d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => d.close()));
+    d.addEventListener('cancel', (e) => { e.preventDefault(); dismiss(); });
+    d.addEventListener('pointerdown', (e) => { d._downOutside = e.target === d; });
+    d.addEventListener('click', (e) => { if (e.target === d && d._downOutside) dismiss(); });
+    d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', dismiss));
     d.querySelector('[data-copy]').addEventListener('click', async (e) => {
       const b = e.currentTarget;
-      try { await navigator.clipboard.writeText(url); b.lastChild.textContent = 'Link copied'; } catch (err) { b.lastChild.textContent = 'Copy failed'; }
-      setTimeout(() => { b.lastChild.textContent = 'Copy link'; }, 1800);
+      try { await navigator.clipboard.writeText(url); b.textContent = 'Link copied'; } catch (err) { b.textContent = 'Copy failed'; }
+      setTimeout(() => { b.textContent = 'Copy link'; }, 1800);
     });
+    document.addEventListener('visibilitychange', rewake);
     d.showModal();
-    if (theme) theme.content = '#ffffff';
     holdWake();
-    // Full screen hides the browser's own bars, so the whole display is lit white
-    if (isPhone()) d.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
-    try { d.querySelector('.mq-big').innerHTML = await qrSvg(url, `QR code to join ${album.name || 'the album'}`); }
-    catch (err) { d.querySelector('.mq-big').outerHTML = `<p class="mq-hint">The QR code could not be drawn (${esc(err.message)}). Share the code ${esc(album.code)} instead.</p>`; }
+    // Opening: the slab grows out of the button, overshoots a touch and settles; its contents rise in after it
+    if (!stillMotion()) {
+      const shape = shapeOf(from, card);
+      card.animate(shape
+        ? [{ transform: shape, opacity: 0 }, { opacity: 1, offset: .2 }, { transform: 'none', opacity: 1 }]
+        : [{ opacity: 0, transform: 'translateY(12px) scale(.96)' }, { opacity: 1, transform: 'none' }],
+      { duration: shape ? 560 : 380, easing: 'cubic-bezier(.34, 1.25, .64, 1)' });
+      [...card.children].filter((el) => !el.matches('.acct-x')).forEach((el, i) => el.animate(
+        [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+        { duration: 420, delay: 160 + i * 40, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' }));
+      try { d.animate({ opacity: [0, 1] }, { duration: 300, pseudoElement: '::backdrop' }); } catch (e) {}
+    }
+    try { card.querySelector('.mq-slab-qr').innerHTML = await qrSvg(url, `QR code to join ${album.name || 'the album'}`); }
+    catch (err) { card.querySelector('.mq-slab-qr').innerHTML = `<p class="mq-slab-err">The QR code could not be drawn. Share the code ${esc(album.code)} instead.</p>`; }
   }
 
   // ---- A small tile, e.g. on the "Album created" screen ----
   async function mount(el, album) {
     if (!el || !album?.code) return;
     el.classList.add('mq-mount');
-    el.innerHTML = `<button class="mq-tile" type="button" aria-label="Show the QR code full screen"></button>
-      <button class="mq-tile-btn" type="button">${ICON.expand}Show QR code full screen</button>`;
+    el.innerHTML = `<button class="mq-tile" type="button" aria-label="Show the QR code"></button>
+      <button class="mq-tile-btn" type="button">${ICON.expand}Show QR code</button>`;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => show(album, b)));
     try { el.querySelector('.mq-tile').innerHTML = await qrSvg(linkFor(album.code), `QR code to join ${album.name || 'the album'}`); }
     catch (err) { el.hidden = true; }

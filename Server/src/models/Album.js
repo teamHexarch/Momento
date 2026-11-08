@@ -26,11 +26,17 @@ const albumSchema = new mongoose.Schema({
     lng: Number,
     radiusM: { type: Number, min: 10, max: 10000 },
   },
+  // Who can join: 'invite' (the code, link or QR code) or 'public' (also listed on the Events map,
+  // where anyone inside the zone can join)
+  visibility: { type: String, enum: ['invite', 'public'], default: 'invite' },
   // When a host last emailed guests who haven't added photos (one reminder a day per album)
   lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.
   destination: { type: String, enum: ['momento', 'google-drive', 'dropbox', 'onedrive'], default: 'momento' },
 }, { timestamps: true });
+
+// The Events map looks public albums up by where their zone is
+albumSchema.index({ visibility: 1, 'zone.lat': 1, 'zone.lng': 1 });
 
 albumSchema.virtual('displayCode').get(function () {
   return `${this.code.slice(0, 3)}-${this.code.slice(3)}`;

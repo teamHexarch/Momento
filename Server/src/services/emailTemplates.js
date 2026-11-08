@@ -69,15 +69,31 @@ export function emailChangeHtml(user, link, newEmail, hours = 24) {
   });
 }
 
-export function emailChangeNoticeHtml(user, newEmail) {
+// Sent to the CURRENT address: nothing changes unless it's approved from here
+export function emailApproveHtml(user, link, newEmail, hours = 24) {
   const first = firstName(user);
   return layout({
-    heading: 'Your email is about to change',
+    heading: 'Approve your new email',
     paragraphs: [
-      `${first ? `Hi ${first}, someone` : 'Someone'} signed in to your Momento account asked to move it to ${newEmail}. Nothing changes until that address confirms it.`,
+      `${first ? `Hi ${first}, someone` : 'Someone'} signed in to your Momento account asked to move it to ${newEmail}.`,
+      'If that was you, open the link and choose Approve. We’ll then send a last confirm link to the new address.',
+      'If it wasn’t you, open the link and choose Not me: the change is stopped and every device is logged out.',
+    ],
+    button: { href: link, label: 'Review the change' },
+    footer: `Nothing changes unless you approve. The link works for ${hours} hours.`,
+  });
+}
+
+// Sent to the OLD address once the move is done
+export function emailChangedHtml(user, newEmail) {
+  const first = firstName(user);
+  return layout({
+    heading: 'Your email was changed',
+    paragraphs: [
+      `${first ? `Hi ${first}, your` : 'Your'} Momento account now uses ${newEmail}, and every device was logged out.`,
       'If this was you, there’s nothing else to do.',
     ],
-    footer: 'If it wasn’t you, reset your password from the Momento log in screen straight away, and reply to this email so we can help.',
+    footer: 'If it wasn’t you, reply to this email straight away so we can help you get your account back.',
   });
 }
 
