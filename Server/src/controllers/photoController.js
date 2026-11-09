@@ -4,6 +4,7 @@ import { Membership } from '../models/Membership.js';
 import { Comment } from '../models/Comment.js';
 import { Album } from '../models/Album.js';
 import { HttpError } from '../utils/httpError.js';
+import { hasGroupAccess } from '../services/groupAccess.js';
 import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageService.js';
 
 // A photo plus the caller's membership of its album; anyone outside the album gets a 404
@@ -11,7 +12,12 @@ import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageServ
 async function photoFor(req, { publicPreview = false } = {}) {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Photo not found.');
   const photo = await Photo.findById(req.params.id);
-  const m = photo && await Membership.findOne({ album: photo.album, user: req.user._id });
+  let m = photo && await Membership.findOne({ album: photo.album, user: req.user._id });
+  // Friend-group members: checked live on every photo, so leaving the group ends access at once
+  if (photo && (!m || m.via === 'group')) {
+    const album = await Album.findById(photo.album, 'group');
+    m = await hasGroupAccess(req.user._id, album) ? (m || { role: 'guest', via: 'group' }) : null;
+  }
   if (!m) {
     if (photo && publicPreview && await Album.exists({ _id: photo.album, visibility: 'public' })) return { photo, m: null };
     throw new HttpError(404, 'Photo not found.');

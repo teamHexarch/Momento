@@ -2,6 +2,7 @@ import { config } from '../config/env.js';
 import { User } from '../models/User.js';
 import { Album } from '../models/Album.js';
 import { Membership } from '../models/Membership.js';
+import { deleteGroupsOf } from '../controllers/groupController.js';
 import { Photo } from '../models/Photo.js';
 import { Comment } from '../models/Comment.js';
 import { Invite } from '../models/Invite.js';
@@ -95,6 +96,8 @@ export async function finishEmailChange(token) {
 // Everything the person owns goes: albums they host (with every photo in them), photos they
 // added to other albums, their memberships and invites, then the account itself.
 export async function deleteAccount(user) {
+  // Groups they made are deleted (albums stay with their hosts); they leave every other group
+  await deleteGroupsOf(user);
   const hosted = await Album.find({ host: user._id }, '_id');
   const hostedIds = hosted.map((a) => a._id);
   const photos = await Photo.find({ $or: [{ album: { $in: hostedIds } }, { uploader: user._id }] }, 'storageKey');

@@ -19,6 +19,8 @@ const albumSchema = new mongoose.Schema({
   // Join code, stored without the dash: K7Q48DM is shown as K7Q-48DM
   code: { type: String, required: true, unique: true },
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  // The friend group it's shared with, if any: everyone in the group can see it and add photos
+  group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group', index: true },
   // Sharing zone: guests must be within radiusM of the venue to add photos (1 to 10 km for new
   // albums). Checked on upload; joining is still open to anyone with the code.
   zone: {

@@ -138,3 +138,15 @@ export function inviteHtml(album, hostName, link, code) {
     footer: 'If you don’t know who sent this, you can ignore it.',
   });
 }
+
+export function groupInviteHtml(groupName, inviterName, link) {
+  return layout({
+    heading: `${inviterName || 'Someone'} invited you to ${groupName}`,
+    paragraphs: [
+      `${inviterName || 'A friend'} wants you in ${groupName}, a friend group on Momento. Everyone in it sees every album the group shares, and can add their photos.`,
+      'Log in with this email address and the invite is waiting on your Groups page.',
+    ],
+    button: { href: link, label: 'See the invite' },
+    footer: 'If you don’t know who sent this, you can ignore it.',
+  });
+}

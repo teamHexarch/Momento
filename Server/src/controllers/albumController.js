@@ -8,6 +8,9 @@ import { Photo } from '../models/Photo.js';
 import { Comment } from '../models/Comment.js';
 import { Invite } from '../models/Invite.js';
 import { User } from '../models/User.js';
+import { Group } from '../models/Group.js';
+import { GroupMember } from '../models/GroupMember.js';
+import { hasGroupAccess, groupIdsOf, dropGroupRows } from '../services/groupAccess.js';
 import { sendEmail } from '../services/emailService.js';
 import { reminderHtml, inviteHtml } from '../services/emailTemplates.js';
 import { HttpError } from '../utils/httpError.js';
@@ -47,18 +50,45 @@ export function albumLifecycle(album, now = Date.now()) {
 }
 const closesLabel = (closes) => new Date(`${closes}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 
-// The caller's membership of an album, or a 404 (not 403, so album ids can't be probed)
+// The caller's membership of an album, or a 404 (not 403, so album ids can't be probed).
+// Friend-group members of a group album get a membership with via: 'group' (role guest): either
+// the row that remembers what they've hidden, or an unsaved one. Group access is checked live,
+// every time, so someone who has left the group gets the 404 straight away.
 export async function membershipOf(req, albumId) {
   if (!mongoose.isValidObjectId(albumId)) throw new HttpError(404, 'Album not found.');
   const m = await Membership.findOne({ album: albumId, user: req.user._id }).populate('album');
-  if (!m?.album) throw new HttpError(404, 'Album not found.');
-  return m;
+  if (m?.album && m.via !== 'group') return m;
+  const album = m?.album || await Album.findById(albumId);
+  if (album && await hasGroupAccess(req.user._id, album)) {
+    if (m) return m;
+    const v = new Membership({ album: album._id, user: req.user._id, role: 'guest', via: 'group' });
+    v.album = album;
+    return v;
+  }
+  throw new HttpError(404, 'Album not found.');
+}
+
+// Album memberships plus the albums this person reaches through their friend groups
+async function albumsOf(userId) {
+  const [rows, groupIds] = await Promise.all([Membership.find({ user: userId }).populate('album'), groupIdsOf(userId)]);
+  const groupAlbums = groupIds.length ? await Album.find({ group: { $in: groupIds } }) : [];
+  const reachable = new Set(groupAlbums.map((a) => String(a._id)));
+  // A group row only counts while the album is still shared with one of their groups
+  const mine = rows.filter((m) => m.album && (m.via !== 'group' || reachable.has(String(m.album._id))));
+  const have = new Set(mine.map((m) => String(m.album._id)));
+  for (const a of groupAlbums) {
+    if (have.has(String(a._id))) continue;
+    const v = new Membership({ album: a._id, user: userId, role: 'guest', via: 'group' });
+    v.album = a;
+    mine.push(v);
+  }
+  return mine;
 }
 
 // Counts and the newest few photos for a set of albums, in two queries
 // hidden: photo ids this person has hidden (left out of their counts and previews)
 async function statsFor(albumIds, userId, hidden = []) {
-  const [photoStats, memberStats, hosts] = await Promise.all([
+  const [photoStats, memberStats, hosts, grouped] = await Promise.all([
     Photo.aggregate([
       { $match: { album: { $in: albumIds }, _id: { $nin: hidden } } },
       { $group: {
@@ -70,15 +100,35 @@ async function statsFor(albumIds, userId, hidden = []) {
       } },
     ]),
     Membership.aggregate([
-      { $match: { album: { $in: albumIds } } },
-      { $group: { _id: '$album', guests: { $sum: 1 } } },
+      { $match: { album: { $in: albumIds }, via: { $ne: 'group' } } },
+      { $group: { _id: '$album', users: { $addToSet: '$user' } } },
     ]),
     // Who hosts each album, so everyone in it can see it clearly
     Membership.find({ album: { $in: albumIds }, role: 'host' }, 'album user').populate('user', 'name'),
+    // Albums shared with a friend group: the group's name, and its people count as guests
+    Album.find({ _id: { $in: albumIds }, group: { $ne: null } }, 'group').populate('group', 'name'),
   ]);
+  const groupIds = grouped.filter((a) => a.group).map((a) => a.group._id);
+  const groupPeople = new Map();
+  if (groupIds.length) {
+    for (const gm of await GroupMember.find({ group: { $in: groupIds } }, 'group user')) {
+      const k = String(gm.group);
+      if (!groupPeople.has(k)) groupPeople.set(k, []);
+      groupPeople.get(k).push(String(gm.user));
+    }
+  }
   const byAlbum = new Map(albumIds.map((id) => [String(id), { photos: 0, mine: 0, pics: [], guests: 0, hostName: '', hostIsYou: false }]));
   for (const s of photoStats) Object.assign(byAlbum.get(String(s._id)), { photos: s.photos, mine: s.mine, pics: s.pics.map(thumbnailUrl) });
-  for (const s of memberStats) byAlbum.get(String(s._id)).guests = s.guests;
+  const people = new Map(memberStats.map((s) => [String(s._id), new Set(s.users.map(String))]));
+  for (const a of grouped) {
+    if (!a.group) continue;
+    const set = people.get(String(a._id)) || new Set();
+    for (const u of groupPeople.get(String(a.group._id)) || []) set.add(u);
+    people.set(String(a._id), set);
+    // anywhere: this person is in the album's group, so they can add photos from anywhere (no zone check)
+    Object.assign(byAlbum.get(String(a._id)), { group: { id: a.group.id, name: a.group.name }, anywhere: (groupPeople.get(String(a.group._id)) || []).includes(String(userId)) });
+  }
+  for (const [id, set] of people) if (byAlbum.has(id)) byAlbum.get(id).guests = set.size;
   for (const h of hosts) {
     const name = (h.user?.name || '').trim() || 'The host';
     Object.assign(byAlbum.get(String(h.album)), { hostName: name, hostIsYou: !!h.user?._id.equals(userId) });
@@ -105,6 +155,13 @@ function summary(album, role, stats) {
     visibility: album.visibility || 'invite',
     ...stats,
   };
+}
+
+// Album cards for a list of albums, from this person's point of view (used by friend groups)
+export async function albumSummaries(albums, userId) {
+  if (!albums.length) return [];
+  const stats = await statsFor(albums.map((a) => a._id), userId);
+  return albums.map((a) => summary(a, a.host.equals(userId) ? 'host' : 'guest', stats.get(String(a._id))));
 }
 
 function readAlbumFields(body) {
@@ -186,8 +243,7 @@ async function waitingGuests(albumIds) {
 }
 
 export async function list(req, res) {
-  const memberships = await Membership.find({ user: req.user._id }).populate('album');
-  const mine = memberships.filter((m) => m.album);
+  const mine = await albumsOf(req.user._id);
   const ids = mine.map((m) => m.album._id);
   const hostedIds = mine.filter((m) => m.role === 'host').map((m) => m.album._id);
   const hidden = mine.flatMap((m) => m.hidden || []);
@@ -230,6 +286,8 @@ export async function list(req, res) {
 
 export async function create(req, res) {
   const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body), visibility: req.body?.visibility === 'public' ? 'public' : 'invite' };
+  const group = req.body?.groupId ? await groupFor(req.user._id, req.body.groupId) : null;
+  if (group) fields.group = group._id;
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -240,7 +298,19 @@ export async function create(req, res) {
     }
   }
   await Membership.create({ album: album._id, user: req.user._id, role: 'host' });
-  res.status(201).json({ album: summary(album, 'host', { photos: 0, mine: 0, pics: [], guests: 1, hostName: (req.user.name || '').trim() || 'The host', hostIsYou: true }) });
+  const stats = group ? (await statsFor([album._id], req.user._id)).get(String(album._id))
+    : { photos: 0, mine: 0, pics: [], guests: 1, hostName: (req.user.name || '').trim() || 'The host', hostIsYou: true };
+  res.status(201).json({ album: summary(album, 'host', stats) });
+}
+
+// A friend group the person is in, or a 404 (so group ids can't be probed)
+async function groupFor(userId, groupId) {
+  if (!mongoose.isValidObjectId(groupId) || !(await GroupMember.exists({ group: groupId, user: userId }))) {
+    throw new HttpError(404, 'That friend group wasn’t found. You may have left it.');
+  }
+  const group = await Group.findById(groupId);
+  if (!group) throw new HttpError(404, 'That friend group wasn’t found. You may have left it.');
+  return group;
 }
 
 // Joins an album from the code an invite link carried, when the account's email is confirmed.
@@ -266,7 +336,10 @@ export async function join(req, res) {
   if (!album) throw new HttpError(404, 'No album has that code. Check it against the host’s card.');
   // The sharing zone (album.zone) is stored but not enforced yet
   let m = await Membership.findOne({ album: album._id, user: req.user._id });
-  const already = !!m;
+  // Already in through a friend group: joining with the code makes it theirs to keep, even if
+  // they leave the group later
+  if (m?.via === 'group') { m.via = undefined; await m.save(); }
+  const already = !!m || await hasGroupAccess(req.user._id, album);
   if (!m) {
     try {
       m = await Membership.create({ album: album._id, user: req.user._id, role: 'guest' });
@@ -331,6 +404,12 @@ export async function update(req, res) {
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the album.');
   const fields = readAlbumFields({ name: m.album.name, date: m.album.date, place: m.album.place, zone: m.album.zone, ...req.body });
   Object.assign(m.album, fields);
+  // groupId: a friend group the host is in, or null to stop sharing it with its group
+  if (req.body && 'groupId' in req.body) {
+    const before = m.album.group;
+    m.album.group = req.body.groupId ? (await groupFor(req.user._id, req.body.groupId))._id : undefined;
+    if (before && !before.equals(m.album.group)) await dropGroupRows({ album: m.album._id });
+  }
   if (req.body?.visibility === 'public' || req.body?.visibility === 'invite') {
     if (req.body.visibility === 'public' && !m.album.zone?.radiusM) throw new HttpError(400, 'A public album needs a venue, so people nearby can find it.');
     m.album.visibility = req.body.visibility;
@@ -359,6 +438,9 @@ export async function remove(req, res) {
 export async function leave(req, res) {
   const m = await membershipOf(req, req.params.id);
   if (m.role === 'host') throw new HttpError(400, 'You’re the host. Delete the album instead.');
+  if (m.via === 'group' || await hasGroupAccess(req.user._id, m.album)) {
+    throw new HttpError(400, 'This album is shared with your friend group. Leave the group to stop seeing its albums.', 'group-album');
+  }
   await m.deleteOne();
   res.json({ ok: true });
 }
@@ -378,7 +460,8 @@ export async function checkMember(req, res, next) {
     if (status === 'upcoming' && opensAt) throw new HttpError(403, `Photos can be added from ${new Date(opensAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })} UTC.`, 'not-open-yet');
     throw new HttpError(403, `This album closed to new photos on ${closesLabel(closes)}. You can still look at it and download everything.`, 'closed');
   }
-  if (!host && album.startsAt && album.zone?.radiusM && album.zone.lat != null) {
+  const viaGroup = !host && album.group && (req.membership.via === 'group' || await hasGroupAccess(req.user._id, album));
+  if (!host && !viaGroup && album.startsAt && album.zone?.radiusM && album.zone.lat != null) {
     // The browser sends where the guest is as "lat,lng,accuracy" in a header, so it's known before
     // any file data is read. Like any browser location it can be faked: it keeps honest guests to
     // the event, it isn't proof.

@@ -574,7 +574,8 @@
   // ---- Asking before an upload (and the guest's location, when the album has a zone) ----
   function confirmUpload(album, files) {
     return new Promise((resolve) => {
-      const needsPlace = album?.role !== 'host' && album?.startsAt && album?.zone?.radiusM;
+      // Hosts, and friend-group members of a group album, can add photos from anywhere
+      const needsPlace = album?.role !== 'host' && !album?.anywhere && album?.startsAt && album?.zone?.radiusM;
       const n = files.length, what = n === 1 ? 'this photo' : `these ${n} photos`;
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
@@ -617,7 +618,7 @@
     if (!a?.startsAt || !a?.endsAt) return '';
     const s = new Date(a.startsAt), e = new Date(a.endsAt), opens = new Date(a.opensAt || s);
     const when = `${fmtWhen(s)} to ${fmtTime(e)}`;
-    const zone = a.zone?.radiusM ? ` within ${km(a.zone.radiusM)} of the venue` : '';
+    const zone = a.zone?.radiusM && !a.anywhere ? ` within ${km(a.zone.radiusM)} of the venue` : '';
     if (a.status === 'upcoming') return `Event ${when}. Photos can be added from ${fmtWhen(opens)}${zone}.`;
     if (a.status === 'live') return `Event ${when}. Photos can be added until ${fmtTime(e)}${zone}.`;
     return `Event ${when}. This album has closed to new photos.`;

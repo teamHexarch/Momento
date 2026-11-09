@@ -11,7 +11,8 @@
     "dev:memory": "node --env-file-if-exists=.env scripts/devMemory.js",
     "email:test": "node --env-file-if-exists=.env scripts/sendTestEmail.js",
     "aws:copy-photos": "node --env-file-if-exists=.env scripts/copyR2ToS3.js",
-    "test:events": "node scripts/testEvents.js"
+    "test:events": "node scripts/testEvents.js",
+    "test:groups": "node scripts/testGroups.js"
   },
   "engines": {
     "node": ">=22"

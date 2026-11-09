@@ -64,6 +64,33 @@
   if (state.seededA7 !== 2) { state.seededA7 = 2; state.albums = [imaadsAlbum(), ...state.albums.filter((a) => a.id !== 'a7')]; save(); }
   // and it stays live whichever day it's opened
   { const a7 = state.albums.find((a) => a.id === 'a7'); if (a7) { Object.assign(a7, imaadsTimes()); save(); } }
+  // Friend groups (added after the rest, so browsers already using the preview get them once)
+  const seedGroups = () => {
+    const you = { id: 'dev-user', name: 'You', avatarUrl: '', role: 'member', you: true, since: new Date(Date.now() - 40 * DAY).toISOString() };
+    const pal = (id, name, role = 'member', days = 30) => ({ id, name, avatarUrl: '', role, you: false, since: new Date(Date.now() - days * DAY).toISOString() });
+    state.groups = [
+      { id: 'g1', name: 'Uni friends', role: 'owner', members: [{ ...you, role: 'owner' }, pal('u-maya', 'Maya Okafor'), pal('u-sam', 'Sam Reid'), pal('u-jon', 'Jon Park', 'member', 12)],
+        invites: [{ id: 'gi1', email: 'lena@example.com', by: 'You', canCancel: true, at: new Date().toISOString() }] },
+      { id: 'g2', name: 'Shah family', role: 'member', members: [pal('u-ruby', 'Ruby Shah', 'owner', 90), you, pal('u-dev', 'Dev Shah', 'member', 60), pal('u-ana', 'Ana Shah', 'member', 50), pal('u-kit', 'Kit Shah', 'member', 20), pal('u-oli', 'Oli Shah', 'member', 9), pal('u-nia', 'Nia Shah', 'member', 3)], invites: [] },
+    ];
+    state.groupInvites = [{ id: 'gv1', group: { id: 'g3', name: 'Thursday book club' }, by: 'Hannah', members: 6, albums: 2, at: new Date().toISOString() }];
+    for (const a of state.albums) { if (a.id === 'a1' || a.id === 'a4') a.groupId = 'g1'; if (a.id === 'a5') a.groupId = 'g2'; }
+  };
+  if (!state.seededGroups) { state.seededGroups = 1; seedGroups(); save(); }
+  // A few messages in each sample group's chat
+  if (!state.seededChat) {
+    state.seededChat = 1;
+    const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+    state.chat = {
+      g1: [
+        { id: 'm1', text: 'Who has the photos from the beach day?', by: 'Maya', you: false, at: ago(300) },
+        { id: 'm2', text: 'Uploading mine now, the sunset ones came out great', by: 'Sam', you: false, at: ago(280) },
+        { id: 'm3', text: 'Same, adding them tonight', by: 'You', you: true, at: ago(120) },
+      ],
+      g2: [{ id: 'm4', text: 'Eid album is up, add yours when you can', by: 'Ruby', you: false, at: ago(1440) }],
+    };
+    save();
+  }
 
   // ---- Photos and album shapes ----
   const picsum = (n, w, h) => `https://picsum.photos/id/${10 + (n * 7) % 50}/${w}/${h}`;
@@ -98,6 +125,7 @@
   const hiddenOf = (a) => new Set((state.hidden || {})[a.id] || []);
   const visibleOf = (a) => { const h = hiddenOf(a); return photosOf(a).filter((p) => !h.has(p.id)); };
   const hiddenCount = (a) => { const h = hiddenOf(a); return photosOf(a).filter((p) => h.has(p.id)).length; };
+  const groupOf = (a) => a.groupId && (state.groups || []).find((g) => g.id === a.groupId);
   const summary = (a) => ({
     id: a.id, name: a.name, date: a.date, place: a.place,
     venue: a.venue?.address || a.venue?.placeId ? a.venue : undefined,
@@ -107,6 +135,7 @@
     zone: a.zone?.radiusM ? a.zone : undefined, visibility: a.visibility || 'invite',
     code: a.role === 'host' ? a.code : undefined, photos: a.photos - hiddenCount(a), mine: a.mine, guests: a.guests,
     pics: [...visibleOf(a)].sort((x, y) => y.likes - x.likes).slice(0, 9).map((p) => p.thumbnailUrl), hostName: a.hostName, hostIsYou: a.role === 'host',
+    ...(groupOf(a) && { group: { id: a.groupId, name: groupOf(a).name }, anywhere: true }),
     ...(a.role === 'host' && { waiting: a.waiting || 0 }),
   });
   const list = () => {
@@ -180,6 +209,86 @@
     }
     if (path.startsWith('/api/auth/') || path === '/api/support') return { body: { ok: true, sent: true, retryAt: new Date(Date.now() + 60000).toISOString(), user: state.user } };
     if (!state.signedIn) return fail(401, 'Log in to continue.');
+
+    // ---- Friend groups ----
+    const describeGroup = (g) => ({ ...g, albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });
+    const groupOut = () => ({ groups: (state.groups || []).map(describeGroup), invites: state.groupInvites || [] });
+    // Leaving a group: albums you were in through it go, albums you host leave the group
+    const dropGroup = (g) => {
+      state.albums = state.albums.filter((a) => !(a.groupId === g.id && a.viaGroup));
+      state.albums.forEach((a) => { if (a.groupId === g.id) delete a.groupId; });
+      state.groups = state.groups.filter((x) => x !== g);
+    };
+    if (path === '/api/groups' && method === 'GET') return { body: groupOut() };
+    if (path === '/api/groups' && method === 'POST') {
+      const name = String(body.name || '').trim();
+      if (!name) return fail(400, 'Give the group a name.');
+      const g = { id: 'g' + (++state.seq), name, role: 'owner', members: [{ id: 'dev-user', name: 'You', avatarUrl: '', role: 'owner', you: true, since: new Date().toISOString() }], invites: [] };
+      (state.groups ||= []).unshift(g); save();
+      return { status: 201, body: { group: describeGroup(g) } };
+    }
+    const gi = /^\/api\/groups\/invites\/([^/]+)\/(accept|decline)$/.exec(path);
+    if (gi && method === 'POST') {
+      const inv = (state.groupInvites || []).find((i) => i.id === gi[1]);
+      if (!inv) return fail(404, 'That invite has expired or was taken back.');
+      state.groupInvites = state.groupInvites.filter((i) => i !== inv);
+      if (gi[2] === 'decline') { save(); return { body: { ok: true } }; }
+      const g = { id: inv.group.id, name: inv.group.name, role: 'member', invites: [],
+        members: [{ id: 'u-hannah', name: 'Hannah Lee', avatarUrl: '', role: 'owner', you: false, since: new Date(Date.now() - 200 * DAY).toISOString() },
+          ...['Tom Hale', 'Isla Grey', 'Raj Patel', 'Zoe Fox'].map((n, k) => ({ id: 'u-b' + k, name: n, avatarUrl: '', role: 'member', you: false, since: new Date(Date.now() - (100 - k * 20) * DAY).toISOString() })),
+          { id: 'dev-user', name: 'You', avatarUrl: '', role: 'member', you: true, since: new Date().toISOString() }] };
+      (state.groups ||= []).unshift(g);
+      state.albums.push(
+        { id: 'a' + (++state.seq), name: 'Book swap picnic', date: iso(-14), place: 'Regent’s Park', role: 'guest', photos: 32, mine: 0, guests: 6, hostName: 'Hannah', groupId: g.id, viaGroup: true },
+        { id: 'a' + (++state.seq), name: 'Author talk night', date: iso(-60), place: 'Daunt Books', role: 'guest', photos: 14, mine: 0, guests: 5, hostName: 'Tom', groupId: g.id, viaGroup: true });
+      save();
+      return { body: { group: describeGroup(g) } };
+    }
+    const gm = /^\/api\/groups\/([^/]+)(?:\/(invites|members)(?:\/([^/]+))?)?$/.exec(path);
+    const grp = gm && (state.groups || []).find((g) => g.id === gm[1]);
+    if (gm && !grp) return fail(404, 'Group not found.');
+    if (gm && !gm[2]) {
+      if (method === 'GET') return { body: { group: describeGroup(grp) } };
+      if (grp.role !== 'owner') return fail(403, 'Only the person who made the group can do that.');
+      if (method === 'PATCH') { const n = String(body.name || '').trim(); if (!n) return fail(400, 'Give the group a name.'); grp.name = n; save(); return { body: { group: describeGroup(grp) } }; }
+      if (method === 'DELETE') { dropGroup(grp); save(); return { body: { ok: true } }; }
+    }
+    if (gm && gm[2] === 'invites' && method === 'POST') {
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(400, 'Enter an email address like name@example.com.');
+      if (email === state.user.email) return fail(400, 'That’s your own address.');
+      grp.invites = grp.invites.filter((i) => i.email !== email);
+      grp.invites.unshift({ id: 'gi' + (++state.seq), email, by: 'You', canCancel: true, at: new Date().toISOString() }); save();
+      return { status: 201, body: { group: describeGroup(grp) } };
+    }
+    if (gm && gm[2] === 'invites' && gm[3] && method === 'DELETE') { grp.invites = grp.invites.filter((i) => i.id !== gm[3]); save(); return { body: { ok: true } }; }
+    if (gm && gm[2] === 'members' && gm[3] && method === 'DELETE') {
+      if (gm[3] === 'me' || gm[3] === 'dev-user') {
+        if (grp.role === 'owner') return fail(400, 'You made this group. Delete it instead, or ask someone else to make a new one.');
+        dropGroup(grp); save(); return { body: { ok: true } };
+      }
+      if (grp.role !== 'owner') return fail(403, 'Only the person who made the group can remove people.');
+      grp.members = grp.members.filter((x) => x.id !== gm[3]); save();
+      return { body: { group: describeGroup(grp) } };
+    }
+    // The group chat
+    const gc = /^\/api\/groups\/([^/]+)\/messages$/.exec(path);
+    if (gc) {
+      if (!(state.groups || []).some((g) => g.id === gc[1])) return fail(404, 'Group not found.');
+      const msgs = ((state.chat ||= {})[gc[1]] ||= []);
+      if (method === 'GET') {
+        const before = query?.get('before');
+        const older = before ? msgs.filter((m) => m.at < before) : msgs;
+        return { body: { messages: older.slice(-50), more: older.length > 50 } };
+      }
+      if (method === 'POST') {
+        const text = String(body.text || '').trim();
+        if (!text) return fail(400, 'Write a message first.');
+        const m = { id: 'm' + (++state.seq), text: text.slice(0, 1000), by: 'You', you: true, at: new Date().toISOString() };
+        msgs.push(m); save();
+        return { status: 201, body: { message: m } };
+      }
+    }
 
     if (path === '/api/events/nearby' && method === 'GET') {
       const at = { lat: Number(query?.get('lat')), lng: Number(query?.get('lng')) };
@@ -272,6 +381,7 @@
       const name = String(body.name || '').trim();
       if (!name) return fail(400, 'Give the album a name.');
       const a = { id: 'a' + (++state.seq), name, date: body.date || iso(0), place: String(body.place || '').trim(), role: 'host', code: newCode(), photos: 0, mine: 0, guests: 1, waiting: 0, hostName: state.user.name };
+      if (body.groupId && (state.groups || []).some((g) => g.id === body.groupId)) a.groupId = body.groupId;
       // Event times, venue and zone, as assets/event.js sends them
       for (const k of ['startsAt', 'endsAt', 'uploadLeadMin', 'zone', 'venue', 'visibility']) if (body[k] != null) a[k] = body[k];
       state.albums.unshift(a); save();

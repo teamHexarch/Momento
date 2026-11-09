@@ -536,6 +536,10 @@
     .name { display: block; max-width: calc(100% - 9rem); font-size: 1.3rem; font-weight: 650; letter-spacing: -.025em; line-height: 1.25; }
     .album.wide .name { font-size: 1.75rem; letter-spacing: -.035em; max-width: calc(100% - 11rem); }
     .when { display: block; margin-top: .3rem; color: var(--slate); font-size: .93rem; }
+    /* A group album: the friend group it's shared with */
+    .grp { display: inline-flex; align-items: center; gap: .3rem; max-width: 12rem; padding: .22rem .6rem; border-radius: 100px; background: rgba(111,152,150,.16); color: #3F6664; font-size: .75rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .grp svg { flex: none; }
+    :root[data-theme="dark"] .grp { background: rgba(160,205,200,.16); color: #BFE0DC; }
     .foot-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin-top: .9rem; color: var(--stone); font-size: .86rem; }
     .foot-row .faces i { width: 1.6rem; height: 1.6rem; font-size: .66rem; --ring: #F6F4FA; }
 
@@ -1231,23 +1235,23 @@
       }
   
       /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
-      :is(.nav-settings, .nav-events) { display: inline-flex; align-items: center; justify-content: center; }
-      :is(.nav-settings, .nav-events) svg { display: none; }
+      :is(.nav-settings, .nav-events, .nav-groups) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-settings, .nav-events, .nav-groups) svg { display: none; }
       @media (max-width: 520px) {
-        :is(.nav-settings, .nav-events) .nav-label { display: none; }
-        :is(.nav-settings, .nav-events) svg { display: block; }
-        :is(.nav-settings, .nav-events) { padding-left: .8rem; padding-right: .8rem; }
+        :is(.nav-settings, .nav-events, .nav-groups) .nav-label { display: none; }
+        :is(.nav-settings, .nav-events, .nav-groups) svg { display: block; }
+        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .5rem; padding-right: .5rem; }
       }
       /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
          logo, the menu and your account button all fit on one line */
-      @media (max-width: 380px) {
+      @media (max-width: 400px) {
         .header { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
         .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
         .nav { gap: 0 !important; padding: .22rem !important; }
         .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
         .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
-        :is(.nav-settings, .nav-events) { padding-left: .58rem !important; padding-right: .58rem !important; }
-        :is(.nav-settings, .nav-events) svg { width: 16px; height: 16px; }
+        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .46rem !important; padding-right: .46rem !important; }
+        :is(.nav-settings, .nav-events, .nav-groups) svg { width: 16px; height: 16px; }
       }
       @media (max-width: 340px) {
         .nav-item { padding: .45rem .42rem !important; }
@@ -1569,6 +1573,16 @@
       .acct-field input:hover, .acct-field textarea:hover { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .3); }
       .acct-field input:focus, .acct-field textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188, 178, 236, .45); }
       .acct-group { margin: 1.1rem 0 .4rem; }
+      .acct-field[hidden] { display: none; }
+      .acct-field select {
+        width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 2.6rem 0 1rem; border: none; border-radius: 14px; -webkit-appearance: none; appearance: none; cursor: pointer;
+        background: rgba(255, 255, 255, .55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A869A' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 1rem center / 14px; color: var(--dusk);
+        font: 500 1rem var(--font-main); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .12); transition: box-shadow .2s ease;
+      }
+      .acct-field select:hover { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(46, 44, 58, .3); }
+      .acct-field select:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188, 178, 236, .45); }
+      .acct-field select:focus-visible { outline: none; }
+      :root[data-theme="dark"] .acct-field select { background-color: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); color-scheme: dark; }
       .acct-group > b { display: block; margin-bottom: .1rem; font-size: .82rem; color: var(--slate); }
       .acct-row { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; padding: .8rem 0; }
       .acct-row + .acct-row { box-shadow: inset 0 1px 0 rgba(46, 44, 58, .08); }
@@ -1967,6 +1981,7 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item" aria-current="page">My albums</a>
+        <a href="groups.html" class="nav-item nav-groups" aria-label="Friend groups"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Groups</span></a>
         <a href="events.html" class="nav-item nav-events" aria-label="Events"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
@@ -2022,6 +2037,7 @@
             <button class="tab" role="tab" type="button" data-filter="all" aria-selected="true">All <small></small></button>
             <button class="tab" role="tab" type="button" data-filter="host" aria-selected="false">Hosting <small></small></button>
             <button class="tab" role="tab" type="button" data-filter="guest" aria-selected="false">Joined <small></small></button>
+            <button class="tab" role="tab" type="button" data-filter="group" aria-selected="false">Groups <small></small></button>
           </div>
           <label class="search">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
@@ -2227,6 +2243,7 @@
       document.getElementById('lede').innerHTML = `Every event you’ve been part of: ${tally('live')} live now, ${up ? `${up} coming up, ` : ''}${tally('wrapping')} wrapping up, ${tally('kept')} kept. ${n(p)} photos, ${n(m)} of them yours.`;
       const arch = list, counts = { all: arch.length, host: arch.filter((a) => a.role === 'host').length };
       counts.guest = counts.all - counts.host;
+      counts.group = arch.filter((a) => a.group).length;
       document.querySelectorAll('.tab').forEach((t) => { t.querySelector('small').textContent = counts[t.dataset.filter]; });
     }
     sumUp(true);
@@ -2323,7 +2340,7 @@
           <span class="info">
             <span class="name">${esc(a.name)}</span>
             <span class="when">${esc([fmtDate(a.date), a.place].filter(Boolean).join(', '))}</span>
-            <span class="foot-row">${a.guests ? `<span>${num(a.photos)} photos from ${a.guests} guests</span>` : `<span>${a.photos ? `${num(a.photos)} photos so far` : 'Waiting for the first photos'}${a.code ? `, code ${a.code}` : ''}</span>`}<span class="role${a.role === 'host' ? ' host' : ''}">${a.role === 'host' ? 'You’re hosting' : a.hostName ? 'Host: ' + esc(a.hostName) : 'Joined'}</span></span>
+            <span class="foot-row">${a.guests ? `<span>${num(a.photos)} photos from ${a.guests} guests</span>` : `<span>${a.photos ? `${num(a.photos)} photos so far` : 'Waiting for the first photos'}${a.code ? `, code ${a.code}` : ''}</span>`}${a.group ? `<span class="grp" title="Shared with ${esc(a.group.name)}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg>${esc(a.group.name)}</span>` : ''}<span class="role${a.role === 'host' ? ' host' : ''}">${a.role === 'host' ? 'You’re hosting' : a.hostName ? 'Host: ' + esc(a.hostName) : 'Joined'}</span></span>
           </span>
         </span>`;
       el.cover = el.querySelector('.cover');
@@ -2363,7 +2380,7 @@
     let filter = 'all', query = '';
     function render(animate = true) {
       const q = query.trim().toLowerCase();
-      const shown = ARCHIVE.filter((a) => !a.gone && (filter === 'all' || a.role === filter) && (!q || `${a.name} ${a.place}`.toLowerCase().includes(q)));
+      const shown = ARCHIVE.filter((a) => !a.gone && (filter === 'all' || (filter === 'group' ? !!a.group : a.role === filter)) && (!q || `${a.name} ${a.place} ${a.group?.name || ''}`.toLowerCase().includes(q)));
       // FLIP: note where every album is, regroup, then glide each from its old spot to its new one
       const first = new Map();
       if (animate) for (const [id, el] of cards) if (el.isConnected) first.set(id, el.getBoundingClientRect());
@@ -2676,7 +2693,7 @@
       document.getElementById('albumCodeText').textContent = isHost ? a.code : '';
       document.getElementById('albumLink').hidden = !isHost;
       document.getElementById('albumQr').hidden = !isHost;
-      document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : ''].filter(Boolean).join(' · ');
+      document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : '', a.group ? `Shared with ${a.group.name}` : ''].filter(Boolean).join(' · ');
       thumbsEl.innerHTML = a.pics.map((p, n) => `<button class="thumb" type="button" data-n="${n}" aria-label="Photo ${n + 1}"><img src="${a.photoItems?.[n]?.thumbnailUrl || pic(p, 200, 200)}" alt=""></button>`).join('');
       albumCard.classList.toggle('is-empty', empty);
       document.getElementById('albumEmpty').hidden = !empty;
@@ -4217,6 +4234,7 @@
               <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
               <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" placeholder="Where it’s on" autocomplete="off"></label>
             </div>
+            <label class="acct-field m-group" hidden><span>Friend group</span><select name="group"><option value="">None: only people I invite</option></select></label>
             <p class="acct-status" role="status"></p>
             <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Create album</button></div>
           </div>
@@ -4244,17 +4262,19 @@
         if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
         // Times, venue and zone (assets/event.js)
         const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
+        // A friend group: everyone in it gets the album too
+        const groupId = form.group.value, groupName = groupId ? form.group.selectedOptions[0]?.textContent : '';
         if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
         form.dataset.busy = 'true';
         const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
         try {
-          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields })));
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields, ...(groupId && { groupId }) })));
           document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}. Share this code so guests can join and add their photos.`;
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
         d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
@@ -4277,8 +4297,21 @@
         if (await Momento.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) d.dismiss();
       });
       const launch = d.launch;
-      d.launch = () => {
+      // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
+      const groupField = d.querySelector('.m-group');
+      async function loadGroups(pick) {
+        groupField.hidden = true;
+        const sel = form.group;
+        sel.length = 1;
+        let groups = [];
+        try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { return; }
+        for (const g of groups) sel.add(new Option(g.name, g.id));
+        groupField.hidden = !groups.length;
+        if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
+      }
+      d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
+        loadGroups(opts.groupId);
         form.date.value = isoToday();
         Momento.event?.mount(form);
         showView('form');
@@ -4287,13 +4320,14 @@
       };
       return d;
     }
-    Momento.createAlbum = (from) => { returnTo = from; (createD ||= createDialog(() => returnTo)).launch(); };
+    // opts.groupId: start with that friend group picked
+    Momento.createAlbum = (from, opts) => { returnTo = from; (createD ||= createDialog(() => returnTo)).launch(opts); };
     // Any "Create an album" control on any page: <a|button data-create>
     document.addEventListener('click', (e) => {
       const t = e.target.closest('[data-create]');
       if (!t) return;
       e.preventDefault();
-      Momento.createAlbum(t);
+      Momento.createAlbum(t, { groupId: t.dataset.createGroup });
     });
   
     // A Light / Dark / System segment bound to the theme (the account menu and the footer both use it)
@@ -4626,6 +4660,7 @@
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
               <li><a class="sf-link" href="sort.html">Sort photos</a></li>
+              <li><a class="sf-link" href="groups.html">Friend groups</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
             </ul>

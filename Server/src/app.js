@@ -11,6 +11,7 @@ import { albumRoutes } from './routes/albumRoutes.js';
 import { photoRoutes } from './routes/photoRoutes.js';
 import { supportRoutes } from './routes/supportRoutes.js';
 import { eventRoutes } from './routes/eventRoutes.js';
+import { groupRoutes } from './routes/groupRoutes.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -43,13 +44,14 @@ app.use('/api/albums', albumRoutes);
 app.use('/api/photos', photoRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/groups', groupRoutes);
 app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 
 // Locally, the site itself comes from the Client folder too, so one address does everything.
 // In production the site is hosted on its own (FRONTEND_URL) and this server is API only.
 // Only what the Pages workflow publishes is served: the pages and simple files in assets/ and
 // assets/vendor/ (plain names, so not the design screenshot). Everything else in Client/ stays private.
-const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/sort.html', '/events.html', '/privacy.html']);
+const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/sort.html', '/events.html', '/groups.html', '/privacy.html']);
 const PUBLIC_ASSET = /^\/assets\/(vendor\/)?[\w-]+(\.[\w-]+)*\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i;
 if (!config.serveClient) {
   console.log(`API only: the site is served from ${config.frontendUrl}.`);
