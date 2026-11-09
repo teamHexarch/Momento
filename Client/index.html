@@ -387,6 +387,12 @@
     .page-cta:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
 
     /* ---------- QR card: scanning it brings out the album ---------- */
+    /* Set by the script every frame: registered as not inherited, so only the card itself is
+       restyled each frame, not the 200 elements inside it (the QR pattern) */
+    @property --shift { syntax: '<length>'; inherits: false; initial-value: 0px; }
+    @property --bob { syntax: '<length>'; inherits: false; initial-value: 0px; }
+    @property --trx { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+    @property --try { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
     .qr-card {
       --shift: 0px; --bob: 0px; --trx: 0deg; --try: 0deg;
       position: absolute; left: 50%; top: calc(50% + 2.2rem); z-index: 2;
@@ -454,7 +460,13 @@
       position: absolute; width: var(--size); padding: 6px 6px 22px;
       background: #FCFBF8; border-radius: 3px;
       box-shadow: 0 2px 4px rgba(46,44,58,.1), 0 14px 28px rgba(46,44,58,.2);
+      /* Moved every frame: its own layer, so moving it doesn't repaint the shadow and photo */
+      will-change: transform, opacity;
+      animation: floater-bob var(--bob-time, 4s) ease-in-out var(--bob-delay, 0s) infinite alternate;
     }
+    /* translate and rotate add to the script's transform, so the bob and the pointer-dodge combine */
+    @keyframes floater-bob { from { translate: 0 -10px; rotate: -4deg; } to { translate: 0 10px; rotate: 4deg; } }
+    @media (prefers-reduced-motion: reduce) { .floater { animation: none; } }
     .floater img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 1px; background: var(--fog); filter: saturate(.85); }
 
     /* ---------- The album ---------- */
@@ -685,6 +697,61 @@
     .step-more > span { overflow: hidden; max-width: 27rem; font-size: .98rem; line-height: 1.55; color: var(--slate); }
     .step.is-on .step-more { grid-template-rows: 1fr; opacity: 1; }
     .step.is-on .step-more > span { padding-top: .4rem; }
+    .step button { transition: translate .4s var(--spring); }
+    .step button:hover { translate: 4px 0; }
+    .step button:active { translate: 2px 0; }
+    .step button:hover .step-no { box-shadow: inset 0 0 0 1.5px rgba(46,44,58,.32); }
+    .step.is-on button:hover .step-no { box-shadow: 0 0 0 5px rgba(154,96,61,.18); }
+    /* Autoplay timer: a thin bar under the open step fills up, then the next step opens.
+       Pauses while the pointer is over the panel, while it's off screen, or after the visitor takes over. */
+    .step-timer { display: block; height: 2px; margin-top: .7rem; max-width: 27rem; border-radius: 2px; background: rgba(46,44,58,.08); overflow: hidden; opacity: 0; transition: opacity .3s ease; }
+    .step-timer::after { content: ""; display: block; height: 100%; background: linear-gradient(to right, var(--blush), var(--copper)); transform-origin: left; scale: 0 1; }
+    .hiw.is-auto .step.is-on .step-timer { opacity: 1; }
+    .hiw.is-auto .step.is-on .step-timer::after { animation: step-time 6.5s linear forwards; }
+    .hiw.is-held .step.is-on .step-timer::after { animation-play-state: paused; }
+    @keyframes step-time { to { scale: 1 1; } }
+
+    /* Under the phone: back, dots, next */
+    .phone-side { display: flex; flex-direction: column; align-items: center; gap: 1rem; justify-self: center; }
+    .hiw-nav { display: flex; align-items: center; gap: .75rem; }
+    .hiw-nav button.arrow {
+      display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border: none; border-radius: 50%; cursor: pointer;
+      background: rgba(255,255,255,.75); color: var(--dusk); box-shadow: inset 0 0 0 1.5px rgba(46,44,58,.12), 0 6px 14px -8px rgba(46,44,58,.4);
+      transition: scale .35s var(--spring), background-color .25s ease, opacity .25s ease;
+    }
+    .hiw-nav button.arrow:hover { scale: 1.08; background: #fff; }
+    .hiw-nav button.arrow:active { scale: .92; }
+    .hiw-nav button.arrow:focus-visible, .hiw-dots button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .hiw-nav button.arrow:disabled { opacity: .35; cursor: default; scale: 1; }
+    .hiw-nav svg { width: 1rem; height: 1rem; }
+    .hiw-dots { display: flex; gap: .45rem; }
+    .hiw-dots button { width: .55rem; height: .55rem; padding: 0; border: none; border-radius: .3rem; cursor: pointer; background: rgba(46,44,58,.18); transition: width .45s var(--spring), background-color .3s ease; }
+    .hiw-dots button:hover { background: rgba(46,44,58,.38); }
+    .hiw-dots button[aria-current="step"] { width: 1.6rem; background: var(--dusk); }
+    .hiw-hint { margin: 0; font-size: .8rem; color: var(--stone); text-align: center; }
+
+    /* The phone leans toward the pointer, and can be tapped or swiped */
+    .phone-wrap { perspective: 1200px; cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+    .phone-wrap.is-dragging { cursor: grabbing; }
+    .phone { transition: rotate .5s cubic-bezier(.2,.8,.2,1); }
+    .phone-tilt { width: 100%; height: 100%; transform: rotateX(var(--tx, 0deg)) rotateY(var(--ty, 0deg)); transition: transform .5s cubic-bezier(.2,.8,.2,1); will-change: transform; }
+    .phone-wrap.is-dragging .phone-tilt { transition: none; }
+    .scr.is-on { pointer-events: auto; }
+    .scr.is-drag { transition: none; }
+    /* Things on the phone you can tap */
+    .app-chips span, .mini-sw, .app-code span, .app-event, .win { cursor: pointer; }
+    .app-chips span { transition: background-color .25s ease, color .25s ease, scale .3s var(--spring); }
+    .app-chips span:active, .app-code span:active { scale: .92; }
+    .mini-sw, .mini-sw::after { transition: background-color .25s ease, translate .35s var(--spring); }
+    .app-code span { transition: translate .4s var(--spring), background-color .3s ease; }
+    .app-code span.pop { translate: 0 -5px; background: #F4E9DF; }
+    .win { transition: scale .35s var(--spring), rotate .35s var(--spring), z-index 0s; }
+    .win:hover, .win.is-up { scale: 1.06; rotate: 0deg; z-index: 2; }
+    .app-event { transition: scale .3s var(--spring); }
+    .app-event:active { scale: .96; }
+    .tap-ripple { position: absolute; z-index: 6; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(154,96,61,.28); pointer-events: none; animation: tap-ripple .5s ease-out forwards; }
+    @keyframes tap-ripple { from { scale: .2; opacity: 1; } to { scale: 1.4; opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .phone-tilt { transform: none; } .hiw.is-auto .step.is-on .step-timer::after { animation: none; } }
 
     /* Phone, scaled to fit the panel */
     .phone-wrap { width: calc(270px * var(--s, 1)); height: calc(556px * var(--s, 1)); }
@@ -927,7 +994,9 @@
     @media (max-width: 900px) {
       .host-panel, .plans, .zone-panel { grid-template-columns: 1fr; }
       .hiw-panel { grid-template-columns: 1fr; height: auto; }
-      .phone-wrap { display: none; }
+      /* Stacked: the phone sits under the steps, smaller, and still swipes */
+      .phone-side { order: 2; }
+      .hiw-copy .grow { display: none; }
       .feat-list { grid-template-columns: 1fr 1fr; }
       .feat-item:nth-child(3) { box-shadow: inset 0 1px 0 rgba(46,44,58,.08); }
       .feat-item:nth-child(4) { box-shadow: inset 1px 0 0 rgba(46,44,58,.08), inset 0 1px 0 rgba(46,44,58,.08); }
@@ -1343,6 +1412,13 @@
   
       /* Copper tints written as plain colours (not through the token) become lavender at night */
       :root[data-theme="dark"] .step.is-on .step-no { box-shadow: 0 0 0 5px rgba(184, 174, 245, .2); }
+      :root[data-theme="dark"] .step-timer { background: rgba(255, 255, 255, .1); }
+      :root[data-theme="dark"] .hiw-dots button { background: rgba(255, 255, 255, .22); }
+      :root[data-theme="dark"] .hiw-dots button:hover { background: rgba(255, 255, 255, .4); }
+      :root[data-theme="dark"] .hiw-dots button[aria-current="step"] { background: var(--dusk); }
+      :root[data-theme="dark"] .hiw-nav button.arrow { background: rgba(255, 255, 255, .1); color: var(--dusk); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
+      :root[data-theme="dark"] .hiw-nav button.arrow:hover { background: rgba(255, 255, 255, .18); }
+      :root[data-theme="dark"] .step button:hover .step-no { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .34); }
       :root[data-theme="dark"] .app-zone { background: radial-gradient(circle, rgba(108, 95, 199, .25), rgba(108, 95, 199, .1) 70%); }
       :root[data-theme="dark"] .app-radar .sweep { background: conic-gradient(from 0deg, transparent 0 290deg, rgba(108, 95, 199, .45) 360deg); }
       :root[data-theme="dark"] .zone-ring { background: radial-gradient(circle, rgba(108, 95, 199, .25), rgba(108, 95, 199, .08) 72%); }
@@ -1974,6 +2050,16 @@
         box-shadow: var(--g-shadow), inset 0 0 0 999px var(--g-lift, rgba(255,255,255,.07));
       }
 
+      /* Real blur only inside popups, menus and toasts (open briefly). Buttons, tabs and switches on
+         the page keep their glass fill and rim, but don't blur: behind them the background moves every
+         frame, so each blurred control had to be re-blurred every frame, which made pages lag. */
+      :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .auth-alt, .auth-close, .acct-x, .qa i,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost,
+          .auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill, .sw, .s-sw, .acct-sw):not(dialog *, .nav-menu *, .acct-menu *, .m-toast *) {
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+      }
+
       /* ---------- Glass switches ----------
          The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
          glass bead with a bright top and a soft shadow underneath. */
@@ -2224,31 +2310,38 @@
                 <span class="step-no">01</span>
                 <span class="step-body"><b>Create the event</b>
                   <span class="step-more"><span>Name it, drag a sharing zone around the venue, and choose where the photos land: Google Drive, iCloud, Dropbox or OneDrive.</span></span>
+                  <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="1">
                 <span class="step-no">02</span>
                 <span class="step-body"><b>Put the code out</b>
                   <span class="step-more"><span>Momento makes a QR code and a six-letter code. Print it for the tables, put it on the screen, or send the link round.</span></span>
+                  <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="2">
                 <span class="step-no">03</span>
                 <span class="step-body"><b>Guests scan and join</b>
                   <span class="step-more"><span>One scan, no sign-up. Momento checks each guest is inside the zone, so the album stays with the people who were there.</span></span>
+                  <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="3">
                 <span class="step-no">04</span>
                 <span class="step-body"><b>Everyone shares</b>
                   <span class="step-more"><span>Guests share straight from their Photos app. Camera files go first, and on mobile data uploads can wait for Wi-Fi.</span></span>
+                  <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="4">
                 <span class="step-no">05</span>
                 <span class="step-body"><b>It all lands in one album</b>
                   <span class="step-more"><span>Full quality, grouped by camera and phone, saved in the cloud you chose. Yours to share, print or relive.</span></span>
+                  <span class="step-timer"></span>
                 </span></button></li>
             </ol>
           </div>
 
+          <div class="phone-side">
           <div class="phone-wrap" aria-hidden="true">
+            <div class="phone-tilt">
             <div class="phone">
               <div class="phone-screen">
                 <span class="island"></span>
@@ -2324,6 +2417,14 @@
                 </div>
               </div>
             </div>
+            </div>
+          </div>
+          <div class="hiw-nav">
+            <button type="button" class="arrow" data-go="-1" aria-label="Previous step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <span class="hiw-dots"></span>
+            <button type="button" class="arrow" data-go="1" aria-label="Next step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
+          <p class="hiw-hint">Tap, swipe or try the buttons on the phone</p>
           </div>
         </div>
       </div>
@@ -2501,6 +2602,9 @@
 
   <script>
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Phones and low-power devices (touch screens, 4 or fewer cores, Data Saver): the scroll lean/stretch
+    // is skipped and the silk background is drawn about 30 times a second instead of 60-75
+    const LOW_POWER = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || !!navigator.connection?.saveData;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
     const lerp = (a, b, t) => a + (b - a) * t;
@@ -2642,7 +2746,7 @@
           if (still && flow.scroll === before && !flow.dirty) return;
           // Every frame up to about 75 a second; faster screens (120 Hz and up) draw every other frame
           flow.acc += dt;
-          if (!flow.dirty && flow.acc < 1 / 75) return;
+          if (!flow.dirty && flow.acc < 1 / (LOW_POWER ? 32 : 75)) return;
           flow.acc = 0; flow.dirty = false;
           gl.uniform1f(u.t, flow.t);
           gl.uniform1f(u.sc, flow.scroll / vh * 0.35);
@@ -2886,6 +2990,9 @@
       const f = { p: i % PICSUM.length, x: 50, y: 50, size: SIZES[i % SIZES.length], depth: .5 + (i % 4) * .23, rot: ROTS[i % ROTS.length], front: i % 2 === 0 };
       const d = el('floater', `<img src="${photo(f.p, 240)}" alt="">`);
       d.style.setProperty('--size', f.size + 'px');
+      // Each photo bobs at its own pace (the same rhythm the script used to draw every frame)
+      d.style.setProperty('--bob-time', ((5 + f.depth * 3) / 2).toFixed(2) + 's');
+      d.style.setProperty('--bob-delay', (-(i * 1.7) % (5 + f.depth * 3)).toFixed(2) + 's');
       document.querySelector(f.front ? '.floaters-front' : '.floaters-back').append(d);
       return { ...f, el: d, rx: 0, ry: 0, cx: 0, cy: 0 };
     });
@@ -3142,7 +3249,9 @@
     // Per-frame album update, called from the shared loop below
     let screens = 0, activeSpread = -1;
     const tilt = { x: 0, y: 0 };
-    window.updateAlbum = (dt, now) => {
+    // Writes a style only when its value really changed (a no-op write still costs a restyle)
+    const setIf = (el, prop, v) => { const c = el._sv || (el._sv = {}); if (c[prop] !== v) { c[prop] = v; if (prop.startsWith('--')) el.style.setProperty(prop, v); else el.style[prop] = v; } };
+    window.updateAlbum = (dt, now, sy = scrollY) => {
       const k = (rate) => (still ? 1 : 1 - Math.exp(-dt * rate));
       screens += (book.s - screens) * k(8);
       tilt.x += (pointer.nx - tilt.x) * k(4);
@@ -3152,12 +3261,12 @@
       if (popAt) {
         // Starts closing the moment you begin to leave, so it shuts as it rides up with the page.
         // Only if it is still open once it is well off screen does it finish at once, unseen
-        if (book.goal > 0 && scrollY > innerHeight * .15) closeBook(false, 1300);
-        else if (book.s > .01 && scrollY > innerHeight * 1.1) closeBook(true);
+        if (book.goal > 0 && sy > innerHeight * .15) closeBook(false, 1300);
+        else if (book.s > .01 && sy > innerHeight * 1.1) closeBook(true);
         else if (book.goal > 0 && now - lastAction > IDLE_MS) closeBook(false);
       }
       // Scrolled off the top section: nothing to draw
-      if (scrollY > innerHeight * 1.2) return;
+      if (sy > innerHeight * 1.2) return;
 
       // The album only opens once it has been scanned
       const opened = popAt > 0;
@@ -3167,9 +3276,9 @@
       const time = now / 1000;
       const motion = still ? 0 : 1;
 
-      heroLeft.style.opacity = 1 - intro;
-      heroLeft.style.translate = `0 ${-intro * 30}px`;
-      heroLeft.style.pointerEvents = intro > .5 ? 'none' : '';
+      setIf(heroLeft, 'opacity', String(1 - intro));
+      setIf(heroLeft, 'translate', `0 ${(-intro * 30).toFixed(1)}px`);
+      setIf(heroLeft, 'pointerEvents', intro > .5 ? 'none' : '');
 
       // Tilted and floating right of centre in the hero; square and centred once open
       const hero = 1 - intro;
@@ -3193,10 +3302,10 @@
 
       // The QR card sits where the album will appear, leaning gently toward the pointer
       if (scanState !== 'done' || pp < 1) {
-        qrCard.style.setProperty('--shift', `${shift}px`);
-        qrCard.style.setProperty('--bob', `${bob * .6}px`);
-        qrCard.style.setProperty('--trx', `${-tilt.y * 10 * motion}deg`);
-        qrCard.style.setProperty('--try', `${tilt.x * 14 * motion}deg`);
+        setIf(qrCard, '--shift', `${shift.toFixed(1)}px`);
+        setIf(qrCard, '--bob', `${(bob * .6).toFixed(2)}px`);
+        setIf(qrCard, '--trx', `${(-tilt.y * 10 * motion).toFixed(2)}deg`);
+        setIf(qrCard, '--try', `${(tilt.x * 14 * motion).toFixed(2)}deg`);
       }
 
       if (opened) {
@@ -3230,9 +3339,10 @@
         const scatterX = (f.x - 50) * .01 * vw * intro * .6;
         const scatterY = (f.y - 50) * .01 * vh * intro * .6;
         const px = tilt.x * 40 * f.depth * motion, py = tilt.y * 40 * f.depth * motion;
-        const fb = Math.sin(time * 2 * Math.PI / (5 + f.depth * 3) + f.x) * 10 * motion;
-        f.el.style.transform = `translate(${f.rx + px + scatterX}px, ${f.ry + py + fb + scatterY}px) rotate(${f.rot + fb * .4}deg)`;
-        f.el.style.opacity = 1 - intro;
+        // The gentle bob is a CSS animation (run by the graphics card); this only follows the pointer,
+        // and is skipped while nothing has moved
+        setIf(f.el, 'transform', `translate(${(f.rx + px + scatterX).toFixed(1)}px, ${(f.ry + py + scatterY).toFixed(1)}px) rotate(${f.rot}deg)`);
+        setIf(f.el, 'opacity', String(1 - intro));
       }
     };
   </script>
@@ -3802,9 +3912,19 @@
       const wrap = hiw.querySelector('.phone-wrap');
       const panel = hiw.querySelector('.hiw-panel');
       let current = -1;
+      const dotsEl = hiw.querySelector('.hiw-dots');
+      const prevBtn = hiw.querySelector('[data-go="-1"]'), nextBtn = hiw.querySelector('[data-go="1"]');
+      steps.forEach((st, k) => {
+        const d = document.createElement('button');
+        d.type = 'button'; d.dataset.i = k; d.setAttribute('aria-label', `Step ${k + 1}: ${st.querySelector('b').textContent}`);
+        dotsEl.append(d);
+      });
+      const dots = [...dotsEl.children];
       function setStep(i) {
         if (i === current) return;
         current = i;
+        dots.forEach((d, k) => { if (k === i) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current'); });
+        prevBtn.disabled = i === 0; nextBtn.disabled = i === steps.length - 1;
         steps.forEach((s, k) => { s.classList.toggle('is-on', k === i); s.classList.toggle('is-done', k < i); });
         screensEls.forEach((s, k) => { s.classList.toggle('is-on', k === i); s.classList.toggle('is-past', k < i); });
         stepsEl.style.setProperty('--rail', (i / (steps.length - 1)).toFixed(3));
@@ -3834,13 +3954,120 @@
         setStep(next);
       }, { passive: false });
       panel.addEventListener('pointerleave', () => { wheelAcc = 0; });
-      hiw.addEventListener('click', (e) => {
-        const b = e.target.closest('.step button');
-        if (b) setStep(Number(b.dataset.i));
+
+      // Autoplay: while the section is on screen, each step's timer bar fills and the next step opens
+      // (CSS runs the timer; this only listens for its end). Hovering the panel holds it; once the
+      // visitor clicks, swipes, scrolls the steps or uses the keys, it stops and they're in charge.
+      const reducedHiw = matchMedia('(prefers-reduced-motion: reduce)');
+      let auto = !reducedHiw.matches;
+      hiw.classList.toggle('is-auto', auto);
+      const stopAuto = () => { if (auto) { auto = false; hiw.classList.remove('is-auto'); } };
+      hiw.addEventListener('animationend', (e) => {
+        if (e.animationName !== 'step-time' || !auto) return;
+        setStep((current + 1) % steps.length);
       });
+      let panelHover = false;
+      new IntersectionObserver(([en]) => hiw.classList.toggle('is-held', !en.isIntersecting || panelHover), { threshold: .35 }).observe(panel);
+      if (matchMedia('(hover: hover)').matches) {
+        panel.addEventListener('pointerenter', () => { panelHover = true; hiw.classList.add('is-held'); });
+        panel.addEventListener('pointerleave', () => { panelHover = false; hiw.classList.remove('is-held'); });
+      }
+      panel.addEventListener('wheel', (e) => { if (!e.defaultPrevented) return; stopAuto(); });
+      const go = (i) => { stopAuto(); setStep(Math.max(0, Math.min(steps.length - 1, i))); };
+
+      hiw.addEventListener('click', (e) => {
+        const b = e.target.closest('.step button, .hiw-dots button');
+        if (b) return go(Number(b.dataset.i));
+        const a = e.target.closest('[data-go]');
+        if (a) go(current + Number(a.dataset.go));
+      });
+      // Arrow keys move through the steps when one of them (or the dots) has focus
+      hiw.addEventListener('keydown', (e) => {
+        if (!e.target.closest('.steps, .hiw-nav')) return;
+        const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+        if (d === undefined) return;
+        e.preventDefault();
+        go(current + d);
+        const t = e.target.closest('.hiw-dots') ? dots[current] : steps[current].querySelector('button');
+        t.focus({ preventScroll: true });
+      });
+
+      // The phone: leans toward the pointer, swipes left/right between steps, and its buttons work
+      const tilt = hiw.querySelector('.phone-tilt');
+      const screenEl = hiw.querySelector('.phone-screen');
+      let tiltRaf = 0, tx = 0, ty = 0;
+      const lean = () => { tiltRaf = 0; tilt.style.setProperty('--tx', `${tx.toFixed(2)}deg`); tilt.style.setProperty('--ty', `${ty.toFixed(2)}deg`); };
+      if (matchMedia('(hover: hover) and (pointer: fine)').matches && !reducedHiw.matches) {
+        panel.addEventListener('pointermove', (e) => {
+          if (drag) return;
+          const r = wrap.getBoundingClientRect();
+          const nx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width * 1.6)));
+          const ny = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height * 1.2)));
+          tx = -ny * 7; ty = nx * 11;
+          if (!tiltRaf) tiltRaf = requestAnimationFrame(lean);
+        });
+        panel.addEventListener('pointerleave', () => { tx = ty = 0; if (!tiltRaf) tiltRaf = requestAnimationFrame(lean); });
+      }
+      let drag = null;
+      wrap.addEventListener('pointerdown', (e) => {
+        if (e.button) return;
+        drag = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false, dx: 0 };
+      });
+      wrap.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (!drag.moved) {
+          if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) { if (Math.abs(dy) > 10) drag = null; return; }
+          drag.moved = true; wrap.setPointerCapture(e.pointerId); wrap.classList.add('is-dragging');
+          screensEls[current].classList.add('is-drag');
+        }
+        drag.dx = dx;
+        const edge = (dx > 0 && current === 0) || (dx < 0 && current === steps.length - 1);
+        screensEls[current].style.translate = `${(edge ? dx * .25 : dx * .6).toFixed(1)}px 0`;
+        tilt.style.setProperty('--ty', `${Math.max(-14, Math.min(14, dx / 12)).toFixed(2)}deg`);
+      });
+      const endDrag = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const d = drag; drag = null;
+        if (!d.moved) return;
+        wrap.classList.remove('is-dragging');
+        const scr = screensEls[current];
+        scr.classList.remove('is-drag'); scr.style.translate = '';
+        tilt.style.setProperty('--ty', '0deg');
+        if (Math.abs(d.dx) > 50) go(current + (d.dx < 0 ? 1 : -1));
+        wrap._justDragged = true; setTimeout(() => { wrap._justDragged = false; }, 0);
+      };
+      wrap.addEventListener('pointerup', endDrag);
+      wrap.addEventListener('pointercancel', endDrag);
+
+      // Taps on the phone: its chips, switches, code letters and cards respond; anywhere else moves on a step
+      screenEl.addEventListener('click', (e) => {
+        if (wrap._justDragged) return;
+        const r = screenEl.getBoundingClientRect(), k = r.width / screenEl.offsetWidth || 1;
+        const rip = document.createElement('span');
+        rip.className = 'tap-ripple';
+        rip.style.left = `${(e.clientX - r.left) / k}px`; rip.style.top = `${(e.clientY - r.top) / k}px`;
+        screenEl.append(rip); rip.addEventListener('animationend', () => rip.remove());
+        const chip = e.target.closest('.app-chips span');
+        if (chip) { stopAuto(); chip.parentElement.querySelectorAll('span').forEach((c) => c.classList.toggle('on', c === chip)); return; }
+        const sw = e.target.closest('.mini-sw');
+        if (sw) { stopAuto(); sw.classList.toggle('on'); return; }
+        const ch = e.target.closest('.app-code span');
+        if (ch) { stopAuto(); const all = [...ch.parentElement.children]; all.forEach((c, j) => setTimeout(() => { c.classList.add('pop'); setTimeout(() => c.classList.remove('pop'), 260); }, j * 60)); return; }
+        const win = e.target.closest('.win');
+        if (win) { stopAuto(); win.parentElement.querySelectorAll('.win').forEach((w) => w.classList.toggle('is-up', w === win && !w.classList.contains('is-up'))); return; }
+        go(current === steps.length - 1 ? 0 : current + 1);
+      });
+
+      const stackedFit = matchMedia('(max-width: 900px)');
       function fitPhone() {
+        if (stackedFit.matches) {
+          wrap.style.setProperty('--s', Math.min(.72, (innerHeight * .58) / 556, (panel.clientWidth - 40) / 270).toFixed(3));
+          return;
+        }
         const pad = parseFloat(getComputedStyle(panel).paddingTop) * 2;
-        wrap.style.setProperty('--s', Math.min(1, (panel.clientHeight - pad) / 556).toFixed(3));
+        const extra = hiw.querySelector('.hiw-nav').offsetHeight + hiw.querySelector('.hiw-hint').offsetHeight + 32;
+        wrap.style.setProperty('--s', Math.min(1, (panel.clientHeight - pad - extra) / 556).toFixed(3));
       }
       addEventListener('resize', fitPhone);
       fitPhone();
@@ -3898,7 +4125,9 @@
       window.measureLines = () => { grows.forEach((g, i) => { tops[i] = g.getBoundingClientRect().top; }); };
       window.updateLines = () => {
         grows.forEach((g, i) => {
-          g.style.transform = `scaleX(${easeOut(clamp01((innerHeight * .95 - tops[i]) / (innerHeight * .5))).toFixed(4)})`;
+          // Only when it changes: most of the time a line is fully grown (or not started) and stays put
+          const t = `scaleX(${easeOut(clamp01((innerHeight * .95 - tops[i]) / (innerHeight * .5))).toFixed(3)})`;
+          if (g._t !== t) { g._t = t; g.style.transform = t; }
         });
       };
     })();
@@ -3913,7 +4142,7 @@
       // Read phase: every rect is measured before anything is written this frame
       window.measureWarp = (dt) => {
         pending = null;
-        if (still || !dt) return;
+        if (still || LOW_POWER || !dt) return;
         v = lerp(v, (scrollY - y) / dt, 1 - Math.exp(-dt * 10));
         y = scrollY;
         const s = clamp(v / 2000, -1, 1);
@@ -3957,7 +4186,8 @@
         last = now;
         if (!document.hidden) {
           // Reads first (one layout), then every write, so nothing forces a second layout mid-frame
-          const scrolled = scrollY !== lastScroll || vw !== lastW;
+          const sy = scrollY;   // read once, before anything is written this frame
+          const scrolled = sy !== lastScroll || vw !== lastW;
           if (scrolled) window.measureLines();
           window.measureWarp(dt);
           if (scrolled) { window.updateNav(); window.updateSteps(); }
@@ -3974,9 +4204,11 @@
             const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
             if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
           }
-          window.updateAlbum(dt, now);
-          if (scrolled) { lastScroll = scrollY; lastW = vw; window.updateLines(); }
+          if (scrolled) window.stringScrolled?.(sy);
+          window.updateAlbum(dt, now, sy);
+          if (scrolled) { lastScroll = sy; lastW = vw; window.updateLines(); }
           window.updateWarp();
+          window.stringTick?.();
         }
         requestAnimationFrame(frame);
       }
@@ -4738,9 +4970,9 @@
       }
   
       // How far along the string the reading line (a little above the bottom of the screen) has got
-      function aim() {
+      function aim(sy = scrollY) {
         if (!lut.length) return 0;
-        const y = scrollY + innerHeight * .7;
+        const y = sy + innerHeight * .7;
         let lo = 0, hi = lut.length - 1;
         while (lo < hi) { const mid = (lo + hi) >> 1; lut[mid][1] < y ? lo = mid + 1 : hi = mid; }
         return lut[lo][0];
@@ -4753,16 +4985,18 @@
         }
       }
       // The string eases toward the reading line; the loop stops as soon as it gets there
+      // Runs from the main loop’s write phase (after every read in the frame), so its style changes
+      // never force the browser to lay the page out twice
       function tick() {
-        raf = 0;
         const d = target - drawn;
         drawn = Math.abs(d) < .5 ? target : drawn + d * .2;
         write();
-        if (drawn !== target) raf = requestAnimationFrame(tick);
       }
-      function kick() { if (!raf) raf = requestAnimationFrame(tick); }
+      window.stringTick = () => { if (drawn !== target) tick(); };
+      function kick() {}
   
-      if (!reduced.matches) addEventListener('scroll', () => { target = aim(); kick(); }, { passive: true });
+      // Told the scroll position by the main loop (read before any writes), so it never forces a layout
+      if (!reduced.matches) window.stringScrolled = (sy) => { const t = aim(sy); if (t !== target) { target = t; kick(); } };
       new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(build, 250); }).observe(wrap);
       // Text that is still rising into place when the page first measures is measured again once it has settled
       const later = (ms) => () => { clearTimeout(timer); timer = setTimeout(build, ms); };

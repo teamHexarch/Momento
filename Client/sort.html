@@ -1297,6 +1297,16 @@
         box-shadow: var(--g-shadow), inset 0 0 0 999px var(--g-lift, rgba(255,255,255,.07));
       }
 
+      /* Real blur only inside popups, menus and toasts (open briefly). Buttons, tabs and switches on
+         the page keep their glass fill and rim, but don't blur: behind them the background moves every
+         frame, so each blurred control had to be re-blurred every frame, which made pages lag. */
+      :is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .auth-alt, .auth-close, .acct-x, .qa i,
+          .acct-actions .acct-primary, .acct-actions .acct-ghost, .album-code button, .modal-card:not(.album-card) .close,
+          .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost,
+          .auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill, .sw, .s-sw, .acct-sw):not(dialog *, .nav-menu *, .acct-menu *, .m-toast *) {
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+      }
+
       /* ---------- Glass switches ----------
          The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
          glass bead with a bright top and a soft shadow underneath. */
