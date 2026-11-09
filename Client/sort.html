@@ -6,6 +6,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
   <script src="assets/api.js"></script>
+  <script src="assets/extras.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -943,8 +944,9 @@
       .acct-btn:hover { scale: 1.04; }
       .acct-btn:active { scale: .97; }
       .acct-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
       .acct-av {
-        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; overflow: hidden;
         background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-style: normal; font-weight: 700;
       }
       .acct-chev { flex: none; margin-left: -.1rem; transition: transform .45s var(--spring); }
@@ -2735,6 +2737,7 @@
         for (const g of groups) sel.add(new Option(g.name, g.id));
         groupField.hidden = !groups.length;
         if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
@@ -2848,7 +2851,11 @@
         if (!show) return;
         built ||= build();
         const name = (a && a.name) || '';
-        built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
+        built.avatars.forEach((el) => {
+          const pic = a && a.avatarUrl;
+          el.textContent = pic ? '' : (name || 'You')[0].toUpperCase();
+          if (pic) { const img = document.createElement('img'); img.src = pic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => { img.remove(); el.textContent = (name || 'You')[0].toUpperCase(); }; el.append(img); }
+        });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
         built.headMail.textContent = (a && a.email) || 'Preview account';

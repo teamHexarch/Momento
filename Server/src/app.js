@@ -12,6 +12,7 @@ import { photoRoutes } from './routes/photoRoutes.js';
 import { supportRoutes } from './routes/supportRoutes.js';
 import { eventRoutes } from './routes/eventRoutes.js';
 import { groupRoutes } from './routes/groupRoutes.js';
+import { userRoutes } from './routes/userRoutes.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -45,6 +46,7 @@ app.use('/api/photos', photoRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 
 // Locally, the site itself comes from the Client folder too, so one address does everything.

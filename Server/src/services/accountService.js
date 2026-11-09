@@ -3,6 +3,7 @@ import { User } from '../models/User.js';
 import { Album } from '../models/Album.js';
 import { Membership } from '../models/Membership.js';
 import { deleteGroupsOf } from '../controllers/groupController.js';
+import { removeFile } from './storageService.js';
 import { Photo } from '../models/Photo.js';
 import { Comment } from '../models/Comment.js';
 import { Invite } from '../models/Invite.js';
@@ -115,5 +116,6 @@ export async function deleteAccount(user) {
     EmailToken.deleteMany({ user: user._id }),
     Album.deleteMany({ _id: { $in: hostedIds } }),
   ]);
+  if (user.avatarKey) await removeFile(user.avatarKey).catch(() => {});
   await user.deleteOne();
 }

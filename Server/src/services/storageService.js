@@ -32,6 +32,10 @@ export async function savePhoto(albumId, inputBuffer) {
   return { storageKey: key, thumbnailKey, previewKey, previewMimeType, mimeType, size };
 }
 
+// Any other file (profile photos): saved and removed by key
+export const saveFile = (key, buffer, mimeType) => driver.save(key, buffer, mimeType);
+export const removeFile = (key) => driver.remove(key);
+
 // Answers a request for the photo; false when the file is gone
 export const sendPhoto = (res, key, mimeType) => driver.send(res, key, mimeType);
 

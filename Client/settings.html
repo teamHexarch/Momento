@@ -6,6 +6,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
   <script src="assets/api.js"></script>
+  <script src="assets/extras.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -591,6 +592,30 @@
       .m-toast { bottom: 1rem; }
     }
   </style>
+  <style>
+    /* Profile photo */
+    .s-avatar { position: relative; display: grid; place-items: center; flex: none; width: 3.4rem; height: 3.4rem; border-radius: 50%; overflow: hidden;
+      background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-size: 1.3rem; font-weight: 700; }
+    .s-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .s-avatar.is-busy::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: rgba(255,255,255,.55) conic-gradient(from 0deg, transparent 0 70%, var(--copper) 100%); animation: s-spin 1s linear infinite;
+      -webkit-mask: radial-gradient(circle, transparent 55%, #000 57%); mask: radial-gradient(circle, transparent 55%, #000 57%); }
+    @keyframes s-spin { to { rotate: 360deg; } }
+    .s-photo-acts { display: flex; gap: .4rem; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+    .s-photo-acts .s-change { margin-left: 0; }
+    .s-change.is-danger { color: #9A3D3D; }
+    :root[data-theme="dark"] .s-change.is-danger { color: #F0A3A3; }
+    /* Permissions on this device */
+    .s-perm-ic { display: grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; border-radius: .8rem; background: rgba(46,44,58,.07); color: var(--dusk); }
+    .s-perm-ic svg { width: 1.25rem; height: 1.25rem; }
+    :root[data-theme="dark"] .s-perm-ic { background: rgba(255,255,255,.08); }
+    .s-perm-state { display: inline-flex; align-items: center; gap: .35rem; }
+    .s-perm-state::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--stone); }
+    .s-perm-state[data-state="granted"]::before { background: #4E9A6B; }
+    .s-perm-state[data-state="denied"]::before { background: #C8553D; }
+    .s-perm-state[data-state="unsupported"]::before { background: rgba(46,44,58,.25); }
+    .s-line .s-change[hidden] { display: none; }
+    @media (prefers-reduced-motion: reduce) { .s-avatar.is-busy::after { animation-duration: 3s; } }
+  </style>
   <!-- @shared:css (generated block; the same in index.html and albums.html) -->
   <style>
       /* ---------- Dark mode ----------
@@ -995,8 +1020,9 @@
       .acct-btn:hover { scale: 1.04; }
       .acct-btn:active { scale: .97; }
       .acct-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
       .acct-av {
-        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; overflow: hidden;
         background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-style: normal; font-weight: 700;
       }
       .acct-chev { flex: none; margin-left: -.1rem; transition: transform .45s var(--spring); }
@@ -1510,6 +1536,17 @@
             <h2 id="g-you">Your details</h2>
             <div class="s-list panel">
               <div class="s-item">
+                <div class="s-line">
+                  <span class="s-avatar" id="avatarNow" aria-hidden="true"></span>
+                  <span class="s-text"><b>Profile photo</b><small id="avatarHint">Shown beside your name in groups, chats and albums</small></span>
+                  <span class="s-photo-acts">
+                    <button class="s-change" type="button" id="avatarPick">Add photo</button>
+                    <button class="s-change is-danger" type="button" id="avatarRemove" hidden>Remove</button>
+                  </span>
+                </div>
+                <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden>
+              </div>
+              <div class="s-item">
                 <div class="s-line"><span class="s-text"><b>Name</b><small id="nameNow">…</small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="namePanel">Change</button></div>
                 <div class="s-panel" id="namePanel" hidden>
                   <form class="s-profile" id="profileForm" novalidate>
@@ -1569,46 +1606,37 @@
             </form>
           </dialog>
 
-          <!-- Uploading: the two everyday switches and where photos are saved; the rest folded away -->
-          <section class="s-group" style="--d: .26s" aria-labelledby="g-uploads">
-            <h2 id="g-uploads">Uploading photos</h2>
+          <!-- Notifications: real switches for this device -->
+          <section class="s-group" style="--d: .26s" aria-labelledby="g-notify">
+            <h2 id="g-notify">Notifications</h2>
             <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-text"><b>Only upload on Wi-Fi</b><small>Saves your phone’s mobile data</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Only upload on Wi-Fi" data-key="wifiOnly"></button><span class="s-state" aria-hidden="true"></span></div>
-              <div class="s-row" data-row><span class="s-text"><b>Keep uploading when Momento is closed</b><small>Photos finish sending on their own</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Keep uploading when Momento is closed" data-key="background"></button><span class="s-state" aria-hidden="true"></span></div>
-              <div class="s-item">
-                <div class="s-line"><span class="s-text"><b>Photos are saved to</b><small id="destNow">Google Drive</small></span><button class="s-change" type="button" aria-expanded="false" aria-controls="destPanel">Change</button></div>
-                <div class="s-panel s-dests" id="destPanel" role="radiogroup" aria-label="Where photos are saved" hidden>
-                  <button class="s-row" type="button" role="radio" aria-checked="true" data-dest="gdrive"><span class="s-text"><b>Google Drive</b><small>Connected · 2 TB plan</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-                  <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="icloud"><span class="s-text"><b>iCloud Drive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-                  <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="dropbox"><span class="s-text"><b>Dropbox</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-                  <button class="s-row" type="button" role="radio" aria-checked="false" data-dest="onedrive"><span class="s-text"><b>OneDrive</b><small>Sign in to connect</small></span><span class="s-check"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span></button>
-                </div>
+              <div class="s-row" data-row><span class="s-text"><b>Group chat messages</b><small>A pop-up and a count on Groups when friends write. In the background too, once notifications are allowed below</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Group chat messages" data-key="chatNotify"></button><span class="s-state" aria-hidden="true"></span></div>
+              <div class="s-row" data-row><span class="s-text"><b>Public events near me</b><small>Tells me when I’m inside a public event’s zone. Needs location</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Public events near me" data-key="nearby"></button><span class="s-state" aria-hidden="true"></span></div>
+            </div>
+            <p class="s-help">These are saved on this device.</p>
+          </section>
+
+          <!-- Permissions: what this browser lets Momento use, straight from the browser -->
+          <section class="s-group" style="--d: .3s" aria-labelledby="g-perms">
+            <h2 id="g-perms">Permissions on this device</h2>
+            <div class="s-list panel">
+              <div class="s-line" data-perm="camera">
+                <span class="s-perm-ic" aria-hidden="true" data-perm-ic></span>
+                <span class="s-text"><b>Camera</b><small><span class="s-perm-state" data-state="prompt">Checking…</span> · taking photos and scanning QR codes</small></span>
+                <button class="s-change" type="button" data-perm-btn hidden>Allow</button>
               </div>
-              <details class="s-more">
-                <summary><span class="s-text"><b>More photo options</b></span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-                <div class="s-row" data-row><span class="s-text"><b>Keep full quality</b><small>Photos are sent exactly as they were taken</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Keep full quality" data-key="originals"></button><span class="s-state" aria-hidden="true"></span></div>
-                <div class="s-row" data-row><span class="s-text"><b>Group photos by camera</b><small>Photos from each camera or phone stay together</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Group photos by camera" data-key="autosort"></button><span class="s-state" aria-hidden="true"></span></div>
-                <div class="s-row" data-row><span class="s-text"><b>Send camera photos first</b><small>Big camera files go before phone photos</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Send camera photos first" data-key="camfirst"></button><span class="s-state" aria-hidden="true"></span></div>
-              </details>
+              <div class="s-line" data-perm="location">
+                <span class="s-perm-ic" aria-hidden="true" data-perm-ic></span>
+                <span class="s-text"><b>Location</b><small><span class="s-perm-state" data-state="prompt">Checking…</span> · checking you’re at the event, finding events nearby</small></span>
+                <button class="s-change" type="button" data-perm-btn hidden>Allow</button>
+              </div>
+              <div class="s-line" data-perm="notifications">
+                <span class="s-perm-ic" aria-hidden="true" data-perm-ic></span>
+                <span class="s-text"><b>Notifications</b><small><span class="s-perm-state" data-state="prompt">Checking…</span> · chat messages and nearby events</small></span>
+                <button class="s-change" type="button" data-perm-btn hidden>Allow</button>
+              </div>
             </div>
-          </section>
-
-          <section class="s-group" style="--d: .3s" aria-labelledby="g-notify">
-            <h2 id="g-notify">Emails from Momento</h2>
-            <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-text"><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Email me when someone adds photos" data-key="notify.photos"></button><span class="s-state" aria-hidden="true"></span></div>
-              <div class="s-row" data-row><span class="s-text"><b>An album is about to close</b><small>so I can save my photos in time</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Email me when an album is about to close" data-key="notify.closing"></button><span class="s-state" aria-hidden="true"></span></div>
-              <div class="s-row" data-row><span class="s-text"><b>My upload has finished</b><small>once all my photos have been sent</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Email me when my upload has finished" data-key="uploadNotify"></button><span class="s-state" aria-hidden="true"></span></div>
-              <div class="s-row" data-row><span class="s-text"><b>A weekly round-up</b><small>the best new photos from my albums</small></span><button class="s-sw" type="button" role="switch" aria-checked="false" aria-label="Weekly round-up email" data-key="notify.recap"></button><span class="s-state" aria-hidden="true"></span></div>
-            </div>
-          </section>
-
-          <section class="s-group" style="--d: .34s" aria-labelledby="g-privacy">
-            <h2 id="g-privacy">Location</h2>
-            <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-text"><b>Use my exact location</b><small>Only to check I’m at the event when I share</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Use my exact location" data-key="precise"></button><span class="s-state" aria-hidden="true"></span></div>
-              <div class="s-row" data-row><span class="s-text"><b>Find albums near me</b><small>Only when I ask</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Find albums near me" data-key="nearby"></button><span class="s-state" aria-hidden="true"></span></div>
-            </div>
+            <p class="s-help">Momento only asks when a feature needs it. To turn one off again, use your browser’s or phone’s site settings.</p>
           </section>
 
           <section class="s-group" style="--d: .38s" aria-labelledby="g-look">
@@ -1624,13 +1652,11 @@
             </div>
           </section>
 
-          <section class="s-group" style="--d: .42s" aria-labelledby="g-store">
+          <section class="s-group" style="--d: .42s" aria-labelledby="g-store" id="storeGroup" hidden>
             <h2 id="g-store">Space on this device</h2>
             <div class="s-list panel">
               <div class="s-store">
-                <div class="s-store-top"><span class="s-text"><b id="storeTotal">2.1 GB used</b><small>Clearing it removes saved previews. Your photos stay safe.</small></span><button class="btn btn-light btn-sm" type="button" id="clearCache">Free up space</button></div>
-                <div class="s-bar" aria-hidden="true"><i style="--c:#AFC0F0;--w:58%"></i><i id="barPreviews" style="--c:#C9C0E2;--w:16%"></i><i style="--c:#C6DEDA;--w:8%"></i></div>
-                <div class="s-legend"><span style="--c:#AFC0F0">Waiting to upload 1.2 GB</span><span id="legPreviews" style="--c:#C9C0E2">Previews 340 MB</span><span style="--c:#C6DEDA">Saved for offline 170 MB</span></div>
+                <div class="s-store-top"><span class="s-text"><b id="storeTotal">Checking…</b><small>Saved pages, previews and settings. Freeing it up keeps your photos, albums and login.</small></span><button class="btn btn-light btn-sm" type="button" id="clearCache">Free up space</button></div>
               </div>
             </div>
           </section>
@@ -1884,8 +1910,8 @@
 
     // ---- Settings: choices are remembered here; name, email and notifications live in the account ----
     const STORE = 'momento-settings';
-    const DEFAULTS = { wifiOnly: true, originals: true, background: true, autosort: true, camfirst: true, dest: 'gdrive', precise: true, nearby: true, uploadNotify: true, notify: { photos: true, closing: true, recap: false } };
-    const DEST_NAME = { gdrive: 'Google Drive', icloud: 'iCloud Drive', dropbox: 'Dropbox', onedrive: 'OneDrive' };
+    // Saved on this device: chat pop-ups, and alerts for public events nearby (assets/nearby.js reads it)
+    const DEFAULTS = { chatNotify: true, nearby: true, notify: { photos: true, closing: true, recap: false } };
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) {}
     const S = { ...DEFAULTS, ...saved, notify: { ...DEFAULTS.notify, ...(saved.notify || {}) } };
@@ -1927,7 +1953,7 @@
       }));
 
       // Change buttons: each opens the form under its line (one at a time) and Cancel closes it
-      const changes = [...document.querySelectorAll('.s-change')];
+      const changes = [...document.querySelectorAll('.s-change[aria-controls]')];
       const openPanel = (btn, open) => {
         const panel = document.getElementById(btn.getAttribute('aria-controls'));
         btn.setAttribute('aria-expanded', open);
@@ -1942,22 +1968,6 @@
       }));
       const closePanelOf = (el) => { const p = el.closest('.s-panel'); const btn = p && changes.find((c) => c.getAttribute('aria-controls') === p.id); if (btn) { openPanel(btn, false); btn.focus(); } };
       document.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', () => { b.closest('form')?.reset(); b.closest('form')?.querySelector('.s-note')?.replaceChildren(); closePanelOf(b); }));
-
-      // Where photos go
-      const dests = [...document.querySelectorAll('[data-dest]')];
-      dests.forEach((r) => r.setAttribute('aria-checked', r.dataset.dest === S.dest));
-      dests.forEach((r) => r.addEventListener('click', () => {
-        S.dest = r.dataset.dest; persist();
-        dests.forEach((x) => {
-          x.setAttribute('aria-checked', x === r);
-          x.querySelector('small').textContent = x === r ? 'Connected · photos land in /Momento' : (x.dataset.dest === 'gdrive' ? 'Connected · 2 TB plan' : 'Sign in to connect');
-        });
-        document.getElementById('destNow').textContent = DEST_NAME[S.dest];
-        toast('Photos will be saved to', DEST_NAME[S.dest]);
-        closePanelOf(r);
-      }));
-      document.getElementById('destNow').textContent = DEST_NAME[S.dest];
-      dests.find((r) => r.dataset.dest === S.dest).querySelector('small').textContent = 'Connected · photos land in /Momento';
 
       // Profile, email and password: saved to the account on the server.
       // Accounts made with Google (no password) can change their email but have no password to change.
@@ -2132,17 +2142,118 @@
       segBtns.forEach((b) => b.addEventListener('click', () => { M.theme.set(b.dataset.theme); toast('Appearance', b.textContent.trim()); }));
       M.theme.onChange(syncSeg); syncSeg();
 
-      // Storage
-      let cleared = false;
-      document.getElementById('clearCache').addEventListener('click', () => {
-        if (cleared) { toast('Nothing to clear', 'The cache is already empty'); return; }
-        cleared = true;
-        document.getElementById('barPreviews').classList.add('is-cleared');
-        document.getElementById('legPreviews').classList.add('is-cleared');
-        document.getElementById('storeTotal').textContent = '1.8 GB used';
-        toast('Cache cleared', '340 MB freed');
+      // ---- Profile photo: uploaded to the account, shown everywhere your name is ----
+      const avNow = document.getElementById('avatarNow'), avPick = document.getElementById('avatarPick'), avRemove = document.getElementById('avatarRemove');
+      const avFile = document.getElementById('avatarFile'), avHint = document.getElementById('avatarHint');
+      const showAvatar = (a) => {
+        const name = a?.name || a?.email || 'You';
+        avNow.replaceChildren();
+        if (a?.avatarUrl) {
+          const img = document.createElement('img');
+          img.src = a.avatarUrl; img.alt = ''; img.referrerPolicy = 'no-referrer';
+          img.onerror = () => { img.remove(); avNow.textContent = name[0].toUpperCase(); };
+          avNow.append(img);
+        } else avNow.textContent = name[0].toUpperCase();
+        avPick.textContent = a?.avatarUrl ? 'Change' : 'Add photo';
+        avRemove.hidden = !a?.avatarUrl;
+      };
+      M.account.onChange(showAvatar);
+      showAvatar(M.account.get());
+      avPick.addEventListener('click', () => avFile.click());
+      avFile.addEventListener('change', async () => {
+        const f = avFile.files[0];
+        avFile.value = '';
+        if (!f) return;
+        if (f.size > 10 * 1024 * 1024) { toast('That photo is too big', 'Choose one under 10 MB.'); return; }
+        const fd = new FormData();
+        fd.append('avatar', f, f.name || 'photo.jpg');
+        avNow.classList.add('is-busy'); avPick.disabled = true;
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
+          M.account.set(user);
+          toast('Profile photo updated', 'Your friends will see it in groups and chats.');
+        } catch (err) { toast('Couldn’t update your photo', err.message); }
+        finally { avNow.classList.remove('is-busy'); avPick.disabled = false; }
+      });
+      avRemove.addEventListener('click', async (e) => {
+        const ok = await M.confirm({ from: e.currentTarget, title: 'Remove your profile photo?', body: 'Your initials show instead.', ok: 'Remove photo' });
+        if (!ok) return;
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'DELETE' });
+          M.account.set(user);
+          toast('Profile photo removed');
+        } catch (err) { toast('Couldn’t remove your photo', err.message); }
       });
 
+      // ---- Notifications: "Public events near me" needs location, so it asks first ----
+      const nearSw = document.querySelector('.s-sw[data-key="nearby"]');
+      nearSw.addEventListener('click', async () => {
+        if (nearSw.getAttribute('aria-checked') !== 'true' || !M.permission) return;
+        const ok = await M.permission.ensure('location', { from: nearSw });
+        if (!ok) { nearSw.setAttribute('aria-checked', 'false'); set('nearby', false); toast('Public events near me', 'Off: location isn’t allowed'); }
+        refreshPerms();
+      });
+      const chatSw = document.querySelector('.s-sw[data-key="chatNotify"]');
+      chatSw.addEventListener('click', async () => {
+        // Turning chat alerts on: offer phone/computer notifications too, if they've never been asked
+        if (chatSw.getAttribute('aria-checked') === 'true' && M.permission && (await M.permission.state('notifications')) === 'prompt') {
+          await M.permission.request('notifications', { from: chatSw });
+          refreshPerms();
+        }
+      });
+
+      // ---- Permissions, as the browser reports them ----
+      const PERM_IC = {
+        camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.2" r="3.6"/></svg>',
+        location: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>',
+        notifications: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2H4.5Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>',
+      };
+      const STATE_TEXT = { granted: 'Allowed', denied: 'Blocked', prompt: 'Not asked yet', unsupported: 'Not available in this browser' };
+      const permRows = [...document.querySelectorAll('[data-perm]')];
+      async function refreshPerms() {
+        for (const row of permRows) {
+          const kind = row.dataset.perm;
+          row.querySelector('[data-perm-ic]').innerHTML = PERM_IC[kind];
+          const st = M.permission ? await M.permission.state(kind) : 'unsupported';
+          const label = row.querySelector('.s-perm-state'), btn = row.querySelector('[data-perm-btn]');
+          label.dataset.state = st;
+          label.textContent = STATE_TEXT[st];
+          btn.hidden = st === 'granted';
+          btn.textContent = st === 'prompt' ? 'Allow' : 'How to allow';
+          btn.setAttribute('aria-label', `${btn.textContent}: ${M.permission?.names[kind] || kind}`);
+        }
+      }
+      permRows.forEach((row) => row.querySelector('[data-perm-btn]').addEventListener('click', async (e) => {
+        const ok = await M.permission.request(row.dataset.perm, { from: e.currentTarget });
+        if (ok) toast(`${M.permission.names[row.dataset.perm]} allowed`);
+        refreshPerms();
+      }));
+      // The browser tells us when a permission changes (in its own settings, say)
+      for (const [kind, name] of [['camera', 'camera'], ['location', 'geolocation'], ['notifications', 'notifications']]) {
+        navigator.permissions?.query({ name }).then((p) => { p.onchange = refreshPerms; }).catch(() => {});
+        void kind;
+      }
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPerms(); });
+      refreshPerms();
+
+      // ---- Space on this device: the browser's own figure for this site ----
+      const storeGroup = document.getElementById('storeGroup'), storeTotal = document.getElementById('storeTotal');
+      const size = (b) => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
+      async function measure() {
+        if (!navigator.storage?.estimate) return;
+        const { usage = 0 } = await navigator.storage.estimate().catch(() => ({}));
+        storeGroup.hidden = false;
+        storeTotal.textContent = `${size(usage)} used by Momento`;
+      }
+      measure();
+      document.getElementById('clearCache').addEventListener('click', async () => {
+        try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (err) {}
+        try { ['momento-my-albums', 'momento-removed', 'momento-waitlist', 'momento-nearby-seen', 'momento-camera-asked'].forEach((k) => localStorage.removeItem(k)); } catch (err) {}
+        await measure();
+        toast('Space freed up', 'Your photos, albums and login are untouched.');
+      });
+
+      // Account
       // Account
       // Account: log out and delete both happen on the server, not just in this browser
       document.getElementById('logOut').addEventListener('click', async () => {
@@ -2720,6 +2831,7 @@
         for (const g of groups) sel.add(new Option(g.name, g.id));
         groupField.hidden = !groups.length;
         if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
@@ -2833,7 +2945,11 @@
         if (!show) return;
         built ||= build();
         const name = (a && a.name) || '';
-        built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
+        built.avatars.forEach((el) => {
+          const pic = a && a.avatarUrl;
+          el.textContent = pic ? '' : (name || 'You')[0].toUpperCase();
+          if (pic) { const img = document.createElement('img'); img.src = pic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => { img.remove(); el.textContent = (name || 'You')[0].toUpperCase(); }; el.append(img); }
+        });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
         built.headMail.textContent = (a && a.email) || 'Preview account';

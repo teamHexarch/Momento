@@ -6,6 +6,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
   <script src="assets/api.js"></script>
+  <script src="assets/extras.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -402,6 +403,31 @@
     .grc-msg.is-you { align-self: flex-end; align-items: flex-end; }
     .grc-msg.is-you p { border-radius: 18px 18px 6px 18px; background: var(--dusk); color: var(--paper); box-shadow: none; }
     .grc-older { align-self: center; }
+    /* Each message: the sender's photo beside the bubble (yours on the right, without a photo) */
+    .grc-row { display: flex; align-items: flex-end; gap: .5rem; align-self: flex-start; max-width: min(86%, 34rem); }
+    .grc-row.is-you { align-self: flex-end; }
+    .grc-row .grc-msg { max-width: none; }
+    .grc-av { flex: none; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; margin-bottom: 1.1rem; border-radius: 50%; overflow: hidden; background: var(--c, #D9D0EA); color: #2E2C3A; font-size: .68rem; font-weight: 700; }
+    .grc-av img { width: 100%; height: 100%; object-fit: cover; }
+    .grc-row.is-new { animation: grc-in .45s cubic-bezier(.2, .8, .2, 1); }
+    @keyframes grc-in { from { opacity: 0; translate: 0 12px; scale: .96; } }
+    /* Someone is typing: three dots bouncing in a bubble */
+    .grc-typing { display: flex; align-items: center; gap: .5rem; min-height: 2.2rem; margin: -.2rem 0 .5rem; color: var(--stone); font-size: .82rem; }
+    .grc-typing[hidden] { display: none; }
+    .grc-typing .grc-av { margin: 0; width: 1.7rem; height: 1.7rem; }
+    .grc-dots { display: inline-flex; gap: .22rem; padding: .6rem .75rem; border-radius: 16px 16px 16px 6px; background: rgba(255, 255, 255, .7); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .08); }
+    .grc-dots i { width: .4rem; height: .4rem; border-radius: 50%; background: var(--stone); animation: grc-dot 1.2s ease-in-out infinite; }
+    .grc-dots i:nth-child(2) { animation-delay: .15s; }
+    .grc-dots i:nth-child(3) { animation-delay: .3s; }
+    @keyframes grc-dot { 0%, 60%, 100% { translate: 0 0; opacity: .45; } 30% { translate: 0 -.3rem; opacity: 1; } }
+    .grc-typing.is-in { animation: grc-in .35s cubic-bezier(.2, .8, .2, 1); }
+    :root[data-theme="dark"] .grc-dots { background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+    .grc-unread { display: inline-block; margin-left: .2rem; }
+    .grc-unread.pop { animation: nav-badge-pop .5s cubic-bezier(.34, 1.6, .64, 1); }
+    .grc-notify { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 0 0 .6rem; padding: .6rem .8rem; border-radius: 14px; background: rgba(154, 96, 61, .08); color: var(--slate); font-size: .86rem; }
+    .grc-notify[hidden] { display: none; }
+    .grc-notify .grc-link { margin-left: auto; }
+    @media (prefers-reduced-motion: reduce) { .grc-row.is-new, .grc-typing.is-in, .grc-unread.pop { animation: none; } .grc-dots i { animation-duration: 2.4s; } }
     .grc-say { display: flex; gap: .5rem; align-items: flex-end; }
     .grc-say textarea {
       flex: 1; min-height: 2.75rem; max-height: 8rem; box-sizing: border-box; padding: .7rem 1rem; border: none; border-radius: 22px; resize: none;
@@ -935,8 +961,9 @@
       .acct-btn:hover { scale: 1.04; }
       .acct-btn:active { scale: .97; }
       .acct-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
       .acct-av {
-        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; overflow: hidden;
         background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-style: normal; font-weight: 700;
       }
       .acct-chev { flex: none; margin-left: -.1rem; transition: transform .45s var(--spring); }
@@ -1742,7 +1769,17 @@
         }
         body.querySelectorAll('.btn').forEach(rollButton);
         body.querySelectorAll('.panel').forEach(lightUp);
+        openChatFromHash();
       }
+      function openChatFromHash() {
+        const id = decodeURIComponent((location.hash.match(/chat=([^&]+)/) || [])[1] || '');
+        const box = id && body.querySelector(`.grc[data-id="${CSS.escape(id)}"] .grc-chat`);
+        if (!box) return;
+        history.replaceState(null, '', location.pathname + location.search);
+        if (!box.open) box.open = true;
+        box.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+      }
+      addEventListener('hashchange', openChatFromHash);
 
       // ---- An invite waiting for you ----
       function inviteCard(i) {
@@ -1821,8 +1858,10 @@
             </div>
           </details>
           <details class="grc-people grc-chat"${chatOpen.has(g.id) ? ' open' : ''}>
-            <summary>Group chat ${ICON.chev}</summary>
+            <summary>Group chat${g.unread ? `<span class="grc-unread" aria-label="${g.unread} unread">${g.unread > 99 ? '99+' : g.unread}</span>` : ''} ${ICON.chev}</summary>
+            <p class="grc-notify" hidden><span>Get a notification when someone writes, even when Momento isn’t open.</span><button class="grc-link" type="button" data-notify>Turn on</button></p>
             <div class="grc-msgs" role="log" aria-live="polite" aria-label="Messages in ${esc(g.name)}"></div>
+            <div class="grc-typing" aria-live="polite" hidden></div>
             <form class="grc-say">
               <label class="grc-say-label" for="grSay-${esc(g.id)}">Message ${esc(g.name)}</label>
               <textarea id="grSay-${esc(g.id)}" name="text" rows="1" maxlength="1000" placeholder="Message ${esc(g.name)}" required></textarea>
@@ -1844,17 +1883,49 @@
       // Messages are fetched when a chat is opened, then every 8 seconds while it's open and the
       // page is visible. The server checks membership on every read and send.
       const timeOf = (at) => new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      const avatar = (who, name) => `<span class="grc-av" style="--c: ${hue(name)}" aria-hidden="true">${who.avatarUrl ? `<img src="${esc(who.avatarUrl)}" alt="" referrerpolicy="no-referrer">` : esc(initials(name))}</span>`;
       function setUpChat(g, box) {
         const list = box.querySelector('.grc-msgs'), form = box.querySelector('form'), field = form.elements.text;
         const state = chats.get(g.id) || { messages: [], more: false };
         chats.set(g.id, state);
+        const typingEl = box.querySelector('.grc-typing'), notifyEl = box.querySelector('.grc-notify');
+        const shown = new Set();   // message ids already drawn, so only new ones slide in
         const draw = (stick) => {
           const near = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
           list.innerHTML = (state.more ? '<button class="grc-link grc-older" type="button">Show earlier messages</button>' : '')
-            + state.messages.map((m) => `<div class="grc-msg${m.you ? ' is-you' : ''}">${m.you ? '' : `<b>${esc(m.by)}</b>`}<p>${esc(m.text)}</p><small>${esc(timeOf(m.at))}</small></div>`).join('');
+            + state.messages.map((m) => {
+              const fresh = shown.size && !shown.has(m.id) && !still;
+              return `<div class="grc-row${m.you ? ' is-you' : ''}${fresh ? ' is-new' : ''}">${m.you ? '' : avatar(m, m.by)}<div class="grc-msg${m.you ? ' is-you' : ''}">${m.you ? '' : `<b>${esc(m.by)}</b>`}<p>${esc(m.text)}</p><small>${esc(timeOf(m.at))}</small></div></div>`;
+            }).join('');
+          state.messages.forEach((m) => shown.add(m.id));
+          if (!shown.size) shown.add('');
           list.querySelector('.grc-older')?.addEventListener('click', older);
           if (stick || near) list.scrollTop = list.scrollHeight;
+          // Tell the notifications on every page this chat has been read
+          const last = state.messages.at(-1);
+          if (last) { window.Momento?.chatSeen?.(g.id, last.id); }
         };
+        // "Maya is typing…" (or "Maya and Sam are typing…")
+        let typingKey = '';
+        const drawTyping = (people = []) => {
+          const key = people.map((p) => p.name).join('|');
+          if (key === typingKey) return;
+          typingKey = key;
+          if (!people.length) { typingEl.hidden = true; typingEl.replaceChildren(); return; }
+          const names = people.map((p) => p.name);
+          const text = names.length === 1 ? `${names[0]} is typing…` : names.length === 2 ? `${names[0]} and ${names[1]} are typing…` : 'Several people are typing…';
+          typingEl.innerHTML = `${avatar(people[0], people[0].name)}<span class="grc-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(text)}</span>`;
+          typingEl.hidden = false;
+          typingEl.classList.remove('is-in'); void typingEl.offsetWidth; typingEl.classList.add('is-in');
+        };
+        // Offer phone/computer notifications once, if they've never been asked
+        const offerNotify = async () => {
+          notifyEl.hidden = !(window.Momento?.permission && (await Momento.permission.state('notifications')) === 'prompt');
+        };
+        notifyEl.querySelector('[data-notify]').addEventListener('click', async (e) => {
+          if (await Momento.permission.request('notifications', { from: e.currentTarget })) Momento.toast('Notifications are on', `You’ll hear when someone writes in ${g.name}.`);
+          offerNotify();
+        });
         const url = `/api/groups/${encodeURIComponent(g.id)}/messages`;
         async function fetchNew(first) {
           try {
@@ -1866,6 +1937,8 @@
             state.messages = [...keep, ...r.messages];
             if (first) state.more = r.more;
             if (first || state.messages.at(-1)?.id !== before) draw(first);
+            drawTyping(r.typing);
+            if (first) { box.querySelector('.grc-unread')?.remove(); g.unread = 0; window.Momento?.chatPoll?.(); }
           } catch (err) {
             if (err.status === 404) { stop(); load(true); }   // no longer in the group
           }
@@ -1887,16 +1960,22 @@
         const start = () => {
           stop();
           fetchNew(true);
-          timer = setInterval(() => { if (!document.hidden && box.isConnected && box.open) fetchNew(false); else if (!box.isConnected) stop(); }, 8000);
+          timer = setInterval(() => { if (!document.hidden && box.isConnected && box.open) fetchNew(false); else if (!box.isConnected) stop(); }, 3000);
         };
         box.addEventListener('toggle', () => {
-          if (box.open) { chatOpen.add(g.id); start(); field.focus({ preventScroll: true }); }
-          else { chatOpen.delete(g.id); stop(); }
+          if (box.open) { chatOpen.add(g.id); start(); offerNotify(); field.focus({ preventScroll: true }); }
+          else { chatOpen.delete(g.id); stop(); drawTyping([]); }
         });
-        if (box.open) { draw(true); start(); }
+        if (box.open) { draw(true); start(); offerNotify(); }
         // Enter sends; Shift+Enter makes a new line. The box grows with the text
         field.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
-        field.addEventListener('input', () => { field.style.height = 'auto'; field.style.height = Math.min(field.scrollHeight, 128) + 'px'; });
+        let typedAt = 0;
+        field.addEventListener('input', () => {
+          field.style.height = 'auto'; field.style.height = Math.min(field.scrollHeight, 128) + 'px';
+          const now = Date.now();
+          if (field.value.trim() && now - typedAt > 3000) { typedAt = now; momentoApi(`${url.replace('/messages', '')}/typing`, momentoJson('POST', {})).catch(() => {}); }
+          if (!field.value.trim() && typedAt) { typedAt = 0; momentoApi(`${url.replace('/messages', '')}/typing`, momentoJson('POST', { typing: false })).catch(() => {}); }
+        });
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
           const text = field.value.trim();
@@ -1906,6 +1985,7 @@
           try {
             const { message } = await momentoApi(url, momentoJson('POST', { text }));
             state.messages.push(message);
+            typedAt = 0;
             field.value = ''; field.style.height = '';
             draw(true);
           } catch (err) { Momento.toast('Couldn’t send the message', err.message); }
@@ -2539,6 +2619,7 @@
         for (const g of groups) sel.add(new Option(g.name, g.id));
         groupField.hidden = !groups.length;
         if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
@@ -2652,7 +2733,11 @@
         if (!show) return;
         built ||= build();
         const name = (a && a.name) || '';
-        built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
+        built.avatars.forEach((el) => {
+          const pic = a && a.avatarUrl;
+          el.textContent = pic ? '' : (name || 'You')[0].toUpperCase();
+          if (pic) { const img = document.createElement('img'); img.src = pic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => { img.remove(); el.textContent = (name || 'You')[0].toUpperCase(); }; el.append(img); }
+        });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
         built.headMail.textContent = (a && a.email) || 'Preview account';

@@ -1,11 +1,15 @@
 import mongoose from 'mongoose';
+import { avatarOf } from '../services/avatarService.js';
 
 const userSchema = new mongoose.Schema({
   name: { type: String, trim: true, maxlength: 80, default: '' },
   email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254, unique: true },
   // Absent for people who only ever used Google
   passwordHash: { type: String, select: false },
+  // Their Google photo, until they upload their own
   avatarUrl: { type: String, default: '' },
+  // A profile photo they uploaded (storage key; served by /api/users/:id/avatar)
+  avatarKey: String,
   // Google vouches for the address; email/password signups start unverified
   emailVerified: { type: Boolean, default: false },
   plan: { type: String, enum: ['free', 'plus'], default: 'free' },
@@ -50,7 +54,8 @@ userSchema.methods.toPublic = function () {
     id: this.id,
     name: this.name,
     email: this.email,
-    avatarUrl: this.avatarUrl,
+    avatarUrl: avatarOf(this),
+    hasAvatar: !!this.avatarKey,
     emailVerified: this.emailVerified,
     verificationResendAt: this.verificationResendAt || null,
     plan: this.plan,

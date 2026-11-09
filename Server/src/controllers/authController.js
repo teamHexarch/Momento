@@ -259,6 +259,21 @@ export async function confirmEmailChange(req, res) {
   res.redirect(303, `${config.frontendUrl}/?login=1&email=${result}`);
 }
 
+// ---- Profile photo ----
+
+export async function uploadAvatar(req, res) {
+  if (!req.file) throw new HttpError(400, 'Choose a photo first.');
+  const { saveAvatar } = await import('../services/avatarService.js');
+  await saveAvatar(req.user, req.file.buffer);
+  res.json({ user: req.user.toPublic() });
+}
+
+export async function deleteAvatar(req, res) {
+  const { removeAvatar } = await import('../services/avatarService.js');
+  await removeAvatar(req.user);
+  res.json({ user: req.user.toPublic() });
+}
+
 export async function deleteMe(req, res) {
   await checkPassword(req.user, req.body?.password);
   await deleteAccount(req.user);

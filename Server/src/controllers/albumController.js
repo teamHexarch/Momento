@@ -11,6 +11,7 @@ import { User } from '../models/User.js';
 import { Group } from '../models/Group.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { hasGroupAccess, groupIdsOf, dropGroupRows } from '../services/groupAccess.js';
+import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { sendEmail } from '../services/emailService.js';
 import { reminderHtml, inviteHtml } from '../services/emailTemplates.js';
 import { HttpError } from '../utils/httpError.js';
@@ -104,7 +105,7 @@ async function statsFor(albumIds, userId, hidden = []) {
       { $group: { _id: '$album', users: { $addToSet: '$user' } } },
     ]),
     // Who hosts each album, so everyone in it can see it clearly
-    Membership.find({ album: { $in: albumIds }, role: 'host' }, 'album user').populate('user', 'name'),
+    Membership.find({ album: { $in: albumIds }, role: 'host' }, 'album user').populate('user', AVATAR_FIELDS),
     // Albums shared with a friend group: the group's name, and its people count as guests
     Album.find({ _id: { $in: albumIds }, group: { $ne: null } }, 'group').populate('group', 'name'),
   ]);
@@ -131,7 +132,7 @@ async function statsFor(albumIds, userId, hidden = []) {
   for (const [id, set] of people) if (byAlbum.has(id)) byAlbum.get(id).guests = set.size;
   for (const h of hosts) {
     const name = (h.user?.name || '').trim() || 'The host';
-    Object.assign(byAlbum.get(String(h.album)), { hostName: name, hostIsYou: !!h.user?._id.equals(userId) });
+    Object.assign(byAlbum.get(String(h.album)), { hostName: name, hostAvatar: avatarOf(h.user), hostIsYou: !!h.user?._id.equals(userId) });
   }
   return byAlbum;
 }
@@ -287,7 +288,8 @@ export async function list(req, res) {
 export async function create(req, res) {
   const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body), visibility: req.body?.visibility === 'public' ? 'public' : 'invite' };
   const group = req.body?.groupId ? await groupFor(req.user._id, req.body.groupId) : null;
-  if (group) fields.group = group._id;
+  // Group albums are for the group (and anyone given the code), never listed publicly on Events
+  if (group) Object.assign(fields, { group: group._id, visibility: 'invite' });
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -409,9 +411,11 @@ export async function update(req, res) {
     const before = m.album.group;
     m.album.group = req.body.groupId ? (await groupFor(req.user._id, req.body.groupId))._id : undefined;
     if (before && !before.equals(m.album.group)) await dropGroupRows({ album: m.album._id });
+    if (m.album.group) m.album.visibility = 'invite';
   }
   if (req.body?.visibility === 'public' || req.body?.visibility === 'invite') {
     if (req.body.visibility === 'public' && !m.album.zone?.radiusM) throw new HttpError(400, 'A public album needs a venue, so people nearby can find it.');
+    if (req.body.visibility === 'public' && m.album.group) throw new HttpError(400, 'Albums shared with a friend group can’t be public. Stop sharing it with the group first.');
     m.album.visibility = req.body.visibility;
   }
   await m.album.save();

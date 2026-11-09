@@ -2,6 +2,7 @@
 <html lang="en" data-page="albums">
 <head>
   <script src="assets/api.js"></script>
+  <script src="assets/extras.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -736,7 +737,8 @@
     .pb-comments[hidden] { display: none; }
     .pb-list { display: grid; gap: .15rem; max-height: 16rem; margin: 0; padding: .25rem; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: rgba(127, 120, 150, .4) transparent; }
     .pb-item { display: grid; grid-template-columns: 2.1rem minmax(0, 1fr) auto; gap: .65rem; align-items: start; padding: .5rem .4rem; border-radius: 14px; }
-    .pb-av { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--c, #D9D0EA); color: #2E2C3A; font-size: .82rem; font-weight: 700; }
+    .pb-av img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+    .pb-av { position: relative; overflow: hidden; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--c, #D9D0EA); color: #2E2C3A; font-size: .82rem; font-weight: 700; }
     .pb-body { min-width: 0; }
     .pb-body b { font-size: .88rem; font-weight: 700; }
     .pb-body small { margin-left: .4rem; color: var(--stone); font-size: .76rem; }
@@ -1499,8 +1501,9 @@
       .acct-btn:hover { scale: 1.04; }
       .acct-btn:active { scale: .97; }
       .acct-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+      .acct-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
       .acct-av {
-        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+        display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; overflow: hidden;
         background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-style: normal; font-weight: 700;
       }
       .acct-chev { flex: none; margin-left: -.1rem; transition: transform .45s var(--spring); }
@@ -3055,6 +3058,9 @@
       li.innerHTML = '<span class="pb-av"></span><div class="pb-body"><b></b><small></small><p></p><div class="pb-acts"><button class="pb-act pb-c-like" type="button">' + SMALL_HEART + '<span></span></button><button class="pb-act pb-reply" type="button">Reply</button></div></div>';
       const av = li.querySelector('.pb-av');
       av.textContent = (c.by.trim()[0] || '·').toUpperCase(); av.style.setProperty('--c', avColor(c.by));
+      // Their profile photo, when they have one (yours too: it comes from your account)
+      const avPic = c.avatarUrl || (c.mine && Momento.account?.get()?.avatarUrl);
+      if (avPic) { const img = document.createElement('img'); img.src = avPic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => img.remove(); av.append(img); }
       li.querySelector('b').textContent = c.by;
       li.querySelector('small').textContent = agoText(c.at);
       li.querySelector('p').textContent = c.text;
@@ -4308,6 +4314,7 @@
         for (const g of groups) sel.add(new Option(g.name, g.id));
         groupField.hidden = !groups.length;
         if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
@@ -4421,7 +4428,11 @@
         if (!show) return;
         built ||= build();
         const name = (a && a.name) || '';
-        built.avatars.forEach((el) => { el.textContent = (name || 'You')[0].toUpperCase(); });
+        built.avatars.forEach((el) => {
+          const pic = a && a.avatarUrl;
+          el.textContent = pic ? '' : (name || 'You')[0].toUpperCase();
+          if (pic) { const img = document.createElement('img'); img.src = pic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => { img.remove(); el.textContent = (name || 'You')[0].toUpperCase(); }; el.append(img); }
+        });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
         built.headMail.textContent = (a && a.email) || 'Preview account';

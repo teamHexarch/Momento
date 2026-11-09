@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
 import { requireUser } from '../middleware/authMiddleware.js';
 import * as auth from '../controllers/authController.js';
 
@@ -43,3 +44,9 @@ authRoutes.post('/password/forgot', emailLimit, auth.forgotPassword);
 authRoutes.post('/password/reset', signInLimit, auth.resetPassword);
 
 authRoutes.post('/google', signInLimit, auth.google);
+
+// Profile photo: one image up to 10 MB, re-encoded small on the server. 30 changes an hour at most
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
+const avatarLimit = rateLimit({ windowMs: 60 * 60000, limit: 30, keyGenerator: (req) => 'user:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false, message: tooMany(60) });
+authRoutes.post('/avatar', requireUser, avatarLimit, avatarUpload.single('avatar'), auth.uploadAvatar);
+authRoutes.delete('/avatar', requireUser, avatarLimit, auth.deleteAvatar);

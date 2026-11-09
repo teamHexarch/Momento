@@ -5,6 +5,7 @@ import { Comment } from '../models/Comment.js';
 import { Album } from '../models/Album.js';
 import { HttpError } from '../utils/httpError.js';
 import { hasGroupAccess } from '../services/groupAccess.js';
+import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageService.js';
 
 // A photo plus the caller's membership of its album; anyone outside the album gets a 404
@@ -56,7 +57,7 @@ const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 const commentOut = (c, userId, isHost) => {
   const mine = !!c.user?._id?.equals(userId);
   return {
-    id: c.id, parent: c.parent ? String(c.parent) : null, by: mine ? 'You' : firstName(c.user?.name), mine, canDelete: mine || isHost, text: c.text, at: c.createdAt,
+    id: c.id, parent: c.parent ? String(c.parent) : null, by: mine ? 'You' : firstName(c.user?.name), avatarUrl: avatarOf(c.user), mine, canDelete: mine || isHost, text: c.text, at: c.createdAt,
     likes: Math.max(0, c.likeCount || 0), liked: (c.likes || []).some((id) => id.equals(userId)),
   };
 };
@@ -77,7 +78,7 @@ export async function like(req, res) {
 // The comments under a photo, oldest first
 export async function comments(req, res) {
   const { photo, m } = await photoFor(req);
-  const list = await Comment.find({ photo: photo._id }).sort({ createdAt: 1 }).limit(300).populate('user', 'name');
+  const list = await Comment.find({ photo: photo._id }).sort({ createdAt: 1 }).limit(300).populate('user', AVATAR_FIELDS);
   res.json({ comments: list.map((c) => commentOut(c, req.user._id, m.role === 'host')) });
 }
 

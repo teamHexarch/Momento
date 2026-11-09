@@ -321,8 +321,19 @@
     range.addEventListener('input', syncRadius);
     box._syncRadius = syncRadius;
 
+    const who = box.querySelector('.ev-who')?.closest('.ev-sec');
+    const syncWho = () => {
+      const grouped = !!form.group?.value;
+      if (who) who.hidden = grouped;
+      if (grouped) { const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true; }
+    };
+    form.addEventListener('change', (e) => { if (e.target.name === 'group') syncWho(); });
+    form.addEventListener('reset', () => setTimeout(syncWho));
+    syncWho();
     const here = box.querySelector('[data-here]');
     here.addEventListener('click', async () => {
+      // Says why first, the first time
+      if (window.Momento?.permission && !(await Momento.permission.ensure('location', { from: here }))) return;
       const label = here.lastChild.textContent;
       here.lastChild.textContent = 'Finding you…';
       try {
@@ -482,7 +493,7 @@
         uploadLeadMin: t.leadMin,
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
-        visibility: form.evVisibility?.value === 'public' ? 'public' : 'invite',
+        visibility: !form.group?.value && form.evVisibility?.value === 'public' ? 'public' : 'invite',
       },
     };
   }
@@ -524,6 +535,7 @@
         say('Starting the camera…');
         try {
           if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error(), { name: 'Insecure' });
+          if (window.Momento?.permission && !(await Momento.permission.ensure('camera'))) throw Object.assign(new Error(), { name: 'NotAllowedError' });
           stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
           if (settled) return stop();
           video.srcObject = stream;

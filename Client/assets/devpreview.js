@@ -89,6 +89,7 @@
       ],
       g2: [{ id: 'm4', text: 'Eid album is up, add yours when you can', by: 'Ruby', you: false, at: ago(1440) }],
     };
+    state.read = { g1: new Date().toISOString() };
     save();
   }
 
@@ -211,7 +212,21 @@
     if (!state.signedIn) return fail(401, 'Log in to continue.');
 
     // ---- Friend groups ----
-    const describeGroup = (g) => ({ ...g, albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });
+    const due = () => {   // a reply that was "being typed" arrives when its time comes
+      for (const r of state.replies || []) if (r.at <= Date.now()) { ((state.chat ||= {})[r.group] ||= []).push(r.message); r.done = true; }
+      state.replies = (state.replies || []).filter((r) => !r.done);
+    };
+    due();
+    if (path === '/api/groups/unread' && method === 'GET') {
+      const groups = (state.groups || []).map((g) => {
+        const msgs = (state.chat || {})[g.id] || [], read = (state.read || {})[g.id] || '';
+        const unread = msgs.filter((m) => !m.you && m.at > read);
+        return { id: g.id, name: g.name, unread: unread.length, latest: unread.at(-1) };
+      }).filter((g) => g.unread);
+      return { body: { total: groups.reduce((t, g) => t + g.unread, 0), groups } };
+    }
+    const describeGroup = (g) => ({ ...g, members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary),
+      unread: ((state.chat || {})[g.id] || []).filter((m) => !m.you && m.at > ((state.read || {})[g.id] || '')).length });
     const groupOut = () => ({ groups: (state.groups || []).map(describeGroup), invites: state.groupInvites || [] });
     // Leaving a group: albums you were in through it go, albums you host leave the group
     const dropGroup = (g) => {
@@ -272,20 +287,31 @@
       return { body: { group: describeGroup(grp) } };
     }
     // The group chat
+    const gt = /^\/api\/groups\/([^/]+)\/typing$/.exec(path);
+    if (gt && method === 'POST') return { body: { typing: [] } };
     const gc = /^\/api\/groups\/([^/]+)\/messages$/.exec(path);
     if (gc) {
       if (!(state.groups || []).some((g) => g.id === gc[1])) return fail(404, 'Group not found.');
       const msgs = ((state.chat ||= {})[gc[1]] ||= []);
       if (method === 'GET') {
+        if (!query?.get('before')) { (state.read ||= {})[gc[1]] = new Date().toISOString(); save(); }
+        const waiting = (state.replies || []).find((r) => r.group === gc[1]);
+        const typing = waiting ? [{ name: waiting.message.by, avatarUrl: '' }] : [];
         const before = query?.get('before');
         const older = before ? msgs.filter((m) => m.at < before) : msgs;
-        return { body: { messages: older.slice(-50), more: older.length > 50 } };
+        return { body: { messages: older.slice(-50), more: older.length > 50, typing } };
       }
       if (method === 'POST') {
         const text = String(body.text || '').trim();
         if (!text) return fail(400, 'Write a message first.');
         const m = { id: 'm' + (++state.seq), text: text.slice(0, 1000), by: 'You', you: true, at: new Date().toISOString() };
-        msgs.push(m); save();
+        msgs.push(m);
+        // Maya answers a few seconds later (typing first), so the preview shows both
+        if (gc[1] === 'g1' && !(state.replies || []).length) {
+          const at = Date.now() + 5000;
+          (state.replies ||= []).push({ group: 'g1', at, message: { id: 'm' + (++state.seq), text: 'Nice! Can’t wait to see them', by: 'Maya', you: false, avatarUrl: '', at: new Date(at).toISOString() } });
+        }
+        save();
         return { status: 201, body: { message: m } };
       }
     }
@@ -427,6 +453,22 @@
 
   window.momentoFetch = async (path, opts = {}) => {
     const url = new URL(path, 'http://dev.local');
+    if (url.pathname === '/api/auth/avatar' && state.signedIn) {
+      if ((opts.method || 'GET').toUpperCase() === 'DELETE') state.user.avatarUrl = '';
+      else {
+        const f = opts.body instanceof FormData ? opts.body.get('avatar') : null;
+        if (!f) return new Response(JSON.stringify({ error: 'Choose a photo first.' }), { status: 400 });
+        state.user.avatarUrl = await new Promise((resolve, reject) => {
+          const img = new Image(), u = URL.createObjectURL(f);
+          img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 256; const k = Math.max(256 / img.width, 256 / img.height); c.getContext('2d').drawImage(img, (256 - img.width * k) / 2, (256 - img.height * k) / 2, img.width * k, img.height * k); URL.revokeObjectURL(u); resolve(c.toDataURL('image/webp', .82)); };
+          img.onerror = () => { URL.revokeObjectURL(u); reject(new Error('bad')); };
+          img.src = u;
+        }).catch(() => null);
+        if (!state.user.avatarUrl) return new Response(JSON.stringify({ error: 'That file isn’t a photo Momento can read.' }), { status: 400 });
+      }
+      state.user.hasAvatar = !!state.user.avatarUrl; save();
+      return new Response(JSON.stringify({ user: state.user }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     let body = {};
     try { body = opts.body ? JSON.parse(opts.body) : {}; } catch (e) {}
     await sleep(120 + Math.random() * 160);   // a little delay, so loading states show

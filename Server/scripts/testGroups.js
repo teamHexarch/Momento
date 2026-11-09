@@ -65,6 +65,12 @@ try {
   await call('/api/albums', 404, o, 'POST', { ...base, groupId: 'not-an-id' });
   const album = (await json(await call('/api/albums', 201, o, 'POST', { ...base, groupId: group.id }))).album;
   assert.equal(album.group.name, 'Uni friends');
+  {
+    const pub = (await json(await call('/api/albums', 201, o, 'POST', { ...base, name: 'Not public', groupId: group.id, visibility: 'public' }))).album;
+    assert.equal(pub.visibility, 'invite', 'group albums are never public');
+    await call(`/api/albums/${pub.id}`, 400, o, 'PATCH', { visibility: 'public' });
+    await call(`/api/albums/${pub.id}`, 200, o, 'DELETE');
+  }
   const bytes = await sharp({ create: { width: 300, height: 200, channels: 3, background: 'red' } }).jpeg().toBuffer();
   const photo = () => { const fd = new FormData(); fd.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'p.jpg'); return fd; };
   const [p1] = (await json(await call(`/api/albums/${album.id}/photos`, 201, o, 'POST', photo()))).photos;
@@ -166,6 +172,23 @@ try {
   assert.equal(group.members.length, 1);
   await call(`/api/albums/${album.id}`, 200, x);
 
+  // Profile photos: upload, shown beside the owner's name in the group and the chat, removed again
+  {
+    const fd = new FormData();
+    fd.append('avatar', new Blob([await sharp({ create: { width: 800, height: 600, channels: 3, background: 'blue' } }).png().toBuffer()], { type: 'image/png' }), 'me.png');
+    const me = (await json(await call('/api/auth/avatar', 200, o, 'POST', fd))).user;
+    assert.match(me.avatarUrl, /\/api\/users\/[0-9a-f]{24}\/avatar\?v=/);
+    assert.equal(me.hasAvatar, true);
+    const pic = await call(new URL(me.avatarUrl).pathname + new URL(me.avatarUrl).search, 200, s);
+    assert.equal((await sharp(Buffer.from(await pic.arrayBuffer())).metadata()).width, 256);
+    await call(new URL(me.avatarUrl).pathname, 401, '');   // only for people who are logged in
+    const bad = new FormData();
+    bad.append('avatar', new Blob([Buffer.from('not an image')], { type: 'image/png' }), 'x.png');
+    await call('/api/auth/avatar', 400, o, 'POST', bad);
+    const g = (await json(await call(`/api/groups/${group.id}`, 200, o))).group;
+    assert.equal(g.members.find((m) => m.you).avatarUrl, me.avatarUrl);
+  }
+
   // The group chat: members only, checked on every read and send
   const chatUrl = `/api/groups/${group.id}/messages`;
   await call(chatUrl, 400, o, 'POST', { text: '   ' });
@@ -177,6 +200,31 @@ try {
   await call(chatUrl, 404, x);   // removed just now
   const chat = await json(await call(chatUrl, 200, o));
   assert.equal(chat.messages.length, 1);
+  assert.ok(chat.messages[0].avatarUrl, 'messages carry the sender’s photo');
+
+  // Typing and unread: a second member sees the owner typing, gets an unread count, reads it
+  {
+    group = (await json(await call(`/api/groups/${group.id}/invites`, 201, o, 'POST', { email: 'stranger@example.invalid' }))).group;
+    const inv = (await json(await call('/api/groups', 200, s))).invites[0];
+    await call(`/api/groups/invites/${inv.id}/accept`, 200, s, 'POST');
+    await call(`/api/groups/${group.id}/typing`, 404, f, 'POST', {});   // not a member
+    await call(`/api/groups/${group.id}/typing`, 200, o, 'POST', {});
+    const seen = await json(await call(chatUrl, 200, s));
+    assert.deepEqual(seen.typing.map((t) => t.name), ['Owner']);
+    assert.equal((await json(await call(chatUrl, 200, o))).typing.length, 0, 'you never see yourself typing');
+    await call(chatUrl, 201, o, 'POST', { text: 'One more' });
+    assert.equal((await json(await call(chatUrl, 200, s))).typing.length, 0, 'sending ends typing');
+    await call(chatUrl, 201, o, 'POST', { text: 'And another' });
+    const u = await json(await call('/api/groups/unread', 200, s));
+    assert.equal(u.total, 1);
+    assert.equal(u.groups[0].latest.text, 'And another');
+    assert.equal((await json(await call(`/api/groups/${group.id}`, 200, s))).group.unread, 1);
+    await call(chatUrl, 200, s);   // reading marks it read
+    assert.equal((await json(await call('/api/groups/unread', 200, s))).total, 0);
+    assert.equal((await json(await call('/api/groups/unread', 200, o))).total, 0, 'your own messages are never unread');
+    await call(`/api/groups/${group.id}/members/me`, 200, s, 'DELETE');
+    await call('/api/auth/avatar', 200, o, 'DELETE');
+  }
   assert.equal(chat.messages[0].text, 'Photos from the beach are up');
   await call(`/api/groups/${group.id}`, 404, s);
 

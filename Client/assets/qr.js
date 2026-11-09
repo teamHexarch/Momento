@@ -317,6 +317,7 @@
       say('Starting the camera…');
       try {
         if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('insecure');
+        if (window.Momento?.permission && !(await Momento.permission.ensure('camera'))) throw Object.assign(new Error('Camera not allowed'), { name: 'NotAllowedError' });
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
         if (done || !d.open) return stop();
         video.srcObject = stream;
