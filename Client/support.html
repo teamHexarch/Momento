@@ -1965,7 +1965,13 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Update your name and email notification preferences.</p>
+          <p class="acct-sub">Update your photo, name and email notification preferences.</p>
+          <div class="acct-photo">
+            <span class="acct-photo-av" aria-hidden="true"></span>
+            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups, chats and albums</small></span>
+            <span class="acct-photo-acts"><button class="acct-photo-btn" type="button" data-photo-pick>Add photo</button><button class="acct-photo-btn is-danger" type="button" data-photo-rm hidden>Remove</button></span>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden data-photo-file>
+          </div>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
@@ -1974,13 +1980,54 @@
             <div class="acct-row"><span><b>An album is about to close</b><small>so I can download my photos in time</small></span><button class="acct-sw" type="button" role="switch" aria-label="An album is about to close" aria-checked="true" data-key="closing"></button></div>
             <div class="acct-row"><span><b>Weekly recap</b><small>the best new photos from my albums</small></span><button class="acct-sw" type="button" role="switch" aria-label="Weekly recap" aria-checked="false" data-key="recap"></button></div>
           </div>
-          <a class="acct-adv" href="settings.html"><span class="acct-adv-ic">${ICON.settings}</span><span><b>Advanced settings</b><small>Uploads, cloud, privacy and storage</small></span>${ICON.chev}</a>
+          <a class="acct-adv" href="settings.html"><span class="acct-adv-ic">${ICON.settings}</span><span><b>Advanced settings</b><small>Password, permissions, notifications and storage</small></span>${ICON.chev}</a>
           <p class="acct-status" role="status"></p>
           <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Save changes</button></div>
         </form>`, getReturn);
       if (/settings\.html$/.test(location.pathname)) d.querySelector('.acct-adv').hidden = true;   // already here
       const form = d.querySelector('form'), status = d.querySelector('.acct-status');
       const switches = [...d.querySelectorAll('.acct-sw')];
+      // Profile photo: saved straight away (not with Save changes), like on the Settings page
+      const photoAv = d.querySelector('.acct-photo-av'), photoPick = d.querySelector('[data-photo-pick]'), photoRm = d.querySelector('[data-photo-rm]'), photoFile = d.querySelector('[data-photo-file]');
+      const showPhoto = (a) => {
+        const name = (a && (a.name || a.email)) || 'You';
+        photoAv.replaceChildren();
+        if (a && a.avatarUrl) {
+          const img = document.createElement('img');
+          img.src = a.avatarUrl; img.alt = ''; img.referrerPolicy = 'no-referrer';
+          img.onerror = () => { img.remove(); photoAv.textContent = name[0].toUpperCase(); };
+          photoAv.append(img);
+        } else photoAv.textContent = name[0].toUpperCase();
+        photoPick.textContent = a && a.avatarUrl ? 'Change' : 'Add photo';
+        photoRm.hidden = !(a && a.avatarUrl);
+      };
+      Momento.account.onChange(showPhoto);
+      showPhoto(Momento.account.get());
+      photoPick.addEventListener('click', () => photoFile.click());
+      photoFile.addEventListener('change', async () => {
+        const f = photoFile.files[0];
+        photoFile.value = '';
+        if (!f) return;
+        if (f.size > 10 * 1024 * 1024) { say('Choose a photo under 10 MB.', true); return; }
+        const fd = new FormData();
+        fd.append('avatar', f, f.name || 'photo.jpg');
+        photoAv.classList.add('is-busy'); photoPick.disabled = photoRm.disabled = true; say('Uploading your photo…');
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
+          Momento.account.set(user);
+          say('Photo updated. Friends see it in groups and chats.');
+        } catch (err) { say(err.message, true); }
+        finally { photoAv.classList.remove('is-busy'); photoPick.disabled = photoRm.disabled = false; }
+      });
+      photoRm.addEventListener('click', async () => {
+        photoPick.disabled = photoRm.disabled = true;
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'DELETE' });
+          Momento.account.set(user);
+          say('Photo removed. Your initials show instead.');
+        } catch (err) { say(err.message, true); }
+        finally { photoPick.disabled = photoRm.disabled = false; }
+      });
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
       form.addEventListener('submit', async (e) => {

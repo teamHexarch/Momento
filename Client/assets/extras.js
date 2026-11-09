@@ -47,7 +47,32 @@
     :root[data-theme="dark"] .nav-badge { box-shadow: 0 0 0 2px #1D1B28; }
     .chat-toast-av { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #D9D0EA; color: #2E2C3A; font-size: .7rem; font-weight: 700; }
     .chat-toast-av img { width: 100%; height: 100%; object-fit: cover; }
-    @media (prefers-reduced-motion: reduce) { .nav-badge.pop { animation: none; } .pw-eye .slash { transition: none; } }
+    /* Account settings popup: the profile photo row */
+    .acct-photo { display: flex; align-items: center; gap: .85rem; margin: .4rem 0 1rem; padding: .75rem .85rem; border-radius: 18px; background: rgba(255, 255, 255, .45); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .08); }
+    .acct-photo-av { position: relative; display: grid; place-items: center; flex: none; width: 3.3rem; height: 3.3rem; border-radius: 50%; overflow: hidden;
+      background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-size: 1.25rem; font-weight: 700; }
+    .acct-photo-av img { width: 100%; height: 100%; object-fit: cover; }
+    .acct-photo-av.is-busy::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 70%, var(--copper, #9A603D) 100%); animation: acct-spin 1s linear infinite;
+      -webkit-mask: radial-gradient(circle, transparent 56%, #000 58%); mask: radial-gradient(circle, transparent 56%, #000 58%); }
+    @keyframes acct-spin { to { rotate: 360deg; } }
+    .acct-photo-text { display: grid; flex: 1; min-width: 0; }
+    .acct-photo-text b { font-size: .95rem; }
+    .acct-photo-text small { font-size: .8rem; color: var(--slate, #5C596B); }
+    .acct-photo-acts { display: flex; flex-direction: column; gap: .3rem; align-items: stretch; }
+    .acct-photo-btn { padding: .45rem .9rem; border: none; border-radius: 100px; background: rgba(46, 44, 58, .08); color: var(--dusk, #2E2C3A); font: 600 .84rem var(--font-main, system-ui); cursor: pointer;
+      transition: background-color .2s ease, scale .3s cubic-bezier(.34, 1.4, .64, 1); }
+    .acct-photo-btn:hover { background: rgba(46, 44, 58, .14); }
+    .acct-photo-btn:active { scale: .95; }
+    .acct-photo-btn:focus-visible { outline: 2px solid var(--dusk, #2E2C3A); outline-offset: 2px; }
+    .acct-photo-btn:disabled { opacity: .5; cursor: default; }
+    .acct-photo-btn.is-danger { background: none; color: #9A3D3D; }
+    .acct-photo-btn.is-danger:hover { background: rgba(154, 61, 61, .08); }
+    .acct-photo-btn[hidden] { display: none; }
+    :root[data-theme="dark"] .acct-photo { background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+    :root[data-theme="dark"] .acct-photo-btn { background: rgba(255, 255, 255, .1); }
+    :root[data-theme="dark"] .acct-photo-btn:hover { background: rgba(255, 255, 255, .16); }
+    :root[data-theme="dark"] .acct-photo-btn.is-danger { background: none; color: #F0A3A3; }
+    @media (prefers-reduced-motion: reduce) { .nav-badge.pop { animation: none; } .pw-eye .slash { transition: none; } .acct-photo-av.is-busy::after { animation-duration: 3s; } }
   `;
   document.head.append(css);
 

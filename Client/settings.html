@@ -614,7 +614,38 @@
     .s-perm-state[data-state="denied"]::before { background: #C8553D; }
     .s-perm-state[data-state="unsupported"]::before { background: rgba(46,44,58,.25); }
     .s-line .s-change[hidden] { display: none; }
-    @media (prefers-reduced-motion: reduce) { .s-avatar.is-busy::after { animation-duration: 3s; } }
+    /* Space on this device: a bar split into what's stored, and a row per part with its own Clear */
+    .s-store-top b#storeTotal { font-variant-numeric: tabular-nums; }
+    .s-store .s-bar { height: 14px; border-radius: 7px; cursor: pointer; }
+    .s-store .s-bar i { min-width: 6px; transition: width .7s cubic-bezier(.2, .8, .2, 1), opacity .25s ease, filter .25s ease; }
+    .s-store .s-bar i:first-child { border-radius: 7px 0 0 7px; }
+    .s-store .s-bar i:last-child { border-radius: 0 7px 7px 0; }
+    .s-store .s-bar:hover i, .s-store.has-focus .s-bar i { opacity: .35; }
+    .s-store .s-bar i.is-on { opacity: 1 !important; filter: saturate(1.4); }
+    .s-free { color: var(--slate); font-size: .84rem; }
+    .s-parts { display: grid; margin: 0 -.5rem; }
+    .s-part { display: flex; align-items: center; gap: .8rem; padding: .7rem .5rem; border-radius: 14px; transition: background-color .2s ease; }
+    .s-part + .s-part { box-shadow: inset 0 1px 0 rgba(46, 44, 58, .06); }
+    .s-part.is-on { background: rgba(46, 44, 58, .05); }
+    .s-part-dot { flex: none; width: .8rem; height: .8rem; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); }
+    .s-part .s-text b { font-size: .95rem; }
+    .s-part .s-text small { font-size: .8rem; }
+    .s-part-size { flex: none; min-width: 4.2rem; text-align: right; font-weight: 650; font-size: .9rem; font-variant-numeric: tabular-nums; color: var(--dusk); }
+    .s-part .s-change { flex: none; min-width: 4.6rem; }
+    .s-part .s-change:disabled { opacity: .45; cursor: default; }
+    .s-part-keep { flex: none; min-width: 4.6rem; text-align: center; font-size: .78rem; color: var(--stone); }
+    .s-part.is-empty .s-part-size { color: var(--stone); font-weight: 500; }
+    :root[data-theme="dark"] .s-part.is-on { background: rgba(255, 255, 255, .06); }
+    :root[data-theme="dark"] .s-part + .s-part { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07); }
+    .s-store .s-row { margin: 0 -1.25rem -1.25rem; border-top: 1px solid rgba(46, 44, 58, .07); }
+    :root[data-theme="dark"] .s-store .s-row { border-color: rgba(255, 255, 255, .08); }
+    @media (max-width: 520px) {
+      .s-part { flex-wrap: wrap; }
+      .s-part .s-text { flex-basis: calc(100% - 2rem); }
+      .s-part-size { margin-left: 1.6rem; text-align: left; min-width: 0; }
+      .s-part .s-change, .s-part-keep { margin-left: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) { .s-avatar.is-busy::after { animation-duration: 3s; } .s-store .s-bar i { transition: none; } }
   </style>
   <!-- @shared:css (generated block; the same in index.html and albums.html) -->
   <style>
@@ -1655,8 +1686,11 @@
           <section class="s-group" style="--d: .42s" aria-labelledby="g-store" id="storeGroup" hidden>
             <h2 id="g-store">Space on this device</h2>
             <div class="s-list panel">
-              <div class="s-store">
-                <div class="s-store-top"><span class="s-text"><b id="storeTotal">Checking…</b><small>Saved pages, previews and settings. Freeing it up keeps your photos, albums and login.</small></span><button class="btn btn-light btn-sm" type="button" id="clearCache">Free up space</button></div>
+              <div class="s-store" id="store">
+                <div class="s-store-top"><span class="s-text"><b id="storeTotal">Checking…</b><small id="storeFree" class="s-free"></small></span><button class="btn btn-light btn-sm" type="button" id="clearCache">Free up space</button></div>
+                <div class="s-bar" id="storeBar" role="img" aria-label="How Momento’s space on this device is used"></div>
+                <div class="s-parts" id="storeParts"></div>
+                <div class="s-row" data-row id="keepRow"><span class="s-text"><b>Keep Momento’s data on this device</b><small>Stops the browser clearing it by itself when the device runs low on space</small></span><button class="s-sw" type="button" role="switch" aria-checked="false" aria-label="Keep Momento’s data on this device" id="keepSw"></button><span class="s-state" aria-hidden="true"></span></div>
               </div>
             </div>
           </section>
@@ -2236,22 +2270,117 @@
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPerms(); });
       refreshPerms();
 
-      // ---- Space on this device: the browser's own figure for this site ----
+      // ---- Space on this device: what Momento keeps in this browser, part by part ----
+      // Sizes come from the browser (navigator.storage) and from Momento's own saved items. Each part
+      // can be cleared on its own; your photos are on Momento's servers, so nothing here holds them.
       const storeGroup = document.getElementById('storeGroup'), storeTotal = document.getElementById('storeTotal');
-      const size = (b) => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
+      const storeEl = document.getElementById('store'), barEl = document.getElementById('storeBar'), partsEl = document.getElementById('storeParts');
+      const size = (b) => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : b >= 1e3 ? `${(b / 1e3).toFixed(1)} KB` : `${Math.round(b)} bytes`;
+      const PARTS = [
+        { id: 'cache', name: 'Saved pages and pictures', what: 'Copies the browser keeps so pages and photos open faster', c: '#AFC0F0', clear: 'Clear' },
+        { id: 'alerts', name: 'Notification memory', what: 'Which chat messages and nearby events you’ve already been told about', c: '#C9C0E2', clear: 'Clear', keys: /^momento-(chat-seen|nearby-seen|camera-asked)$/ },
+        { id: 'shortcuts', name: 'Album shortcuts', what: 'Albums and wait-lists remembered on this device for quick access', c: '#C6DEDA', clear: 'Clear', keys: /^momento-(my-albums|removed|waitlist)/ },
+        { id: 'preview', name: 'Sample albums (local preview)', what: 'The pretend albums used when trying Momento on this computer', c: '#EADCC8', clear: 'Clear', keys: /^momento-dev/ },
+        { id: 'choices', name: 'Your choices', what: 'Light or dark, and the switches on this page', c: '#E6CDD6', keep: 'Kept', keys: /^momento-(settings|theme|notify-nearby)$/ },
+      ];
+      const lsBytes = (re) => { let t = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (re.test(k)) t += (k.length + (localStorage.getItem(k) || '').length) * 2; } } catch (e) {} return t; };
+      const lsClear = (re) => { try { Object.keys(localStorage).filter((k) => re.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) {} };
+      let shownTotal = 0, focusId = '';
+      const countTo = (to) => {
+        const from = shownTotal, t0 = performance.now(), ms = still ? 0 : 700;
+        shownTotal = to;
+        const step = (t) => { const k = ms ? Math.min(1, (t - t0) / ms) : 1, e = 1 - Math.pow(1 - k, 3); storeTotal.textContent = `${size(from + (to - from) * e)} used by Momento`; if (k < 1) requestAnimationFrame(step); };
+        requestAnimationFrame(step);
+      };
+      const highlight = (id) => {
+        focusId = id;
+        storeEl.classList.toggle('has-focus', !!id);
+        barEl.querySelectorAll('i').forEach((i) => i.classList.toggle('is-on', i.dataset.part === id));
+        partsEl.querySelectorAll('.s-part').forEach((p) => p.classList.toggle('is-on', p.dataset.part === id));
+      };
       async function measure() {
-        if (!navigator.storage?.estimate) return;
-        const { usage = 0 } = await navigator.storage.estimate().catch(() => ({}));
+        if (!navigator.storage?.estimate) { storeGroup.hidden = true; return; }
+        const est = await navigator.storage.estimate().catch(() => ({}));
+        const d = est.usageDetails || {};
+        const sizes = {};
+        for (const p of PARTS) if (p.keys) sizes[p.id] = lsBytes(p.keys);
+        // Browser storage other than these small saved items (caches, databases, offline files)
+        const local = Object.values(sizes).reduce((a, b) => a + b, 0);
+        sizes.cache = d.caches != null || d.indexedDB != null ? (d.caches || 0) + (d.indexedDB || 0) + (d.serviceWorkerRegistrations || 0) : Math.max(0, (est.usage || 0) - local);
+        const parts = PARTS.filter((p) => p.id !== 'preview' || sizes.preview);
+        const total = parts.reduce((t, p) => t + sizes[p.id], 0);
         storeGroup.hidden = false;
-        storeTotal.textContent = `${size(usage)} used by Momento`;
+        countTo(total);
+        document.getElementById('storeFree').textContent = est.quota ? `About ${size(Math.max(0, est.quota - (est.usage || 0)))} still free for Momento in this browser. Your photos are on Momento’s servers, not here.` : 'Your photos are on Momento’s servers, not here.';
+        // The bar: one coloured part each, in proportion
+        barEl.replaceChildren(...parts.filter((p) => sizes[p.id] > 0).map((p) => {
+          const i = document.createElement('i');
+          i.dataset.part = p.id; i.style.setProperty('--c', p.c);
+          i.style.width = `${Math.max(2, (sizes[p.id] / (total || 1)) * 100)}%`;
+          i.title = `${p.name}: ${size(sizes[p.id])}`;
+          return i;
+        }));
+        // A row per part, with its size and its own Clear
+        partsEl.replaceChildren(...parts.map((p) => {
+          const row = document.createElement('div');
+          row.className = 's-part' + (sizes[p.id] ? '' : ' is-empty');
+          row.dataset.part = p.id;
+          row.style.setProperty('--c', p.c);
+          row.innerHTML = `<span class="s-part-dot" aria-hidden="true"></span><span class="s-text"><b></b><small></small></span><span class="s-part-size"></span>`
+            + (p.keep ? `<span class="s-part-keep">${p.keep}</span>` : `<button class="s-change" type="button">${p.clear}</button>`);
+          row.querySelector('b').textContent = p.name;
+          row.querySelector('small').textContent = p.what;
+          row.querySelector('.s-part-size').textContent = sizes[p.id] ? size(sizes[p.id]) : 'Empty';
+          const btn = row.querySelector('.s-change');
+          if (btn) {
+            btn.disabled = !sizes[p.id];
+            btn.setAttribute('aria-label', `Clear ${p.name}`);
+            btn.addEventListener('click', async () => { await clearPart(p); toast(`${p.name} cleared`, 'Your photos, albums and login are untouched.'); });
+          }
+          row.addEventListener('pointerenter', () => highlight(p.id));
+          row.addEventListener('pointerleave', () => highlight(''));
+          row.addEventListener('focusin', () => highlight(p.id));
+          row.addEventListener('focusout', () => highlight(''));
+          return row;
+        }));
+        if (focusId) highlight(focusId);
+      }
+      async function clearPart(p) {
+        if (p.id === 'cache') {
+          try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (err) {}
+        } else if (p.keys) lsClear(p.keys);
+        await measure();
+      }
+      // The bar: point at a part to see which it is; tap it to jump to its row
+      barEl.addEventListener('pointermove', (e) => { const i = e.target.closest('i'); if (i) highlight(i.dataset.part); });
+      barEl.addEventListener('pointerleave', () => highlight(''));
+      barEl.addEventListener('click', (e) => {
+        const i = e.target.closest('i'); if (!i) return;
+        const row = partsEl.querySelector(`[data-part="${i.dataset.part}"]`);
+        highlight(i.dataset.part);
+        (row.querySelector('button:not(:disabled)') || row).focus?.({ preventScroll: true });
+        row.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+      });
+      document.getElementById('clearCache').addEventListener('click', async () => {
+        for (const p of PARTS) if (!p.keep) await clearPart(p);
+        toast('Space freed up', 'Your photos, albums, login and choices are untouched.');
+      });
+      // Persistent storage: the browser's own "don't clear this site by itself"
+      const keepSw = document.getElementById('keepSw');
+      if (!navigator.storage?.persist) document.getElementById('keepRow').hidden = true;
+      else {
+        navigator.storage.persisted().then((on) => keepSw.setAttribute('aria-checked', String(on))).catch(() => {});
+        keepSw.addEventListener('click', async () => {
+          // Ask the browser, and show its real answer
+          const want = keepSw.getAttribute('aria-checked') !== 'true';
+          if (!want) { toast('Your browser decides when to stop keeping it', 'Clearing this site’s data in the browser’s settings removes it.'); return; }
+          const ok = await navigator.storage.persist().catch(() => false);
+          keepSw.setAttribute('aria-checked', String(ok));
+          toast(ok ? 'Momento’s data will be kept' : 'Your browser said no for now', ok ? 'The browser won’t clear it by itself.' : 'Browsers allow this once a site is used often, or installed to the Home Screen.');
+        });
       }
       measure();
-      document.getElementById('clearCache').addEventListener('click', async () => {
-        try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (err) {}
-        try { ['momento-my-albums', 'momento-removed', 'momento-waitlist', 'momento-nearby-seen', 'momento-camera-asked'].forEach((k) => localStorage.removeItem(k)); } catch (err) {}
-        await measure();
-        toast('Space freed up', 'Your photos, albums and login are untouched.');
-      });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) measure(); });
 
       // Account
       // Account
@@ -2502,7 +2631,13 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <h2 id="acctSettingsTitle">Account settings</h2>
-          <p class="acct-sub">Update your name and email notification preferences.</p>
+          <p class="acct-sub">Update your photo, name and email notification preferences.</p>
+          <div class="acct-photo">
+            <span class="acct-photo-av" aria-hidden="true"></span>
+            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups, chats and albums</small></span>
+            <span class="acct-photo-acts"><button class="acct-photo-btn" type="button" data-photo-pick>Add photo</button><button class="acct-photo-btn is-danger" type="button" data-photo-rm hidden>Remove</button></span>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden data-photo-file>
+          </div>
           <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
           <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
           <div class="acct-group" role="group" aria-label="Email me when">
@@ -2511,13 +2646,54 @@
             <div class="acct-row"><span><b>An album is about to close</b><small>so I can download my photos in time</small></span><button class="acct-sw" type="button" role="switch" aria-label="An album is about to close" aria-checked="true" data-key="closing"></button></div>
             <div class="acct-row"><span><b>Weekly recap</b><small>the best new photos from my albums</small></span><button class="acct-sw" type="button" role="switch" aria-label="Weekly recap" aria-checked="false" data-key="recap"></button></div>
           </div>
-          <a class="acct-adv" href="settings.html"><span class="acct-adv-ic">${ICON.settings}</span><span><b>Advanced settings</b><small>Uploads, cloud, privacy and storage</small></span>${ICON.chev}</a>
+          <a class="acct-adv" href="settings.html"><span class="acct-adv-ic">${ICON.settings}</span><span><b>Advanced settings</b><small>Password, permissions, notifications and storage</small></span>${ICON.chev}</a>
           <p class="acct-status" role="status"></p>
           <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Save changes</button></div>
         </form>`, getReturn);
       if (/settings\.html$/.test(location.pathname)) d.querySelector('.acct-adv').hidden = true;   // already here
       const form = d.querySelector('form'), status = d.querySelector('.acct-status');
       const switches = [...d.querySelectorAll('.acct-sw')];
+      // Profile photo: saved straight away (not with Save changes), like on the Settings page
+      const photoAv = d.querySelector('.acct-photo-av'), photoPick = d.querySelector('[data-photo-pick]'), photoRm = d.querySelector('[data-photo-rm]'), photoFile = d.querySelector('[data-photo-file]');
+      const showPhoto = (a) => {
+        const name = (a && (a.name || a.email)) || 'You';
+        photoAv.replaceChildren();
+        if (a && a.avatarUrl) {
+          const img = document.createElement('img');
+          img.src = a.avatarUrl; img.alt = ''; img.referrerPolicy = 'no-referrer';
+          img.onerror = () => { img.remove(); photoAv.textContent = name[0].toUpperCase(); };
+          photoAv.append(img);
+        } else photoAv.textContent = name[0].toUpperCase();
+        photoPick.textContent = a && a.avatarUrl ? 'Change' : 'Add photo';
+        photoRm.hidden = !(a && a.avatarUrl);
+      };
+      Momento.account.onChange(showPhoto);
+      showPhoto(Momento.account.get());
+      photoPick.addEventListener('click', () => photoFile.click());
+      photoFile.addEventListener('change', async () => {
+        const f = photoFile.files[0];
+        photoFile.value = '';
+        if (!f) return;
+        if (f.size > 10 * 1024 * 1024) { say('Choose a photo under 10 MB.', true); return; }
+        const fd = new FormData();
+        fd.append('avatar', f, f.name || 'photo.jpg');
+        photoAv.classList.add('is-busy'); photoPick.disabled = photoRm.disabled = true; say('Uploading your photo…');
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
+          Momento.account.set(user);
+          say('Photo updated. Friends see it in groups and chats.');
+        } catch (err) { say(err.message, true); }
+        finally { photoAv.classList.remove('is-busy'); photoPick.disabled = photoRm.disabled = false; }
+      });
+      photoRm.addEventListener('click', async () => {
+        photoPick.disabled = photoRm.disabled = true;
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'DELETE' });
+          Momento.account.set(user);
+          say('Photo removed. Your initials show instead.');
+        } catch (err) { say(err.message, true); }
+        finally { photoPick.disabled = photoRm.disabled = false; }
+      });
       switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
       const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
       form.addEventListener('submit', async (e) => {
