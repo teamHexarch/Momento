@@ -4,6 +4,7 @@
 # assets/devpreview.js (local dev mode) is removed from the published files.
 #
 # Needs Settings > Pages > Build and deployment > Source set to "GitHub Actions".
+# To publish again without changing anything: GitHub > Actions > Publish site > Run workflow.
 
 name: Publish site
 
