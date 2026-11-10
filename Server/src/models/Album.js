@@ -21,8 +21,9 @@ const albumSchema = new mongoose.Schema({
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   // The friend group it's shared with, if any: everyone in the group can see it and add photos
   group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group', index: true },
-  // Sharing zone: guests must be within radiusM of the venue to add photos (1 to 10 km for new
-  // albums). Checked on upload; joining is still open to anyone with the code.
+  // Sharing zone: the venue and a radius (1 to 10 km for new albums). When locationRequired is on,
+  // a guest joining must be within radiusM (plus their fix's accuracy) or wait for the host's
+  // approval. Members can add photos from anywhere while uploads are open.
   zone: {
     lat: Number,
     lng: Number,
@@ -31,6 +32,13 @@ const albumSchema = new mongoose.Schema({
   // Who can join: 'invite' (the code, link or QR code) or 'public' (also listed on the Events map,
   // where anyone inside the zone can join)
   visibility: { type: String, enum: ['invite', 'public'], default: 'invite' },
+  joiningOpen: { type: Boolean, default: true },
+  joinDeadline: Date,
+  locationRequired: { type: Boolean, default: true },
+  chatEnabled: { type: Boolean, default: false },
+  requests: [{ _id: false, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    status: { type: String, enum: ['pending', 'approving', 'declined'] }, name: String }],
+  messages: { type: [{ name: String, body: String, at: Date }], select: false, default: undefined },
   // When a host last emailed guests who haven't added photos (one reminder a day per album)
   lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.

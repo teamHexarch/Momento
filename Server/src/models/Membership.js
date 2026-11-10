@@ -7,10 +7,12 @@ const membershipSchema = new mongoose.Schema({
   role: { type: String, enum: ['host', 'guest'], required: true },
   // 'group': a row kept only to remember what a friend-group member has hidden in a group album.
   // It never grants access on its own: that comes from being in the group, checked every time.
-  via: { type: String, enum: ['group'] },
+  via: { type: String, enum: ['group', 'invite', 'location', 'approval'] },
   // Photos this person has hidden from their own view of the album (Sort photos). Everyone else
   // still sees them; nothing is deleted
   hidden: { type: [mongoose.Schema.Types.ObjectId], default: [] },
+  // When this person last read the event chat (for the unread count, as in friend groups)
+  chatReadAt: Date,
 }, { timestamps: true });
 
 membershipSchema.index({ album: 1, user: 1 }, { unique: true });

@@ -1,6 +1,22 @@
 <!doctype html>
 <html lang="en" data-page="albums">
 <head>
+  <script>if (location.hash === "#join" || new URLSearchParams(location.search).has("join")) location.replace("events.html" + location.search + location.hash);</script>
+  <script>
+    // Embedded (albums.html?album=<id>&embed=1 inside another Momento page): only the album window shows,
+    // over the page that opened it. Links leave to the top page; no intro plays.
+    (() => {
+      if (window.parent === window || !new URLSearchParams(location.search).has('embed')) return;
+      try { if (window.parent.location.origin !== location.origin) return; } catch (e) { return; }
+      document.documentElement.classList.add('is-embed');
+      const base = document.createElement('base'); base.target = '_top'; document.head.append(base);
+      try { sessionStorage.setItem('momento-intro-albums', '1'); } catch (e) {}
+    })();
+  </script>
+  <style>
+    html.is-embed, html.is-embed body { background: transparent !important; }
+    html.is-embed .bg, html.is-embed .grain, html.is-embed .header, html.is-embed .page-wrap, html.is-embed #intro { display: none !important; }
+  </style>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/nearby.js" defer></script>
@@ -225,6 +241,10 @@
     }
     .btn-pearl:hover, .btn-light:hover { color: var(--paper); }
     .btn-light { background: rgba(255,255,255,.92); color: var(--dusk); --fill: var(--dusk); box-shadow: inset 0 0 0 1px rgba(46,44,58,.08); }
+    /* Not taking photos right now: looks off, but a press still explains why */
+    .btn[aria-disabled="true"], .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn[aria-disabled="true"] .btn-fill, .btn:disabled .btn-fill { display: none; }
+    .btn-light:is([aria-disabled="true"], :disabled):hover { color: var(--dusk); }
 
     /* ---------- Page ---------- */
     .page-wrap { position: relative; z-index: 1; }
@@ -2007,11 +2027,6 @@
         <div>
           <span class="mask"><h1 class="title ink rise" data-text="My albums">My albums</h1></span>
           <p class="lede intro" id="lede" style="--d: .3s"></p>
-          <div class="actions intro" style="--d: .42s">
-            <button class="btn btn-pearl" type="button" id="joinOpen">Join with a code</button>
-            <button class="btn btn-light" type="button" id="scanOpen" data-qr-scan>Scan a QR code</button>
-            <a class="btn btn-dark" href="index.html#for-hosts" data-create>Create an album</a>
-          </div>
         </div>
         <article class="live panel intro" id="live" style="--d: .5s" aria-labelledby="liveTitle"></article>
       </section>
@@ -2141,30 +2156,6 @@
     <p class="vw-hint" id="vwHint">Click the photo to zoom in</p>
   </dialog>
 
-  <dialog class="modal" id="joinModal" aria-labelledby="joinTitle">
-    <form class="modal-card small" id="joinForm" novalidate>
-      <button class="close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
-      <h2 id="joinTitle" style="padding-right: 2.5rem">Join an album</h2>
-      <p class="modal-sub">Enter the 7-character code the host shared with you.</p>
-      <div class="field"><span id="joinCodeLabel">Album code</span>
-        <div class="otp" id="joinOtp" role="group" aria-labelledby="joinCodeLabel">
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 1 of 7">
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 2 of 7">
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 3 of 7">
-          <span class="otp-dash" aria-hidden="true"></span>
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 4 of 7">
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 5 of 7">
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 6 of 7">
-          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 7 of 7">
-        </div>
-        <input type="hidden" name="code" id="joinCode">
-      </div>
-      <p class="note" id="joinNote" role="status"></p>
-      <div class="modal-actions"><button class="btn btn-dark" type="submit" style="width: 100%">Join album</button></div>
-      <button class="join-scan" type="button" id="joinScan">Or scan the host’s QR code</button>
-    </form>
-  </dialog>
-
   <script>
     document.documentElement.classList.remove('intro-on');
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2243,7 +2234,7 @@
     function sumUp(first) {
       const list = kept(), p = list.reduce((t, a) => t + a.photos, 0), m = list.reduce((t, a) => t + a.mine, 0), up = tally('new');
       const n = (v) => (first ? `<b data-count="${v}">0</b>` : `<b>${num(v)}</b>`);
-      document.getElementById('lede').innerHTML = `Every event you’ve been part of: ${tally('live')} live now, ${up ? `${up} coming up, ` : ''}${tally('wrapping')} wrapping up, ${tally('kept')} kept. ${n(p)} photos, ${n(m)} of them yours.`;
+      document.getElementById('lede').innerHTML = `Your event and group albums: ${tally('live')} live now, ${up ? `${up} coming up, ` : ''}${tally('wrapping')} wrapping up, ${tally('kept')} kept. ${n(p)} photos, ${n(m)} of them yours.`;
       const arch = list, counts = { all: arch.length, host: arch.filter((a) => a.role === 'host').length };
       counts.guest = counts.all - counts.host;
       counts.group = arch.filter((a) => a.group).length;
@@ -2253,8 +2244,6 @@
 
     const liveEl = document.getElementById('live');
     liveEl.hidden = true;
-    const story = { paused: false };
-    function updateStory() {}
     // The big card beside "My albums": the album that's live now; otherwise the most recent one
     // with photos (wrapping up first), then the next one coming up, then the latest. So the spot is
     // never left empty while there are albums.
@@ -2471,7 +2460,6 @@
     function showModal(m) {
       // The custom cursor can't draw above a modal, so the normal cursor comes back
       root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
-      story.paused = true;
       m.showModal();
       // The dimmed backdrop fades in rather than snapping on
       if (!still) try { m.animate({ opacity: [0, 1] }, { duration: 380, easing: 'ease-out', pseudoElement: '::backdrop' }); } catch (e) {}
@@ -2583,7 +2571,8 @@
       fillAlbum(a);
       document.getElementById('albumNote').textContent = '';
       if (!uploading) setUpload('off');
-      if (upload && a.open !== false) {
+      if (upload && !canAdd(a)) document.getElementById('albumNote').textContent = noAddReason(a);
+      else if (upload) {
         // Straight to the photo picker (browsers allow it shortly after a click); the hint covers the rest
         document.getElementById('albumNote').textContent = 'Choose Add your photos below to upload.';
         try { albumFiles.click(); } catch {}
@@ -2655,7 +2644,6 @@
       albumCard.classList.remove('is-flying');
       if (M.hidden) { M.hidden.style.opacity = ''; M.hidden = null; }
       M.closing = false;
-      story.paused = false;
       if (useCursor) root.classList.add('has-cursor');
     });
     albumModal.addEventListener('cancel', (e) => { e.preventDefault(); closeAlbum(); });
@@ -2708,8 +2696,8 @@
       albumRemove.hidden = false;
       // Albums with event times take photos in their window; the host can add at any time
       const can = canAdd(a);
-      document.getElementById('albumAdd').disabled = !can;
-      document.getElementById('albumCamera').disabled = !can;
+      // Still clickable when the album isn't taking photos, so a press can say why (see noAddReason)
+      for (const id of ['albumAdd', 'albumCamera']) document.getElementById(id).setAttribute('aria-disabled', String(!can));
       const win = document.getElementById('albumWindow');
       win.textContent = openLabel(a);
       win.title = Momento.event?.windowText(a) || '';
@@ -2723,11 +2711,26 @@
       sortLink.href = 'sort.html?album=' + encodeURIComponent(a.id);
       albumRemove.textContent = a.role === 'host' ? 'Delete album' : 'Leave album';
     }
-    const canAdd = (a) => !!a && (a.open || (a.role === 'host' && !!a.startsAt));
-    document.getElementById('albumAdd').addEventListener('click', () => albumFiles.click());
+    const canAdd = (a) => !!a?.open;
+    // Why photos can't be added right now, in words
+    function noAddReason(a) {
+      if (!a) return '';
+      const at = (d) => new Date(d).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      const soon = a.status === 'new' || a.status === 'upcoming';
+      if (soon && (a.opensAt || a.startsAt)) return `Photos can be added from ${at(a.opensAt || a.startsAt)}.`;
+      if (soon) return 'Photos can be added once the event starts.';
+      return 'This album has closed to new photos. You can still look at it and download everything.';
+    }
+    function tryAdd() {
+      if (uploading) return false;
+      if (canAdd(M.a)) return true;
+      document.getElementById('albumNote').textContent = noAddReason(M.a);
+      return false;
+    }
+    document.getElementById('albumAdd').addEventListener('click', () => { if (tryAdd()) albumFiles.click(); });
     // Momento's own camera: the photos go straight into the upload, never into the device's gallery
     document.getElementById('albumCamera').addEventListener('click', async () => {
-      if (!M.a || uploading || !Momento.event) return;
+      if (!M.a || !Momento.event || !tryAdd()) return;
       const files = await Momento.event.camera();
       if (files.length) uploadFiles(files);
     });
@@ -2803,7 +2806,7 @@
         uploadPct.textContent = '';
         note.textContent = err.message + ' Refresh the album before retrying; some photos may have uploaded.';
         try { await fetchAlbum(a); photosChanged(a, 0); } catch {}
-      } finally { uploading = false; add.disabled = !canAdd(M.a); document.getElementById('albumCamera').disabled = !canAdd(M.a); }
+      } finally { uploading = false; add.disabled = false; document.getElementById("albumCamera").disabled = false; }
     }
     // A link to share: hosts get a join link (it carries the album code); guests get a link back to the album
     const albumLinkFor = (a) => {
@@ -3202,101 +3205,7 @@
 
     // ---- Join an album using the server-issued guest code ----
 
-    const joinModal = document.getElementById('joinModal');
-    const joinForm = document.getElementById('joinForm');
-    const joinCode = document.getElementById('joinCode');
-    const joinNote = document.getElementById('joinNote');
-    joinModal.addEventListener('close', () => { story.paused = false; if (useCursor) root.classList.add('has-cursor'); });
-    joinModal.addEventListener('pointerdown', (e) => { joinModal._downOutside = e.target === joinModal; }); joinModal.addEventListener('click', (e) => { if (e.target === joinModal && joinModal._downOutside) softClose(joinModal); });
-    joinModal.querySelector('[data-close]').addEventListener('click', () => softClose(joinModal));
-    joinModal.addEventListener('cancel', (e) => { e.preventDefault(); softClose(joinModal); });
-    // Opened empty from the hero, or with a code already typed when it comes from an invite
-    const otp = document.getElementById('joinOtp');
-    const otpBoxes = [...otp.querySelectorAll('input')];
-    const CODE_CHAR = /[^A-Z0-9]/g;
-    // The hidden field holds the whole code (K7Q-48DM) for the form
-    function syncOtp() {
-      const chars = otpBoxes.map((b) => b.value).join('');
-      joinCode.value = chars.length > 3 ? chars.slice(0, 3) + '-' + chars.slice(3) : chars;
-      otpBoxes.forEach((b) => b.classList.toggle('is-filled', !!b.value));
-      otp.classList.remove('is-error');
-      return chars;
-    }
-    function setOtp(code) {
-      const chars = String(code || '').toUpperCase().replace(CODE_CHAR, '').slice(0, 7);
-      otpBoxes.forEach((b, i) => { b.value = chars[i] || ''; });
-      syncOtp();
-    }
-    const focusOtp = () => (otpBoxes.find((b) => !b.value) || otpBoxes[otpBoxes.length - 1]).focus();
-    // Typing or pasting into any box fills it and the boxes after it; the last one sends the form
-    function fillFrom(i, text) {
-      const chars = text.toUpperCase().replace(CODE_CHAR, '');
-      if (!chars) { syncOtp(); return; }
-      for (let k = 0; k < chars.length && i + k < otpBoxes.length; k++) otpBoxes[i + k].value = chars[k];
-      const next = Math.min(i + chars.length, otpBoxes.length - 1);
-      const full = syncOtp().length === 7;
-      otpBoxes[next].focus();
-      if (full && i + chars.length >= 7) joinForm.requestSubmit();
-    }
-    otpBoxes.forEach((box, i) => {
-      box.addEventListener('focus', () => box.select());
-      box.addEventListener('input', () => {
-        const v = box.value; box.value = '';
-        fillFrom(i, v);
-      });
-      box.addEventListener('paste', (e) => { e.preventDefault(); fillFrom(i, e.clipboardData?.getData('text') || ''); });
-      box.addEventListener('keydown', (e) => {
-        if (e.key === 'Backspace' && !box.value && i > 0) { e.preventDefault(); otpBoxes[i - 1].value = ''; otpBoxes[i - 1].focus(); syncOtp(); }
-        else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); otpBoxes[i - 1].focus(); }
-        else if (e.key === 'ArrowRight' && i < otpBoxes.length - 1) { e.preventDefault(); otpBoxes[i + 1].focus(); }
-      });
-    });
-    function otpError() {
-      otp.classList.add('is-error'); otp.classList.remove('is-shake');
-      void otp.offsetWidth; otp.classList.add('is-shake');
-    }
-    function openJoin(code = '') {
-      setOtp(code); joinNote.textContent = ''; joinNote.classList.remove('error');
-      showModal(joinModal); focusOtp();
-    }
-    document.getElementById('joinOpen').addEventListener('click', () => openJoin());
-    // QR codes (assets/qr.js): the scanner's "Type the code" opens this window, and a scanned code joins here
-    // (this runs before the shared script, so window.Momento may not exist yet)
-    const MQ = (window.Momento ||= {});
-    MQ.openJoin = (code) => openJoin(code);
-    MQ.joinFromQr = (code) => joinFromLink(code);
-    document.getElementById('joinScan').addEventListener('click', async (e) => { await softClose(joinModal); Momento.qr?.scan(document.getElementById('joinOpen')); });
     document.getElementById('albumQr').addEventListener('click', (e) => { if (M.a?.code) Momento.qr?.show(M.a, e.currentTarget); });
-    // The footer's "Join with a code" link arrives as albums.html#join
-    const joinFromHash = () => {
-      if (location.hash !== '#join') return;
-      history.replaceState(null, '', location.pathname + location.search);
-      openJoin();
-    };
-    addEventListener('hashchange', joinFromHash);
-    if (document.documentElement.classList.contains('intro-on')) document.addEventListener('momento:intro-end', () => setTimeout(joinFromHash, 250), { once: true });
-    else setTimeout(joinFromHash, 250);
-    joinForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const code = joinCode.value.trim().toUpperCase().replace(/\s/g, '');
-      if (!/^[A-Z0-9]{3}-?[A-Z0-9]{4}$/.test(code)) {
-        joinNote.classList.add('error');
-        joinNote.textContent = 'Codes are 7 letters and numbers, like K7Q-48DM.';
-        otpError(); focusOtp(); return;
-      }
-      joinNote.classList.remove('error');
-      const button = joinForm.querySelector('[type="submit"]');
-      if (button.disabled) return;
-      button.disabled = true;
-      try {
-        const { album } = await momentoApi('/api/albums/join', momentoJson('POST', { code }));
-        await loadAlbums();
-        await softClose(joinModal);
-        await openAlbum(album.id);
-      } catch (err) { joinNote.classList.add('error'); joinNote.textContent = err.message; otpError(); }
-      finally { button.disabled = false; }
-    });
-
     // ---- Albums come and go: created or joined here, deleted or left, or brought back with Undo ----
     function refreshCard(a) {
       if (!cards.has(a.id)) return null;   // the live album has no card in the archive
@@ -3549,8 +3458,6 @@
       W.s = clamp(W.v / 2000, -1, 1);
       W.a = Math.abs(W.s);
     }
-    // The live story bends with the scroll too
-    function updateLive() {}
     // Covers lean back as they rise, stand up mid-screen, tilt toward the cursor, and bend with speed;
     // the photo drifts inside its frame
     function updateCovers() {
@@ -3597,7 +3504,7 @@
       ALBUMS.splice(0, ALBUMS.length, ...updated);
       ALBUMS.forEach((a, i) => cards.set(a.id, makeCard(a, i)));
       render(false); sumUp(false); renderLive();
-      document.querySelector('#empty > span').textContent = ALBUMS.length ? 'Try another name or place.' : 'Create an album or join with a code to add your first photos.';
+      document.querySelector('#empty > span').textContent = ALBUMS.length ? 'Try another name or place.' : 'Your event and group albums will appear here.';
       renderFeed(result);
       renderTodo(result);
       renderSorter();
@@ -3626,12 +3533,8 @@
     const coverTile = (a) => (a.pics?.length ? `<img src="${esc(pic(a.pics[0], 120, 120))}" alt="" loading="lazy" decoding="async">` : initialTile(a.name));
     const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
     function renderTodo(result) {
+      // (Invitations to join live on the Events page; this page only shows albums you're already in)
       todos = [];
-      for (const inv of result.invites || []) todos.push({
-        kind: 'invite', pic: initialTile(inv.name), title: `${inv.by} invited you to ${inv.name}`,
-        note: [inv.date && fmtDate(inv.date), inv.place].filter(Boolean).join(', ') || 'Join to see and add photos.',
-        act: 'Join', run: () => openJoin(inv.code),
-      });
       const list = kept();
       // Happening now and you haven't added anything yet
       for (const a of list) if (a.status === 'live' && a.open !== false && !a.mine) todos.push({
@@ -3699,15 +3602,14 @@
         <li class="todo-empty">
           <span class="todo-empty-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
           <b>You’re all caught up</b>
-          <p>${list.length ? 'Nothing needs you right now. Invites, reminders and albums about to close will show up here.' : 'Create an album for your next event, or join one with the code from a host.'}</p>
-          <span class="todo-empty-acts"><button class="todo-act" type="button" data-empty="create">Create an album</button><button class="todo-act is-light" type="button" data-empty="join">Join with a code</button></span>
+          <p>${list.length ? 'Nothing needs you right now. Invites, reminders and albums about to close will show up here.' : 'Your albums will appear here once you create one or join an event.'}</p>
+          <span class="todo-empty-acts"><button class="todo-act" type="button" data-empty="create">Create an album</button></span>
         </li>`;
     }
     todoEl.addEventListener('click', (e) => {
       const b = e.target.closest('.todo-act');
       if (!b || b.disabled) return;
       if (b.dataset.empty === 'create') return Momento.createAlbum?.(b);
-      if (b.dataset.empty === 'join') return openJoin();
       todos[+b.dataset.todo]?.run(b);
     });
 
@@ -3756,19 +3658,10 @@
     });
 
     const PENDING_JOIN = 'momento-pending-join';
-    // An invite link joins straight away and opens the album. If the code doesn't work, the join
-    // window opens with it filled in and says why
-    async function joinFromLink(code) {
-      try {
-        const { album, already } = await momentoApi('/api/albums/join', momentoJson('POST', { code }));
-        await loadAlbums();
-        Momento.toast(already ? 'You’re already in this album' : 'You joined the album', `${album.name}. Add your photos whenever you like.`);
-        await openAlbum(album.id);
-      } catch (err) {
-        openJoin(code);
-        joinNote.classList.add('error'); joinNote.textContent = err.message;
-      }
-    }
+    // Embedded in another page (see the top of <head>): that page shows this album window over itself
+    const embedded = root.classList.contains('is-embed');
+    const tellParent = (state) => { try { parent.postMessage({ type: 'momento:album', state }, location.origin); } catch (e) {} };
+    if (embedded) albumModal.addEventListener('close', () => setTimeout(() => { if (!albumModal.open) tellParent('closed'); }, 0));
     document.addEventListener('DOMContentLoaded', async () => {
       const lede = document.getElementById('lede');
       lede.textContent = 'Loading your albums…';
@@ -3776,9 +3669,6 @@
       try {
         const user = await Momento.sessionReady;
         const params = new URLSearchParams(location.search);
-        if (params.get('join')) {
-          try { localStorage.setItem(PENDING_JOIN, JSON.stringify({ code: params.get('join'), at: Date.now() })); } catch (e) {}
-        }
         if (!user) {
           // Not logged in (or the login has expired): log in or sign up first, then come back here
           location.replace('index.html?login=1&next=' + encodeURIComponent('albums.html' + location.search + location.hash));
@@ -3789,7 +3679,6 @@
           lede.textContent = 'Confirm your email to view albums and upload photos.';
           document.querySelector('.pulse').hidden = true;
           document.querySelector('.tools').parentElement.hidden = true;
-          document.querySelector('.actions').hidden = true;
           return;
         }
         await loadAlbums();
@@ -3802,12 +3691,14 @@
           params.delete('verified');
           history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
         }
-        if (params.get('album')) await openAlbum(params.get('album'));
-        else if (joinCode) {
-          params.delete('join');
-          history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
-          await joinFromLink(joinCode);
+        if (embedded) {
+          // Inside another page: open the one album, tell that page, and close with it
+          if (params.get('album')) await openAlbum(params.get('album'), 0, null, params.has('upload'));
+          tellParent(albumModal.open ? 'ready' : 'closed');
+          return;
         }
+        if (params.get('album')) await openAlbum(params.get('album'));
+        else if (joinCode) location.replace('events.html?join=' + encodeURIComponent(joinCode));
         else albumFromHash();
       } catch (err) { lede.textContent = 'Could not load your albums. ' + err.message + ' Reload to try again.'; }
     });
@@ -3829,8 +3720,7 @@
           if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
         }
         updateSpeed(dt);
-        updateStory(dt);
-        if (!still) { updateCovers(); updateLive(); }
+        if (!still) updateCovers();
         if (scrollY !== lastScroll) { lastScroll = scrollY; updateScroll(); }
       }
       requestAnimationFrame(frame);
@@ -4244,7 +4134,7 @@
 
     // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
     // The link a host sends guests: opening it asks them to log in or sign up first, then offers to join
-    Momento.inviteLink = (code) => new URL('albums.html?join=' + encodeURIComponent(code), location.href).href;
+    Momento.inviteLink = (code) => new URL('events.html?join=' + encodeURIComponent(code), location.href).href;
     Momento.shareInvite = async (album, btn, label = 'Share link') => {
       const url = Momento.inviteLink(album.code);
       if (navigator.share && matchMedia('(pointer: coarse)').matches) {
@@ -4287,7 +4177,7 @@
               <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
               <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" placeholder="Where it’s on" autocomplete="off"></label>
             </div>
-            <label class="acct-field m-group" hidden><span>Friend group</span><select name="group"><option value="">None: only people I invite</option></select></label>
+            <fieldset class="m-group m-share" hidden><legend class="ev-label">Who do you want to share this album with?</legend><div class="ev-who" role="radiogroup"></div></fieldset>
             <p class="acct-status" role="status"></p>
             <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Create album</button></div>
           </div>
@@ -4316,7 +4206,7 @@
         // Times, venue and zone (assets/event.js)
         const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
         // A friend group: everyone in it gets the album too
-        const groupId = form.group.value, groupName = groupId ? form.group.selectedOptions[0]?.textContent : '';
+        const picked = groupField.querySelector('input[name="group"]:checked'), groupId = picked?.value || '', groupName = groupId ? picked.dataset.name : '';
         if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
         form.dataset.busy = 'true';
@@ -4327,7 +4217,7 @@
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already, and you can keep talking in the group’s chat. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
         d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
@@ -4352,16 +4242,28 @@
       const launch = d.launch;
       // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
       const groupField = d.querySelector('.m-group');
+      // "Who do you want to share this album with?": one of their friend groups (the album joins that
+      // group, and everyone keeps talking in the group's one chat), or just the people at this event
+      // (event chat starts off; the host can turn it on)
+      const shareList = groupField.querySelector('.ev-who');
+      const shareOption = (value, title, note) => {
+        const l = document.createElement('label'), r = document.createElement('input'), b = document.createElement('b'), s = document.createElement('small');
+        r.type = 'radio'; r.name = 'group'; r.value = value; r.dataset.name = title;
+        b.textContent = title; s.textContent = note;
+        l.append(r, b, s);
+        return l;
+      };
       async function loadGroups(pick) {
         groupField.hidden = true;
-        const sel = form.group;
-        sel.length = 1;
+        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code. Event chat starts off, and you can turn it on.'));
+        shareList.querySelector('input').checked = true;
         let groups = [];
-        try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { return; }
-        for (const g of groups) sel.add(new Option(g.name, g.id));
+        try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { groups = []; }
+        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it. You keep talking in the group’s chat, so there’s no new chat to follow.`), shareList.lastChild);
         groupField.hidden = !groups.length;
-        if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
-        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        const want = pick && groups.some((g) => g.id === pick) ? pick : '';
+        const on = [...shareList.querySelectorAll('input')].find((r) => r.value === want);
+        if (on) { on.checked = true; on.dispatchEvent(new Event('change', { bubbles: true })); }
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
@@ -4716,7 +4618,7 @@
             <h2 id="sfAlbums">Your albums</h2>
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
-              <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
               <li><a class="sf-link" href="sort.html">Sort photos</a></li>
               <li><a class="sf-link" href="groups.html">Friend groups</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>

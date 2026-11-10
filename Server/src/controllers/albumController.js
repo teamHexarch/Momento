@@ -1,3 +1,4 @@
+import { admit } from '../services/eventAdmission.js';
 import { once } from 'node:events';
 import mongoose from 'mongoose';
 import { ZipArchive } from 'archiver';
@@ -6,6 +7,7 @@ import { Album } from '../models/Album.js';
 import { Membership } from '../models/Membership.js';
 import { Photo } from '../models/Photo.js';
 import { Comment } from '../models/Comment.js';
+import { EventMessage } from '../models/EventMessage.js';
 import { Invite } from '../models/Invite.js';
 import { User } from '../models/User.js';
 import { Group } from '../models/Group.js';
@@ -18,7 +20,7 @@ import { HttpError } from '../utils/httpError.js';
 import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
 import { savePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
 
-const PREVIEW_PICS = 9;
+const PREVIEW_PICS = 12;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
 const photoUrl = (id) => `${config.publicUrl}/api/photos/${id}`;
 const thumbnailUrl = (id) => `${photoUrl(id)}?size=thumb`;
@@ -148,6 +150,8 @@ function summary(album, role, stats) {
     endsAt: album.endsAt || undefined,
     uploadLeadMin: album.startsAt ? album.uploadLeadMin || 0 : undefined,
     role,
+    chatEnabled: album.chatEnabled,
+    ...(role === 'host' && { joiningOpen: album.joiningOpen, locationRequired: album.locationRequired, joinDeadline: album.joinDeadline, requests: album.requests.filter(r => r.status !== 'declined') }),
     ...albumLifecycle(album),
     live: albumLifecycle(album).status === 'live',
     // Only the host sees the join code, to print or share
@@ -290,6 +294,9 @@ export async function create(req, res) {
   const group = req.body?.groupId ? await groupFor(req.user._id, req.body.groupId) : null;
   // Group albums are for the group (and anyone given the code), never listed publicly on Events
   if (group) Object.assign(fields, { group: group._id, visibility: 'invite' });
+  // Event chat: off unless the host turns it on. A friend group already has its own chat, so on a
+  // group album this is only for guests from outside the group (they never see the group's chat).
+  fields.chatEnabled = req.body?.chatEnabled === true;
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -315,41 +322,15 @@ async function groupFor(userId, groupId) {
   return group;
 }
 
-// Joins an album from the code an invite link carried, when the account's email is confirmed.
-// Returns the album, or null when the code no longer matches one
-export async function joinFromInvite(user, rawCode) {
-  const code = normaliseCode(rawCode);
-  if (code.length !== 7) return null;
-  const album = await Album.findOne({ code });
-  if (!album) return null;
-  try {
-    await Membership.updateOne({ album: album._id, user: user._id }, { $setOnInsert: { role: 'guest' } }, { upsert: true });
-  } catch (err) {
-    if (err.code !== 11000) throw err;   // joined at the same moment some other way
-  }
-  if (user.emailVerified) await Invite.deleteMany({ album: album._id, email: user.email });
-  return album;
-}
-
 export async function join(req, res) {
   const code = normaliseCode(req.body?.code);
   if (code.length !== 7) throw new HttpError(400, 'Codes are 7 letters and numbers, like K7Q-48DM.');
   const album = await Album.findOne({ code });
   if (!album) throw new HttpError(404, 'No album has that code. Check it against the host’s card.');
-  // The sharing zone (album.zone) is stored but not enforced yet
-  let m = await Membership.findOne({ album: album._id, user: req.user._id });
-  // Already in through a friend group: joining with the code makes it theirs to keep, even if
-  // they leave the group later
-  if (m?.via === 'group') { m.via = undefined; await m.save(); }
-  const already = !!m || await hasGroupAccess(req.user._id, album);
-  if (!m) {
-    try {
-      m = await Membership.create({ album: album._id, user: req.user._id, role: 'guest' });
-    } catch (err) {
-      if (err.code !== 11000) throw err;   // a double tap joined twice at once
-      m = await Membership.findOne({ album: album._id, user: req.user._id });
-    }
-  }
+  const result = await admit(album, req.user, req.body);
+  if (result.pending) return res.status(202).json(result);
+  const { already } = result;
+  const m = await membershipOf(req, album.id);
   // (only for a confirmed address, so an unconfirmed sign-up can't clear the real person's invite)
   if (req.user.emailVerified) await Invite.deleteMany({ album: album._id, email: req.user.email });
   const stats = await statsFor([album._id], req.user._id, m?.hidden || []);
@@ -431,6 +412,7 @@ export async function remove(req, res) {
   await Promise.all([
     Photo.deleteMany({ album: m.album._id }),
     Comment.deleteMany({ album: m.album._id }),
+    EventMessage.deleteMany({ album: m.album._id }),
     Membership.deleteMany({ album: m.album._id }),
     Invite.deleteMany({ album: m.album._id }),
     m.album.deleteOne(),
@@ -457,28 +439,9 @@ export async function checkMember(req, res, next) {
   req.membership = await membershipOf(req, req.params.id);
   const album = req.membership.album;
   const { open, closes, status, opensAt } = albumLifecycle(album);
-  // The host can always add photos to an album with event times (from home afterwards, say);
-  // the time window and the zone are for guests
-  const host = req.membership.role === 'host';
-  if (!open && !(host && album.startsAt)) {
+  if (!open) {
     if (status === 'upcoming' && opensAt) throw new HttpError(403, `Photos can be added from ${new Date(opensAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })} UTC.`, 'not-open-yet');
     throw new HttpError(403, `This album closed to new photos on ${closesLabel(closes)}. You can still look at it and download everything.`, 'closed');
-  }
-  const viaGroup = !host && album.group && (req.membership.via === 'group' || await hasGroupAccess(req.user._id, album));
-  if (!host && !viaGroup && album.startsAt && album.zone?.radiusM && album.zone.lat != null) {
-    // The browser sends where the guest is as "lat,lng,accuracy" in a header, so it's known before
-    // any file data is read. Like any browser location it can be faked: it keeps honest guests to
-    // the event, it isn't proof.
-    const [lat, lng, acc] = String(req.get('X-Momento-Location') || '').split(',').map(Number);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-      throw new HttpError(403, 'Momento needs your location to check you’re at the event. Allow location access and try again.', 'location-needed');
-    }
-    const away = distanceM({ lat, lng }, album.zone);
-    // A phone's fix can be off by its accuracy; up to 200 m of that is allowed for
-    const slack = Math.min(Number.isFinite(acc) && acc > 0 ? acc : 0, 200);
-    if (away - slack > album.zone.radiusM) {
-      throw new HttpError(403, `You’re about ${kmLabel(away)} from the venue. Photos can be added within ${kmLabel(album.zone.radiusM)} of it.`, 'outside-zone');
-    }
   }
   next();
 }
@@ -588,7 +551,7 @@ export async function invite(req, res) {
     { invitedBy: req.user._id, expiresAt: new Date(Date.now() + 30 * 86400000) },
     { upsert: true, setDefaultsOnInsert: true },
   );
-  const link = `${config.frontendUrl}/albums.html?join=${album.displayCode}`;
+  const link = `${config.frontendUrl}/events.html?join=${album.displayCode}`;
   await sendEmail({
     to: email,
     subject: `${firstName(req.user.name)} invited you to ${album.name} on Momento`,

@@ -2,7 +2,7 @@
 // - Momento.qr.show(album, from)  a glass slab with the QR for { name, code }, grown out of `from`; the screen stays awake
 // - Momento.qr.scan()       camera scanner; a Momento QR (or a bare code) joins that album
 // - Momento.qr.mount(el, album)  a small QR tile inside el (the "Album created" screen uses it)
-// The QR holds the album's invite link (albums.html?join=CODE), so a phone's own camera app works too.
+// The QR holds the album's invite link (events.html?join=CODE), so a phone's own camera app works too.
 // Libraries are loaded only when needed: qrcode-generator to draw, jsQR to read where the browser
 // has no built-in BarcodeDetector (Firefox, Safari, desktop Chrome on some systems).
 (() => {
@@ -19,7 +19,7 @@
   });
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const linkFor = (code) => (Momento.inviteLink ? Momento.inviteLink(code) : new URL('albums.html?join=' + encodeURIComponent(code), location.href).href);
+  const linkFor = (code) => (Momento.inviteLink ? Momento.inviteLink(code) : new URL('events.html?join=' + encodeURIComponent(code), location.href).href);
   const toast = (t, b) => (Momento.toast ? Momento.toast(t, b) : null);
   const isPhone = () => (navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) && matchMedia('(pointer: coarse)').matches;
   const svgIcon = (inner, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
@@ -369,7 +369,7 @@
     d.querySelector('[data-type]').addEventListener('click', () => {
       d.close();
       if (Momento.openJoin) Momento.openJoin();
-      else location.href = new URL('albums.html#join', location.href).href;
+      else location.href = new URL('events.html#join', location.href).href;
     });
     d.querySelector('[data-photo]').addEventListener('click', () => file.click());
     file.addEventListener('change', async () => {

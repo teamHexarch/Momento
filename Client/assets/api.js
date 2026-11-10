@@ -28,6 +28,7 @@
       const error = new Error(data.error || 'The request failed. Please try again.');
       error.status = response.status;
       error.code = data.code;
+      if (data.code === 'session_limit') error.challenge = data.challenge;
       error.retryAt = data.retryAt;
       throw error;
     }

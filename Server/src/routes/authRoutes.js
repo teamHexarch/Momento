@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { requireUser } from '../middleware/authMiddleware.js';
+import * as devices from '../services/deviceLogin.js';
 import * as auth from '../controllers/authController.js';
 
 const tooMany = (minutes) => ({ error: `Too many attempts. Wait ${minutes} minutes and try again.` });
@@ -22,6 +23,9 @@ export const authRoutes = Router();
 
 authRoutes.post('/signup', signInLimit, auth.signup);
 authRoutes.post('/login', signInLimit, auth.login);
+authRoutes.post('/devices/code', emailLimit, devices.sendCode);
+authRoutes.post('/devices/verify', approveLimit, devices.verifyCode);
+authRoutes.post('/devices/replace', approveLimit, devices.replaceDevice);
 authRoutes.post('/logout', auth.logout);
 authRoutes.get('/me', auth.me);
 authRoutes.patch('/me', requireUser, auth.updateMe);

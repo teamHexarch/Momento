@@ -1,3 +1,4 @@
+import { deviceLoginChallenge } from '../services/deviceLogin.js';
 import crypto from 'node:crypto';
 import { verifySignupCaptcha } from '../services/captchaService.js';
 import bcrypt from 'bcryptjs';
@@ -9,7 +10,6 @@ import { startSession, endSession } from '../utils/session.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, peekEmailApproval, approveEmailChange, cancelEmailChange, finishEmailChange, dropEmailChange, deleteAccount } from '../services/accountService.js';
-import { joinFromInvite } from './albumController.js';
 import { normaliseCode } from '../utils/albumCodes.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -35,7 +35,12 @@ function providerNames(user) {
 async function signedIn(res, user, status = 200) {
   user.lastLoginAt = new Date();
   await user.save();
-  await startSession(res, user);
+  try {
+    await startSession(res, user);
+  } catch (error) {
+    if (error.code !== 'session_limit') throw error;
+    return res.status(409).json({ code: 'session_limit', error: 'Three devices are logged in. Verify your email to replace one.', challenge: deviceLoginChallenge(user) });
+  }
   res.status(status).json({ user: user.toPublic() });
 }
 
@@ -294,15 +299,12 @@ export async function verifyEmail(req, res) {
     return res.redirect(303, `${config.frontendUrl}/?login=1&verified=session_limit`);
   }
   // Signed up through an invite link: join that album now and open it
-  let album = null;
-  try {
-    const pending = await User.findById(user._id).select('+pendingJoin');
-    if (pending?.pendingJoin) {
-      album = await joinFromInvite(user, pending.pendingJoin);
-      await User.updateOne({ _id: user._id }, { $unset: { pendingJoin: 1 } });
-    }
-  } catch (err) { console.error(`Joining the invite album for ${user.email} failed: ${err.message}`); }
-  res.redirect(303, `${config.frontendUrl}/albums.html?verified=1${album ? `&album=${album.id}` : ''}`);
+  const pending = await User.findById(user._id).select('+pendingJoin');
+  if (pending?.pendingJoin) {
+    await User.updateOne({ _id: user._id }, { $unset: { pendingJoin: 1 } });
+    return res.redirect(303, config.frontendUrl + '/events.html?join=' + encodeURIComponent(pending.pendingJoin));
+  }
+  res.redirect(303, config.frontendUrl + '/albums.html?verified=1');
 }
 
 export async function resendVerification(req, res) {

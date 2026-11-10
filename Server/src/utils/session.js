@@ -15,16 +15,34 @@ const cookieOptions = () => ({
   path: '/',
 });
 
-export async function startSession(res, user) {
+function describeDevice(agent = '') {
+  const browser = /Edg/i.test(agent) ? 'Edge' : /Firefox|FxiOS/i.test(agent) ? 'Firefox'
+    : /Chrome|CriOS/i.test(agent) ? 'Chrome' : /Safari/i.test(agent) ? 'Safari' : 'Browser';
+  const platform = ['iPad', 'iPhone', 'Android', 'Windows', 'Mac', 'Linux'].find(name => agent.includes(name));
+  return platform ? browser + ' on ' + platform : browser;
+}
+
+export async function startSession(res, user, replacement) {
   const id = crypto.randomUUID();
   const token = jwt.sign({ sub: user.id, jti: id }, config.jwtSecret, { expiresIn: `${config.sessionDays}d` });
-  await User.updateOne({ _id: user.id }, { $pull: { sessions: { expiresAt: { $lte: new Date() } } } });
-  // Check capacity and reserve a slot in the same atomic update, so concurrent
-  // logins cannot both claim the final slot.
-  const result = await User.updateOne({ _id: user.id, [`sessions.${MAX_SESSIONS - 1}`]: { $exists: false } }, {
-    $push: { sessions: { id, expiresAt: new Date(jwt.decode(token).exp * 1000) } },
-  });
-  if (!result.matchedCount) throw new HttpError(409, 'This account already has 3 active logins. Log out on another device or browser, then try again.', 'session_limit');
+  const session = { id, deviceName: describeDevice(res.req?.headers['user-agent']), loggedInAt: new Date(), expiresAt: new Date(jwt.decode(token).exp * 1000) };
+  if (replacement) {
+    const result = await User.updateOne({
+      ...replacement.filter, sessions: { $elemMatch: { id: replacement.deviceId, expiresAt: { $gt: new Date() } } },
+    }, { $set: { 'sessions.$': session, lastLoginAt: session.loggedInAt }, $unset: { deviceVerification: 1 } });
+    if (!result.modifiedCount) throw new HttpError(409, 'This device or verification has changed. Log in again.');
+  } else {
+    await User.updateOne({ _id: user.id }, { $pull: { sessions: { expiresAt: { $lte: new Date() } } } });
+    // Check capacity and reserve a slot in the same atomic update, so concurrent
+    // logins cannot both claim the final slot.
+    const result = await User.updateOne({
+      _id: user.id,
+      $or: [{ plan: 'admin' }, { [`sessions.${MAX_SESSIONS - 1}`]: { $exists: false } }],
+    }, {
+      $push: { sessions: session },
+    });
+    if (!result.matchedCount) throw new HttpError(409, 'This account already has 3 active logins. Log out on another device or browser, then try again.', 'session_limit');
+  }
   res.cookie(SESSION_COOKIE, token, { ...cookieOptions(), maxAge: config.sessionDays * 86400000 });
 }
 

@@ -10,7 +10,7 @@ import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageServ
 
 // A photo plus the caller's membership of its album; anyone outside the album gets a 404
 // (publicPreview: a small version may also be shown to anyone when the album is a public event)
-async function photoFor(req, { publicPreview = false } = {}) {
+async function photoFor(req) {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Photo not found.');
   const photo = await Photo.findById(req.params.id);
   let m = photo && await Membership.findOne({ album: photo.album, user: req.user._id });
@@ -20,14 +20,13 @@ async function photoFor(req, { publicPreview = false } = {}) {
     m = await hasGroupAccess(req.user._id, album) ? (m || { role: 'guest', via: 'group' }) : null;
   }
   if (!m) {
-    if (photo && publicPreview && await Album.exists({ _id: photo.album, visibility: 'public' })) return { photo, m: null };
     throw new HttpError(404, 'Photo not found.');
   }
   return { photo, m };
 }
 
 export async function file(req, res) {
-  const { photo } = await photoFor(req, { publicPreview: req.query.size === 'thumb' || req.query.size === 'preview' });
+  const { photo } = await photoFor(req);
   // From disk: the file itself. From S3: a short-lived link straight to the bucket.
   const thumbnail = req.query.size === 'thumb' && await ensureThumbnail(photo);
   const preview = req.query.size === 'preview' && photo.previewKey;

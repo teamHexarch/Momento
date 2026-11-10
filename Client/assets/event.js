@@ -107,6 +107,17 @@
     :root[data-theme="dark"] .ev-who input { accent-color: #F2EFF8; }
     :root[data-theme="dark"] .ev-who label:has(input:checked) { box-shadow: inset 0 0 0 2px #F2EFF8; }
     @media (max-width: 480px) { .ev-who { grid-template-columns: 1fr; } }
+    /* Create album: "Who do you want to share this album with?" (friend groups, then just this event) */
+    .m-share { border: 0; padding: 0; margin: 0 0 1rem; min-width: 0; }
+    .m-share[hidden] { display: none; }
+    .m-share legend { padding: 0; margin-bottom: .5rem; }
+    .m-share .ev-who { grid-template-columns: 1fr; }
+    .ev-sec[hidden] { display: none; }
+    .ev-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; border-radius: 16px; background: rgba(127, 120, 150, .08); }
+    .ev-switch-row > span { display: grid; gap: .2rem; }
+    .ev-switch-row b { font-size: .92rem; font-weight: 700; color: var(--dusk, #2e2c3a); }
+    .ev-switch-row small { font-size: .8rem; line-height: 1.4; color: var(--slate, #5c596b); }
+    :root[data-theme="dark"] .ev-switch-row b { color: #F2EFF8; }
     .ev-more > summary, .ev-more > summary small { white-space: nowrap; }
     @media (max-width: 480px) { .ev-more > summary small { display: none; } }
     @media (prefers-reduced-motion: reduce) { .ev-more > summary svg { transition: none; } }
@@ -163,7 +174,7 @@
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) return reject(new Error('This browser can’t share your location.'));
       navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp }),
         (err) => reject(new Error(err.code === 1
           ? 'Location access is off for Momento. Allow it in your browser’s site settings, then try again.'
           : err.code === 3 ? 'Finding your location took too long. Try again, ideally near a window or outside.'
@@ -243,6 +254,9 @@
             <label><input type="radio" name="evVisibility" value="public"><b>Public</b><small>Shown on the Events map. Anyone inside the zone can join</small></label>
           </div>
         </div>
+        <div class="ev-sec ev-chat-opt">
+          <div class="ev-switch-row"><span><b id="evChatLabel">Event chat</b><small>Guests in the album can message each other. You can change this later in Settings.</small></span><button class="acct-sw" type="button" role="switch" aria-checked="false" aria-labelledby="evChatLabel" data-ev-chat></button></div>
+        </div>
         <details class="ev-more">
           <summary>Additional settings<small data-more-sum></small>${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</summary>
           <div class="ev-more-body">
@@ -259,7 +273,7 @@
               <div class="ev-range-head"><label class="ev-label" for="evRadius">Guests can add photos within</label><output class="ev-range-val" for="evRadius" data-radius-out>1 km</output></div>
               <input class="ev-range" id="evRadius" name="evRadius" type="range" min="1" max="10" step="0.5" value="1" aria-valuetext="1 kilometre">
               <div class="ev-range-ends" aria-hidden="true"><span>1 km</span><span>10 km</span></div>
-              <p class="ev-hint">of the venue. Momento checks a guest’s location when they upload.</p>
+              <p class="ev-hint">of the venue. Momento checks a guest’s location when they join.</p>
             </div>
           </div>
         </details>`;
@@ -323,11 +337,21 @@
 
     const who = box.querySelector('.ev-who')?.closest('.ev-sec');
     const syncWho = () => {
-      const grouped = !!form.group?.value;
+      const picked = form.querySelector('input[name="group"]:checked');
+      const grouped = !!picked?.value;
       if (who) who.hidden = grouped;
+      // Albums shared with a friend group talk in the group's own chat, so the event chat there is
+      // only for guests from outside the group. Either way it starts off.
+      const note = box.querySelector('.ev-chat-opt small');
+      if (note) note.textContent = grouped
+        ? `${picked.dataset.name || 'The group'} keeps using its own chat. Turn this on only if people outside the group join: they can see this chat, not the group’s.`
+        : 'Guests in the album can message each other. You can change this later in Settings.';
+      if (grouped) box.querySelector('[data-ev-chat]')?.setAttribute('aria-checked', 'false');
       if (grouped) { const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true; }
     };
     form.addEventListener('change', (e) => { if (e.target.name === 'group') syncWho(); });
+    const chatSw = box.querySelector('[data-ev-chat]');
+    chatSw.addEventListener('click', () => chatSw.setAttribute('aria-checked', String(chatSw.getAttribute('aria-checked') !== 'true')));
     form.addEventListener('reset', () => setTimeout(syncWho));
     syncWho();
     const here = box.querySelector('[data-here]');
@@ -414,6 +438,7 @@
       form.evLeadH.value = '0'; form.evLeadM.value = '30';
       form.evRadius.value = '1';
       const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true;
+      box.querySelector('[data-ev-chat]').setAttribute('aria-checked', 'false');
       box._syncRadius();
       setVenue(null);
       const input = search.querySelector('input'); if (input) input.value = '';
@@ -494,6 +519,7 @@
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
         visibility: !form.group?.value && form.evVisibility?.value === 'public' ? 'public' : 'invite',
+        chatEnabled: box.querySelector('[data-ev-chat]')?.getAttribute('aria-checked') === 'true',
       },
     };
   }
@@ -586,8 +612,6 @@
   // ---- Asking before an upload (and the guest's location, when the album has a zone) ----
   function confirmUpload(album, files) {
     return new Promise((resolve) => {
-      // Hosts, and friend-group members of a group album, can add photos from anywhere
-      const needsPlace = album?.role !== 'host' && !album?.anywhere && album?.startsAt && album?.zone?.radiusM;
       const n = files.length, what = n === 1 ? 'this photo' : `these ${n} photos`;
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
@@ -597,30 +621,14 @@
         <h2 id="evAskTitle">Upload ${n === 1 ? '1 photo' : `${n} photos`}?</h2>
         <p>Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.</p>
         <div class="ev-thumbs">${urls.map((u) => `<img src="${u}" alt="">`).join('')}${n > 5 ? `<span>+${n - 5}</span>` : ''}</div>
-        ${needsPlace ? `<div class="ev-loc">${ICON.pin}<span>To check you’re at the event, Momento will ask for your location. You need to be within ${km(album.zone.radiusM)} of the venue. Your location is only checked, not saved.</span></div>` : ''}
-        <p class="ev-err" role="alert" hidden></p>
-        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>${needsPlace ? 'Allow and upload' : 'Upload'}</button></div>`;
+        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
       document.body.append(d);
-      const err = d.querySelector('.ev-err'), yes = d.querySelector('[data-yes]');
+      const yes = d.querySelector('[data-yes]');
       let settled = false;
       const done = (v) => { if (settled) return; settled = true; urls.forEach(URL.revokeObjectURL); if (d.open) d.close(); d.remove(); resolve(v); };
       d.querySelector('[data-no]').addEventListener('click', () => done(null));
       d.addEventListener('cancel', (e) => { e.preventDefault(); done(null); });
-      yes.addEventListener('click', async () => {
-        if (!needsPlace) return done({ location: '' });
-        yes.disabled = true; yes.textContent = 'Checking your location…'; err.hidden = true;
-        try {
-          const p = await locate();
-          const away = distanceM(p, album.zone);
-          if (away - Math.min(p.accuracy || 0, 200) > album.zone.radiusM) {
-            throw new Error(`You’re about ${km(away)} from the venue. Photos can be added within ${km(album.zone.radiusM)} of it.`);
-          }
-          done({ location: `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${Math.round(p.accuracy || 0)}` });
-        } catch (e) {
-          err.textContent = e.message; err.hidden = false;
-          yes.disabled = false; yes.textContent = 'Try again';
-        }
-      });
+      yes.addEventListener('click', () => done({ location: '' }));
       d.showModal();
     });
   }
@@ -630,9 +638,8 @@
     if (!a?.startsAt || !a?.endsAt) return '';
     const s = new Date(a.startsAt), e = new Date(a.endsAt), opens = new Date(a.opensAt || s);
     const when = `${fmtWhen(s)} to ${fmtTime(e)}`;
-    const zone = a.zone?.radiusM && !a.anywhere ? ` within ${km(a.zone.radiusM)} of the venue` : '';
-    if (a.status === 'upcoming') return `Event ${when}. Photos can be added from ${fmtWhen(opens)}${zone}.`;
-    if (a.status === 'live') return `Event ${when}. Photos can be added until ${fmtTime(e)}${zone}.`;
+    if (a.status === 'upcoming') return `Event ${when}. Photos can be added from ${fmtWhen(opens)}.`;
+    if (a.status === 'live') return `Event ${when}. Photos can be added until ${fmtTime(e)}.`;
     return `Event ${when}. This album has closed to new photos.`;
   }
 

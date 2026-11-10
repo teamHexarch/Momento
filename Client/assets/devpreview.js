@@ -32,6 +32,8 @@
   const imaadsTimes = () => ({ date: iso(0), startsAt: at(Date.now() - 2 * 3600000), endsAt: at(Date.now() + 6 * 3600000) });
   const imaadsAlbum = () => ({ id: 'a7', name: 'Imaad’s 18th', place: '13 Gardiner Road', role: 'host', code: 'M18-IMAD', photos: 18, mine: 6, guests: 9, waiting: 2, hostName: 'Priya Shah',
     ...imaadsTimes(), uploadLeadMin: 30,
+    // Two guests who couldn't check in at the venue, waiting for the host
+    requests: [{ user: 'u-dev-1', name: 'Leila Haddad', status: 'pending' }, { user: 'u-dev-2', name: 'Tom Okafor', status: 'pending' }],
     zone: { lat: -37.8355756, lng: 145.0347419, radiusM: 1000 }, venue: { address: '13 Gardiner Road, Hawthorn, Melbourne, Australia', placeId: '' } });
 
   const seed = () => ({
@@ -52,7 +54,10 @@
       { id: 'a5', name: 'Ruby’s graduation', date: iso(-75), place: 'Manchester', role: 'guest', photos: 96, mine: 12, guests: 34, hostName: 'Ruby' },
       { id: 'a6', name: 'New Year’s Eve', date: iso(-330), place: 'Edinburgh', role: 'host', code: 'N3Y-10EV', photos: 389, mine: 120, guests: 58, waiting: 0, hostName: 'Priya Shah' },
     ],
-    invites: [{ id: 'i1', code: 'J2M-7QPC', name: 'Hannah’s housewarming', date: iso(5), place: 'Leeds', by: 'Hannah' }],
+    invites: [{ id: 'i1', code: 'J2M-7QPC', name: 'Hannah’s housewarming', date: iso(5), place: 'Leeds', by: 'Hannah' },
+      // Checks location on entry, at a venue far away: joining from here asks the host
+      { id: 'i2', code: 'SYD-4RBR', name: 'Harbour launch party', date: iso(0), place: 'Sydney Opera House', by: 'Marcus',
+        zone: { lat: -33.8568, lng: 151.2153, radiusM: 1000 } }],
   });
 
   const q = new URLSearchParams(location.search).get('dev');
@@ -133,9 +138,11 @@
     startsAt: a.startsAt || undefined, endsAt: a.endsAt || undefined,
     uploadLeadMin: a.startsAt ? a.uploadLeadMin || 0 : undefined,
     role: a.role, ...albumLifecycle(a), live: albumLifecycle(a).status === 'live',
+    joiningOpen: a.joiningOpen ?? true, locationRequired: a.locationRequired ?? true,
+    chatEnabled: !!a.chatEnabled, joinDeadline: a.joinDeadline, requests: a.requests || [],
     zone: a.zone?.radiusM ? a.zone : undefined, visibility: a.visibility || 'invite',
     code: a.role === 'host' ? a.code : undefined, photos: a.photos - hiddenCount(a), mine: a.mine, guests: a.guests,
-    pics: [...visibleOf(a)].sort((x, y) => y.likes - x.likes).slice(0, 9).map((p) => p.thumbnailUrl), hostName: a.hostName, hostIsYou: a.role === 'host',
+    pics: [...visibleOf(a)].sort((x, y) => y.likes - x.likes).slice(0, 12).map((p) => p.thumbnailUrl), hostName: a.hostName, hostIsYou: a.role === 'host',
     ...(groupOf(a) && { group: { id: a.groupId, name: groupOf(a).name }, anywhere: true }),
     ...(a.role === 'host' && { waiting: a.waiting || 0 }),
   });
@@ -316,6 +323,71 @@
       }
     }
 
+    if (path === '/api/events/requests') return { body: { requests: state.eventRequests || [] } };
+    // A host letting a waiting guest in, or turning them away
+    const review = /^\/api\/events\/([^/]+)\/requests\/([^/]+)$/.exec(path);
+    if (review && method === 'POST') {
+      const album = state.albums.find(a => a.id === review[1] && a.role === 'host');
+      const r = album && (album.requests || []).find(x => x.user === decodeURIComponent(review[2]) && x.status === 'pending');
+      if (!r) return fail(404, 'This request is no longer pending.');
+      if (typeof body.approve !== 'boolean') return fail(400, 'Choose approve or decline.');
+      if (body.approve) { album.requests = album.requests.filter(x => x !== r); album.guests = (album.guests || 0) + 1; }
+      else r.status = 'declined';
+      save(); return { body: { ok: true } };
+    }
+    // Event chat, shaped like the server's (and a friend group's): unread counts, typing, earlier pages
+    if (path === '/api/events/unread') {
+      const albums = state.albums.filter((a) => a.chatEnabled).map((a) => {
+        const read = (state.eventRead || {})[a.id] || '';
+        const fresh = (a.chat || []).filter((m) => !m.you && m.at > read);
+        return { id: a.id, name: a.name, unread: fresh.length, latest: fresh.at(-1) };
+      }).filter((x) => x.unread);
+      return { body: { total: albums.reduce((t, x) => t + x.unread, 0), albums } };
+    }
+    const control = /^\/api\/events\/([^/]+)\/(policy|chat|typing)$/.exec(path);
+    if (control) {
+      const album = state.albums.find(a => a.id === control[1]);
+      if (!album) return fail(404, 'Album not found.');
+      if (control[2] === 'policy') {
+        if (album.role !== 'host') return fail(404, 'Event not found.');
+        for (const key of ['joiningOpen','locationRequired','chatEnabled','joinDeadline']) {
+          if (key in body) album[key] = body[key];
+        }
+        // A sample conversation the first time the chat is switched on, with a reply to come
+        if (album.chatEnabled && !album.chat) {
+          const t = (min) => new Date(Date.now() - min * 60000).toISOString();
+          album.chat = [
+            { id: 'em' + (++state.seq), text: 'Just got here, the lights look amazing', by: 'Leila Haddad', avatarUrl: '', you: false, at: t(14) },
+            { id: 'em' + (++state.seq), text: 'Grabbing drinks, anyone want anything?', by: 'Tom Okafor', avatarUrl: '', you: false, at: t(6) },
+          ];
+        }
+        save(); return { body: { ok: true } };
+      }
+      if (!album.chatEnabled) return fail(403, 'The host has switched the event chat off.', 'chat-off');
+      album.chat ||= [];
+      if (control[2] === 'typing') return { body: { typing: [] } };
+      if (method === 'POST') {
+        const text = String(body.text ?? '').trim();
+        if (!text) return fail(400, 'Write a message first.');
+        if (text.length > 1000) return fail(400, 'Keep messages under 1,000 characters.');
+        const message = { id: 'em' + (++state.seq), text, by: 'You', avatarUrl: '', you: true, at: new Date().toISOString() };
+        album.chat.push(message);
+        (state.eventRead ||= {})[album.id] = message.at;
+        save(); return { status: 201, body: { message } };
+      }
+      const before = query?.get('before');
+      const pool = before ? album.chat.filter((m) => m.at < before) : album.chat;
+      if (!before) { (state.eventRead ||= {})[album.id] = new Date().toISOString(); save(); }
+      // Someone answers a little after you write (only in the preview)
+      const last = album.chat.at(-1);
+      const typing = last?.you && Date.now() - Date.parse(last.at) < 4000 ? [{ name: 'Leila', avatarUrl: '' }] : [];
+      if (last?.you && Date.now() - Date.parse(last.at) > 5000 && !last.answered) {
+        last.answered = true;
+        album.chat.push({ id: 'em' + (++state.seq), text: 'Love it! See you by the stage', by: 'Leila Haddad', avatarUrl: '', you: false, at: new Date().toISOString() });
+        save();
+      }
+      return { body: { messages: pool.slice(-50), more: pool.length > 50, typing } };
+    }
     if (path === '/api/events/nearby' && method === 'GET') {
       const at = { lat: Number(query?.get('lat')), lng: Number(query?.get('lng')) };
       if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng)) return fail(400, 'Your location is needed to find events near you.');
@@ -326,7 +398,7 @@
       const events = pool.map((e) => {
         const d = Math.round(distM(at, e.zone)), life = albumLifecycle(e);
         return { id: e.id, name: e.name, date: e.date, place: e.place, venue: e.venue, startsAt: e.startsAt, endsAt: e.endsAt, status: life.status, live: life.status === 'live', opensAt: life.opensAt,
-          zone: e.zone, distanceM: d, inside: d <= e.zone.radiusM, photos: e.photos, pics: [...visibleOf(e)].sort((x, y) => y.likes - x.likes).slice(0, 9).map((p) => p.thumbnailUrl),
+          zone: e.zone, distanceM: d, inside: d <= e.zone.radiusM, photos: e.photos, pics: mineIds.has(e.id) ? visibleOf(e).slice(0, 9).map(p => p.thumbnailUrl) : [],
           guests: e.guests, hostName: e.hostName, joined: mineIds.has(e.id) };
       }).filter((e) => e.distanceM <= km * 1000 && e.status !== 'kept').sort((x, y) => (y.live - x.live) || (x.distanceM - y.distanceM));
       return { body: { events } };
@@ -336,10 +408,11 @@
       const e = (state.events || []).find((x) => x.id === em[1]) || state.albums.find((x) => x.id === em[1] && x.visibility === 'public');
       if (!e) return fail(404, 'Event not found.');
       if (state.albums.some((x) => x.id === e.id)) return { body: { already: true, id: e.id } };
-      const d = distM({ lat: Number(body.lat), lng: Number(body.lng) }, e.zone), slack = Math.min(200, Number(body.accuracy) || 0);
-      if (!(d <= e.zone.radiusM + slack)) {
-        const away = d - e.zone.radiusM;
-        return fail(403, `You’re ${away >= 1000 ? (away / 1000).toFixed(1) + ' km' : Math.round(away / 10) * 10 + ' m'} outside the zone. Get closer to join.`, 'outside');
+      if (body.location === undefined) return fail(409, 'Check your location to join.', 'check-location');
+      if (!body.location || distM(body.location, e.zone) > e.zone.radiusM + Math.min(200,body.location.accuracy)) {
+        state.eventRequests ||= [];
+        if (!state.eventRequests.some(r => r.id === e.id)) state.eventRequests.push({ id: e.id, name: e.name, status: 'pending' });
+        save(); return { status: 202, body: { pending: true } };
       }
       state.albums.unshift({ ...e, role: 'guest', mine: 0, waiting: 0, guests: e.guests + 1 }); save();
       return { status: 201, body: { already: false, id: e.id } };
@@ -409,7 +482,7 @@
       const a = { id: 'a' + (++state.seq), name, date: body.date || iso(0), place: String(body.place || '').trim(), role: 'host', code: newCode(), photos: 0, mine: 0, guests: 1, waiting: 0, hostName: state.user.name };
       if (body.groupId && (state.groups || []).some((g) => g.id === body.groupId)) a.groupId = body.groupId;
       // Event times, venue and zone, as assets/event.js sends them
-      for (const k of ['startsAt', 'endsAt', 'uploadLeadMin', 'zone', 'venue', 'visibility']) if (body[k] != null) a[k] = body[k];
+      for (const k of ['startsAt', 'endsAt', 'uploadLeadMin', 'zone', 'venue', 'visibility', 'chatEnabled']) if (body[k] != null) a[k] = body[k];
       state.albums.unshift(a); save();
       return { status: 201, body: { album: summary(a) } };
     }
@@ -420,6 +493,16 @@
       if (mineAlready) return { body: { already: true, album: summary(mineAlready) } };
       const inv = state.invites.find((i) => i.code.replace('-', '') === code);
       if (!inv) return fail(404, 'No album has that code. Check it against the host’s card.');
+      // Same rules as the server: inside the zone gets straight in; outside it, or with no
+      // location, the request waits for the host
+      if (inv.zone) {
+        if (body.location === undefined) return fail(409, 'Check your location to join this event.', 'check-location');
+        if (!body.location || distM(body.location, inv.zone) > inv.zone.radiusM + Math.min(200, body.location.accuracy || 0)) {
+          state.eventRequests ||= [];
+          if (!state.eventRequests.some((r) => r.id === inv.id)) state.eventRequests.push({ id: inv.id, name: inv.name, status: 'pending' });
+          save(); return { status: 202, body: { pending: true } };
+        }
+      }
       const a = { id: 'a' + (++state.seq), name: inv.name, date: inv.date, place: inv.place, role: 'guest', photos: 18, mine: 0, guests: 9, hostName: inv.by };
       state.albums.unshift(a); state.invites = state.invites.filter((i) => i !== inv); save();
       return { status: 201, body: { already: false, album: summary(a) } };

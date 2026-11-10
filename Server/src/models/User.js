@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema({
   avatarKey: String,
   // Google vouches for the address; email/password signups start unverified
   emailVerified: { type: Boolean, default: false },
-  plan: { type: String, enum: ['free', 'plus'], default: 'free' },
+  // Every new account starts as admin (set 2026-11-10; was 'free')
+  plan: { type: String, enum: ['free', 'plus', 'admin'], default: 'admin' },
   googleId: { type: String, unique: true, sparse: true },
   lastLoginAt: Date,
   verificationResendAt: Date,
@@ -20,8 +21,12 @@ const userSchema = new mongoose.Schema({
   // confirm their email, so the confirm link takes them into the album on any device
   pendingJoin: { type: String, maxlength: 7, select: false },
   // One record per login. Never apply a TTL index here: that would delete users.
+  deviceVerification: {
+    type: new mongoose.Schema({ challenge: String, codeHash: String, ticketHash: String, expiresAt: Date, sentAt: Date, tries: Number }, { _id: false }),
+    select: false,
+  },
   sessions: {
-    type: [{ _id: false, id: { type: String, required: true }, expiresAt: { type: Date, required: true } }],
+    type: [{ _id: false, id: { type: String, required: true }, deviceName: String, loggedInAt: Date, expiresAt: { type: Date, required: true } }],
     default: [],
     select: false,
   },

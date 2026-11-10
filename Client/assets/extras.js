@@ -36,7 +36,7 @@
     .perm-list li::before { content: ""; flex: none; width: .45rem; height: .45rem; margin-top: .45rem; border-radius: 50%; background: var(--copper, #9A603D); }
     .perm-steps { margin: 0 0 1rem; padding-left: 1.2rem; font-size: .92rem; line-height: 1.55; color: var(--slate, #5C596B); }
 
-    .nav-groups { position: relative; }
+    .nav-groups, .nav-events { position: relative; }
     .nav-badge {
       position: absolute; top: -.15rem; right: -.2rem; min-width: 1.1rem; height: 1.1rem; padding: 0 .3rem; box-sizing: border-box; border-radius: .6rem;
       background: #C8553D; color: #fff; font: 700 .66rem/1.1rem var(--font-main, system-ui); text-align: center; box-shadow: 0 0 0 2px var(--paper, #F8F7FA);
@@ -266,13 +266,64 @@
   M.chatPoll = poll;
   M.chatSeen = (groupId, messageId) => { const map = seen(); map[groupId] = messageId; remember(map); };
 
+  // ---------- Event chat notifications: the same as friend groups, for event albums ----------
+  const EV_SEEN = 'momento-event-chat-seen';
+  const evSeen = () => { try { return JSON.parse(localStorage.getItem(EV_SEEN) || '{}') || {}; } catch (e) { return {}; } };
+  const evRemember = (map) => { try { localStorage.setItem(EV_SEEN, JSON.stringify(map)); } catch (e) {} };
+  let evFirst = true, evPolling = false;
+  function evBadge(total) {
+    document.querySelectorAll('.nav-events').forEach((link) => {
+      let b = link.querySelector('.nav-badge');
+      if (!total) { b?.remove(); link.removeAttribute('data-unread'); return; }
+      if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; b.setAttribute('aria-hidden', 'true'); link.append(b); }
+      const text = total > 99 ? '99+' : String(total);
+      if (b.textContent !== text) { b.textContent = text; b.classList.remove('pop'); void b.offsetWidth; if (!still) b.classList.add('pop'); }
+      link.setAttribute('aria-label', `Events, ${total} unread ${total === 1 ? 'message' : 'messages'}`);
+    });
+  }
+  async function evPoll() {
+    if (evPolling || !window.momentoApi) return;
+    evPolling = true;
+    try {
+      const user = await M.sessionReady?.catch?.(() => null);
+      if (!user?.emailVerified) return;
+      const { total = 0, albums = [] } = await momentoApi('/api/events/unread');
+      evBadge(total);
+      const map = evSeen(), first = evFirst;
+      evFirst = false;
+      for (const a of albums) {
+        const m = a.latest;
+        if (!m || map[a.id] === m.id) continue;
+        map[a.id] = m.id;
+        // The Events page shows it in the open chat itself
+        if (first || !chatNotifyOn() || M.eventChatOpen?.has?.(a.id)) continue;
+        const go = () => { if (M.openEventChat) M.openEventChat(a.id); else location.href = 'events.html#chat=' + encodeURIComponent(a.id); };
+        const av = m.avatarUrl ? `<img src="${esc(m.avatarUrl)}" alt="">` : esc(initials(m.by));
+        M.toast?.(`${m.by} in ${a.name}`, m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text, { action: { label: 'Open chat', run: go } });
+        const ic = document.querySelector('.m-toast .m-toast-ic');
+        if (ic) ic.innerHTML = `<span class="chat-toast-av">${av}</span>`;
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            const n = new Notification(`${m.by} in ${a.name}`, { body: m.text, tag: 'momento-event-chat-' + a.id, icon: m.avatarUrl || 'assets/momento-icon.png' });
+            n.onclick = () => { window.focus(); go(); n.close(); };
+          } catch (e) {}
+        }
+      }
+      evRemember(map);
+    } catch (e) {
+      // Offline or logged out: try again next time
+    } finally { evPolling = false; }
+  }
+  M.eventChatPoll = evPoll;
+  M.eventChatSeen = (albumId, messageId) => { const map = evSeen(); map[albumId] = messageId; evRemember(map); };
+
   const go = () => {
     start();
-    poll();
+    poll(); evPoll();
     let t = 0;
-    const next = () => { clearTimeout(t); t = setTimeout(() => { poll(); next(); }, document.hidden ? 60000 : 15000); };
+    const next = () => { clearTimeout(t); t = setTimeout(() => { poll(); evPoll(); next(); }, document.hidden ? 60000 : 15000); };
     next();
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); next(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); evPoll(); } next(); });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 })();

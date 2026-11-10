@@ -53,7 +53,7 @@
   </script>
   <!-- /@shared:boot -->
   <title>Events near you | Momento</title>
-  <meta name="description" content="Public events happening near you. See their photos, and join from inside the zone.">
+  <meta name="description" content="Join event albums with an invitation, check your requests and discover events nearby.">
   <!-- The map: Leaflet (pinned, checked against its published hashes) with OpenStreetMap data -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
@@ -1361,6 +1361,8 @@
       }
     </style>
   <!-- /@shared:css -->
+<link rel="stylesheet" href="assets/event-albums.css">
+<script defer src="assets/event-albums.js"></script>
 </head>
 <body>
   <canvas class="bg" id="bg" aria-hidden="true"></canvas>
@@ -1435,8 +1437,23 @@
     <main class="page">
 
       <section class="ev-head">
-        <span class="mask"><h1 class="ev-title ink rise" data-text="Events near you">Events near you</h1></span>
-        <p class="ev-lede intro" style="--d: .25s">Public events happening around you. Look through their photos, and if it looks fun, join from inside the zone and add your own.</p>
+        <div class="event-entry">
+          <h1 class="ev-title">Event albums</h1>
+          <p class="ev-lede">Bring the code on your invitation. If joining has closed or you can’t check in at the venue, the host can review your request.</p>
+          <div class="ev-actions">
+            <button class="btn btn-pearl" type="button" id="joinOpen">Join with a code</button>
+            <button class="btn btn-light" type="button" id="scanOpen" data-qr-scan>Scan a QR code</button>
+            <a class="btn btn-dark" href="index.html#for-hosts" data-create>Create an album</a>
+          </div>
+        </div>
+        <section class="ea-requests" id="eaInvites" aria-live="polite" hidden><h2>Invitations</h2><ul></ul></section>
+        <section class="ea-requests" id="admission-status" aria-live="polite" hidden><h2>Your join requests</h2><ul></ul></section>
+        <div class="events-library-head"><h2>Your event <span style="white-space: nowrap">albums<span class="ea-total" id="eaTotal"></span></span></h2><button class="btn btn-light" id="refreshEvents" type="button">Refresh</button></div>
+        <div class="ea-grid" id="joinedEvents" aria-live="polite"><p class="ea-loading">Loading your albums…</p></div>
+      </section>
+      <section class="nearby-heading">
+        <span class="mask"><h2 class="ev-title ink rise" data-text="Events near you">Events near you</h2></span>
+        <p class="ev-lede intro" style="--d: .25s">Discover public events nearby. Open an event to join or request access from the host.</p>
         <div class="ev-where intro" style="--d: .35s">
           <button class="btn btn-dark" type="button" id="evLocate">Use my location</button>
           <label class="ev-search glass">
@@ -1462,6 +1479,34 @@
           </div>
         </div>
       </section>
+
+  <dialog class="modal" id="joinModal" aria-labelledby="joinTitle">
+    <form class="modal-card small" id="joinForm" novalidate>
+      <button class="close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+      <h2 id="joinTitle" style="padding-right: 2.5rem">Join an album</h2>
+      <p class="modal-sub">Enter the 7-character code the host shared with you.</p>
+      <div class="field"><span id="joinCodeLabel">Album code</span>
+        <div class="otp" id="joinOtp" role="group" aria-labelledby="joinCodeLabel">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 1 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 2 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 3 of 7">
+          <span class="otp-dash" aria-hidden="true"></span>
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 4 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 5 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 6 of 7">
+          <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="•" aria-label="Character 7 of 7">
+        </div>
+        <input type="hidden" name="code" id="joinCode">
+      </div>
+      <p class="note" id="joinNote" role="status"></p>
+      <div class="modal-actions"><button class="btn btn-dark" type="submit" style="width: 100%">Join album</button></div>
+      <button class="join-scan" type="button" id="joinScan">Or scan the host’s QR code</button>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="eaDialog" aria-labelledby="eaTitle">
+    <div class="modal-card ea-sheet" id="eaSheet"></div>
+  </dialog>
 
       <dialog class="ev-sheet" id="evSheet" aria-labelledby="evSheetTitle">
         <div class="ev-card panel" id="evCard"></div>
@@ -1834,21 +1879,21 @@
         const w = when(e);
         const grid = e.pics.length
           ? `<div class="ev-grid">${e.pics.map((p) => `<img src="${esc(p)}" alt="" loading="lazy">`).join('')}</div>`
-          : '<p class="ev-grid-empty">No photos yet. Join and be the first to add some.</p>';
+          : '<p class="ev-grid-empty">Photos are available inside the album.</p>';
         card.innerHTML = `
           <button class="ev-x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           <div class="ev-hero">${e.pics[0] ? `<img src="${esc(e.pics[0])}" alt="">` : ''}<span class="evc-tag${w.live ? ' is-live' : ''}">${w.live ? '<i></i>' : ''}${esc(w.text)}</span><h2 id="evSheetTitle">${esc(e.name)}</h2></div>
           <div class="ev-info">
             <p class="evc-meta">${esc([e.venue?.address || e.place, `Hosted by ${e.hostName}`].filter(Boolean).join(' · '))}</p>
             <p class="evc-where"><b>${dist(e.distanceM)} away</b>${whereChip(e)}</p>
-            <p class="ev-facts"><span><b>${plural(e.photos, 'photo', 'photos')}</b></span><span><b>${plural(e.guests, 'person', 'people')}</b> in it</span><span>Joinable within <b>${dist(e.zone.radiusM)}</b> of the venue</span></p>
+            <p class="ev-facts"><span><b>${plural(e.photos, 'photo', 'photos')}</b></span><span><b>${plural(e.guests, 'person', 'people')}</b> in it</span><span>Venue radius <b>${dist(e.zone.radiusM)}</b></span></p>
           </div>
           ${grid}
           <div class="ev-acts">
             ${e.joined
               ? `<a class="btn btn-dark" href="albums.html#album=${encodeURIComponent(e.id)}">Open album</a>`
               : `<button class="btn btn-dark" type="button" data-join>Join and add photos</button>`}
-            <p class="ev-acts-note" role="status">${e.joined ? 'You’re in this album.' : e.inside ? 'You’re inside the zone, so you can join now.' : `Join from inside the zone: get within ${dist(e.distanceM - e.zone.radiusM)} of it first.`}</p>
+            <p class="ev-acts-note" role="status">${e.joined ? 'You’re in this album.' : 'Check in to join. If approval is needed, your request goes to the host.'}</p>
           </div>`;
         card.querySelector('[data-close]').addEventListener('click', closeSheet);
         card.querySelector('[data-join]')?.addEventListener('click', (k) => join(e, k.currentTarget));
@@ -1894,13 +1939,13 @@
         const label = btn.textContent;
         btn.textContent = 'Checking where you are…';
         try {
-          real = await locate();
-          const r = await momentoApi(`/api/events/${encodeURIComponent(e.id)}/join`, momentoJson('POST', { lat: real.lat, lng: real.lng, accuracy: real.accuracy }));
+          const r = await Momento.eventAdmission('/api/events/' + encodeURIComponent(e.id) + '/join', {});
+          if (r.pending) { tell('Waiting for host approval.'); btn.textContent = 'Requested'; document.dispatchEvent(new CustomEvent('momento:albums')); return; }
           e.joined = true;
           tell(r.already ? 'You were already in. Opening the album…' : 'You’re in! Opening the album…');
           btn.textContent = 'Opening…';
           Momento.flash?.(`You joined ${e.name}`, 'Add your photos while it’s on.');
-          setTimeout(() => { location.href = 'albums.html#album=' + encodeURIComponent(e.id); }, 700);
+          setTimeout(() => { if (Momento.openAlbumHere) Momento.openAlbumHere(e.id); else location.href = 'albums.html#album=' + encodeURIComponent(e.id); }, 700);
         } catch (err) {
           btn.disabled = false; btn.textContent = label;
           tell(err.message, true);
@@ -1984,7 +2029,7 @@
         let user;
         try { user = await Momento.sessionReady; }
         catch (err) { say('Couldn’t reach Momento. Check your connection, then reload the page.', true); return; }
-        if (!user) { location.replace('index.html?login=1&next=' + encodeURIComponent('events.html' + location.search)); return; }
+        if (!user) { location.replace('index.html?login=1&next=' + encodeURIComponent('events.html' + location.search + location.hash)); return; }
         ensureMap();
         try {
           const p = await navigator.permissions?.query({ name: 'geolocation' });
@@ -2460,12 +2505,13 @@
     const onAlbums = /albums\.html$/.test(location.pathname);
     const viewAlbum = (id) => {
       if (onAlbums) document.dispatchEvent(new CustomEvent('momento:open-album', { detail: id }));
+      else if (Momento.openAlbumHere) Momento.openAlbumHere(id);
       else location.href = `albums.html#album=${encodeURIComponent(id)}`;
     };
 
     // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
     // The link a host sends guests: opening it asks them to log in or sign up first, then offers to join
-    Momento.inviteLink = (code) => new URL('albums.html?join=' + encodeURIComponent(code), location.href).href;
+    Momento.inviteLink = (code) => new URL('events.html?join=' + encodeURIComponent(code), location.href).href;
     Momento.shareInvite = async (album, btn, label = 'Share link') => {
       const url = Momento.inviteLink(album.code);
       if (navigator.share && matchMedia('(pointer: coarse)').matches) {
@@ -2508,7 +2554,7 @@
               <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
               <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" placeholder="Where it’s on" autocomplete="off"></label>
             </div>
-            <label class="acct-field m-group" hidden><span>Friend group</span><select name="group"><option value="">None: only people I invite</option></select></label>
+            <fieldset class="m-group m-share" hidden><legend class="ev-label">Who do you want to share this album with?</legend><div class="ev-who" role="radiogroup"></div></fieldset>
             <p class="acct-status" role="status"></p>
             <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Create album</button></div>
           </div>
@@ -2537,7 +2583,7 @@
         // Times, venue and zone (assets/event.js)
         const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
         // A friend group: everyone in it gets the album too
-        const groupId = form.group.value, groupName = groupId ? form.group.selectedOptions[0]?.textContent : '';
+        const picked = groupField.querySelector('input[name="group"]:checked'), groupId = picked?.value || '', groupName = groupId ? picked.dataset.name : '';
         if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
         say('');
         form.dataset.busy = 'true';
@@ -2548,7 +2594,7 @@
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already, and you can keep talking in the group’s chat. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
         d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
@@ -2573,16 +2619,28 @@
       const launch = d.launch;
       // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
       const groupField = d.querySelector('.m-group');
+      // "Who do you want to share this album with?": one of their friend groups (the album joins that
+      // group, and everyone keeps talking in the group's one chat), or just the people at this event
+      // (event chat starts off; the host can turn it on)
+      const shareList = groupField.querySelector('.ev-who');
+      const shareOption = (value, title, note) => {
+        const l = document.createElement('label'), r = document.createElement('input'), b = document.createElement('b'), s = document.createElement('small');
+        r.type = 'radio'; r.name = 'group'; r.value = value; r.dataset.name = title;
+        b.textContent = title; s.textContent = note;
+        l.append(r, b, s);
+        return l;
+      };
       async function loadGroups(pick) {
         groupField.hidden = true;
-        const sel = form.group;
-        sel.length = 1;
+        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code. Event chat starts off, and you can turn it on.'));
+        shareList.querySelector('input').checked = true;
         let groups = [];
-        try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { return; }
-        for (const g of groups) sel.add(new Option(g.name, g.id));
+        try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { groups = []; }
+        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it. You keep talking in the group’s chat, so there’s no new chat to follow.`), shareList.lastChild);
         groupField.hidden = !groups.length;
-        if (pick && groups.some((g) => g.id === pick)) sel.value = pick;
-        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        const want = pick && groups.some((g) => g.id === pick) ? pick : '';
+        const on = [...shareList.querySelectorAll('input')].find((r) => r.value === want);
+        if (on) { on.checked = true; on.dispatchEvent(new Event('change', { bubbles: true })); }
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
@@ -2937,7 +2995,7 @@
             <h2 id="sfAlbums">Your albums</h2>
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
-              <li><a class="sf-link" href="albums.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
               <li><a class="sf-link" href="sort.html">Sort photos</a></li>
               <li><a class="sf-link" href="groups.html">Friend groups</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
