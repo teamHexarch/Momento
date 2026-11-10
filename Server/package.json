@@ -7,12 +7,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
-    "dev": "node --watch --env-file-if-exists=.env src/server.js",
-    "dev:memory": "node --env-file-if-exists=.env scripts/devMemory.js",
-    "email:test": "node --env-file-if-exists=.env scripts/sendTestEmail.js",
-    "aws:copy-photos": "node --env-file-if-exists=.env scripts/copyR2ToS3.js",
-    "test:events": "node scripts/testEvents.js",
-    "test:groups": "node scripts/testGroups.js"
+    "dev": "node --watch --env-file-if-exists=.env src/server.js"
   },
   "engines": {
     "node": ">=22"
