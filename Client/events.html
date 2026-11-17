@@ -337,6 +337,24 @@
     :root[data-theme="dark"] .leaflet-control-attribution.leaflet-control { color: rgba(242, 239, 248, .65); background: rgba(30, 28, 40, .55); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
     /* Zone rings: a pane of frosted colour with a bright edge */
     .ev-zone { stroke: rgba(124, 111, 184, .75); fill: rgba(188, 178, 236, .16); }
+    /* The scanned circle (dashed), how exact your position is, and the approximate-area circle */
+    .ev-scan-area { stroke: rgba(76, 123, 224, .7); fill: rgba(76, 123, 224, .05); stroke-dasharray: 6 6; }
+    .ev-scan-area.is-scanning { fill: rgba(76, 123, 224, .1); animation: ev-dash 1s linear infinite; }
+    @keyframes ev-dash { to { stroke-dashoffset: -24; } }
+    .ev-accuracy { stroke: rgba(76, 123, 224, .45); fill: rgba(76, 123, 224, .12); }
+    .ev-approx { stroke: rgba(76, 123, 224, .5); fill: rgba(76, 123, 224, .14); stroke-dasharray: 3 5; }
+    /* The radar: a beam going round the scanned circle, and rings rippling out from you */
+    .ev-sweep { position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); border-radius: 50%; pointer-events: none; }
+    .ev-sweep b { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgba(76, 123, 224, 0) 0deg, rgba(76, 123, 224, 0) 290deg, rgba(76, 123, 224, .45) 360deg); animation: ev-beam 1.4s linear infinite; }
+    .ev-sweep i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(76, 123, 224, .6); opacity: 0; transform: scale(.05); animation: ev-ripple 1.8s cubic-bezier(.2, .7, .3, 1) infinite; }
+    .ev-sweep i:nth-of-type(2) { animation-delay: .6s; }
+    .ev-sweep i:nth-of-type(3) { animation-delay: 1.2s; }
+    @keyframes ev-beam { to { transform: rotate(360deg); } }
+    @keyframes ev-ripple { 0% { opacity: .9; transform: scale(.05); } 100% { opacity: 0; transform: scale(1); } }
+    :root[data-theme="dark"] .ev-scan-area { stroke: rgba(143, 176, 255, .75); fill: rgba(143, 176, 255, .06); }
+    :root[data-theme="dark"] .ev-sweep b { background: conic-gradient(from 0deg, rgba(143, 176, 255, 0) 0deg, rgba(143, 176, 255, 0) 290deg, rgba(143, 176, 255, .45) 360deg); }
+    .leaflet-marker-draggable .ev-me { cursor: grab; }
+    @media (prefers-reduced-motion: reduce) { .ev-sweep b, .ev-sweep i, .ev-scan-area.is-scanning { animation: none; } .ev-sweep i { opacity: .4; transform: none; } }
     .ev-zone.is-in { stroke: rgba(43, 122, 101, .8); fill: rgba(120, 210, 180, .16); }
     :root[data-theme="dark"] .ev-zone { stroke: rgba(184, 174, 245, .7); fill: rgba(184, 174, 245, .1); }
     :root[data-theme="dark"] .ev-zone.is-in { stroke: rgba(147, 226, 201, .75); fill: rgba(147, 226, 201, .1); }
@@ -2093,19 +2111,59 @@
       let scanM = NEAR_M;
       const scanLabel = () => (scanM >= 1000 ? `${scanM / 1000} km` : `${scanM} m`);
       let lookLabel = 'you';
+      // The sweep: the map shows the scanned circle, a radar beam goes round it and rings ripple out,
+      // while the search runs (at least 1.6 s, so it reads as a scan)
+      let fxLayer = null;
+      function scanFx(at, radius) {
+        const m = ensureMap();
+        if (!m) return () => {};
+        fxLayer ||= L.layerGroup().addTo(m);
+        fxLayer.clearLayers();
+        // A fresh scan: the last results go, and come back when it finishes
+        layer?.clearLayers(); markers.clear();
+        if (!at.approx) L.marker([at.lat, at.lng], { icon: L.divIcon({ className: '', html: '<span class="ev-me"></span>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, keyboard: false }).addTo(fxLayer);
+        const ring = L.circle([at.lat, at.lng], { radius, className: 'ev-scan-area is-scanning', weight: 2, interactive: false }).addTo(fxLayer);
+        m.fitBounds(ring.getBounds(), { padding: [24, 24], animate: !still });
+        let sweep = null, stopped = false;
+        const place = () => {
+          if (stopped) return;
+          const c = m.latLngToLayerPoint([at.lat, at.lng]);
+          const edge = m.latLngToLayerPoint([at.lat + radius / 111320, at.lng]);
+          const px = Math.max(30, Math.round(Math.abs(c.y - edge.y)));
+          sweep?.remove();
+          sweep = L.marker([at.lat, at.lng], {
+            icon: L.divIcon({ className: '', html: `<span class="ev-sweep" style="--r:${px}px"><b></b><i></i><i></i><i></i></span>`, iconSize: [0, 0] }),
+            interactive: false, keyboard: false,
+          }).addTo(fxLayer);
+        };
+        m.once('moveend', place);
+        setTimeout(place, still ? 0 : 400);
+        if (!still) m.getContainer().scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return () => { stopped = true; m.off('moveend', place); sweep?.remove(); ring.getElement()?.classList.remove('is-scanning'); };
+      }
       async function look(at, label, radius = NEAR_M) {
         center = at;
         scanM = radius;
         const req = ++lookReq;
-        say(`Looking for events within ${scanLabel()} of ${label}…`);
+        say(`Scanning ${scanLabel()} around ${label}…`);
+        listMsg(`Scanning ${scanLabel()} around ${label}…`, 'Looking for public events happening nearby.', { scanning: true });
+        const stopFx = scanFx(at, radius);
         let r;
-        try { r = await momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&radius=${radius}`); }
-        catch (err) { if (req === lookReq) { say(''); listMsg('Couldn’t look for events', err.message, { retry: true }); } return; }
+        try {
+          [r] = await Promise.all([
+            momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&radius=${radius}`),
+            new Promise((ok) => setTimeout(ok, still ? 300 : 1600)),
+          ]);
+        }
+        catch (err) { stopFx(); if (req === lookReq) { say(''); listMsg('Couldn’t look for events', err.message, { retry: true }); } return; }
+        stopFx();
         if (req !== lookReq) return;
         events = [...r.events].sort((a, b) => a.distanceM - b.distanceM);   // the closest first
         const live = events.filter((e) => e.live).length;
         lookLabel = label;
-        say(events.length ? `${plural(events.length, 'event', 'events')} within ${scanLabel()} of ${label}${live ? `, ${live} happening now` : ''}.` : `Nothing public within ${scanLabel()} of ${label} right now.`);
+        const exact = at.approx ? ' This is your approximate area, from your internet connection.' : at.accuracy ? ` Your position is accurate to about ${dist(at.accuracy)}.` : '';
+        say((events.length ? `${plural(events.length, 'event', 'events')} within ${scanLabel()} of ${label}${live ? `, ${live} happening now` : ''}.` : `Nothing public within ${scanLabel()} of ${label} right now.`) + exact
+          + (at.accuracy > 150 && !at.approx ? ' Not quite right? Drag the blue dot to where you are.' : ''));
         render();
         const want = new URLSearchParams(location.search).get('event');
         const e = want && events.find((x) => x.id === want);
@@ -2130,8 +2188,22 @@
         if (!events.length && m) { note.textContent = 'No public events around here right now'; note.hidden = false; }
         if (!m) return;
         layer.clearLayers(); markers.clear();
+        fxLayer?.clearLayers();
+        let scanned = null;
         if (center) {
-          me = L.marker([center.lat, center.lng], { icon: L.divIcon({ className: '', html: '<span class="ev-me"></span>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, keyboard: false }).addTo(layer);
+          scanned = L.circle([center.lat, center.lng], { radius: scanM, className: 'ev-scan-area', weight: 1.5, interactive: false }).addTo(layer);
+          if (center.approx) {
+            // Only the nearest town: a soft area, not a precise-looking dot
+            L.circle([center.lat, center.lng], { radius: 3000, className: 'ev-approx', weight: 1.5, interactive: false }).addTo(layer);
+          } else {
+            if (center.accuracy > 25) L.circle([center.lat, center.lng], { radius: center.accuracy, className: 'ev-accuracy', weight: 1, interactive: false }).addTo(layer);
+            // Drag the dot to where you really are: it scans again from there
+            me = L.marker([center.lat, center.lng], {
+              icon: L.divIcon({ className: '', html: '<span class="ev-me" title="Drag to where you are"></span>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+              draggable: true, keyboard: false, title: 'You (drag to adjust)', alt: 'Your position',
+            }).addTo(layer);
+            me.on('dragend', () => { const p = me.getLatLng(); real = { lat: p.lat, lng: p.lng, accuracy: 0 }; look(real, 'you', scanM); });
+          }
         }
         const bounds = [];
         for (const e of events) {
@@ -2144,9 +2216,11 @@
           markers.set(e.id, pin);
           bounds.push([e.zone.lat, e.zone.lng]);
         }
-        if (center) bounds.push([center.lat, center.lng]);
-        if (bounds.length > 1) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-        else if (center) map.setView([center.lat, center.lng], 13);
+        // Show the whole scanned circle, and every event found
+        const all = scanned ? scanned.getBounds() : null;
+        for (const b of bounds) all ? all.extend(b) : null;
+        if (all) map.fitBounds(all, { padding: [30, 30], maxZoom: 16 });
+        else if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       }
       function cardFor(e) {
         const w = when(e);
@@ -2237,12 +2311,29 @@
           const state = await Momento.permission.state('location').catch(() => '');
           throw state === 'denied' ? fail('blocked', 'Location is blocked for Momento in this browser.') : fail('declined', 'No problem: Momento only uses your location when you scan.');
         }
-        const once = (high, timeout) => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
-          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }), reject,
-          { enableHighAccuracy: high, timeout, maximumAge: 300000 }));
-        try { return await once(false, 10000); }
+        // The phone (or computer) improves its fix over a few seconds: keep listening for up to 12 s
+        // and use the most precise one, stopping as soon as it's within 25 m. Never a cached position.
+        const best = () => new Promise((resolve, reject) => {
+          let top = null, lastErr = null, done = false;
+          const finish = () => {
+            if (done) return; done = true;
+            navigator.geolocation.clearWatch(id); clearTimeout(timer);
+            top ? resolve(top) : reject(lastErr || { code: 3 });
+          };
+          const id = navigator.geolocation.watchPosition((p) => {
+            const fix = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) };
+            if (!top || fix.accuracy < top.accuracy) top = fix;
+            say(`Finding you… accurate to about ${dist(top.accuracy)} so far`);
+            if (top.accuracy <= 25) finish();
+          }, (e) => { lastErr = e; if (e.code === 1) finish(); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 });
+          const timer = setTimeout(finish, 12000);
+        });
+        const once = () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) }), reject,
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }));
+        try { return await best(); }
         catch (first) {
-          try { return await once(true, 15000); }
+          try { return await once(); }
           catch (err) {
             const state = await Momento.permission?.state?.('location').catch?.(() => '') ?? '';
             if (state === 'denied') throw fail('blocked', 'Location is blocked for Momento in this browser.');
@@ -2282,7 +2373,7 @@
           const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
           const r = await fetch('https://get.geojs.io/v1/ip/geo.json', { cache: 'no-store', signal: ctl.signal }).then((x) => (x.ok ? x.json() : Promise.reject()));
           clearTimeout(t);
-          const at = { lat: Number(r.latitude), lng: Number(r.longitude) };
+          const at = { lat: Number(r.latitude), lng: Number(r.longitude), approx: true };
           if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng)) throw new Error();
           await look(at, r.city || 'your area', FAR_M);
         } catch (e) {
