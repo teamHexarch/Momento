@@ -22,7 +22,7 @@
       const at = await new Promise((resolve) => navigator.geolocation.getCurrentPosition(
         (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }), () => resolve(null), { maximumAge: 300000, timeout: 10000 }));
       if (!at) return;
-      const { events = [] } = await momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&km=15`).catch(() => ({}));
+      const { events = [] } = await momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&radius=5000`).catch(() => ({}));
       const seen = read(SEEN, {}), now = Date.now();
       for (const id of Object.keys(seen)) if (now - seen[id] > 2 * 864e5) delete seen[id];
       const e = events.find((x) => x.live && x.inside && !x.joined && !seen[x.id]);

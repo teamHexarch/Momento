@@ -51,7 +51,8 @@ Errors: 400 (not a 7-character code), 404 (no album has it).
 
 `GET /api/events/nearby?lat=<lat>&lng=<lng>&radius=<metres>`
 
-- `radius=1000` scans 1 km. Anything from 100 m to 100 km; the old `km=` still works (default 25 km).
+- Two sizes only: `radius=1000` (1 km, the default) or `radius=5000` (5 km). Anything bigger is treated as 5 km,
+  anything smaller as 1 km. The older `km=` works the same way.
 - Lists **public** events that haven't ended, within the radius, plus any event whose sharing zone the
   person is standing in even if its venue is further away. Live events first, then nearest.
 - Free: the position comes from the phone through the browser (`navigator.geolocation`), and the

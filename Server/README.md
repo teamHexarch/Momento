@@ -239,7 +239,7 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/albums/join` | `{ code, location? }` joins as a guest; any case, dash optional. Follows the album's rules: location check, host approval when closed |
 | GET | `/api/albums/preview/:code` | **No login needed.** What an album is (name, host's first name, counts, how joining works), never its photos. See GUEST-AND-NEARBY-API.md |
 | POST | `/api/albums/:id/remind` | Host only: emails guests who haven't added photos (once a day per album, at most 25 people) |
-| GET | `/api/events/nearby` | **No login needed.** `?lat&lng&radius` (metres, 100 m to 100 km; or `km`) Public events that haven't finished, nearest first, with `distanceM`, `bearing`, `direction`, `inside`, `inScan`. See GUEST-AND-NEARBY-API.md |
+| GET | `/api/events/nearby` | **No login needed.** `?lat&lng&radius` (1000 or 5000 metres: 1 km by default, 5 km for anything bigger) Public events that haven't finished, nearest first, with `distanceM`, `bearing`, `direction`, `inside`, `inScan`. See GUEST-AND-NEARBY-API.md |
 | POST | `/api/events/:id/join` | `{ location }` joins a public event as a guest (inside its zone, or the host approves) |
 | GET | `/api/albums/:id` | One album with its photos (each with `likes`, `liked`, `reactions`, `reaction`), minus any you've hidden or the host has deleted; `album.hiddenCount`, `album.saved`, and for the host `album.trashCount`. `?hidden=1` includes your hidden ones, marked `hidden: true` |
 | POST | `/api/albums/:id/save` | `{ saved }` the bookmark (saved albums show under Liked) |

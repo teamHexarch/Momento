@@ -298,8 +298,10 @@
     .ev-alt { margin-top: .6rem !important; font-size: .9rem; color: var(--slate); }
     .ev-scan-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: 1rem; }
     #evMap { cursor: crosshair; }
-    .leaflet-tile-pane { filter: sepia(.5) hue-rotate(208deg) saturate(.9) brightness(.93) contrast(1.18); }
-    :root[data-theme="dark"] .leaflet-tile-pane { filter: sepia(.6) hue-rotate(215deg) saturate(1.15) brightness(.92) contrast(1.05); }
+    /* The map in its own true colours (no tint), so water, parks and roads are easy to tell apart.
+       At night the dark map gets a little brighter, and its street names brighter still */
+    :root[data-theme="dark"] .leaflet-tile-pane { filter: brightness(1.25) contrast(1.1); }
+    :root[data-theme="dark"] .leaflet-labels-pane { filter: brightness(1.4) contrast(1.15); }
     :root[data-theme="dark"] #evMap { background: #1E1C27; }
     .ev-map-glass {
       position: absolute; inset: .5rem; z-index: 1; border-radius: 26px; pointer-events: none;
@@ -338,7 +340,7 @@
     /* Zone rings: a pane of frosted colour with a bright edge */
     .ev-zone { stroke: rgba(124, 111, 184, .75); fill: rgba(188, 178, 236, .16); }
     /* The scanned circle (dashed), how exact your position is, and the approximate-area circle */
-    .ev-scan-area { stroke: rgba(76, 123, 224, .7); fill: rgba(76, 123, 224, .05); stroke-dasharray: 6 6; }
+    .ev-scan-area { stroke: rgba(37, 84, 196, .95); stroke-width: 2.5px; fill: rgba(37, 84, 196, .07); stroke-dasharray: 8 6; }
     .ev-scan-area.is-scanning { fill: rgba(76, 123, 224, .1); animation: ev-dash 1s linear infinite; }
     @keyframes ev-dash { to { stroke-dashoffset: -24; } }
     .ev-accuracy { stroke: rgba(76, 123, 224, .45); fill: rgba(76, 123, 224, .12); }
@@ -1743,7 +1745,7 @@
             <div class="ev-list" id="evList">
               <div class="ev-empty ev-scan is-idle panel">
                 <h3>What’s on around you?</h3>
-                <p>Scan to see public events within 25 km of you. Momento only uses your location when you ask.</p>
+                <p>Scan to see public events within 1 km of you. Momento only uses your location when you ask.</p>
               </div>
             </div>
             <button class="ev-more glass" type="button" id="evMore" hidden></button>
@@ -2070,15 +2072,22 @@
         map.attributionControl.setPrefix(false);   // (the map data credits stay; Leaflet's own credit is optional)
         // Street names sit above the zone rings but under the pins, and never catch clicks
         const lp = map.createPane('labels'); lp.style.zIndex = 450; lp.style.pointerEvents = 'none';
+        // Light: Esri's street map (blue water, green parks, clear roads and names). Dark: Esri's dark
+        // map. Both free, no key. detectRetina: twice the detail on sharp screens, so nothing is blurry
+        const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+        const CREDIT = '&copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
         const setTiles = () => {
           const dark = document.documentElement.dataset.theme === 'dark';
           if (tiles) tiles.remove();
           if (labels) labels.remove();
-          const base = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_' + (dark ? 'Dark' : 'Light') + '_Gray_';
-          tiles = L.tileLayer(base + 'Base/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 16, attribution: '&copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          }).addTo(map);
-          labels = L.tileLayer(base + 'Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'labels' }).addTo(map);
+          labels = null;
+          const opts = { maxZoom: 18, maxNativeZoom: dark ? 16 : 18, detectRetina: true, attribution: CREDIT };
+          if (dark) {
+            tiles = L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', opts).addTo(map);
+            labels = L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { ...opts, attribution: '', pane: 'labels' }).addTo(map);
+          } else {
+            tiles = L.tileLayer(ESRI + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts).addTo(map);
+          }
         };
         setTiles();
         window.Momento?.theme?.onChange?.(setTiles);
@@ -2106,8 +2115,8 @@
         if (again) again.textContent = typeof retry === 'string' ? retry : 'Scan again';
         if (again) { again.addEventListener('click', () => useMyLocation()); rollButton?.(again); }
       }
-      // The scan looks within 1 km of you first; "Look further" widens it to 25 km
-      const NEAR_M = 1000, FAR_M = 25000;
+      // The scan looks within 1 km of you first; "Look within 5 km" widens it (the only two sizes)
+      const NEAR_M = 1000, FAR_M = 5000;
       let scanM = NEAR_M;
       const scanLabel = () => (scanM >= 1000 ? `${scanM / 1000} km` : `${scanM} m`);
       let lookLabel = 'you';
@@ -2172,12 +2181,12 @@
       function render() {
         if (events.length) listEl.innerHTML = '';
         else if (scanM < FAR_M) {
-          listMsg('Nothing within 1 km', 'No public events this close right now. Look further, or search another place above.', { retry: 'Look within 25 km' });
+          listMsg('Nothing within 1 km', 'No public events this close right now. Look further, or search another place above.', { retry: 'Look within 5 km' });
           const again = listEl.querySelector('[data-rescan]');
           again?.replaceWith(again.cloneNode(true));
           listEl.querySelector('[data-rescan]')?.addEventListener('click', () => look(center, lookLabel, FAR_M));
         }
-        else listMsg('Nothing on nearby', 'No public events within 25 km right now. Scan again later, or search another place above.', { retry: true });
+        else listMsg('Nothing within 5 km', 'No public events within 5 km right now. Scan again later, or search another place above.', { retry: true });
         for (const e of events) listEl.append(cardFor(e));
         // The closest few show to begin with (the style sheet hides the rest until "Show all")
         listEl.classList.remove('is-all');
@@ -2365,7 +2374,7 @@
       }
 
       // Roughly where you are from your internet connection (a free service, no key, no account).
-      // Only about the nearest town, so it scans 25 km around it
+      // Only about the nearest town, so it scans 5 km around it
       async function approximateArea() {
         say('Finding your area…');
         listMsg('Finding your area…', 'Using your internet connection to find the nearest town.', { scanning: true });

@@ -21,7 +21,7 @@ function readPoint(src) {
 }
 
 // GET /api/events/nearby?lat=&lng=[&radius=<metres>|&km=<km>]   (no login needed)
-// The scan: public events within the radius (radius=1000 scans 1 km; 100 m to 100 km), plus any
+// The scan: public events within 1 km (radius=1000, the default) or 5 km (radius=5000), plus any
 // event whose own sharing zone you're standing in even if its venue is further. Sorted live first,
 // then nearest. Each comes with its distance and its compass direction from you, for a radar view.
 // Your position comes from your phone (the browser's location, free); distances are worked out
@@ -35,7 +35,9 @@ function bearing(from, to) {
 }
 export async function nearby(req, res) {
   const at = readPoint(req.query);
-  const radiusM = Math.round(Math.min(100000, Math.max(100, Number(req.query.radius) || (Number(req.query.km) || 25) * 1000)));
+  // Only two sizes: 1 km, or 5 km for anything bigger (radius in metres, or the older km)
+  const want = Number(req.query.radius) || (Number(req.query.km) || 1) * 1000;
+  const radiusM = want > 1000 ? 5000 : 1000;
   // A box first (cheap, on the zone's centre), then the exact distance. The box also reaches 10 km
   // further, the biggest a sharing zone can be, so a zone you're standing in is never missed
   const km = radiusM / 1000 + 10;

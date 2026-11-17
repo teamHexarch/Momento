@@ -72,9 +72,14 @@ try {
   assert.equal(run.inside, true);
   assert.equal(run.direction, 'east');
   assert.equal(scan.scan.count, 1);
-  // A wider scan finds the far one; a bad position is refused
-  const wider = await json(await call(`/api/events/nearby?lat=${here.lat}&lng=${here.lng}&km=25`, 200));
-  assert.ok(wider.events.some((e) => e.name === 'Beach day'));
+  // Scans are 1 km or 5 km only: 5 km takes in the fun run's venue, never the beach 20 km away
+  const wider = await json(await call(`/api/events/nearby?lat=${here.lat}&lng=${here.lng}&radius=5000`, 200));
+  assert.equal(wider.scan.radiusM, 5000);
+  assert.equal(wider.events.find((e) => e.name === 'City fun run').inScan, true);
+  assert.ok(!wider.events.some((e) => e.name === 'Beach day'));
+  assert.equal((await json(await call(`/api/events/nearby?lat=${here.lat}&lng=${here.lng}&km=25`, 200))).scan.radiusM, 5000, 'anything bigger is 5 km');
+  assert.equal((await json(await call(`/api/events/nearby?lat=${here.lat}&lng=${here.lng}`, 200))).scan.radiusM, 1000, '1 km by default');
+  assert.equal((await json(await call(`/api/events/nearby?lat=${here.lat}&lng=${here.lng}&radius=300`, 200))).scan.radiusM, 1000);
   await call('/api/events/nearby?lat=999&lng=0', 400);
 
   // ---- Looking at an album from its code, logged out ----

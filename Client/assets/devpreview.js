@@ -321,7 +321,8 @@
       const at = { lat: Number(query?.get('lat')), lng: Number(query?.get('lng')) };
       if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng)) return fail(400, 'Your location is needed to find events near you.');
       // Like the server: radius in metres (100 m to 100 km), or the older km
-      const radiusM = Math.min(100000, Math.max(100, Number(query?.get('radius')) || (Number(query?.get('km')) || 25) * 1000));
+      const want = Number(query?.get('radius')) || (Number(query?.get('km')) || 1) * 1000;
+      const radiusM = want > 1000 ? 5000 : 1000;
       const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
       const bearing = (to) => { const r = Math.PI / 180, dl = (to.lng - at.lng) * r; return (Math.atan2(Math.sin(dl) * Math.cos(to.lat * r), Math.cos(at.lat * r) * Math.sin(to.lat * r) - Math.sin(at.lat * r) * Math.cos(to.lat * r) * Math.cos(dl)) / r + 360) % 360; };
       if (!state.events) { state.events = seedEvents(at); save(); }
