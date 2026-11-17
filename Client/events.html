@@ -294,6 +294,10 @@
     /* ---------- The map in liquid glass ----------
        The street map is tinted into the site's lilac, a pane of glass sits over it (a bright rim, a sheen
        across the top, a soft glow at the foot), and every control on it is a frosted glass pill */
+    /* When your location can't be used: the free alternatives */
+    .ev-alt { margin-top: .6rem !important; font-size: .9rem; color: var(--slate); }
+    .ev-scan-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: 1rem; }
+    #evMap { cursor: crosshair; }
     .leaflet-tile-pane { filter: sepia(.5) hue-rotate(208deg) saturate(.9) brightness(.93) contrast(1.18); }
     :root[data-theme="dark"] .leaflet-tile-pane { filter: sepia(.6) hue-rotate(215deg) saturate(1.15) brightness(.92) contrast(1.05); }
     :root[data-theme="dark"] #evMap { background: #1E1C27; }
@@ -1715,7 +1719,7 @@
           <div class="ev-mapbox panel">
             <div id="evMap" role="region" aria-label="Map of events near you"></div>
             <span class="ev-map-glass" aria-hidden="true"></span>
-            <p class="ev-map-note" id="evMapNote">Use your location, or search a place, to see what’s on</p>
+            <p class="ev-map-note" id="evMapNote">Scan nearby, search a place, or tap the map to see what’s on</p>
           </div>
           <div class="ev-side">
             <div class="ev-list" id="evList">
@@ -2061,6 +2065,8 @@
         setTiles();
         window.Momento?.theme?.onChange?.(setTiles);
         layer = L.layerGroup().addTo(map);
+        // Tap anywhere to see what's on around that spot (pins and zones have their own taps)
+        map.on('click', (e) => look({ lat: e.latlng.lat, lng: e.latlng.lng }, 'the spot you picked'));
         setTimeout(() => map.invalidateSize(), 700);
         return map;
       }
@@ -2218,16 +2224,71 @@
       sheet.addEventListener('click', (k) => { if (k.target === sheet && sheet._down) closeSheet(); });
 
       // ---- Where you really are (asked for only when you press a button) ----
+      // Where you are, from the phone or computer itself (free: no map service involved).
+      // A quick fix first (Wi-Fi based, fine for a 1 km scan), then a precise one if that fails.
+      // A failure says which kind it was: 'blocked' (this browser said no to Momento) or 'device'
+      // (the device couldn't work out where it is: location off in Windows, no Wi-Fi, no location service)
+      const fail = (kind, text) => Object.assign(new Error(text), { kind });
       async function locate() {
+        if (!navigator.geolocation || !window.isSecureContext) throw fail('device', 'This browser can’t share a location here.');
         // Says why first, the first time
-        if (Momento.permission && !(await Momento.permission.ensure('location'))) throw new Error('Location is off for Momento, so events near you can’t be found. You can allow it in Settings.');
-        return new Promise((resolve, reject) => {
-          if (!navigator.geolocation) return reject(new Error('This browser can’t share your location.'));
-          navigator.geolocation.getCurrentPosition(
-            (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
-            (err) => reject(new Error(err.code === 1 ? 'Location is off for Momento. Allow it in your browser’s site settings, then try again.' : err.code === 3 ? 'Finding you took too long. Try again.' : 'Your location couldn’t be found. Try again.')),
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
-        });
+        if (Momento.permission && !(await Momento.permission.ensure('location'))) {
+          // Blocked in the browser, or they tapped Not now on Momento's explanation
+          const state = await Momento.permission.state('location').catch(() => '');
+          throw state === 'denied' ? fail('blocked', 'Location is blocked for Momento in this browser.') : fail('declined', 'No problem: Momento only uses your location when you scan.');
+        }
+        const once = (high, timeout) => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }), reject,
+          { enableHighAccuracy: high, timeout, maximumAge: 300000 }));
+        try { return await once(false, 10000); }
+        catch (first) {
+          try { return await once(true, 15000); }
+          catch (err) {
+            const state = await Momento.permission?.state?.('location').catch?.(() => '') ?? '';
+            if (state === 'denied') throw fail('blocked', 'Location is blocked for Momento in this browser.');
+            throw fail('device', 'This device couldn’t work out where you are.');
+          }
+        }
+      }
+
+      // When your own location can't be used: say why, and offer the free ways that always work
+      const isWindows = /Windows/.test(navigator.userAgent);
+      function locationHelp(err) {
+        moreBtn.hidden = true;
+        const blocked = err.kind === 'blocked', declined = err.kind === 'declined';
+        const tip = declined ? 'Tap Scan nearby whenever you’re ready to share it.'
+          : blocked ? 'You can allow it again in this browser’s site settings.'
+          : isWindows ? 'On a Windows PC, check Settings › Privacy & security › Location: turn on Location services and “Let desktop apps access your location”, and connect to Wi-Fi.'
+          : 'Check that Location is on for this device and browser, and that you’re on Wi-Fi or mobile data.';
+        listEl.innerHTML = `<div class="ev-empty ev-scan panel is-idle"><h2></h2><p></p><p class="ev-alt">Or, with no location needed: <b>tap anywhere on the map</b> to scan there, or search a town above.</p>
+          <div class="ev-scan-acts">${blocked ? '<button class="btn btn-light" type="button" data-how>How to allow it</button>' : ''}<button class="btn btn-light" type="button" data-again>Try again</button><button class="btn btn-dark" type="button" data-area>Use my approximate area</button></div></div>`;
+        listEl.querySelector('h2').textContent = declined ? 'Scan without your location' : blocked ? 'Location is blocked for Momento' : 'Couldn’t find where you are';
+        if (declined) listEl.querySelector('[data-again]').textContent = 'Scan nearby';
+        listEl.querySelector('p').textContent = `${err.message} ${tip}`;
+        listEl.querySelector('[data-how]')?.addEventListener('click', (e) => Momento.permission?.request('location', { from: e.currentTarget }).then((ok) => ok && useMyLocation()));
+        listEl.querySelector('[data-again]').addEventListener('click', () => useMyLocation());
+        listEl.querySelector('[data-area]').addEventListener('click', () => approximateArea());
+        listEl.querySelectorAll('.btn').forEach((b) => rollButton?.(b));
+        const m = ensureMap();
+        if (m) { note.textContent = 'Tap anywhere on the map to see what’s on there'; note.hidden = false; }
+      }
+
+      // Roughly where you are from your internet connection (a free service, no key, no account).
+      // Only about the nearest town, so it scans 25 km around it
+      async function approximateArea() {
+        say('Finding your area…');
+        listMsg('Finding your area…', 'Using your internet connection to find the nearest town.', { scanning: true });
+        try {
+          const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
+          const r = await fetch('https://get.geojs.io/v1/ip/geo.json', { cache: 'no-store', signal: ctl.signal }).then((x) => (x.ok ? x.json() : Promise.reject()));
+          clearTimeout(t);
+          const at = { lat: Number(r.latitude), lng: Number(r.longitude) };
+          if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng)) throw new Error();
+          await look(at, r.city || 'your area', FAR_M);
+        } catch (e) {
+          say('');
+          listMsg('Couldn’t find your area', 'Search a town or place above, or tap anywhere on the map to scan there.', { retry: true });
+        }
       }
       async function join(e, btn) {
         const noteEl = card.querySelector('.ev-acts-note');
@@ -2259,7 +2320,7 @@
         try { real = await locate(); await look(real, 'you'); }
         catch (err) {
           say('');
-          listMsg('Turn on location to see what’s near you', err.message + ' You can also search a town or place above.', { retry: true });
+          locationHelp(err);
         }
         finally { locBtn.disabled = false; }
       }
