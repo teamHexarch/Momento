@@ -63,6 +63,16 @@
     :root[data-theme="dark"] .acct-photo-btn { background: rgba(255, 255, 255, .1); }
     :root[data-theme="dark"] .acct-photo-btn:hover { background: rgba(255, 255, 255, .16); }
     :root[data-theme="dark"] .acct-photo-btn.is-danger { background: none; color: #F0A3A3; }
+    /* The header for visitors: a Log in button where the account button would be */
+    .nl-login { min-height: 2.6rem; padding: 0 1.2rem; font-size: .92rem; }
+    /* The log-in prompt: what you're about to join */
+    .nl-album { display: flex; align-items: center; gap: .8rem; margin: .2rem 0 1rem; padding: .7rem .8rem; border-radius: 18px; background: rgba(255, 255, 255, .5); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .08); }
+    .nl-album[hidden] { display: none; }
+    .nl-cover { display: grid; place-items: center; flex: none; width: 3rem; height: 3rem; border-radius: 14px; background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-weight: 700; font-size: 1.2rem; }
+    .nl-text { display: grid; min-width: 0; }
+    .nl-text b { font-size: 1rem; }
+    .nl-text small { font-size: .82rem; color: var(--slate, #5C596B); }
+    :root[data-theme="dark"] .nl-album { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
     @media (prefers-reduced-motion: reduce) { .pw-eye .slash { transition: none; } .acct-photo-av.is-busy::after { animation-duration: 3s; } }
   `;
   document.head.append(css);
@@ -201,6 +211,109 @@
   }
   M.permission = { state, request, ensure, supported, names: Object.fromEntries(Object.entries(WHY).map(([k, v]) => [k, v.name])) };
 
-  const go = () => { start(); };
+  // ---------- Log in when you act ----------
+  // Visitors can look around without an account. The moment they act (join, upload, create, ...),
+  // this asks them to log in or sign up, then brings them back to carry on: a join code is joined,
+  // "Create an album" opens.
+  const ASK = {
+    join: ['Log in to join this album', 'It only takes a moment, and then the photos are yours to see and add to.'],
+    create: ['Log in to create your album', 'It’s free. Your guests join with a code or QR code, no app needed.'],
+    upload: ['Log in to add your photos', 'Your photos go straight into the album, in full quality.'],
+    react: ['Log in to like and react', 'Show some love for the best photos.'],
+    groups: ['Log in to see your groups', 'Share albums with the people you see most, in one place.'],
+    view: ['Log in to see the photos', 'Join the album to see everything everyone added.'],
+    continue: ['Log in to continue', 'Log in or sign up. It only takes a moment.'],
+  };
+  // Where to come back to after logging in (the home page only sends people to My albums or Social)
+  const here = () => {
+    const page = location.pathname.split('/').pop() || 'index.html';
+    return /^(albums|events)\.html$/.test(page) ? page + location.search + location.hash : 'albums.html';
+  };
+  let asking = false;
+  M.needLogin = ({ action = 'continue', next, from = null, album = null } = {}) => {
+    if (asking) return;
+    asking = true;
+    const [title, body] = ASK[action] || ASK.continue;
+    const d = document.createElement('dialog');
+    d.className = 'acct-dialog';
+    d.setAttribute('aria-labelledby', 'needLoginTitle');
+    d.innerHTML = `
+      <div class="acct-card">
+        <button class="acct-x" type="button" aria-label="Close" data-close><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="nl-album" hidden><span class="nl-cover" aria-hidden="true"></span><span class="nl-text"><b></b><small></small></span></div>
+        <h2 id="needLoginTitle"></h2>
+        <p class="acct-sub"></p>
+        <div class="acct-actions nl-acts"><button class="acct-ghost" type="button" data-go="login">Log in</button><button class="acct-primary" type="button" data-go="signup">Sign up free</button></div>
+      </div>`;
+    d.querySelector('h2').textContent = title;
+    d.querySelector('.acct-sub').textContent = body;
+    if (album) {
+      // What they're about to join, so it's worth the sign-up
+      const box = d.querySelector('.nl-album');
+      box.hidden = false;
+      box.querySelector('.nl-cover').textContent = (album.name || '·').trim()[0]?.toUpperCase() || '·';
+      box.querySelector('b').textContent = album.name;
+      const bits = [album.hostName && `Hosted by ${album.hostName}`, album.photos ? `${album.photos} photo${album.photos === 1 ? '' : 's'}` : 'No photos yet', album.guests ? `${album.guests} in it` : '', album.live ? 'Happening now' : ''];
+      box.querySelector('small').textContent = bits.filter(Boolean).join(' · ');
+    }
+    document.body.append(d);
+    d.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
+      const to = next || here();
+      location.href = `index.html?login=1${b.dataset.go === 'signup' ? '&signup=1' : ''}&next=${encodeURIComponent(to)}`;
+    }));
+    d.querySelector('[data-close]').addEventListener('click', () => d.close());
+    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+    d.addEventListener('close', () => { asking = false; d.remove(); from?.focus?.({ preventScroll: true }); });
+    d.showModal();
+  };
+  // A safety net: any action the server says needs an account opens the prompt (looking never does)
+  const api = window.momentoApi;
+  if (api) {
+    window.momentoApi = async (path, opts = {}) => {
+      try { return await api(path, opts); }
+      catch (err) {
+        if (err.code === 'login-required' && (opts.method || 'GET').toUpperCase() !== 'GET') M.needLogin({ action: err.action || 'continue' });
+        throw err;
+      }
+    };
+  }
+  // "Create an album" when logged out: the prompt, then the form opens after logging in
+  const signedIn = () => !!M.account?.get?.();
+  const wrapCreate = () => {
+    const make = M.createAlbum;
+    if (!make || make.guarded) return;
+    M.createAlbum = Object.assign((from, opts) => {
+      if (signedIn()) return make(from, opts);
+      const page = here().split(/[?#]/)[0];
+      return M.needLogin({ action: 'create', from, next: `${page}?create=1` });
+    }, { guarded: true, original: make });
+  };
+  async function afterLogin() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has('create')) return;
+    const user = await M.sessionReady?.catch?.(() => null);
+    if (!user) return;
+    q.delete('create');
+    history.replaceState(null, '', location.pathname + (q.size ? '?' + q : '') + location.hash);
+    // (straight to the form: the account was just confirmed above)
+    (M.createAlbum?.original || M.createAlbum)?.();
+  }
+
+  // In the header, visitors get a "Log in" button (and come back to this page afterwards) instead of an
+  // account button with nobody in it
+  async function guestHeader() {
+    const slot = document.querySelector('.me-slot[data-acct-always]');
+    if (!slot) return;
+    const user = await M.sessionReady?.catch?.(() => null);
+    if (user || M.account?.get?.()) return;
+    const link = document.createElement('a');
+    link.className = 'btn btn-dark nl-login';
+    link.href = 'index.html?login=1&next=' + encodeURIComponent(here());
+    link.textContent = 'Log in';
+    slot.replaceChildren(link);
+    slot.hidden = false;
+  }
+
+  const go = () => { wrapCreate(); afterLogin(); guestHeader(); start(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 })();

@@ -534,6 +534,12 @@
     .foot-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin-top: .9rem; color: var(--stone); font-size: .86rem; }
     .foot-row .faces i { width: 1.6rem; height: 1.6rem; font-size: .66rem; --ring: #F6F4FA; }
 
+    /* My albums, for visitors who haven't logged in */
+    .live.is-guest { display: grid; align-content: center; min-height: 0; }
+    .guest-in { display: grid; gap: .7rem; padding: clamp(1.4rem, 3vw, 2.2rem); }
+    .guest-in h2 { margin: 0; font-size: clamp(1.4rem, 2.6vw, 1.9rem); letter-spacing: -.025em; }
+    .guest-in p { margin: 0; max-width: 34rem; color: var(--slate); line-height: 1.6; }
+    .guest-acts { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .5rem; }
     .empty { display: grid; justify-items: center; gap: .4rem; margin-bottom: var(--s6); padding: 3rem 1rem 3.4rem; text-align: center; color: var(--slate); }
     .empty[hidden] { display: none; }
     .empty b { color: var(--dusk); font-size: 1.25rem; letter-spacing: -.02em; }
@@ -4063,8 +4069,25 @@
         const user = await Momento.sessionReady;
         const params = new URLSearchParams(location.search);
         if (!user) {
-          // Not logged in (or the login has expired): log in or sign up first, then come back here
-          location.replace('index.html?login=1&next=' + encodeURIComponent('albums.html' + location.search + location.hash));
+          // Not logged in: a welcome with the ways in. Logging in is asked for only when they act
+          if (embedded) { tellParent('failed', 'Log in to see this album.'); return; }
+          lede.textContent = 'Every event you’re part of, in one place.';
+          document.querySelector('.pulse').hidden = true;
+          document.querySelector('.tools').parentElement.hidden = true;
+          const live = document.getElementById('live');
+          live.hidden = false;
+          live.classList.add('is-guest');
+          live.innerHTML = `<div class="guest-in">
+            <h2 id="liveTitle">Your albums will live here</h2>
+            <p>Join an album with its code or QR code, find a public event near you, or create one for your own event. You’ll log in or sign up when you’re ready.</p>
+            <div class="guest-acts">
+              <a class="btn btn-dark" href="events.html#join">Join with a code</a>
+              <button class="btn btn-light" type="button" data-create>Create an album</button>
+              <a class="btn btn-light" href="events.html#events">Events near you</a>
+            </div>
+          </div>`;
+          live.querySelectorAll('.btn').forEach((b) => rollButton?.(b));
+          if (params.get('join')) location.replace('events.html?join=' + encodeURIComponent(params.get('join')));
           return;
         }
         if (!user.emailVerified) {

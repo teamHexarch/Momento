@@ -230,7 +230,22 @@
       state.signedIn = true; save(); return { body: { user: state.user } };
     }
     if (path.startsWith('/api/auth/') || path === '/api/support') return { body: { ok: true, sent: true, retryAt: new Date(Date.now() + 60000).toISOString(), user: state.user } };
-    if (!state.signedIn) return fail(401, 'Log in to continue.');
+    // Like the real server: visitors can preview an album by its code and scan for events; anything else
+    // asks them to log in (code 'login-required')
+    const pv = /^\/api\/albums\/preview\/([^/]+)$/.exec(path);
+    if (pv && method === 'GET') {
+      const want = decodeURIComponent(pv[1]).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (want.length !== 7) return fail(400, 'Codes are 7 letters and numbers, like K7Q-48DM.');
+      const all = [...state.albums, ...(state.invites || []), ...(state.events || [])];
+      const a = all.find((x) => String(x.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === want);
+      if (!a) return fail(404, 'No album has that code. Check it against the host’s card.');
+      return { body: { album: { code: a.code, name: a.name, date: a.date, place: a.place, hostName: a.hostName || a.by || 'The host', photos: a.photos || 0, guests: a.guests || 0,
+        live: a.date ? albumLifecycle(a).status === 'live' : false, joining: { open: true } }, signedIn: !!state.signedIn, member: state.albums.includes(a) } };
+    }
+    if (!state.signedIn && !(path === '/api/events/nearby' && method === 'GET')) {
+      const action = method === 'POST' && /join$/.test(path) ? 'join' : method === 'POST' && path === '/api/albums' ? 'create' : 'continue';
+      return { status: 401, body: { error: 'Log in or sign up to continue.', code: 'login-required', action } };
+    }
 
     // ---- Groups ----
     const describeGroup = (g) => ({ ...g, members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });

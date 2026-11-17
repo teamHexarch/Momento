@@ -99,6 +99,14 @@
       const button = joinForm.querySelector('[type="submit"]');
       if (button.disabled) return;
       button.disabled = true;
+      // Not logged in: show what the album is (no login needed for that), then ask to log in. The
+      // code goes with them, so they're joined as soon as they're back
+      if (!(await MQ.sessionReady?.catch?.(() => null))) {
+        try { await guestJoin(code); }
+        catch (err) { joinNote.classList.add('error'); joinNote.textContent = err.message; otpError(); }
+        finally { button.disabled = false; }
+        return;
+      }
       try {
         const { album, pending } = await MQ.eventAdmission('/api/albums/join', { code });
         if (pending) { joinNote.textContent = 'Your request is waiting for the host.'; loadJoined(); return; }
@@ -108,6 +116,13 @@
       finally { button.disabled = false; }
     });
 
+
+    async function guestJoin(code) {
+      const clean = code.replace('-', '');
+      const { album } = await momentoApi('/api/albums/preview/' + encodeURIComponent(clean));
+      joinModal.close();
+      MQ.needLogin({ action: 'join', next: 'events.html?join=' + encodeURIComponent(album.code || clean), album });
+    }
 
     function submitInvite(code) {
       if (!/^[A-Z0-9]{3}-?[A-Z0-9]{4}$/i.test(code)) {
@@ -395,6 +410,8 @@
       }
       try {
         const user = await Momento.sessionReady;
+        // A visitor with an invite link or QR code: show the album and ask them to log in
+        if (!user && code) { guestJoin(code).catch(() => openJoin(code)); return; }
         if (!user?.emailVerified) return;
         me = user.name || '';
       } catch (err) { joined.textContent = err.message; return; }

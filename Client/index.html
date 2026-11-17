@@ -3834,7 +3834,7 @@
       });
       document.querySelectorAll('[data-auth]').forEach((b) => b.addEventListener('click', () => window.openAuth({ mode: b.dataset.auth })));
       // From an invite link most people are new, so it opens on Sign up (Log in is one tap away)
-      document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).has('login')) window.openAuth({ mode: fromInvite ? 'signup' : 'login' }); });
+      document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).has('login')) window.openAuth({ mode: fromInvite || new URLSearchParams(location.search).has('signup') ? 'signup' : 'login' }); });
       // ---- Links from emails: password reset, approving an email change, and how a link went ----
       // Tokens are taken out of the address bar straight away (the referrer meta also keeps them
       // from ever reaching another site)
