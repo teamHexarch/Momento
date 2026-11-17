@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-page="events">
+<html lang="en" data-page="social">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +7,7 @@
   <style>[hidden] { display: none !important; }</style>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
+  <script src="assets/pickers.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -36,11 +37,11 @@
     } catch (e) {}
   
     // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
-    // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
+    // links into a section (#faq) and when the page is reopened part-way down. Until it ends, a
     // veil (#intro) covers the page; if the script that runs it never loads, the veil is lifted anyway
     try {
       const page = root.dataset.page, seen = sessionStorage.getItem('momento-intro-' + page);
-      if (page && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\b/.test(location.search) || (!seen && !location.hash))) {
+      if (page === 'home' && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\b/.test(location.search) || (!seen && !location.hash))) {
         root.classList.add('intro-on');
         setTimeout(() => {
           if (!root.classList.contains('intro-on')) return;
@@ -52,8 +53,8 @@
   })();
   </script>
   <!-- /@shared:boot -->
-  <title>Events near you | Momento</title>
-  <meta name="description" content="Join event albums with an invitation, check your requests and discover events nearby.">
+  <title>Social | Momento</title>
+  <meta name="description" content="Your friend groups and event albums in one place: share albums with the people you see most, join events with an invitation and discover events nearby.">
   <!-- The map: Leaflet (pinned, checked against its published hashes) with OpenStreetMap data -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
@@ -270,9 +271,6 @@
        Public albums around you, on a map and in a list. The map is the picture; each event is a round
        print of its favourite photo with a ring for its zone. Cards beside it say how far, whether you're
        inside, and show a few photos so you can tell if it looks fun before joining. */
-    .ev-head { padding: 7.2rem 0 1.6rem; }
-    .ev-title { margin: 0; font-size: clamp(2.6rem, 5vw, 4.2rem); line-height: .98; font-weight: 700; letter-spacing: -.05em; }
-    .ev-lede { max-width: 34rem; margin: .9rem 0 0; color: var(--slate); font-size: 1.08rem; line-height: 1.6; }
     .ev-where { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin-top: 1.4rem; }
     .ev-search { --radius: 100px; position: relative; display: flex; align-items: center; gap: .55rem; width: min(24rem, 100%); min-height: 3rem; padding: 0 1.1rem; box-sizing: border-box; color: var(--slate); }
     .ev-search input { flex: 1; min-width: 0; height: 2.9rem; border: none; background: none; color: var(--dusk); font: 500 .95rem var(--font-main); outline: none; }
@@ -422,13 +420,11 @@
       .brand-word { display: none; }
       .header { display: flex; justify-content: space-between; padding: 1rem 3%; gap: .5rem; }
       .nav-item { padding: .55rem .85rem; font-size: .82rem; }
-      .ev-head { padding-top: 6rem; }
       .ev-body { grid-template-columns: minmax(0, 1fr); }
       .ev-mapbox { position: relative; top: 0; height: 52vh; }
       .ev-notify { margin-left: 0; }
     }
     @media (max-width: 600px) {
-      .ev-head { padding-top: 5.2rem; }
       .ev-where .btn { width: 100%; }
       .ev-search { width: 100%; }
       .ev-notify { width: 100%; box-sizing: border-box; justify-content: space-between; padding: .3rem .2rem .3rem .3rem; font-size: .86rem; line-height: 1.35; }
@@ -436,6 +432,231 @@
       .ev-grid { grid-template-columns: repeat(3, 1fr); }
     }
     @media (prefers-reduced-motion: reduce) { .evc, .ev-pin { transition: none; } .evc-tag.is-live i { animation: none; } }
+
+    /* ---------- Friend groups ----------
+       The people you share albums with again and again. Each group is a glass panel led by its faces,
+       with the group's albums laid out beside them as a row of prints (the same prints as My albums).
+       Invites waiting for you come first, because they're the one thing here that needs an answer. */
+    .gr-status { margin: 0 0 .9rem; min-height: 1.3em; color: var(--slate); font-size: .9rem; }
+    .gr-status.is-error { color: #9A3D3D; font-weight: 600; }
+
+    .gr-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); margin-bottom: var(--s6); }
+    .gr-h2 { margin: .6rem 0 0; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; color: var(--slate); }
+
+    /* Invites for you */
+    .gr-invites { display: grid; gap: .75rem; }
+    .gri { --radius: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: .9rem 1rem; padding: 1rem 1rem 1rem 1.2rem; }
+    .gri-ic { display: grid; place-items: center; flex: none; width: 2.9rem; height: 2.9rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
+    .gri-text { flex: 1; min-width: 13rem; line-height: 1.4; }
+    .gri-text b { font-weight: 650; }
+    .gri-text small { display: block; margin-top: .15rem; color: var(--slate); font-size: .86rem; }
+    .gri-acts { display: flex; gap: .5rem; }
+    .gri-acts .btn { min-height: 2.6rem; padding: 0 1.1rem; font-size: .88rem; }
+
+    /* A group */
+    .grc-faces { display: flex; flex: none; padding-left: .5rem; }
+    .grc-faces .grc-face { position: relative; z-index: var(--z, 0); margin-left: -.5rem; }
+    .grc-face.is-you { font-size: .74rem; }
+    .grc-face {
+      display: grid; place-items: center; flex: none; width: 2.9rem; height: 2.9rem; margin-left: -.6rem; overflow: hidden; border-radius: 50%;
+      background: var(--c, var(--lavender)); color: #2E2C3A; font: 650 .95rem var(--font-main);
+      box-shadow: 0 0 0 2.5px rgba(255, 255, 255, .9), 0 6px 14px -8px rgba(46, 44, 58, .55);
+    }
+    .grc-face img { width: 100%; height: 100%; object-fit: cover; }
+    .grc-face.is-more { background: var(--dusk); color: var(--paper); font-size: .8rem; }
+
+    .gra {
+      display: block; scroll-snap-align: start; padding: .5rem .5rem .75rem; border-radius: 5px; background: #FFFFFF; color: #2E2C3A; text-decoration: none;
+      box-shadow: 0 1px 2px rgba(46, 44, 58, .12), 0 14px 26px -18px rgba(60, 50, 90, .55);
+      transform: rotate(var(--tilt, 0deg)); transition: transform .5s var(--spring), box-shadow .3s ease;
+    }
+    .gra:nth-child(3n + 1) { --tilt: -1.1deg; }
+    .gra:nth-child(3n + 2) { --tilt: .7deg; }
+    .gra:nth-child(3n) { --tilt: -.3deg; }
+    .gra:hover { transform: translateY(-4px) rotate(0deg); box-shadow: 0 1px 2px rgba(46, 44, 58, .12), 0 22px 34px -18px rgba(60, 50, 90, .6); }
+    .gra:active { transform: scale(.97); }
+    .gra:focus-visible { outline: 2px solid var(--dusk); outline-offset: 4px; }
+    .gra-pic { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 2px; background: linear-gradient(135deg, #E6E0F1, #F2E3E9); }
+    .gra-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .gra-none { position: absolute; inset: 0; display: grid; place-items: center; padding: .5rem; color: #6F6B7D; font-size: .8rem; font-weight: 600; text-align: center; }
+    .gra-live { position: absolute; left: .4rem; top: .4rem; display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .55rem; border-radius: 100px; background: rgba(255, 255, 255, .92); font-size: .72rem; font-weight: 650; }
+    .gra-live i { width: 6px; height: 6px; border-radius: 50%; background: #3E9B6E; }
+    .gra b { display: block; margin-top: .6rem; overflow: hidden; font-size: .92rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+    .gra small { display: block; margin-top: .1rem; overflow: hidden; color: #6F6B7D; font-size: .78rem; white-space: nowrap; text-overflow: ellipsis; }
+    .gra-add {
+      display: grid; place-items: center; align-content: center; gap: .45rem; min-height: 11rem; padding: 1rem; border: 1.5px dashed rgba(46, 44, 58, .25); border-radius: 18px;
+      background: none; color: var(--slate); font: 600 .88rem var(--font-main); text-align: center; cursor: pointer; transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+    }
+    .gra-add:hover { background: rgba(255, 255, 255, .45); border-color: rgba(46, 44, 58, .4); color: var(--dusk); }
+    .gra-add:active { background: rgba(255, 255, 255, .7); }
+    .gra-add:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
+    .grc-list { display: grid; gap: .1rem; margin: .3rem 0 .4rem; padding: 0; list-style: none; }
+    .grc-list li { display: flex; align-items: center; gap: .75rem; padding: .4rem 0; }
+    .grc-list .grc-face { width: 2.2rem; height: 2.2rem; margin: 0; font-size: .8rem; box-shadow: none; }
+    .grc-list .grc-face.is-waiting { background: none; color: var(--slate); box-shadow: inset 0 0 0 1.5px rgba(46, 44, 58, .25); }
+    .grc-who { flex: 1; min-width: 0; line-height: 1.35; }
+    .grc-who b { display: block; overflow: hidden; font-size: .93rem; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+    .grc-who small { color: var(--slate); font-size: .8rem; }
+    .grc-foot { display: flex; flex-wrap: wrap; gap: .2rem; margin: .3rem 0 0 -.8rem; }
+    .grc-link {
+      flex: none; padding: .5rem .8rem; border: none; border-radius: 100px; background: none; color: var(--slate);
+      font: 600 .85rem var(--font-main); cursor: pointer; transition: background-color .2s ease, color .2s ease;
+    }
+    .grc-link:hover { background: rgba(46, 44, 58, .07); color: var(--dusk); }
+    .grc-link:active { background: rgba(46, 44, 58, .12); }
+    .grc-link:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .grc-link:disabled { opacity: .5; cursor: default; }
+    .grc-link.is-danger { color: #9A3D3D; }
+    .grc-link.is-danger:hover { background: rgba(154, 61, 61, .08); }
+
+    .gr-empty { --radius: 36px; max-width: 40rem; padding: 2rem 2.1rem 2.1rem; }
+    .gr-empty h3 { margin: 0 0 .5rem; font-size: 1.5rem; letter-spacing: -.03em; }
+    .gr-empty p { margin: 0 0 1.3rem; color: var(--slate); line-height: 1.6; }
+    .gr-loading { min-height: 12rem; opacity: .55; }
+
+    :root[data-theme="dark"] .gr-status.is-error { color: #F0A3A3; }
+    :root[data-theme="dark"] .grc-faces .grc-face { box-shadow: 0 0 0 2.5px rgba(22, 20, 32, .95), 0 6px 14px -8px rgba(0, 0, 0, .6); }
+    :root[data-theme="dark"] .grc-list .grc-face.is-waiting { color: var(--slate); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .25); }
+    :root[data-theme="dark"] .gra-add { border-color: rgba(255, 255, 255, .2); }
+    :root[data-theme="dark"] .gra-add:hover { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .35); }
+    :root[data-theme="dark"] .grc-link:hover { background: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .grc-link.is-danger { color: #F0A3A3; }
+    :root[data-theme="dark"] .grc-link.is-danger:hover { background: rgba(240, 163, 163, .1); }
+
+    @media (max-width: 900px) {
+      /* The header at phone width: the wordmark goes, the nav tightens (same as the other pages) */
+      .brand-word { display: none; }
+      .header { display: flex; justify-content: space-between; padding: 1rem 3%; gap: .5rem; }
+    }
+    @media (max-width: 600px) {
+      .gri-acts { width: 100%; }
+      .gri-acts .btn { flex: 1; }
+      .gr-empty { padding: 1.6rem 1.4rem; }
+    }
+    @media (prefers-reduced-motion: reduce) { .gra { transition: none; } }
+
+    /* ---------- Social: groups and public events, on one page ----------
+       Read top to bottom: what's waiting for you, your groups, then what's on near you. Each group is a tile that
+       opens in a panel beside the page, so the page itself stays short. */
+    .so-head { padding: 7.2rem 0 0; }
+    .so-title { margin: 0; font-size: clamp(2.6rem, 5vw, 4.2rem); line-height: .98; font-weight: 700; letter-spacing: -.05em; }
+    .so-lede { max-width: 36rem; margin: .9rem 0 0; color: var(--slate); font-size: 1.08rem; line-height: 1.6; }
+    .so-jump { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.6rem; }
+    .so-jump-item { --radius: 26px; display: flex; align-items: center; gap: .85rem; min-width: min(16rem, 100%); box-sizing: border-box; padding: .75rem 1.4rem .75rem .8rem; color: var(--dusk); text-decoration: none; transition: transform .4s var(--spring); }
+    .so-jump-item:hover { transform: translateY(-2px); }
+    .so-jump-item:active { transform: scale(.98); }
+    .so-jump-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .so-jump-ic { display: grid; place-items: center; flex: none; width: 2.7rem; height: 2.7rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
+    .so-jump-item > span:last-child { display: grid; gap: .1rem; line-height: 1.3; }
+    .so-jump-item b { font-size: 1rem; font-weight: 650; }
+    .so-jump-item small { color: var(--slate); font-size: .85rem; }
+
+    /* Needs you: every invite and request that's waiting for an answer, stacked. Hidden when there are none */
+    .so-need { padding-top: var(--s4); }
+    .so-need[hidden] { display: none; }
+    .so-need .gr-h2 { display: flex; align-items: center; gap: .5rem; margin: 0 0 .9rem; }
+    .so-count { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; padding: 0 .4rem; box-sizing: border-box; border-radius: 100px; background: #C8553D; color: #fff; font: 700 .74rem/1 var(--font-main); }
+    .so-count:empty { display: none; }
+    .so-stack { display: grid; gap: .75rem; }
+    .so-stack:empty { display: none; }
+
+    /* A part of the page: a title and what it's for, with its main action to the right */
+    .so-sec { padding-top: var(--s5); scroll-margin-top: 5.5rem; }
+    .so-sec[hidden] { display: none; }
+    .so-sec-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem; margin-bottom: 1.4rem; }
+    .so-h2 { margin: 0; font-size: clamp(1.7rem, 3.2vw, 2.3rem); line-height: 1.05; font-weight: 700; letter-spacing: -.04em; }
+    .so-sec-lede { max-width: 34rem; margin: .55rem 0 0; color: var(--slate); line-height: 1.6; }
+    .so-end { height: var(--s5); }
+
+    /* Your groups: a tile each, with a peek at its albums */
+    .gr-body { display: block; }
+    .gt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); gap: 1.1rem; }
+    .gt { --radius: 30px; position: relative; display: grid; align-content: start; gap: 1rem; min-height: 12rem; padding: 1.3rem 1.3rem 1.2rem; box-sizing: border-box; border: 0; color: var(--dusk); font: inherit; text-align: left; cursor: pointer; transition: transform .45s var(--spring); }
+    .gt:hover { transform: translateY(-3px); }
+    .gt:active { transform: scale(.985); }
+    .gt:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .gt .grc-faces { padding-left: .6rem; }
+    .gt-name { display: grid; gap: .25rem; min-width: 0; }
+    .gt-name b { font-size: 1.35rem; line-height: 1.15; font-weight: 700; letter-spacing: -.035em; overflow-wrap: anywhere; }
+    .gt-name small { color: var(--slate); font-size: .88rem; }
+    .gt-pics { display: flex; align-items: center; gap: .4rem; margin-top: auto; }
+    .gt-pics img, .gt-pics span { flex: none; width: 2.7rem; height: 2.7rem; border-radius: 11px; object-fit: cover; background: rgba(127, 120, 150, .18); }
+    .gt-live { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; padding: .22rem .6rem; border-radius: 100px; background: rgba(70, 160, 135, .16); color: #1F6B57; font: 650 .76rem var(--font-main); font-style: normal; }
+    .gt-live i { width: 6px; height: 6px; border-radius: 50%; background: #3E9B6E; }
+    .gt-none { margin-top: auto; color: var(--stone); font-size: .88rem; }
+    .gt-add { display: grid; place-items: center; align-content: center; gap: .5rem; min-height: 12rem; padding: 1rem; border: 1.5px dashed rgba(46, 44, 58, .25); border-radius: 30px; background: none; color: var(--slate); font: 650 .95rem var(--font-main); cursor: pointer; transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+    .gt-add:hover { background: rgba(255, 255, 255, .45); border-color: rgba(46, 44, 58, .4); color: var(--dusk); }
+    .gt-add:active { background: rgba(255, 255, 255, .7); }
+    .gt-add:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    :root[data-theme="dark"] .gt-add { border-color: rgba(255, 255, 255, .2); }
+    :root[data-theme="dark"] .gt-add:hover { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .35); }
+    :root[data-theme="dark"] .gt-live { background: rgba(120, 210, 180, .16); color: #93E2C9; }
+
+    /* A group opened: a panel from the right (a sheet from the bottom on a phone) */
+    .gd { position: fixed; inset: 0 0 0 auto; width: min(31rem, 100vw); max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; background: none; overflow: visible; color: var(--dusk); }
+    .gd::backdrop { background: rgba(46, 44, 58, .32); }
+    :root[data-theme="dark"] .gd::backdrop { background: rgba(6, 5, 10, .62); }
+    .gd-card { box-sizing: border-box; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 1.3rem 1.5rem 2rem; border-radius: 32px 0 0 32px; scrollbar-width: thin;
+      background: linear-gradient(180deg, #FBFAFD, #F3F1F8); box-shadow: -30px 0 80px -30px rgba(46, 44, 58, .55), 0 0 0 .5px rgba(46, 44, 58, .08); }
+    :root[data-theme="dark"] .gd-card { background: linear-gradient(180deg, #24212F, #1B1924); box-shadow: -30px 0 80px -30px rgba(0, 0, 0, .8), 0 0 0 .5px rgba(255, 255, 255, .08); }
+    .gd-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .gd-x { display: grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; padding: 0; border: 0; border-radius: 50%; background: rgba(46, 44, 58, .07); color: var(--dusk); cursor: pointer; transition: transform .3s var(--spring), background-color .2s ease; }
+    .gd-x:hover { background: rgba(46, 44, 58, .14); }
+    .gd-x:active { transform: scale(.92); }
+    .gd-x:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    :root[data-theme="dark"] .gd-x { background: rgba(255, 255, 255, .09); }
+    :root[data-theme="dark"] .gd-x:hover { background: rgba(255, 255, 255, .16); }
+    .gd-title { margin: 1.1rem 0 0; font-size: 2rem; line-height: 1.08; font-weight: 700; letter-spacing: -.04em; overflow-wrap: anywhere; }
+    .gd-sub { margin: .4rem 0 0; color: var(--slate); }
+    .gd-acts { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+    .gd-acts .btn { min-height: 2.6rem; padding: 0 1.1rem; font-size: .88rem; }
+    .gd-h3 { margin: 1.8rem 0 .7rem; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; color: var(--slate); }
+    .gd-albums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: .3rem .2rem .5rem; }
+    .gd-albums .gra-add { min-height: 10rem; }
+    .gd .grc-foot { margin-top: .6rem; }
+
+    /* Events near you: what you can do, a place to look, then the map beside the closest few */
+    #events .ev-actions { margin: 0 0 1rem; }
+    #events .ev-where { margin-top: 0; }
+    #events .ea-requests { margin: 0 0 1rem; }
+    #events .ea-requests h3 { margin: 0 0 .6rem; font-size: .95rem; font-weight: 650; color: var(--slate); }
+    #events .ev-status { margin-top: .8rem; }
+    #events .ev-body { margin: .6rem 0 0; }
+    #events .ev-mapbox { height: min(64vh, 560px); }
+    .ev-side { display: grid; align-content: start; gap: .9rem; min-width: 0; }
+    .ev-list:not(.is-all) > .evc:nth-of-type(n + 4) { display: none; }   /* the closest three until "Show all" */
+    .ev-more { --radius: 100px; justify-self: start; min-height: 2.75rem; padding: 0 1.3rem; border: 0; color: var(--dusk); font: 650 .92rem var(--font-main); cursor: pointer; transition: transform .35s var(--spring); }
+    .ev-more[hidden] { display: none; }
+    .ev-more:hover { transform: translateY(-2px); }
+    .ev-more:active { transform: scale(.97); }
+    .ev-more:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    @media (max-width: 600px) {
+      .so-head { padding-top: 5.4rem; }
+      .so-jump-item { flex: 1 1 100%; }
+      .so-sec { padding-top: var(--s4); }
+      .gt-grid { grid-template-columns: minmax(0, 1fr); }
+      #events .ev-actions .btn { flex: 1 1 auto; }
+      .gd { inset: auto 0 0 0; width: 100%; height: auto; max-height: 90dvh; }
+      .gd-card { height: auto; max-height: 90dvh; padding: 1.1rem 1.2rem 1.8rem; border-radius: 28px 28px 0 0; box-shadow: 0 -30px 80px -30px rgba(46, 44, 58, .55); }
+      .gd-albums { gap: .8rem; }
+    }
+    @media (prefers-reduced-motion: reduce) { .so-jump-item, .gt, .ev-more, .gd-x { transition: none; } }
+    /* Scanning: a soft radar while Momento finds you and looks around */
+    .ev-scan { display: grid; justify-items: center; }
+    .ev-radar { position: relative; display: block; width: 4.5rem; height: 4.5rem; margin: .2rem 0 1rem; }
+    .ev-radar::after { content: ""; position: absolute; inset: 36%; border-radius: 50%; background: var(--dusk); box-shadow: 0 0 0 4px rgba(184, 174, 245, .35); }
+    .ev-radar i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(124, 111, 184, .55); opacity: 0; animation: ev-radar 2.4s cubic-bezier(.2, .7, .3, 1) infinite; }
+    .ev-radar i:nth-child(2) { animation-delay: .8s; }
+    .ev-radar i:nth-child(3) { animation-delay: 1.6s; }
+    @keyframes ev-radar { 0% { transform: scale(.3); opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
+    .ev-scan.is-idle .ev-radar i { animation: none; }
+    .ev-empty .btn { margin-top: 1.1rem; }
+    :root[data-theme="dark"] .ev-radar::after { background: #F2EFF8; }
+    :root[data-theme="dark"] .ev-radar i { border-color: rgba(184, 174, 245, .55); }
+    @media (prefers-reduced-motion: reduce) { .ev-radar i { animation: none; opacity: .5; } .ev-radar i:nth-child(2) { transform: scale(.65); } .ev-radar i:nth-child(1) { transform: scale(.35); } }
+    /* Phones and small tablets: the events themselves before the map */
+    @media (max-width: 900px) { #events .ev-side { order: -1; } #events .ev-mapbox { height: 42vh; } }
 
     /* ---------- Phones: keep it simple and keep things apart ----------
        The background thread is dropped (it crossed text on a narrow screen), and the header
@@ -569,7 +790,7 @@
       }
   
       /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
-      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .nav-menu) {
+      :root[data-theme="dark"] :is(.glass, .panel, .zone-ctrl, .nav-menu) {
         background:
           linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
           linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
@@ -581,13 +802,7 @@
           0 26px 60px -30px rgba(0, 0, 0, .75);
       }
       :root[data-theme="dark"] .glass { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .15), inset 0 0 16px rgba(150, 140, 210, .06), 0 0 24px -8px rgba(120, 100, 190, .3), 0 12px 30px -14px rgba(0, 0, 0, .7); }
-      :root[data-theme="dark"] :is(.zone-ctrl, .plan) { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
-      :root[data-theme="dark"] .plan-plus {
-        background:
-          radial-gradient(80% 60% at 85% 10%, rgba(255, 255, 255, .1), transparent 60%) padding-box,
-          linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
-          linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
-      }
+      :root[data-theme="dark"] .zone-ctrl { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
       :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
       :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
   
@@ -673,13 +888,13 @@
         :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
       }
   
-      /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
-      :is(.nav-settings, .nav-events, .nav-groups) { display: inline-flex; align-items: center; justify-content: center; }
-      :is(.nav-settings, .nav-events, .nav-groups) svg { display: none; }
+      /* ---------- Social and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
+      :is(.nav-social, .nav-settings) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-social, .nav-settings) svg { display: none; }
       @media (max-width: 520px) {
-        :is(.nav-settings, .nav-events, .nav-groups) .nav-label { display: none; }
-        :is(.nav-settings, .nav-events, .nav-groups) svg { display: block; }
-        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .5rem; padding-right: .5rem; }
+        :is(.nav-social, .nav-settings) .nav-label { display: none; }
+        :is(.nav-social, .nav-settings) svg { display: block; }
+        :is(.nav-social, .nav-settings) { padding-left: .5rem; padding-right: .5rem; }
       }
       /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
          logo, the menu and your account button all fit on one line */
@@ -689,12 +904,12 @@
         .nav { gap: 0 !important; padding: .22rem !important; }
         .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
         .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
-        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .46rem !important; padding-right: .46rem !important; }
-        :is(.nav-settings, .nav-events, .nav-groups) svg { width: 16px; height: 16px; }
+        :is(.nav-social, .nav-settings) { padding-left: .46rem !important; padding-right: .46rem !important; }
+        :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
       }
       @media (max-width: 340px) {
         .nav-item { padding: .45rem .42rem !important; }
-        :is(.nav-settings, .nav-events) { padding-left: .45rem !important; padding-right: .45rem !important; }
+        :is(.nav-social, .nav-settings) { padding-left: .45rem !important; padding-right: .45rem !important; }
       }
   
       /* ---------- The thread ----------
@@ -1417,15 +1632,13 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item">My albums</a>
-        <a href="groups.html" class="nav-item nav-groups" aria-label="Friend groups"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Groups</span></a>
-        <a href="events.html" class="nav-item nav-events" aria-label="Events" aria-current="page"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
+        <a href="events.html" class="nav-item nav-social" aria-label="Social" aria-current="page"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Social</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
       <div class="nav-menu glass" id="navMenu" aria-label="Home page sections">
         <a href="index.html#how-it-works" class="menu-item">How it works</a>
         <a href="index.html#features" class="menu-item">Features</a>
         <a href="index.html#for-hosts" class="menu-item">For hosts</a>
-        <a href="index.html#pricing" class="menu-item">Pricing</a>
         <a href="index.html#faq" class="menu-item">FAQ</a>
       </div>
     </div>
@@ -1436,49 +1649,97 @@
   <div class="page-wrap" id="pageWrap">
     <main class="page">
 
-      <section class="ev-head">
-        <div class="event-entry">
-          <h1 class="ev-title">Event albums</h1>
-          <p class="ev-lede">Bring the code on your invitation. If joining has closed or you can’t check in at the venue, the host can review your request.</p>
-          <div class="ev-actions">
-            <button class="btn btn-pearl" type="button" id="joinOpen">Join with a code</button>
-            <button class="btn btn-light" type="button" id="scanOpen" data-qr-scan>Scan a QR code</button>
-            <a class="btn btn-dark" href="index.html#for-hosts" data-create>Create an album</a>
-          </div>
-        </div>
-        <section class="ea-requests" id="eaInvites" aria-live="polite" hidden><h2>Invitations</h2><ul></ul></section>
-        <section class="ea-requests" id="admission-status" aria-live="polite" hidden><h2>Your join requests</h2><ul></ul></section>
-        <div class="events-library-head"><h2>Your event <span style="white-space: nowrap">albums<span class="ea-total" id="eaTotal"></span></span></h2><button class="btn btn-light" id="refreshEvents" type="button">Refresh</button></div>
-        <div class="ea-grid" id="joinedEvents" aria-live="polite"><p class="ea-loading">Loading your albums…</p></div>
-      </section>
-      <section class="nearby-heading">
-        <span class="mask"><h2 class="ev-title ink rise" data-text="Events near you">Events near you</h2></span>
-        <p class="ev-lede intro" style="--d: .25s">Discover public events nearby. Open an event to join or request access from the host.</p>
-        <div class="ev-where intro" style="--d: .35s">
-          <button class="btn btn-dark" type="button" id="evLocate">Use my location</button>
-          <label class="ev-search glass">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
-            <input id="evSearch" type="text" autocomplete="off" spellcheck="false" placeholder="Or look around a town or place" aria-label="Look around a town or place" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="evSuggest">
-            <ul class="ev-suggest" id="evSuggest" role="listbox" aria-label="Places" hidden></ul>
-          </label>
-          <label class="ev-notify" for="evNotify"><span>Alert me about events nearby</span><button class="acct-sw" type="button" role="switch" id="evNotify" aria-checked="false"></button></label>
-        </div>
-        <p class="ev-status intro" style="--d: .4s" id="evStatus" role="status"></p>
+      <section class="so-head">
+        <span class="mask"><h1 class="so-title ink rise" data-text="Social">Social</h1></span>
+        <p class="so-lede intro" style="--d: .25s">Share albums with the people you see most, or find public events happening near you.</p>
+        <nav class="so-jump intro" style="--d: .35s" aria-label="On this page">
+          <a class="so-jump-item glass" href="#groups">
+            <span class="so-jump-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg></span>
+            <span><b>Groups</b><small>Share albums with the same people</small></span>
+          </a>
+          <a class="so-jump-item glass" href="#events">
+            <span class="so-jump-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg></span>
+            <span><b>Events</b><small>Join public albums near you</small></span>
+          </a>
+        </nav>
       </section>
 
-      <section class="ev-body intro" style="--d: .45s" aria-label="Events on the map and in a list">
-        <div class="ev-mapbox panel">
-          <div id="evMap" role="region" aria-label="Map of events near you"></div>
-          <span class="ev-map-glass" aria-hidden="true"></span>
-          <p class="ev-map-note" id="evMapNote">Use your location, or search a place, to see what’s on</p>
+      <!-- Everything waiting for an answer, in one place: group invites, event invitations, guests to let in, your own requests -->
+      <section class="so-need" id="soNeed" aria-labelledby="soNeedTitle" hidden>
+        <h2 class="gr-h2" id="soNeedTitle">Needs you <span class="so-count" id="soNeedCount"></span></h2>
+        <div class="so-stack" aria-live="polite">
+          <div class="so-stack" id="grInvites"></div>
+          <div class="so-stack" id="eaInvites"></div>
+          <div class="so-stack" id="eaWaiting"></div>
         </div>
-        <div class="ev-list" id="evList">
-          <div class="ev-empty panel">
-            <h2>What’s on around you?</h2>
-            <p>Use your location to see public events nearby. Momento only uses it to find events and to check you’re inside a zone when you join.</p>
+      </section>
+
+      <section class="so-sec" id="groups" aria-labelledby="soGroupsTitle">
+        <div class="so-sec-head">
+          <div>
+            <h2 class="so-h2" id="soGroupsTitle">Your groups</h2>
+            <p class="so-sec-lede">People you share albums with again and again. Everyone in a group sees every album shared with it, and can add their own photos.</p>
+          </div>
+          <button class="btn btn-dark" type="button" id="grNew">New group</button>
+        </div>
+        <p class="gr-status" id="grStatus" role="status"></p>
+        <div class="gr-body" id="grBody" aria-label="Your groups" aria-busy="true">
+          <div class="panel gr-loading" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="so-sec" id="events" aria-labelledby="soEventsTitle">
+        <div class="so-sec-head">
+          <div>
+            <h2 class="so-h2" id="soEventsTitle">Events near you</h2>
+            <p class="so-sec-lede">Public albums happening around you. Open one to see its photos and join in.</p>
+          </div>
+          <label class="ev-notify" for="evNotify"><span>Alert me about events nearby</span><button class="acct-sw" type="button" role="switch" id="evNotify" aria-checked="false"></button></label>
+        </div>
+        <div class="ev-actions">
+          <button class="btn btn-pearl" type="button" id="joinOpen">Join with a code</button>
+          <button class="btn btn-light" type="button" id="scanOpen" data-qr-scan>Scan a QR code</button>
+          <a class="btn btn-dark" href="index.html#for-hosts" data-create>Create an album</a>
+        </div>
+        <section class="ea-requests" id="admission-status" aria-live="polite" hidden><h3>Your join requests</h3><ul></ul></section>
+        <div class="ev-where">
+          <label class="ev-search glass">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+            <input id="evSearch" type="text" autocomplete="off" spellcheck="false" placeholder="Search a town or place" aria-label="Search a town or place" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="evSuggest">
+            <ul class="ev-suggest" id="evSuggest" role="listbox" aria-label="Places" hidden></ul>
+          </label>
+          <button class="btn btn-light" type="button" id="evLocate">Scan nearby</button>
+        </div>
+        <p class="ev-status" id="evStatus" role="status"></p>
+        <div class="ev-body" aria-label="Events on the map and in a list">
+          <div class="ev-mapbox panel">
+            <div id="evMap" role="region" aria-label="Map of events near you"></div>
+            <span class="ev-map-glass" aria-hidden="true"></span>
+            <p class="ev-map-note" id="evMapNote">Use your location, or search a place, to see what’s on</p>
+          </div>
+          <div class="ev-side">
+            <div class="ev-list" id="evList">
+              <div class="ev-empty ev-scan is-idle panel">
+                <h3>What’s on around you?</h3>
+                <p>Scan to see public events within 25 km of you. Momento only uses your location when you ask.</p>
+              </div>
+            </div>
+            <button class="ev-more glass" type="button" id="evMore" hidden></button>
           </div>
         </div>
       </section>
+
+      <!-- Only for people who host an event album: who gets in, the join deadline, and guests waiting to be let in -->
+      <section class="so-sec" id="soHosting" aria-labelledby="soHostingTitle" hidden>
+        <div class="so-sec-head">
+          <div>
+            <h2 class="so-h2" id="soHostingTitle">Events you host <span class="ea-total" id="eaTotal"></span></h2>
+            <p class="so-sec-lede">Choose who gets in, set a join deadline, and let waiting guests in.</p>
+          </div>
+        </div>
+        <div class="eh-list" id="joinedEvents" aria-live="polite"></div>
+      </section>
+      <div class="so-end" aria-hidden="true"></div>
 
   <dialog class="modal" id="joinModal" aria-labelledby="joinTitle">
     <form class="modal-card small" id="joinForm" novalidate>
@@ -1508,6 +1769,10 @@
     <div class="modal-card ea-sheet" id="eaSheet"></div>
   </dialog>
 
+      <dialog class="gd" id="grDrawer" aria-labelledby="grTitle">
+        <div class="gd-card" id="grPanel"></div>
+      </dialog>
+
       <dialog class="ev-sheet" id="evSheet" aria-labelledby="evSheetTitle">
         <div class="ev-card panel" id="evCard"></div>
       </dialog>
@@ -1518,8 +1783,6 @@
 
 
   <script>
-    // This page has no intro of its own
-    document.documentElement.classList.remove('intro-on');
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const root = document.documentElement;
@@ -1738,9 +2001,10 @@
         menu.classList.toggle('is-open', v);
         caret.setAttribute('aria-expanded', v);
       };
-      caret.addEventListener('click', () => setOpen(!open));
+      // A click just after hovering opened it keeps it open (instead of closing it straight away)
+      caret.addEventListener('click', () => { if (open && performance.now() - (caret._hoverAt || 0) < 500) return; setOpen(!open); });
       if (finePointer) for (const zone of [split, menu]) {
-        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') setOpen(true); });
+        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { if (!open) caret._hoverAt = performance.now(); setOpen(true); } });
         zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') timer = setTimeout(() => setOpen(false), 260); });
       }
       document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
@@ -1803,25 +2067,58 @@
 
       // ---- What's around a point ----
       let center = null, real = null, events = [], picked = null, lookReq = 0;
-      async function look(at, label) {
+      // The list's own messages: scanning, or why nothing could be shown (with a way to try again)
+      const SHOWN = 3, moreBtn = $('evMore');
+      moreBtn.addEventListener('click', () => {
+        const all = listEl.classList.toggle('is-all');
+        moreBtn.textContent = all ? 'Show fewer' : `Show all ${events.length} events`;
+      });
+      function listMsg(title, text, { scanning = false, retry = false } = {}) {
+        moreBtn.hidden = true;
+        listEl.innerHTML = `<div class="ev-empty ev-scan panel${scanning ? '' : ' is-idle'}">${scanning ? '<span class="ev-radar" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}<h2></h2><p></p>${retry ? '<button class="btn btn-dark" type="button" data-rescan></button>' : ''}</div>`;
+        listEl.querySelector('h2').textContent = title;
+        listEl.querySelector('p').textContent = text;
+        const again = listEl.querySelector('[data-rescan]');
+        if (again) again.textContent = typeof retry === 'string' ? retry : 'Scan again';
+        if (again) { again.addEventListener('click', () => useMyLocation()); rollButton?.(again); }
+      }
+      // The scan looks within 1 km of you first; "Look further" widens it to 25 km
+      const NEAR_M = 1000, FAR_M = 25000;
+      let scanM = NEAR_M;
+      const scanLabel = () => (scanM >= 1000 ? `${scanM / 1000} km` : `${scanM} m`);
+      let lookLabel = 'you';
+      async function look(at, label, radius = NEAR_M) {
         center = at;
+        scanM = radius;
         const req = ++lookReq;
-        say(`Looking for events near ${label}…`);
+        say(`Looking for events within ${scanLabel()} of ${label}…`);
         let r;
-        try { r = await momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&km=25`); }
-        catch (err) { if (req === lookReq) say(err.message, true); return; }
+        try { r = await momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&radius=${radius}`); }
+        catch (err) { if (req === lookReq) { say(''); listMsg('Couldn’t look for events', err.message, { retry: true }); } return; }
         if (req !== lookReq) return;
-        events = r.events;
+        events = [...r.events].sort((a, b) => a.distanceM - b.distanceM);   // the closest first
         const live = events.filter((e) => e.live).length;
-        say(events.length ? `${plural(events.length, 'event', 'events')} within 25 km of ${label}${live ? `, ${live} happening now` : ''}.` : `Nothing public within 25 km of ${label} right now.`);
+        lookLabel = label;
+        say(events.length ? `${plural(events.length, 'event', 'events')} within ${scanLabel()} of ${label}${live ? `, ${live} happening now` : ''}.` : `Nothing public within ${scanLabel()} of ${label} right now.`);
         render();
         const want = new URLSearchParams(location.search).get('event');
         const e = want && events.find((x) => x.id === want);
         if (e) { history.replaceState(null, '', location.pathname); openSheet(e); }
       }
       function render() {
-        listEl.innerHTML = events.length ? '' : `<div class="ev-empty panel"><h2>Nothing on nearby</h2><p>No public events within 25 km right now. Try another place, or check back later.</p></div>`;
+        if (events.length) listEl.innerHTML = '';
+        else if (scanM < FAR_M) {
+          listMsg('Nothing within 1 km', 'No public events this close right now. Look further, or search another place above.', { retry: 'Look within 25 km' });
+          const again = listEl.querySelector('[data-rescan]');
+          again?.replaceWith(again.cloneNode(true));
+          listEl.querySelector('[data-rescan]')?.addEventListener('click', () => look(center, lookLabel, FAR_M));
+        }
+        else listMsg('Nothing on nearby', 'No public events within 25 km right now. Scan again later, or search another place above.', { retry: true });
         for (const e of events) listEl.append(cardFor(e));
+        // The closest few show to begin with (the style sheet hides the rest until "Show all")
+        listEl.classList.remove('is-all');
+        moreBtn.hidden = events.length <= SHOWN;
+        moreBtn.textContent = `Show all ${events.length} events`;
         const m = ensureMap();
         note.hidden = !!events.length || !m;
         if (!events.length && m) { note.textContent = 'No public events around here right now'; note.hidden = false; }
@@ -1859,7 +2156,7 @@
             <h3>${esc(e.name)}</h3>
             <p class="evc-meta">${esc([e.place, `by ${e.hostName}`].filter(Boolean).join(' · '))}</p>
             ${w.live ? '' : `<p class="evc-when">${esc(w.text)}</p>`}
-            <p class="evc-where"><b>${dist(e.distanceM)} away</b>${whereChip(e)}</p>
+            <p class="evc-where"><b>${e.direction === 'here' ? 'Right here' : `${dist(e.distanceM)} ${e.direction ? e.direction : 'away'}`}</b>${whereChip(e)}</p>
             ${pics ? `<div class="evc-pics">${pics}</div>` : ''}
           </div>`;
         el.addEventListener('click', () => { pick(e, false); openSheet(e); });
@@ -1885,7 +2182,7 @@
           <div class="ev-hero">${e.pics[0] ? `<img src="${esc(e.pics[0])}" alt="">` : ''}<span class="evc-tag${w.live ? ' is-live' : ''}">${w.live ? '<i></i>' : ''}${esc(w.text)}</span><h2 id="evSheetTitle">${esc(e.name)}</h2></div>
           <div class="ev-info">
             <p class="evc-meta">${esc([e.venue?.address || e.place, `Hosted by ${e.hostName}`].filter(Boolean).join(' · '))}</p>
-            <p class="evc-where"><b>${dist(e.distanceM)} away</b>${whereChip(e)}</p>
+            <p class="evc-where"><b>${e.direction === 'here' ? 'Right here' : `${dist(e.distanceM)} ${e.direction ? e.direction : 'away'}`}</b>${whereChip(e)}</p>
             <p class="ev-facts"><span><b>${plural(e.photos, 'photo', 'photos')}</b></span><span><b>${plural(e.guests, 'person', 'people')}</b> in it</span><span>Venue radius <b>${dist(e.zone.radiusM)}</b></span></p>
           </div>
           ${grid}
@@ -1955,10 +2252,15 @@
       // ---- Use my location ----
       const locBtn = $('evLocate');
       async function useMyLocation() {
+        if (locBtn.disabled) return;
         locBtn.disabled = true;
         say('Finding you…');
+        listMsg('Scanning for events near you…', 'Checking for public events within 1 km.', { scanning: true });
         try { real = await locate(); await look(real, 'you'); }
-        catch (err) { say(err.message, true); }
+        catch (err) {
+          say('');
+          listMsg('Turn on location to see what’s near you', err.message + ' You can also search a town or place above.', { retry: true });
+        }
         finally { locBtn.disabled = false; }
       }
       locBtn.addEventListener('click', useMyLocation);
@@ -2030,13 +2332,385 @@
         try { user = await Momento.sessionReady; }
         catch (err) { say('Couldn’t reach Momento. Check your connection, then reload the page.', true); return; }
         if (!user) { location.replace('index.html?login=1&next=' + encodeURIComponent('events.html' + location.search + location.hash)); return; }
+        // Events is one part of a longer page, so it never asks for your location unprompted: if you've
+        // already allowed it, it scans straight away; otherwise it waits for a tap on "Scan nearby"
         ensureMap();
-        try {
-          const p = await navigator.permissions?.query({ name: 'geolocation' });
-          if (p?.state === 'granted') useMyLocation();
-          else if (new URLSearchParams(location.search).get('event')) say('Use your location to see this event and whether you can join.');
-        } catch (err) {}
+        let allowed = false;
+        try { allowed = (await navigator.permissions?.query({ name: 'geolocation' }))?.state === 'granted'; } catch (err) {}
+        if (allowed) useMyLocation();
+        else listMsg('What’s on around you?', 'Scan to see public events within 1 km of you. Momento asks for your location first, and only uses it when you scan.', { retry: 'Scan nearby' });
       });
+    })();
+
+    // ---- Groups ----
+    // Make a group, invite people by email, accept or decline invites, and browse each group's albums.
+    // Each group is a tile; opening one slides in a panel with its albums and people.
+    // Being in a group is what gives access to its albums: the server checks it on every album and photo.
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const plural = (n, one, many) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const FACES = ['#D9D0EA', '#E6CDD6', '#C9DEDB', '#EADCC8', '#D3DCEE'];
+      const statusEl = $('grStatus'), body = $('grBody'), inviteBox = $('grInvites'), drawer = $('grDrawer'), panel = $('grPanel');
+      const say = (t, bad) => { statusEl.textContent = t || ''; statusEl.classList.toggle('is-error', !!bad); };
+      const ICON = {
+        mail: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>',
+        plus: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+        close: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+      };
+
+      let groups = [], invites = [];
+      let openId = null;   // the group whose panel is open, kept across redraws
+
+      const initials = (name) => (name === 'You' ? 'You' : String(name).trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?');
+      const hue = (id) => FACES[[...String(id)].reduce((t, c) => t + c.charCodeAt(0), 0) % FACES.length];
+      const face = (m, i = 0) => `<span class="grc-face${m.you ? ' is-you' : ''}" style="--c: ${hue(m.id)}; --z: ${9 - i}" title="${esc(m.name)}">${m.avatarUrl ? `<img src="${esc(m.avatarUrl)}" alt="">` : esc(initials(m.name))}</span>`;
+      const dateOf = (a) => new Date(a.date + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      async function load(quiet) {
+        try {
+          ({ groups, invites } = await momentoApi('/api/groups'));
+          if (!quiet) say('');
+        } catch (err) {
+          say(err.message, true);
+          return;
+        }
+        render();
+      }
+
+      function render() {
+        body.removeAttribute('aria-busy');
+        body.textContent = '';
+        // Invites go to "Needs you" at the top of the page: they're the one thing here that needs an answer
+        inviteBox.textContent = '';
+        for (const i of invites) inviteBox.append(inviteCard(i));
+        inviteBox.querySelectorAll('.btn').forEach(rollButton);
+        inviteBox.querySelectorAll('.panel').forEach(lightUp);
+        if (!groups.length) {
+          const empty = document.createElement('div');
+          empty.className = 'gr-empty panel';
+          empty.innerHTML = `
+            <h3>Start a group for the people you share with most</h3>
+            <p>Make a group, invite people by email, then share albums with it. Everyone who joins sees every album the group shares, including ones added later.</p>
+            <button class="btn btn-dark" type="button" data-new>Make a group</button>`;
+          empty.querySelector('[data-new]').addEventListener('click', (e) => newGroup(e.currentTarget));
+          body.append(empty);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'gt-grid';
+          for (const g of groups) grid.append(groupTile(g));
+          const add = document.createElement('button');
+          add.type = 'button';
+          add.className = 'gt-add';
+          add.innerHTML = `${ICON.plus}<span>New group</span>`;
+          add.addEventListener('click', (e) => newGroup(e.currentTarget));
+          grid.append(add);
+          body.append(grid);
+        }
+        body.querySelectorAll('.btn').forEach(rollButton);
+        body.querySelectorAll('.panel').forEach(lightUp);
+        // A panel that was open shows the new data, or closes if its group is gone
+        const open = openId && groups.find((x) => x.id === openId);
+        if (open) paintPanel(open); else if (openId) { openId = null; closePanel(); }
+        openFromHash();
+      }
+
+      // ---- An invite waiting for you ----
+      function inviteCard(i) {
+        const el = document.createElement('article');
+        el.className = 'gri panel';
+        el.innerHTML = `
+          <i class="gri-ic" aria-hidden="true">${ICON.mail}</i>
+          <p class="gri-text"><b>${esc(i.by)}</b> invited you to the group <b>${esc(i.group.name)}</b><small>${plural(i.members, 'person', 'people')} in it, ${plural(i.albums, 'shared album', 'shared albums')}</small></p>
+          <div class="gri-acts"><button class="btn btn-light" type="button" data-no>Decline</button><button class="btn btn-dark" type="button" data-yes>Join group</button></div>`;
+        el.querySelector('[data-yes]').addEventListener('click', async (e) => {
+          e.currentTarget.disabled = true;
+          try {
+            const { group } = await momentoApi(`/api/groups/invites/${encodeURIComponent(i.id)}/accept`, { method: 'POST' });
+            Momento.toast(`You joined ${group.name}`, group.albums.length ? `${plural(group.albums.length, 'album', 'albums')} added to My albums` : 'Albums shared with it will show up here');
+            await load();
+            openPanel(group.id);
+          } catch (err) { e.currentTarget.disabled = false; Momento.toast('Couldn’t join the group', err.message); }
+        });
+        el.querySelector('[data-no]').addEventListener('click', async (e) => {
+          const ok = await Momento.confirm({ from: e.currentTarget, title: `Decline the invite to ${i.group.name}?`, body: `${i.by} can invite you again later.`, ok: 'Decline', danger: false });
+          if (!ok) return;
+          try {
+            await momentoApi(`/api/groups/invites/${encodeURIComponent(i.id)}/decline`, { method: 'POST' });
+            Momento.toast('Invite declined', i.group.name);
+            await load();
+          } catch (err) { Momento.toast('Couldn’t decline the invite', err.message); }
+        });
+        return el;
+      }
+
+      // ---- A group, as a tile: its faces, its name, and a peek at its albums ----
+      function groupTile(g) {
+        const shown = g.members.slice(0, 4);
+        const more = g.members.length - shown.length;
+        const live = g.albums.some((a) => a.live);
+        const peek = g.albums.slice(0, 3).map((a) => (a.pics?.[0] ? `<img src="${esc(a.pics[0])}" alt="" loading="lazy">` : '<span></span>')).join('');
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'gt panel';
+        el.dataset.id = g.id;
+        el.setAttribute('aria-label', `${g.name}, ${plural(g.members.length, 'person', 'people')}, ${plural(g.albums.length, 'shared album', 'shared albums')}. Open group`);
+        el.innerHTML = `
+          <span class="grc-faces" aria-hidden="true">${shown.map((m, i) => face(m, i)).join('')}${more > 0 ? `<span class="grc-face is-more">+${more}</span>` : ''}</span>
+          <span class="gt-name"><b>${esc(g.name)}</b><small>${plural(g.members.length, 'person', 'people')}, ${plural(g.albums.length, 'album', 'albums')}</small></span>
+          ${g.albums.length
+            ? `<span class="gt-pics" aria-hidden="true">${peek}${live ? '<em class="gt-live"><i></i>Live now</em>' : ''}</span>`
+            : '<span class="gt-none">No albums yet</span>'}`;
+        el.addEventListener('click', () => openPanel(g.id, el));
+        return el;
+      }
+
+      // ---- A group opened: its albums and people, in a panel beside the page ----
+      let opener = null;
+      function paintPanel(g) {
+        const owner = g.role === 'owner';
+        const shown = g.members.slice(0, 5);
+        const more = g.members.length - shown.length;
+        const albums = g.albums.map((a) => `
+          <a class="gra" href="albums.html#album=${encodeURIComponent(a.id)}" aria-label="${esc(a.name)}, ${esc(dateOf(a))}, ${plural(a.photos, 'photo', 'photos')}">
+            <span class="gra-pic">${a.pics?.[0] ? `<img src="${esc(a.pics[0])}" alt="" loading="lazy">` : '<span class="gra-none">No photos yet</span>'}${a.live ? '<span class="gra-live"><i></i>Live</span>' : ''}</span>
+            <b>${esc(a.name)}</b>
+            <small>${esc(dateOf(a))}, ${plural(a.photos, 'photo', 'photos')}</small>
+            <small>${a.hostIsYou ? 'You’re hosting' : `Host: ${esc(a.hostName)}`}</small>
+          </a>`).join('');
+        const people = g.members.map((m) => `
+          <li>${face(m, 0)}<span class="grc-who"><b>${esc(m.name)}</b><small>${m.role === 'owner' ? 'Made the group' : `Joined ${new Date(m.since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}</small></span>
+            ${owner && !m.you ? `<button class="grc-link is-danger" type="button" data-remove="${esc(m.id)}" data-name="${esc(m.name)}">Remove</button>` : ''}</li>`).join('');
+        const waiting = g.invites.map((i) => `
+          <li><span class="grc-face is-waiting" aria-hidden="true">${ICON.mail}</span><span class="grc-who"><b>${esc(i.email)}</b><small>Invited by ${esc(i.by)}, hasn’t joined yet</small></span>
+            ${i.canCancel ? `<button class="grc-link" type="button" data-cancel="${esc(i.id)}" data-email="${esc(i.email)}">Take back</button>` : ''}</li>`).join('');
+        const scroll = panel.scrollTop;
+        panel.innerHTML = `
+          <div class="gd-top">
+            <span class="grc-faces" aria-hidden="true">${shown.map((m, i) => face(m, i)).join('')}${more > 0 ? `<span class="grc-face is-more">+${more}</span>` : ''}</span>
+            <button class="gd-x" type="button" data-close aria-label="Close">${ICON.close}</button>
+          </div>
+          <h2 class="gd-title" id="grTitle">${esc(g.name)}</h2>
+          <p class="gd-sub">${plural(g.members.length, 'person', 'people')}, ${plural(g.albums.length, 'shared album', 'shared albums')}${owner ? '. You made it' : ''}</p>
+          <div class="gd-acts"><button class="btn btn-dark" type="button" data-invite>Invite a friend</button></div>
+          <h3 class="gd-h3">Albums</h3>
+          <div class="gd-albums" aria-label="Albums shared with ${esc(g.name)}">
+            ${albums}
+            <button class="gra-add" type="button" data-create data-create-group="${esc(g.id)}">${ICON.plus}${g.albums.length ? 'Share another album' : 'Share the first album with this group'}</button>
+          </div>
+          <h3 class="gd-h3">People${g.invites.length ? `, ${g.invites.length} invited` : ''}</h3>
+          <ul class="grc-list">${people}${waiting}</ul>
+          <div class="grc-foot">
+            ${owner
+              ? '<button class="grc-link" type="button" data-rename>Rename group</button><button class="grc-link is-danger" type="button" data-delete>Delete group</button>'
+              : '<button class="grc-link is-danger" type="button" data-leave>Leave group</button>'}
+          </div>`;
+        panel.scrollTop = scroll;
+        panel.querySelectorAll('.btn').forEach(rollButton);
+        panel.querySelector('[data-close]').addEventListener('click', closePanel);
+        panel.querySelector('[data-invite]').addEventListener('click', (e) => invite(g, e.currentTarget));
+        panel.querySelector('[data-rename]')?.addEventListener('click', (e) => rename(g, e.currentTarget));
+        panel.querySelector('[data-delete]')?.addEventListener('click', (e) => removeGroup(g, e.currentTarget));
+        panel.querySelector('[data-leave]')?.addEventListener('click', (e) => leave(g, e.currentTarget));
+        panel.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => removeMember(g, b)));
+        panel.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', () => cancelInvite(g, b)));
+      }
+      const phone = matchMedia('(max-width: 600px)');
+      function openPanel(id, from) {
+        const g = groups.find((x) => x.id === id);
+        if (!g) return;
+        openId = id;
+        if (from) opener = from;
+        paintPanel(g);
+        if (drawer.open) return;
+        panel.scrollTop = 0;
+        drawer.showModal();
+        if (!still) {
+          const slide = phone.matches ? 'translateY(48px)' : 'translateX(48px)';
+          try { drawer.animate({ opacity: [0, 1] }, { duration: 300, easing: 'ease-out', pseudoElement: '::backdrop' }); } catch (err) {}
+          panel.animate([{ opacity: 0, transform: slide }, { opacity: 1, transform: 'none' }], { duration: 420, easing: OUT });
+        }
+      }
+      async function closePanel() {
+        if (!drawer.open || drawer._closing) return;
+        drawer._closing = true;
+        openId = null;
+        if (!still) {
+          const to = phone.matches ? 'translateY(32px)' : 'translateX(32px)';
+          const jobs = [panel.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: to }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).finished];
+          try { jobs.push(drawer.animate({ opacity: [1, 0] }, { duration: 260, easing: 'ease-in', fill: 'forwards', pseudoElement: '::backdrop' }).finished); } catch (err) {}
+          await Promise.all(jobs).catch(() => {});
+        }
+        drawer.close();
+        drawer.getAnimations({ subtree: true }).forEach((a) => a.cancel());
+        drawer._closing = false;
+        // Back to the tile it came from (which is drawn again whenever the list reloads)
+        const tile = opener?.dataset?.id && body.querySelector(`.gt[data-id="${CSS.escape(opener.dataset.id)}"]`);
+        (tile || (opener?.isConnected ? opener : null))?.focus({ preventScroll: true });
+      }
+      drawer.addEventListener('cancel', (e) => { e.preventDefault(); closePanel(); });
+      drawer.addEventListener('pointerdown', (e) => { drawer._down = e.target === drawer; });
+      drawer.addEventListener('click', (e) => { if (e.target === drawer && drawer._down) closePanel(); });
+      drawer.addEventListener('close', () => { openId = null; });
+
+      // Links like events.html#group=<id> open that group
+      function openFromHash() {
+        const id = decodeURIComponent((location.hash.match(/^#group=(.+)$/) || [])[1] || '');
+        if (!id || !groups.some((g) => g.id === id)) return;
+        history.replaceState(null, '', location.pathname + location.search + '#groups');
+        openPanel(id);
+      }
+      addEventListener('hashchange', openFromHash);
+
+      // ---- Actions ----
+      async function newGroup(from) {
+        const name = await Momento.ask({
+          from, title: 'New group', body: 'Name it after the people in it. You’ll invite them next.',
+          label: 'Group name', placeholder: 'For example Uni friends', ok: 'Create group',
+          check: (v) => (!v ? 'Give the group a name.' : v.length > 60 ? 'Keep the name under 60 characters.' : ''),
+        });
+        if (!name) return;
+        let group;
+        try { ({ group } = await momentoApi('/api/groups', momentoJson('POST', { name }))); }
+        catch (err) { Momento.toast('Couldn’t create the group', err.message); return; }
+        await load();
+        Momento.toast('Group created', `Invite people to ${group.name}`);
+        openPanel(group.id);
+        invite(group, panel.querySelector('[data-invite]'));
+      }
+
+      async function invite(g, from) {
+        const email = await Momento.ask({
+          from, title: `Invite a friend to ${g.name}`, body: 'They’ll get an email, and the invite waits here once they log in with that address. When they join, they see every album shared with the group.',
+          label: 'Their email', type: 'email', placeholder: 'name@example.com', ok: 'Send invite',
+          check: (v) => (EMAIL_RE.test(v) ? '' : 'Enter an email address like name@example.com.'),
+        });
+        if (!email) return;
+        try {
+          await momentoApi(`/api/groups/${encodeURIComponent(g.id)}/invites`, momentoJson('POST', { email }));
+          Momento.toast('Invite sent', email);
+          await load(true);
+        } catch (err) { Momento.toast('Couldn’t send the invite', err.message); }
+      }
+
+      async function rename(g, from) {
+        const name = await Momento.ask({
+          from, title: 'Rename group', label: 'Group name', value: g.name, ok: 'Save name',
+          check: (v) => (!v ? 'Give the group a name.' : v.length > 60 ? 'Keep the name under 60 characters.' : ''),
+        });
+        if (!name || name === g.name) return;
+        try {
+          await momentoApi(`/api/groups/${encodeURIComponent(g.id)}`, momentoJson('PATCH', { name }));
+          Momento.toast('Group renamed', name);
+          await load(true);
+        } catch (err) { Momento.toast('Couldn’t rename the group', err.message); }
+      }
+
+      async function removeGroup(g, from) {
+        const others = g.members.length - 1;
+        const ok = await Momento.confirm({
+          from, title: `Delete “${g.name}”?`,
+          body: `${others ? `${plural(others, 'person loses', 'people lose')} access to the albums shared with it, unless they joined an album with its code.` : 'Nobody else is in it yet.'} The albums themselves stay with their hosts.`,
+          ok: 'Delete group',
+        });
+        if (!ok) return;
+        try {
+          await momentoApi(`/api/groups/${encodeURIComponent(g.id)}`, { method: 'DELETE' });
+          closePanel();
+          Momento.toast('Group deleted', g.name, { danger: true });
+          await load(true);
+        } catch (err) { Momento.toast('Couldn’t delete the group', err.message); }
+      }
+
+      async function leave(g, from) {
+        const hosting = g.albums.filter((a) => a.hostIsYou).length;
+        const ok = await Momento.confirm({
+          from, title: `Leave “${g.name}”?`,
+          body: `You’ll stop seeing the albums shared with it, unless you joined one with its code. ${hosting ? `The ${plural(hosting, 'album', 'albums')} you host leave the group with you. ` : ''}Your photos stay in the albums.`,
+          ok: 'Leave group',
+        });
+        if (!ok) return;
+        try {
+          await momentoApi(`/api/groups/${encodeURIComponent(g.id)}/members/me`, { method: 'DELETE' });
+          closePanel();
+          Momento.toast('You left the group', g.name);
+          await load(true);
+        } catch (err) { Momento.toast('Couldn’t leave the group', err.message); }
+      }
+
+      async function removeMember(g, btn) {
+        const name = btn.dataset.name;
+        const ok = await Momento.confirm({
+          from: btn, title: `Remove ${name} from “${g.name}”?`,
+          body: 'They stop seeing the albums shared with the group, unless they joined one with its code. Albums they host leave the group with them. Their photos stay.',
+          ok: 'Remove',
+        });
+        if (!ok) return;
+        try {
+          await momentoApi(`/api/groups/${encodeURIComponent(g.id)}/members/${encodeURIComponent(btn.dataset.remove)}`, { method: 'DELETE' });
+          Momento.toast(`${name} was removed`, g.name, { danger: true });
+          await load(true);
+        } catch (err) { Momento.toast('Couldn’t remove them', err.message); }
+      }
+
+      async function cancelInvite(g, btn) {
+        btn.disabled = true;
+        try {
+          await momentoApi(`/api/groups/${encodeURIComponent(g.id)}/invites/${encodeURIComponent(btn.dataset.cancel)}`, { method: 'DELETE' });
+          Momento.toast('Invite taken back', btn.dataset.email);
+          await load(true);
+        } catch (err) { btn.disabled = false; Momento.toast('Couldn’t take the invite back', err.message); }
+      }
+
+      $('grNew').addEventListener('click', (e) => newGroup(e.currentTarget));
+      // An album made from here (Share another album) shows up in its group straight away
+      document.addEventListener('momento:albums', () => load(true));
+
+      // ---- Start ----
+      document.addEventListener('DOMContentLoaded', async () => {
+        let user;
+        try { user = await Momento.sessionReady; }
+        catch (err) { say('Couldn’t reach Momento. Check your connection, then reload the page.', true); return; }
+        if (!user) return;
+        if (!user.emailVerified) return;   // the confirm-your-email popup (assets/guard.js) covers the page
+        load();
+      });
+    })();
+
+    // ---- Social: one page, read top to bottom ----
+    // Links that point at a part of it scroll there: #groups, or #events (and #alerts, #join, ?join=, ?event=,
+    // which open what they name). "Needs you" only shows while something is waiting for an answer.
+    (() => {
+      const need = document.getElementById('soNeed'), count = document.getElementById('soNeedCount');
+      // Watches the rows only (not the heading that holds the count, or it would trigger itself)
+      const paintNeed = () => {
+        const n = need.querySelectorAll('.gri').length, label = n ? String(n) : '';
+        need.hidden = !n;
+        if (count.textContent !== label) count.textContent = label;
+      };
+      new MutationObserver(paintNeed).observe(need.querySelector('.so-stack'), { childList: true, subtree: true });
+
+      const sections = { groups: document.getElementById('groups'), events: document.getElementById('events') };
+      const fromUrl = () => {
+        const h = location.hash;
+        if (/^#groups\b/.test(h)) return 'groups';
+        if (/^#events\b/.test(h)) return 'events';
+        return null;
+      };
+      const show = (name) => sections[name]?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+      window.socialTab = show;
+      // Groups and events fill in after the page loads, so wait a moment before scrolling to them
+      const go = () => { const t = fromUrl(); if (t) show(t); };
+      addEventListener('load', () => setTimeout(go, 500));
+      addEventListener('hashchange', go);
+      // The two shortcuts under the title scroll to their part of the page
+      document.querySelectorAll('.so-jump-item').forEach((a) => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const t = a.getAttribute('href').slice(1);
+        show(t);
+        history.replaceState(null, '', location.pathname + location.search + '#' + t);
+      }));
     })();
 
     // ---- The header gains a veil once scrolled, and the page opens ----
@@ -2221,7 +2895,7 @@
           <p class="acct-sub">Update your photo, name and email notification preferences.</p>
           <div class="acct-photo">
             <span class="acct-photo-av" aria-hidden="true"></span>
-            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups, chats and albums</small></span>
+            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups and albums</small></span>
             <span class="acct-photo-acts"><button class="acct-photo-btn" type="button" data-photo-pick>Add photo</button><button class="acct-photo-btn is-danger" type="button" data-photo-rm hidden>Remove</button></span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden data-photo-file>
           </div>
@@ -2268,7 +2942,7 @@
         try {
           const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
           Momento.account.set(user);
-          say('Photo updated. Friends see it in groups and chats.');
+          say('Photo updated. Friends see it in groups and albums.');
         } catch (err) { say(err.message, true); }
         finally { photoAv.classList.remove('is-busy'); photoPick.disabled = photoRm.disabled = false; }
       });
@@ -2466,7 +3140,7 @@
       row.querySelector('.acct-primary, button')?.focus();
     });
 
-    // Asks for one value (an email for the waitlist, say). Resolves the value, or null if cancelled
+    // Asks for one value (an email address, say). Resolves the value, or null if cancelled
     let askD = null, askDone = null;
     Momento.ask = ({ title, body = '', label, type = 'text', value = '', placeholder = '', ok = 'Continue', check, from = null }) => new Promise((resolve) => {
       if (!askD) {
@@ -2594,7 +3268,7 @@
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already, and you can keep talking in the group’s chat. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
         d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
@@ -2620,8 +3294,7 @@
       // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
       const groupField = d.querySelector('.m-group');
       // "Who do you want to share this album with?": one of their friend groups (the album joins that
-      // group, and everyone keeps talking in the group's one chat), or just the people at this event
-      // (event chat starts off; the host can turn it on)
+      // group, and everyone in it sees it), or just the people at this event
       const shareList = groupField.querySelector('.ev-who');
       const shareOption = (value, title, note) => {
         const l = document.createElement('label'), r = document.createElement('input'), b = document.createElement('b'), s = document.createElement('small');
@@ -2632,11 +3305,11 @@
       };
       async function loadGroups(pick) {
         groupField.hidden = true;
-        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code. Event chat starts off, and you can turn it on.'));
+        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code.'));
         shareList.querySelector('input').checked = true;
         let groups = [];
         try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { groups = []; }
-        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it. You keep talking in the group’s chat, so there’s no new chat to follow.`), shareList.lastChild);
+        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it, including people who join the group later.`), shareList.lastChild);
         groupField.hidden = !groups.length;
         const want = pick && groups.some((g) => g.id === pick) ? pick : '';
         const on = [...shareList.querySelectorAll('input')].find((r) => r.value === want);
@@ -2971,6 +3644,20 @@
       setTimeout(() => finish(), 9000);
       Promise.resolve().then(() => run(kit)).then(() => finish(), (e) => { console.error(e); finish(true); });
     };
+
+    // ---- Nav flourish: only home has a page intro. On the other pages the current nav item gives a short
+    // nudge once per tab (the Settings knobs slide into place). Transform only; skipped for reduced motion ----
+    Momento.flourish = () => {
+      const page = document.documentElement.dataset.page;
+      const cur = document.querySelector('.nav > .nav-item[aria-current="page"]');
+      if (!cur || !cur.animate || page === 'home' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      try { if (sessionStorage.getItem('momento-flourish-' + page)) return; sessionStorage.setItem('momento-flourish-' + page, '1'); } catch (e) {}
+      const SPRING = 'cubic-bezier(.34, 1.4, .64, 1)';
+      const knobs = cur.classList.contains('nav-settings') ? [...cur.querySelectorAll('svg circle')] : [];
+      if (knobs.length) knobs.forEach((k, i) => k.animate([{ transform: `translateX(${i ? 3 : -3}px)` }, { transform: 'none' }], { duration: 480, delay: i * 90, easing: SPRING }));
+      else cur.animate([{ transform: 'none' }, { transform: 'translateY(-2px) scale(1.1)', offset: .4 }, { transform: 'none' }], { duration: 380, easing: SPRING });
+    };
+    if (document.documentElement.dataset.page !== 'home') addEventListener('load', () => setTimeout(() => Momento.flourish(), 250), { once: true });
   
     // ---- Site footer: one footer for every page. A page marks it <footer class="site-foot" data-site-foot> ----
     document.querySelectorAll('[data-site-foot]').forEach((foot) => {
@@ -2988,7 +3675,6 @@
               <li><a class="sf-link" href="${P}#how-it-works">How it works</a></li>
               <li><a class="sf-link" href="${P}#features">Features</a></li>
               <li><a class="sf-link" href="${P}#for-hosts">For hosts</a></li>
-              <li><a class="sf-link" href="${P}#pricing">Pricing</a></li>
             </ul>
           </nav>
           <nav class="sf-col" aria-labelledby="sfAlbums">
@@ -2996,8 +3682,7 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
-              <li><a class="sf-link" href="sort.html">Sort photos</a></li>
-              <li><a class="sf-link" href="groups.html">Friend groups</a></li>
+              <li><a class="sf-link" href="events.html#groups">Groups</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
             </ul>
@@ -3005,7 +3690,7 @@
           <nav class="sf-col" aria-labelledby="sfEvents">
             <h2 id="sfEvents">Events</h2>
             <ul>
-              <li><a class="sf-link" href="events.html">Events near you</a></li>
+              <li><a class="sf-link" href="events.html#events">Events near you</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Host a public event</a></li>
               <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>

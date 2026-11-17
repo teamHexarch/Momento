@@ -65,6 +65,5 @@ export const config = {
     replyTo: env.EMAIL_REPLY_TO || '',
   },
   // Where the support form's messages go
-  supportEmail: env.SUPPORT_EMAIL || env.EMAIL_REPLY_TO || '',
   isProduction: env.NODE_ENV === 'production',
 };

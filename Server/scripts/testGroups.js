@@ -189,43 +189,11 @@ try {
     assert.equal(g.members.find((m) => m.you).avatarUrl, me.avatarUrl);
   }
 
-  // The group chat: members only, checked on every read and send
-  const chatUrl = `/api/groups/${group.id}/messages`;
-  await call(chatUrl, 400, o, 'POST', { text: '   ' });
-  const said = (await json(await call(chatUrl, 201, o, 'POST', { text: 'Photos from the beach are up' }))).message;
-  assert.equal(said.you, true);
-  await call(chatUrl, 404, s);
-  await call(chatUrl, 404, s, 'POST', { text: 'let me in' });
-  await call(chatUrl, 404, f);   // left the group earlier
-  await call(chatUrl, 404, x);   // removed just now
-  const chat = await json(await call(chatUrl, 200, o));
-  assert.equal(chat.messages.length, 1);
-  assert.ok(chat.messages[0].avatarUrl, 'messages carry the sender’s photo');
-
-  // Typing and unread: a second member sees the owner typing, gets an unread count, reads it
-  {
-    group = (await json(await call(`/api/groups/${group.id}/invites`, 201, o, 'POST', { email: 'stranger@example.invalid' }))).group;
-    const inv = (await json(await call('/api/groups', 200, s))).invites[0];
-    await call(`/api/groups/invites/${inv.id}/accept`, 200, s, 'POST');
-    await call(`/api/groups/${group.id}/typing`, 404, f, 'POST', {});   // not a member
-    await call(`/api/groups/${group.id}/typing`, 200, o, 'POST', {});
-    const seen = await json(await call(chatUrl, 200, s));
-    assert.deepEqual(seen.typing.map((t) => t.name), ['Owner']);
-    assert.equal((await json(await call(chatUrl, 200, o))).typing.length, 0, 'you never see yourself typing');
-    await call(chatUrl, 201, o, 'POST', { text: 'One more' });
-    assert.equal((await json(await call(chatUrl, 200, s))).typing.length, 0, 'sending ends typing');
-    await call(chatUrl, 201, o, 'POST', { text: 'And another' });
-    const u = await json(await call('/api/groups/unread', 200, s));
-    assert.equal(u.total, 1);
-    assert.equal(u.groups[0].latest.text, 'And another');
-    assert.equal((await json(await call(`/api/groups/${group.id}`, 200, s))).group.unread, 1);
-    await call(chatUrl, 200, s);   // reading marks it read
-    assert.equal((await json(await call('/api/groups/unread', 200, s))).total, 0);
-    assert.equal((await json(await call('/api/groups/unread', 200, o))).total, 0, 'your own messages are never unread');
-    await call(`/api/groups/${group.id}/members/me`, 200, s, 'DELETE');
-    await call('/api/auth/avatar', 200, o, 'DELETE');
-  }
-  assert.equal(chat.messages[0].text, 'Photos from the beach are up');
+  // Chat was taken out of Momento: its routes are gone
+  await call(`/api/groups/${group.id}/messages`, 404, o);
+  await call(`/api/groups/${group.id}/messages`, 404, o, 'POST', { text: 'hi' });
+  await call('/api/groups/unread', 404, o);
+  await call('/api/auth/avatar', 200, o, 'DELETE');
   await call(`/api/groups/${group.id}`, 404, s);
 
   // Rename and delete: owner only. Deleting keeps the album with its host

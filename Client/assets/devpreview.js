@@ -82,66 +82,77 @@
     for (const a of state.albums) { if (a.id === 'a1' || a.id === 'a4') a.groupId = 'g1'; if (a.id === 'a5') a.groupId = 'g2'; }
   };
   if (!state.seededGroups) { state.seededGroups = 1; seedGroups(); save(); }
-  // A few messages in each sample group's chat
-  if (!state.seededChat) {
-    state.seededChat = 1;
-    const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
-    state.chat = {
-      g1: [
-        { id: 'm1', text: 'Who has the photos from the beach day?', by: 'Maya', you: false, at: ago(300) },
-        { id: 'm2', text: 'Uploading mine now, the sunset ones came out great', by: 'Sam', you: false, at: ago(280) },
-        { id: 'm3', text: 'Same, adding them tonight', by: 'You', you: true, at: ago(120) },
-      ],
-      g2: [{ id: 'm4', text: 'Eid album is up, add yours when you can', by: 'Ruby', you: false, at: ago(1440) }],
-    };
-    state.read = { g1: new Date().toISOString() };
-    save();
-  }
 
   // ---- Photos and album shapes ----
   const picsum = (n, w, h) => `https://picsum.photos/id/${10 + (n * 7) % 50}/${w}/${h}`;
   const salt = (a) => [...a.id].reduce((t, c) => t + c.charCodeAt(0), 0);
   // Photos keep stable ids (album-p<index>); deleted ones are remembered per album and skipped
   const goneOf = (a) => new Set((state.removed || {})[a.id] || []);
-  const SAYINGS = ['This one is perfect', 'Haha I love this', 'Need this in full size!', 'Best photo of the night', 'Who took this? So good', 'Framing this one', 'The light here 😍', 'Iconic'];
+  // Recently deleted: a deleted photo waits here for 30 days (state.trash[albumId] = [{ i, at }]) and can be
+  // brought back. Moving one here already took it out of the album's counts, so a purge only has to forget it
+  const KEEP_DAYS = 30;
+  const purgeIndex = (a, i) => { state.removed = state.removed || {}; state.removed[a.id] = [...goneOf(a), i]; };
+  const trashOf = (a) => {
+    state.trash ||= {};
+    const all = state.trash[a.id] || [], live = all.filter((t) => Date.now() - t.at < KEEP_DAYS * DAY);
+    if (live.length !== all.length) { all.filter((t) => !live.includes(t)).forEach((t) => purgeIndex(a, t.i)); state.trash[a.id] = live; save(); }
+    return live;
+  };
+  // Emoji reactions: one per person per photo (the same six as the album page)
+  const RX = ['😍', '😂', '🔥', '👏', '🥹', '😮'];
+  const REACTORS = [...NAMES, 'Alex', 'Noor', 'Theo', 'Zara', 'Ben', 'Isla', 'Omar', 'Chloe', 'Dev', 'Hana', 'Leo', 'Mina', 'Rory', 'Tess', 'Yusuf'];
   const socialOf = (a, i, mine) => {
     const id = `${a.id}-p${i}`;
-    if (state.social?.[id]) return state.social[id];
-    const n = salt(a) + i * 7;
-    const comments = n % 4 === 0 ? Array.from({ length: 1 + (n % 3) }, (_, k) => ({
-      id: `${id}-c${k}`, parent: k > 0 && n % 2 === 0 ? `${id}-c0` : null, by: NAMES[(n + k) % NAMES.length], mine: false, text: SAYINGS[(n + k * 3) % SAYINGS.length],
-      likes: (n + k * 3) % 5, liked: false,
-      at: new Date(Date.now() - (i * 37 + 20 - k * 6) * 60000).toISOString(),
-    })) : [];
-    return { likes: (n * 5) % 17 < 6 ? 0 : (n * 5) % 17, liked: false, comments };
+    if (state.social?.[id]) return { reactions: {}, reaction: null, ...state.social[id] };
+    const n = salt(a) + i * 7, reactions = {};
+    for (let k = 0; k < n % 4; k++) reactions[RX[(n + k * 2) % RX.length]] = 1 + ((n * 3 + k) % 6);
+    return { likes: (n * 5) % 17 < 6 ? 0 : (n * 5) % 17, liked: false, reactions, reaction: null };
   };
   const saveSocial = (id, s) => { state.social ||= {}; state.social[id] = s; save(); };
   const photosOf = (a) => {
-    const gone = goneOf(a), mineUpTo = a.mineBase ?? a.mine, total = a.photos + gone.size, out = [];
+    const gone = goneOf(a), binned = new Set(trashOf(a).map((t) => t.i)), mineUpTo = a.mineBase ?? a.mine, total = a.photos + gone.size + binned.size, out = [];
     for (let i = 0; i < total && out.length < Math.min(a.photos, 60); i++) {
-      if (gone.has(i)) continue;
-      const mine = i < mineUpTo, n = salt(a) + i;
+      if (gone.has(i) || binned.has(i)) continue;
+      const mine = i < mineUpTo, n = salt(a) + i, so = socialOf(a, i, mine);
       out.push({ id: `${a.id}-p${i}`, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), downloadUrl: picsum(n, 1200, 750),
         by: mine ? 'You' : NAMES[(i + 1) % NAMES.length], mine, at: new Date(Date.now() - i * 37 * 60000).toISOString(),
-        likes: socialOf(a, i, mine).likes, liked: socialOf(a, i, mine).liked, comments: socialOf(a, i, mine).comments.length });
+        likes: so.likes, liked: so.liked, reactions: so.reactions, reaction: so.reaction });
     }
     return out;
   };
-  // Photos you've hidden from your own view (Sort photos), per album, like the server's membership.hidden
+  // Photos you've hidden from your own view ("Hidden by you"), per album, like the server's membership.hidden
   const hiddenOf = (a) => new Set((state.hidden || {})[a.id] || []);
   const visibleOf = (a) => { const h = hiddenOf(a); return photosOf(a).filter((p) => !h.has(p.id)); };
   const hiddenCount = (a) => { const h = hiddenOf(a); return photosOf(a).filter((p) => h.has(p.id)).length; };
+  // A few liked photos and two saved albums, so the Liked tab has something to show (once)
+  if (!state.seededLikes) {
+    state.seededLikes = 1;
+    const likeSome = (albumId, picks) => {
+      const a = state.albums.find((x) => x.id === albumId);
+      if (!a) return;
+      for (const [i, mins] of picks) {
+        const s = socialOf(a, i);
+        s.liked = true; s.likes = Math.max(1, s.likes + 1); s.likedAt = new Date(Date.now() - mins * 60000).toISOString();
+        saveSocial(`${a.id}-p${i}`, s);
+      }
+    };
+    likeSome('a2', [[3, 40], [11, 900], [20, 2900]]);
+    likeSome('a1', [[2, 15], [7, 200]]);
+    likeSome('a6', [[5, 5000], [30, 6400]]);
+    for (const id of ['a2', 'a6']) { const a = state.albums.find((x) => x.id === id); if (a) a.saved = true; }
+    save();
+  }
   const groupOf = (a) => a.groupId && (state.groups || []).find((g) => g.id === a.groupId);
   const summary = (a) => ({
-    id: a.id, name: a.name, date: a.date, place: a.place,
+    id: a.id, name: a.name, date: a.date, place: a.place, saved: !!a.saved,
     venue: a.venue?.address || a.venue?.placeId ? a.venue : undefined,
     startsAt: a.startsAt || undefined, endsAt: a.endsAt || undefined,
     uploadLeadMin: a.startsAt ? a.uploadLeadMin || 0 : undefined,
     role: a.role, ...albumLifecycle(a), live: albumLifecycle(a).status === 'live',
     joiningOpen: a.joiningOpen ?? true, locationRequired: a.locationRequired ?? true,
-    chatEnabled: !!a.chatEnabled, joinDeadline: a.joinDeadline, requests: a.requests || [],
+    joinDeadline: a.joinDeadline, requests: a.requests || [],
     zone: a.zone?.radiusM ? a.zone : undefined, visibility: a.visibility || 'invite',
-    code: a.role === 'host' ? a.code : undefined, photos: a.photos - hiddenCount(a), mine: a.mine, guests: a.guests,
+    code: a.role === 'host' ? a.code : undefined, photos: a.photos - hiddenCount(a), mine: a.mine, guests: a.guests, trashCount: a.role === 'host' ? trashOf(a).length : 0,
     pics: [...visibleOf(a)].sort((x, y) => y.likes - x.likes).slice(0, 12).map((p) => p.thumbnailUrl), hostName: a.hostName, hostIsYou: a.role === 'host',
     ...(groupOf(a) && { group: { id: a.groupId, name: groupOf(a).name }, anywhere: true }),
     ...(a.role === 'host' && { waiting: a.waiting || 0 }),
@@ -153,6 +164,9 @@
       recent: withPics.slice(0, 2).flatMap((a, i) => visibleOf(a).slice(0, 6).map((p, k) => ({ albumId: a.id, photoId: p.id, url: p.thumbnailUrl, by: p.by, at: new Date(Date.now() - (i * 6 + k + 1) * 600000).toISOString() }))),
       feed: withPics.slice(0, 3).map((a, i) => ({ albumId: a.id, by: i === 0 ? 'You' : NAMES[i + 1], n: Math.min(a.photos, 7 + i * 5), pics: visibleOf(a).slice(0, 6).map((p) => p.thumbnailUrl), at: new Date(Date.now() - (i + 1) * 3 * 3600000).toISOString() })),
       invites: state.invites.map((i) => ({ ...i, at: new Date().toISOString() })),
+      // For the badges on the Recently deleted button
+      trashCount: state.albums.reduce((n, a) => n + (a.role === 'host' ? trashOf(a).length : 0), 0),
+      hiddenCount: state.albums.reduce((n, a) => n + hiddenCount(a), 0),
     };
   };
   const newCode = () => { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const p = () => c[Math.floor(Math.random() * c.length)]; return `${p()}${p()}${p()}-${p()}${p()}${p()}${p()}`; };
@@ -218,22 +232,8 @@
     if (path.startsWith('/api/auth/') || path === '/api/support') return { body: { ok: true, sent: true, retryAt: new Date(Date.now() + 60000).toISOString(), user: state.user } };
     if (!state.signedIn) return fail(401, 'Log in to continue.');
 
-    // ---- Friend groups ----
-    const due = () => {   // a reply that was "being typed" arrives when its time comes
-      for (const r of state.replies || []) if (r.at <= Date.now()) { ((state.chat ||= {})[r.group] ||= []).push(r.message); r.done = true; }
-      state.replies = (state.replies || []).filter((r) => !r.done);
-    };
-    due();
-    if (path === '/api/groups/unread' && method === 'GET') {
-      const groups = (state.groups || []).map((g) => {
-        const msgs = (state.chat || {})[g.id] || [], read = (state.read || {})[g.id] || '';
-        const unread = msgs.filter((m) => !m.you && m.at > read);
-        return { id: g.id, name: g.name, unread: unread.length, latest: unread.at(-1) };
-      }).filter((g) => g.unread);
-      return { body: { total: groups.reduce((t, g) => t + g.unread, 0), groups } };
-    }
-    const describeGroup = (g) => ({ ...g, members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary),
-      unread: ((state.chat || {})[g.id] || []).filter((m) => !m.you && m.at > ((state.read || {})[g.id] || '')).length });
+    // ---- Groups ----
+    const describeGroup = (g) => ({ ...g, members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });
     const groupOut = () => ({ groups: (state.groups || []).map(describeGroup), invites: state.groupInvites || [] });
     // Leaving a group: albums you were in through it go, albums you host leave the group
     const dropGroup = (g) => {
@@ -293,35 +293,6 @@
       grp.members = grp.members.filter((x) => x.id !== gm[3]); save();
       return { body: { group: describeGroup(grp) } };
     }
-    // The group chat
-    const gt = /^\/api\/groups\/([^/]+)\/typing$/.exec(path);
-    if (gt && method === 'POST') return { body: { typing: [] } };
-    const gc = /^\/api\/groups\/([^/]+)\/messages$/.exec(path);
-    if (gc) {
-      if (!(state.groups || []).some((g) => g.id === gc[1])) return fail(404, 'Group not found.');
-      const msgs = ((state.chat ||= {})[gc[1]] ||= []);
-      if (method === 'GET') {
-        if (!query?.get('before')) { (state.read ||= {})[gc[1]] = new Date().toISOString(); save(); }
-        const waiting = (state.replies || []).find((r) => r.group === gc[1]);
-        const typing = waiting ? [{ name: waiting.message.by, avatarUrl: '' }] : [];
-        const before = query?.get('before');
-        const older = before ? msgs.filter((m) => m.at < before) : msgs;
-        return { body: { messages: older.slice(-50), more: older.length > 50, typing } };
-      }
-      if (method === 'POST') {
-        const text = String(body.text || '').trim();
-        if (!text) return fail(400, 'Write a message first.');
-        const m = { id: 'm' + (++state.seq), text: text.slice(0, 1000), by: 'You', you: true, at: new Date().toISOString() };
-        msgs.push(m);
-        // Maya answers a few seconds later (typing first), so the preview shows both
-        if (gc[1] === 'g1' && !(state.replies || []).length) {
-          const at = Date.now() + 5000;
-          (state.replies ||= []).push({ group: 'g1', at, message: { id: 'm' + (++state.seq), text: 'Nice! Can’t wait to see them', by: 'Maya', you: false, avatarUrl: '', at: new Date(at).toISOString() } });
-        }
-        save();
-        return { status: 201, body: { message: m } };
-      }
-    }
 
     if (path === '/api/events/requests') return { body: { requests: state.eventRequests || [] } };
     // A host letting a waiting guest in, or turning them away
@@ -335,73 +306,34 @@
       else r.status = 'declined';
       save(); return { body: { ok: true } };
     }
-    // Event chat, shaped like the server's (and a friend group's): unread counts, typing, earlier pages
-    if (path === '/api/events/unread') {
-      const albums = state.albums.filter((a) => a.chatEnabled).map((a) => {
-        const read = (state.eventRead || {})[a.id] || '';
-        const fresh = (a.chat || []).filter((m) => !m.you && m.at > read);
-        return { id: a.id, name: a.name, unread: fresh.length, latest: fresh.at(-1) };
-      }).filter((x) => x.unread);
-      return { body: { total: albums.reduce((t, x) => t + x.unread, 0), albums } };
-    }
-    const control = /^\/api\/events\/([^/]+)\/(policy|chat|typing)$/.exec(path);
+    // A host's rules for who gets in
+    const control = /^\/api\/events\/([^/]+)\/policy$/.exec(path);
     if (control) {
       const album = state.albums.find(a => a.id === control[1]);
       if (!album) return fail(404, 'Album not found.');
-      if (control[2] === 'policy') {
-        if (album.role !== 'host') return fail(404, 'Event not found.');
-        for (const key of ['joiningOpen','locationRequired','chatEnabled','joinDeadline']) {
-          if (key in body) album[key] = body[key];
-        }
-        // A sample conversation the first time the chat is switched on, with a reply to come
-        if (album.chatEnabled && !album.chat) {
-          const t = (min) => new Date(Date.now() - min * 60000).toISOString();
-          album.chat = [
-            { id: 'em' + (++state.seq), text: 'Just got here, the lights look amazing', by: 'Leila Haddad', avatarUrl: '', you: false, at: t(14) },
-            { id: 'em' + (++state.seq), text: 'Grabbing drinks, anyone want anything?', by: 'Tom Okafor', avatarUrl: '', you: false, at: t(6) },
-          ];
-        }
-        save(); return { body: { ok: true } };
+      if (album.role !== 'host') return fail(404, 'Event not found.');
+      for (const key of ['joiningOpen','locationRequired','joinDeadline']) {
+        if (key in body) album[key] = body[key];
       }
-      if (!album.chatEnabled) return fail(403, 'The host has switched the event chat off.', 'chat-off');
-      album.chat ||= [];
-      if (control[2] === 'typing') return { body: { typing: [] } };
-      if (method === 'POST') {
-        const text = String(body.text ?? '').trim();
-        if (!text) return fail(400, 'Write a message first.');
-        if (text.length > 1000) return fail(400, 'Keep messages under 1,000 characters.');
-        const message = { id: 'em' + (++state.seq), text, by: 'You', avatarUrl: '', you: true, at: new Date().toISOString() };
-        album.chat.push(message);
-        (state.eventRead ||= {})[album.id] = message.at;
-        save(); return { status: 201, body: { message } };
-      }
-      const before = query?.get('before');
-      const pool = before ? album.chat.filter((m) => m.at < before) : album.chat;
-      if (!before) { (state.eventRead ||= {})[album.id] = new Date().toISOString(); save(); }
-      // Someone answers a little after you write (only in the preview)
-      const last = album.chat.at(-1);
-      const typing = last?.you && Date.now() - Date.parse(last.at) < 4000 ? [{ name: 'Leila', avatarUrl: '' }] : [];
-      if (last?.you && Date.now() - Date.parse(last.at) > 5000 && !last.answered) {
-        last.answered = true;
-        album.chat.push({ id: 'em' + (++state.seq), text: 'Love it! See you by the stage', by: 'Leila Haddad', avatarUrl: '', you: false, at: new Date().toISOString() });
-        save();
-      }
-      return { body: { messages: pool.slice(-50), more: pool.length > 50, typing } };
+      save(); return { body: { ok: true } };
     }
     if (path === '/api/events/nearby' && method === 'GET') {
       const at = { lat: Number(query?.get('lat')), lng: Number(query?.get('lng')) };
       if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng)) return fail(400, 'Your location is needed to find events near you.');
-      const km = Math.min(100, Math.max(1, Number(query?.get('km')) || 25));
+      // Like the server: radius in metres (100 m to 100 km), or the older km
+      const radiusM = Math.min(100000, Math.max(100, Number(query?.get('radius')) || (Number(query?.get('km')) || 25) * 1000));
+      const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+      const bearing = (to) => { const r = Math.PI / 180, dl = (to.lng - at.lng) * r; return (Math.atan2(Math.sin(dl) * Math.cos(to.lat * r), Math.cos(at.lat * r) * Math.sin(to.lat * r) - Math.sin(at.lat * r) * Math.cos(to.lat * r) * Math.cos(dl)) / r + 360) % 360; };
       if (!state.events) { state.events = seedEvents(at); save(); }
       const mineIds = new Set(state.albums.map((a) => a.id));
       const pool = [...state.events.filter((e) => !mineIds.has(e.id)), ...state.albums.filter((a) => a.visibility === 'public' && a.zone?.radiusM)];
       const events = pool.map((e) => {
         const d = Math.round(distM(at, e.zone)), life = albumLifecycle(e);
         return { id: e.id, name: e.name, date: e.date, place: e.place, venue: e.venue, startsAt: e.startsAt, endsAt: e.endsAt, status: life.status, live: life.status === 'live', opensAt: life.opensAt,
-          zone: e.zone, distanceM: d, inside: d <= e.zone.radiusM, photos: e.photos, pics: mineIds.has(e.id) ? visibleOf(e).slice(0, 9).map(p => p.thumbnailUrl) : [],
+          zone: e.zone, distanceM: d, inside: d <= e.zone.radiusM, inScan: d <= radiusM, bearing: Math.round(bearing(e.zone)), direction: d < 30 ? 'here' : DIRS[Math.round(bearing(e.zone) / 45) % 8], photos: e.photos, pics: mineIds.has(e.id) ? visibleOf(e).slice(0, 9).map(p => p.thumbnailUrl) : [],
           guests: e.guests, hostName: e.hostName, joined: mineIds.has(e.id) };
-      }).filter((e) => e.distanceM <= km * 1000 && e.status !== 'kept').sort((x, y) => (y.live - x.live) || (x.distanceM - y.distanceM));
-      return { body: { events } };
+      }).filter((e) => (e.distanceM <= radiusM || e.inside) && e.status !== 'kept').sort((x, y) => (y.live - x.live) || (x.distanceM - y.distanceM));
+      return { body: { events, scan: { lat: at.lat, lng: at.lng, radiusM, count: events.filter((e) => e.inScan).length } } };
     }
     const em = /^\/api\/events\/([^/]+)\/join$/.exec(path);
     if (em && method === 'POST') {
@@ -418,56 +350,123 @@
       return { status: 201, body: { already: false, id: e.id } };
     }
     if (path === '/api/albums' && method === 'GET') return { body: list() };
+    // Saving an album (a bookmark, kept per person), and every photo you've hearted, newest first
+    const sv = /^\/api\/albums\/([^/]+)\/save$/.exec(path);
+    if (sv && method === 'POST') {
+      const a = state.albums.find((x) => x.id === sv[1]);
+      if (!a) return fail(404, 'Album not found.');
+      a.saved = body.saved !== false; save();
+      return { body: { saved: a.saved } };
+    }
+    if (path === '/api/photos/liked' && method === 'GET') {
+      const photos = [];
+      for (const [pid, s] of Object.entries(state.social || {})) {
+        if (!s.liked) continue;
+        const m = /^(.+)-p(\d+)$/.exec(pid);
+        const a = m && state.albums.find((x) => x.id === m[1]);
+        if (!a || goneOf(a).has(Number(m[2]))) continue;
+        const p = photosOf(a).find((x) => x.id === pid);
+        if (p) photos.push({ id: p.id, albumId: a.id, albumName: a.name, url: p.url, thumbnailUrl: p.thumbnailUrl, by: p.by, likedAt: s.likedAt || '' });
+      }
+      photos.sort((x, y) => String(y.likedAt).localeCompare(String(x.likedAt)));
+      return { body: { photos } };
+    }
     // Deleting a photo: the host can take down any photo in their album, a guest only their own
-    const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|comments)(?:\/([^/]+))?(\/like)?$/.exec(path);
+    const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|reaction|reactions)$/.exec(path);
     if (sm) {
       const a = state.albums.find((x) => x.id === sm[1]), i = Number(sm[2]), pid = `${sm[1]}-p${sm[2]}`;
       if (!a || goneOf(a).has(i)) return fail(404, 'Photo not found.');
       const s = structuredClone(socialOf(a, i));
       if (sm[3] === 'like' && method === 'POST') {
         const want = body.liked !== false;
-        if (want !== s.liked) { s.liked = want; s.likes = Math.max(0, s.likes + (want ? 1 : -1)); saveSocial(pid, s); }
+        if (want !== s.liked) { s.liked = want; s.likes = Math.max(0, s.likes + (want ? 1 : -1)); if (want) s.likedAt = new Date().toISOString(); saveSocial(pid, s); }
         return { body: { likes: s.likes, liked: s.liked } };
       }
-      const out = (c) => ({ parent: null, likes: 0, liked: false, ...c, canDelete: c.mine || a.role === 'host' });
-      if (sm[3] === 'comments' && sm[4] && sm[5] && method === 'POST') {
-        const c = s.comments.find((x) => x.id === sm[4]);
-        if (!c) return fail(404, 'Comment not found.');
-        const want = body.liked !== false;
-        if (want !== !!c.liked) { c.liked = want; c.likes = Math.max(0, (c.likes || 0) + (want ? 1 : -1)); saveSocial(pid, s); }
-        return { body: { likes: c.likes || 0, liked: !!c.liked } };
-      }
-      if (sm[3] === 'comments' && method === 'GET') return { body: { comments: s.comments.map(out) } };
-      if (sm[3] === 'comments' && method === 'POST') {
-        const text = String(body.text || '').trim();
-        if (!text) return fail(400, 'Write something first.');
-        if (text.length > 500) return fail(400, 'Keep comments under 500 characters.');
-        let parent = null;
-        if (body.replyTo != null) {
-          const to = s.comments.find((x) => x.id === body.replyTo);
-          if (!to) return fail(404, 'That comment is gone.');
-          parent = to.parent || to.id;
+      // Who reacted: one row per person (you included), each with the emoji they picked
+      if (sm[3] === 'reactions' && method === 'GET') {
+        const people = [], pool = [...REACTORS];
+        let k = (salt(a) + i) % pool.length;
+        for (const [emoji, n] of Object.entries(s.reactions)) {
+          for (let c = n - (s.reaction === emoji ? 1 : 0); c > 0; c--) { people.push({ by: pool[k % pool.length], emoji, mine: false, avatarUrl: '' }); k++; }
         }
-        const c = { id: `${pid}-u${Date.now()}`, parent, by: 'You', mine: true, text, likes: 0, liked: false, at: new Date().toISOString() };
-        s.comments.push(c); saveSocial(pid, s);
-        return { status: 201, body: { comment: out(c) } };
+        if (s.reaction) people.unshift({ by: 'You', emoji: s.reaction, mine: true, avatarUrl: '' });
+        return { body: { people } };
       }
-      if (sm[3] === 'comments' && method === 'DELETE' && sm[4]) {
-        const c = s.comments.find((x) => x.id === sm[4]);
-        if (!c) return fail(404, 'Comment not found.');
-        if (!c.mine && a.role !== 'host') return fail(403, 'Only the person who wrote it or the host can remove it.');
-        const before = s.comments.length;
-        s.comments = s.comments.filter((x) => x !== c && x.parent !== c.id); saveSocial(pid, s);
-        return { body: { ok: true, removed: before - s.comments.length } };
+      // { emoji: '😍' } sets (or switches) your reaction, { emoji: null } takes it back
+      if (sm[3] === 'reaction' && method === 'POST') {
+        const want = body.emoji == null ? null : String(body.emoji);
+        if (want && !RX.includes(want)) return fail(400, 'Pick one of the reactions.');
+        if (s.reaction) { s.reactions[s.reaction] = Math.max(0, (s.reactions[s.reaction] || 1) - 1); if (!s.reactions[s.reaction]) delete s.reactions[s.reaction]; }
+        if (want) s.reactions[want] = (s.reactions[want] || 0) + 1;
+        s.reaction = want; delete s.comments; saveSocial(pid, s);
+        return { body: { reactions: s.reactions, reaction: s.reaction } };
       }
+    }
+    // ---- Recently deleted: move photos in, bring them back, or delete them for good ----
+    const whose = (id) => { const m = /^(.+)-p(\d+)$/.exec(String(id)); const a = m && state.albums.find((x) => x.id === m[1]); return a ? { a, i: Number(m[2]) } : null; };
+    const binRow = (a, t) => {
+      const n = salt(a) + t.i;
+      return { id: `${a.id}-p${t.i}`, albumId: a.id, albumName: a.name, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), downloadUrl: picsum(n, 1200, 750),
+        deletedAt: new Date(t.at).toISOString(), purgeAt: new Date(t.at + KEEP_DAYS * DAY).toISOString() };
+    };
+    if (path === '/api/trash' && method === 'GET') {
+      const only = query?.get('album');
+      const photos = state.albums.filter((a) => a.role === 'host' && (!only || a.id === only)).flatMap((a) => trashOf(a).map((t) => binRow(a, t)))
+        .sort((x, y) => y.deletedAt.localeCompare(x.deletedAt));
+      return { body: { photos } };
+    }
+    if (path === '/api/trash' && method === 'POST') {
+      let moved = 0, skipped = 0;
+      state.trash ||= {};
+      for (const id of Array.isArray(body.photoIds) ? body.photoIds : []) {
+        const w = whose(id);
+        if (!w) { skipped++; continue; }
+        const { a, i } = w, gone = goneOf(a), bin = trashOf(a), mineUpTo = a.mineBase ?? a.mine;
+        if (gone.has(i) || bin.some((t) => t.i === i) || i >= a.photos + gone.size + bin.length) { skipped++; continue; }
+        if (a.role !== 'host') { skipped++; continue; }   // only the host deletes photos
+        a.mineBase = mineUpTo;
+        if (i < mineUpTo) a.mine--;
+        a.photos--;
+        (state.trash[a.id] ||= []).push({ i, at: Date.now() });
+        moved++;
+      }
+      save();
+      if (!moved && skipped) return fail(403, 'Only the host of an album can delete its photos.');
+      return { body: { moved, skipped } };
+    }
+    // Restore or purge: { photoIds: [...] } for some photos, or { all: true } (with an optional album) for the lot
+    if ((path === '/api/trash/restore' || path === '/api/trash/purge') && method === 'POST') {
+      const restoring = path.endsWith('restore');
+      let count = 0;
+      for (const a of state.albums) {
+        if (a.role !== 'host' || (body.album && body.album !== a.id)) continue;   // only a host can recover or purge
+        const bin = trashOf(a), mineUpTo = a.mineBase ?? a.mine;
+        const pick = body.all === true ? bin : bin.filter((t) => (body.photoIds || []).includes(`${a.id}-p${t.i}`));
+        for (const t of pick) {
+          if (restoring) { a.photos++; if (t.i < mineUpTo) a.mine++; } else purgeIndex(a, t.i);
+          count++;
+        }
+        state.trash[a.id] = bin.filter((t) => !pick.includes(t));
+      }
+      save();
+      return { body: restoring ? { restored: count } : { purged: count } };
+    }
+    // The photos you've hidden from your own view, in every album (or one)
+    if (path === '/api/hidden' && method === 'GET') {
+      const only = query?.get('album');
+      const photos = state.albums.filter((a) => !only || a.id === only).flatMap((a) => {
+        const h = hiddenOf(a);
+        return photosOf(a).filter((p) => h.has(p.id)).map((p) => ({ id: p.id, albumId: a.id, albumName: a.name, url: p.url, thumbnailUrl: p.thumbnailUrl, downloadUrl: p.downloadUrl, by: p.by }));
+      });
+      return { body: { photos } };
     }
     const pm = /^\/api\/photos\/(.+)-p(\d+)$/.exec(path);
     if (pm && method === 'DELETE') {
       const a = state.albums.find((x) => x.id === pm[1]), i = Number(pm[2]);
       if (!a) return fail(404, 'Photo not found.');
       const gone = goneOf(a), mineUpTo = a.mineBase ?? a.mine;
-      if (gone.has(i) || i >= a.photos + gone.size) return fail(404, 'Photo not found.');
-      if (a.role !== 'host' && i >= mineUpTo) return fail(403, 'Only the person who added it or the host can remove it.');
+      if (gone.has(i) || i >= a.photos + gone.size + trashOf(a).length) return fail(404, 'Photo not found.');
+      if (a.role !== 'host') return fail(403, 'Only the host of an album can remove its photos.');
       a.mineBase = mineUpTo;
       if (i < mineUpTo) a.mine--;
       a.photos--;
@@ -482,7 +481,7 @@
       const a = { id: 'a' + (++state.seq), name, date: body.date || iso(0), place: String(body.place || '').trim(), role: 'host', code: newCode(), photos: 0, mine: 0, guests: 1, waiting: 0, hostName: state.user.name };
       if (body.groupId && (state.groups || []).some((g) => g.id === body.groupId)) a.groupId = body.groupId;
       // Event times, venue and zone, as assets/event.js sends them
-      for (const k of ['startsAt', 'endsAt', 'uploadLeadMin', 'zone', 'venue', 'visibility', 'chatEnabled']) if (body[k] != null) a[k] = body[k];
+      for (const k of ['startsAt', 'endsAt', 'uploadLeadMin', 'zone', 'venue', 'visibility']) if (body[k] != null) a[k] = body[k];
       state.albums.unshift(a); save();
       return { status: 201, body: { album: summary(a) } };
     }

@@ -6,19 +6,17 @@ import { config } from '../config/env.js';
 import { Album } from '../models/Album.js';
 import { Membership } from '../models/Membership.js';
 import { Photo } from '../models/Photo.js';
-import { Comment } from '../models/Comment.js';
-import { EventMessage } from '../models/EventMessage.js';
-import { Invite } from '../models/Invite.js';
 import { User } from '../models/User.js';
 import { Group } from '../models/Group.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { hasGroupAccess, groupIdsOf, dropGroupRows } from '../services/groupAccess.js';
 import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { sendEmail } from '../services/emailService.js';
-import { reminderHtml, inviteHtml } from '../services/emailTemplates.js';
+import { reminderHtml } from '../services/emailTemplates.js';
 import { HttpError } from '../utils/httpError.js';
 import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
 import { savePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
+import { reactionCounts, myReaction } from './photoController.js';
 
 const PREVIEW_PICS = 12;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
@@ -93,7 +91,7 @@ async function albumsOf(userId) {
 async function statsFor(albumIds, userId, hidden = []) {
   const [photoStats, memberStats, hosts, grouped] = await Promise.all([
     Photo.aggregate([
-      { $match: { album: { $in: albumIds }, _id: { $nin: hidden } } },
+      { $match: { album: { $in: albumIds }, _id: { $nin: hidden }, deletedAt: null } },
       { $group: {
         _id: '$album',
         photos: { $sum: 1 },
@@ -150,7 +148,6 @@ function summary(album, role, stats) {
     endsAt: album.endsAt || undefined,
     uploadLeadMin: album.startsAt ? album.uploadLeadMin || 0 : undefined,
     role,
-    chatEnabled: album.chatEnabled,
     ...(role === 'host' && { joiningOpen: album.joiningOpen, locationRequired: album.locationRequired, joinDeadline: album.joinDeadline, requests: album.requests.filter(r => r.status !== 'declined') }),
     ...albumLifecycle(album),
     live: albumLifecycle(album).status === 'live',
@@ -239,7 +236,7 @@ async function waitingGuests(albumIds) {
   if (!albumIds.length) return new Map();
   const [guests, contributors] = await Promise.all([
     Membership.find({ album: { $in: albumIds }, role: 'guest' }, 'album user'),
-    Photo.aggregate([{ $match: { album: { $in: albumIds } } }, { $group: { _id: '$album', users: { $addToSet: '$uploader' } } }]),
+    Photo.aggregate([{ $match: { album: { $in: albumIds }, deletedAt: null } }, { $group: { _id: '$album', users: { $addToSet: '$uploader' } } }]),
   ]);
   const added = new Map(contributors.map((c) => [String(c._id), new Set(c.users.map(String))]));
   const waiting = new Map(albumIds.map((id) => [String(id), 0]));
@@ -252,21 +249,27 @@ export async function list(req, res) {
   const ids = mine.map((m) => m.album._id);
   const hostedIds = mine.filter((m) => m.role === 'host').map((m) => m.album._id);
   const hidden = mine.flatMap((m) => m.hidden || []);
-  const [stats, recent, waiting, invites] = await Promise.all([
+  const [stats, recent, waiting, binned, hiddenCount] = await Promise.all([
     statsFor(ids, req.user._id, hidden),
-    Photo.find({ album: { $in: ids }, _id: { $nin: hidden } }).sort({ createdAt: -1 }).limit(80).populate('uploader', 'name'),
+    Photo.find({ album: { $in: ids }, _id: { $nin: hidden }, deletedAt: null }).sort({ createdAt: -1 }).limit(80).populate('uploader', 'name'),
     waitingGuests(hostedIds),
-    // Only to someone who has proved the address is theirs: anyone can sign up with an email they
-    // don't own, and an invite carries the album's join code
-    req.user.emailVerified
-      ? Invite.find({ email: req.user.email, album: { $nin: ids } }).sort({ createdAt: -1 }).limit(10).populate('album').populate('invitedBy', 'name')
-      : [],
+    Photo.aggregate([{ $match: { album: { $in: hostedIds }, deletedAt: { $ne: null } } }, { $group: { _id: '$album', n: { $sum: 1 } } }]),
+    hidden.length ? Photo.countDocuments({ _id: { $in: hidden }, deletedAt: null }) : 0,
   ]);
+  const trash = new Map(binned.map((b) => [String(b._id), b.n]));
+  const saved = new Set((req.user.savedAlbums || []).map(String));
   const albums = mine
-    .map((m) => ({ ...summary(m.album, m.role, stats.get(String(m.album._id))), ...(m.role === 'host' && { waiting: waiting.get(String(m.album._id)) || 0 }) }))
+    .map((m) => ({
+      ...summary(m.album, m.role, stats.get(String(m.album._id))),
+      saved: saved.has(String(m.album._id)),
+      ...(m.role === 'host' && { waiting: waiting.get(String(m.album._id)) || 0, trashCount: trash.get(String(m.album._id)) || 0 }),
+    }))
     .sort((a, b) => b.date.localeCompare(a.date));
   res.json({
     albums,
+    // The bin (photos in albums you host) and the photos you've hidden, across all albums
+    trashCount: [...trash.values()].reduce((t, n) => t + n, 0),
+    hiddenCount,
     // Single photos, newest first (the "just added" line of prints)
     recent: recent.slice(0, 12).map((p) => ({
       albumId: String(p.album),
@@ -277,15 +280,6 @@ export async function list(req, res) {
     })),
     // The same photos grouped into who-added-what batches
     feed: batches(recent, req.user._id).slice(0, 8),
-    invites: invites.filter((i) => i.album).map((i) => ({
-      id: i.id,
-      code: i.album.displayCode,
-      name: i.album.name,
-      date: i.album.date,
-      place: i.album.place,
-      by: firstName(i.invitedBy?.name),
-      at: i.createdAt,
-    })),
   });
 }
 
@@ -294,9 +288,8 @@ export async function create(req, res) {
   const group = req.body?.groupId ? await groupFor(req.user._id, req.body.groupId) : null;
   // Group albums are for the group (and anyone given the code), never listed publicly on Events
   if (group) Object.assign(fields, { group: group._id, visibility: 'invite' });
-  // Event chat: off unless the host turns it on. A friend group already has its own chat, so on a
+
   // group album this is only for guests from outside the group (they never see the group's chat).
-  fields.chatEnabled = req.body?.chatEnabled === true;
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -322,6 +315,60 @@ async function groupFor(userId, groupId) {
   return group;
 }
 
+// GET /api/albums/preview/:code  (no login needed)
+// What someone sees after scanning a QR code or typing a code, before they log in: enough to want
+// to join (the event, who hosts it, how many photos and guests), never the photos themselves, the
+// venue's exact position or anyone's name but the host's first name.
+export async function preview(req, res) {
+  const code = normaliseCode(req.params.code);
+  if (code.length !== 7) throw new HttpError(400, 'Codes are 7 letters and numbers, like K7Q-48DM.');
+  const album = await Album.findOne({ code }).populate('host', AVATAR_FIELDS);
+  if (!album) throw new HttpError(404, 'No album has that code. Check it against the host’s card.');
+  const [photos, guests, member] = await Promise.all([
+    Photo.countDocuments({ album: album._id, deletedAt: null }),
+    Membership.countDocuments({ album: album._id, via: { $ne: 'group' } }),
+    req.user ? Membership.exists({ album: album._id, user: req.user._id, via: { $ne: 'group' } }) : null,
+  ]);
+  const life = albumLifecycle(album);
+  const deadline = album.joinDeadline ?? album.endsAt;
+  const open = album.joiningOpen !== false && !(deadline && deadline <= new Date());
+  res.json({
+    album: {
+      code: album.displayCode,
+      name: album.name, date: album.date, place: album.place,
+      venue: album.venue?.address ? { address: album.venue.address } : undefined,
+      startsAt: album.startsAt || undefined, endsAt: album.endsAt || undefined,
+      status: life.status, live: life.status === 'live', opensAt: life.opensAt,
+      hostName: firstName(album.host?.name), hostAvatar: req.user ? avatarOf(album.host) : '',
+      photos, guests,
+      visibility: album.visibility || 'invite',
+      group: !!album.group,
+      // How joining works, so the page can say it before they log in
+      joining: {
+        open,
+        needsLocation: open && !album.group && album.locationRequired !== false && !!album.zone?.radiusM,
+        radiusM: album.zone?.radiusM || undefined,
+        approval: !open,   // closed: they can still ask the host
+      },
+    },
+    signedIn: !!req.user,
+    member: !!member,
+  });
+}
+
+// POST /api/albums/:id/save  { saved: true|false }  The bookmark on My albums (only albums you're in)
+export async function save(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  const want = req.body?.saved !== false;
+  await User.updateOne({ _id: req.user._id }, want ? { $addToSet: { savedAlbums: m.album._id } } : { $pull: { savedAlbums: m.album._id } });
+  res.json({ saved: want });
+}
+
+// The ids of every album this person can open (their own memberships and their friend groups')
+export async function albumIdsOf(userId) {
+  return (await albumsOf(userId)).map((m) => m.album._id);
+}
+
 export async function join(req, res) {
   const code = normaliseCode(req.body?.code);
   if (code.length !== 7) throw new HttpError(400, 'Codes are 7 letters and numbers, like K7Q-48DM.');
@@ -331,8 +378,6 @@ export async function join(req, res) {
   if (result.pending) return res.status(202).json(result);
   const { already } = result;
   const m = await membershipOf(req, album.id);
-  // (only for a confirmed address, so an unconfirmed sign-up can't clear the real person's invite)
-  if (req.user.emailVerified) await Invite.deleteMany({ album: album._id, email: req.user.email });
   const stats = await statsFor([album._id], req.user._id, m?.hidden || []);
   res.status(already ? 200 : 201).json({ already, album: summary(album, m.role, stats.get(String(album._id))) });
 }
@@ -343,19 +388,21 @@ export async function show(req, res) {
   const m = await membershipOf(req, req.params.id);
   const hidden = m.hidden || [];
   const withHidden = req.query.hidden === '1';
-  const [stats, photos, hiddenCount] = await Promise.all([
+  const [stats, photos, hiddenCount, trashCount] = await Promise.all([
     statsFor([m.album._id], req.user._id, hidden),
-    Photo.find({ album: m.album._id, ...(!withHidden && { _id: { $nin: hidden } }) }).sort({ createdAt: -1 }).populate('uploader', 'name'),
-    hidden.length ? Photo.countDocuments({ album: m.album._id, _id: { $in: hidden } }) : 0,
+    Photo.find({ album: m.album._id, deletedAt: null, ...(!withHidden && { _id: { $nin: hidden } }) }).sort({ createdAt: -1 }).populate('uploader', 'name'),
+    hidden.length ? Photo.countDocuments({ album: m.album._id, _id: { $in: hidden }, deletedAt: null }) : 0,
+    m.role === 'host' ? Photo.countDocuments({ album: m.album._id, deletedAt: { $ne: null } }) : 0,
   ]);
   const hiddenSet = new Set(hidden.map(String));
   res.json({
-    album: { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount },
+    album: { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)) },
     photos: photos.map((p) => {
       const mine = p.uploader?._id.equals(req.user._id);
       return {
         id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
-        likes: p.likeCount || 0, liked: (p.likes || []).some((id) => id.equals(req.user._id)), comments: p.commentCount || 0,
+        likes: p.likeCount || 0, liked: (p.likes || []).some((id) => id.equals(req.user._id)),
+        reactions: reactionCounts(p), reaction: myReaction(p, req.user._id),
         ...(withHidden && hiddenSet.has(p.id) && { hidden: true }),
       };
     }),
@@ -373,7 +420,7 @@ export async function setHidden(req, res) {
     const raw = Array.isArray(req.body?.photoIds) ? req.body.photoIds : [];
     if (!raw.length || raw.length > 500 || !raw.every((id) => mongoose.isValidObjectId(id))) throw new HttpError(400, 'Choose the photos to hide or show.');
     // Only photos that really are in this album
-    const ids = (await Photo.find({ album: m.album._id, _id: { $in: raw } }, '_id')).map((p) => p._id);
+    const ids = (await Photo.find({ album: m.album._id, _id: { $in: raw }, deletedAt: null }, '_id')).map((p) => p._id);
     const keep = new Set(ids.map(String));
     if (hide) m.hidden = [...(m.hidden || []).filter((id) => !keep.has(String(id))), ...ids];
     else m.hidden = (m.hidden || []).filter((id) => !keep.has(String(id)));
@@ -411,10 +458,7 @@ export async function remove(req, res) {
   await deletePhotos(photos.map((p) => p.storageKey));
   await Promise.all([
     Photo.deleteMany({ album: m.album._id }),
-    Comment.deleteMany({ album: m.album._id }),
-    EventMessage.deleteMany({ album: m.album._id }),
     Membership.deleteMany({ album: m.album._id }),
-    Invite.deleteMany({ album: m.album._id }),
     m.album.deleteOne(),
   ]);
   res.json({ ok: true });
@@ -465,7 +509,7 @@ export async function addPhotos(req, res) {
 
 export async function download(req, res) {
   const m = await membershipOf(req, req.params.id);
-  const photos = await Photo.find({ album: m.album._id, _id: { $nin: m.hidden || [] } }).sort({ createdAt: 1 });
+  const photos = await Photo.find({ album: m.album._id, _id: { $nin: m.hidden || [] }, deletedAt: null }).sort({ createdAt: 1 });
   if (!photos.length) throw new HttpError(404, 'This album has no photos yet.');
   const safeName = m.album.name.replace(/[^\w\- ]+/g, '').trim() || 'album';
   res.attachment(`${safeName}.zip`);
@@ -487,12 +531,11 @@ export async function download(req, res) {
   }
 }
 
-// ---- Host actions: nudging guests, inviting people ----
+// ---- Host actions: nudging guests ----
 
 const REMIND_EVERY_MS = 24 * 3600000;
 // Each reminder is real email, so one goes to at most this many
 const REMIND_MAX = 25;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Host actions send email from our domain to other people, so they need a confirmed address:
 // otherwise a throwaway account could use Momento to send "invites" to anyone
@@ -518,7 +561,7 @@ export async function remind(req, res) {
   if (!claimed) throw new HttpError(429, 'You’ve already sent a reminder today. Try again tomorrow.');
   const [guests, contributors] = await Promise.all([
     Membership.find({ album: album._id, role: 'guest' }, 'user'),
-    Photo.distinct('uploader', { album: album._id }),
+    Photo.distinct('uploader', { album: album._id, deletedAt: null }),
   ]);
   const added = new Set(contributors.map(String));
   const ids = guests.map((g) => g.user).filter((u) => !added.has(String(u))).slice(0, REMIND_MAX);
@@ -536,26 +579,3 @@ export async function remind(req, res) {
   res.json({ ok: true, sent });
 }
 
-// Invites someone by email: they get an email with the code, and it waits on their albums page
-export async function invite(req, res) {
-  const album = await hostedAlbum(req);
-  const email = String(req.body?.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'Enter an email address like name@example.com.');
-  if (albumLifecycle(album).status === 'kept') throw new HttpError(400, 'This album has closed, so new guests can’t add photos.');
-  const existing = await User.findOne({ email }, '_id');
-  if (existing && await Membership.exists({ album: album._id, user: existing._id })) {
-    throw new HttpError(409, 'They’re already in this album.');
-  }
-  await Invite.findOneAndUpdate(
-    { album: album._id, email },
-    { invitedBy: req.user._id, expiresAt: new Date(Date.now() + 30 * 86400000) },
-    { upsert: true, setDefaultsOnInsert: true },
-  );
-  const link = `${config.frontendUrl}/events.html?join=${album.displayCode}`;
-  await sendEmail({
-    to: email,
-    subject: `${firstName(req.user.name)} invited you to ${album.name} on Momento`,
-    html: inviteHtml(album, req.user.name, link, album.displayCode),
-  });
-  res.status(201).json({ ok: true });
-}

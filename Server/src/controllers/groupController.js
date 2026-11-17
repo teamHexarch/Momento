@@ -4,7 +4,6 @@ import { Album } from '../models/Album.js';
 import { Group } from '../models/Group.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { GroupInvite } from '../models/GroupInvite.js';
-import { GroupMessage } from '../models/GroupMessage.js';
 import { User } from '../models/User.js';
 import { sendEmail } from '../services/emailService.js';
 import { groupInviteHtml } from '../services/emailTemplates.js';
@@ -71,14 +70,9 @@ async function view(group, userId) {
       at: i.createdAt,
     })),
     albums: await albumSummaries(albums, userId),
-    unread: me ? await unreadIn(group._id, me) : 0,
   };
 }
 
-// Messages from other people since this member last read the chat
-function unreadIn(groupId, me) {
-  return GroupMessage.countDocuments({ group: groupId, user: { $ne: me.user?._id || me.user }, createdAt: { $gt: me.lastReadAt || me.createdAt } });
-}
 
 // Takes someone out of a group: albums they host leave the group with them, and the rows that
 // remembered what they hid in the group's albums are cleared
@@ -101,9 +95,7 @@ async function deleteGroup(group) {
     dropGroupRows({ album: { $in: shared.map((a) => a._id) } }),
     GroupMember.deleteMany({ group: group._id }),
     GroupInvite.deleteMany({ group: group._id }),
-    GroupMessage.deleteMany({ group: group._id }),
   ]);
-  typingNow.delete(group.id);
   await group.deleteOne();
 }
 
@@ -111,10 +103,7 @@ async function deleteGroup(group) {
 export async function deleteGroupsOf(user) {
   for (const g of await Group.find({ owner: user._id })) await deleteGroup(g);
   for (const m of await GroupMember.find({ user: user._id })) await takeOut(m.group, user._id);
-  await Promise.all([
-    GroupInvite.deleteMany({ $or: [{ invitedBy: user._id }, { email: user.email }] }),
-    GroupMessage.deleteMany({ user: user._id }),
-  ]);
+  await GroupInvite.deleteMany({ $or: [{ invitedBy: user._id }, { email: user.email }] });
 }
 
 // ---- Groups ----
@@ -265,75 +254,3 @@ export async function removeMember(req, res) {
   res.json({ group: await view(group, req.user._id) });
 }
 
-// ---- The group's chat: members only, checked on every read and send ----
-
-const messageOut = (m, userId) => ({
-  id: m.id,
-  text: m.text,
-  avatarUrl: avatarOf(m.user),
-  by: m.user?._id.equals(userId) ? 'You' : (m.user?.name || '').trim() || 'Someone',
-  you: !!m.user?._id.equals(userId),
-  at: m.createdAt,
-});
-
-// The newest 50 messages (oldest first), or the 50 before ?before=<ISO time>
-export async function messages(req, res) {
-  const { group } = await memberOf(req);
-  const before = req.query.before ? new Date(String(req.query.before)) : null;
-  const filter = { group: group._id, ...(before && !Number.isNaN(before.getTime()) && { createdAt: { $lt: before } }) };
-  const list = await GroupMessage.find(filter).sort({ createdAt: -1 }).limit(50).populate('user', AVATAR_FIELDS);
-  if (!before) await GroupMember.updateOne({ group: group._id, user: req.user._id }, { lastReadAt: new Date() });
-  res.json({ messages: list.reverse().map((m) => messageOut(m, req.user._id)), more: list.length === 50, typing: typingIn(group.id, req.user.id) });
-}
-
-// Who is typing, kept in memory for a few seconds (one server process). POST /:id/typing says
-// "I'm typing"; it lasts 6 seconds unless sent again, and ends when the message is sent.
-const typingNow = new Map();   // group id -> Map(user id -> { name, avatarUrl, until })
-const TYPING_MS = 6000;
-function typingIn(groupId, exceptUserId) {
-  const people = typingNow.get(groupId);
-  if (!people) return [];
-  const now = Date.now(), out = [];
-  for (const [id, t] of people) {
-    if (t.until < now) people.delete(id);
-    else if (id !== exceptUserId) out.push({ name: t.name, avatarUrl: t.avatarUrl });
-  }
-  if (!people.size) typingNow.delete(groupId);
-  return out;
-}
-export async function typing(req, res) {
-  const { group } = await memberOf(req);
-  if (!typingNow.has(group.id)) typingNow.set(group.id, new Map());
-  const stop = req.body?.typing === false;
-  if (stop) typingNow.get(group.id).delete(req.user.id);
-  else typingNow.get(group.id).set(req.user.id, { name: firstName(req.user.name), avatarUrl: avatarOf(req.user), until: Date.now() + TYPING_MS });
-  res.json({ typing: typingIn(group.id, req.user.id) });
-}
-
-// For the notifications on every page: unread chat messages in each of your groups, with the newest
-export async function unread(req, res) {
-  const mine = await GroupMember.find({ user: req.user._id }).populate('group', 'name');
-  const groups = [];
-  for (const me of mine) {
-    if (!me.group) continue;
-    const since = me.lastReadAt || me.createdAt;
-    const filter = { group: me.group._id, user: { $ne: req.user._id }, createdAt: { $gt: since } };
-    const n = await GroupMessage.countDocuments(filter);
-    if (!n) continue;
-    const latest = await GroupMessage.findOne(filter).sort({ createdAt: -1 }).populate('user', AVATAR_FIELDS);
-    groups.push({ id: me.group.id, name: me.group.name, unread: n, latest: latest && messageOut(latest, req.user._id) });
-  }
-  res.json({ total: groups.reduce((t, g) => t + g.unread, 0), groups });
-}
-
-export async function sendMessage(req, res) {
-  const { group } = await memberOf(req);
-  const text = String(req.body?.text ?? '').trim();
-  if (!text) throw new HttpError(400, 'Write a message first.');
-  if (text.length > 1000) throw new HttpError(400, 'Keep messages under 1,000 characters.');
-  const m = await GroupMessage.create({ group: group._id, user: req.user._id, text });
-  await m.populate('user', AVATAR_FIELDS);
-  typingNow.get(group.id)?.delete(req.user.id);
-  await GroupMember.updateOne({ group: group._id, user: req.user._id }, { lastReadAt: new Date() });
-  res.status(201).json({ message: messageOut(m, req.user._id) });
-}

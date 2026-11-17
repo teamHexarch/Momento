@@ -11,8 +11,6 @@ const membershipSchema = new mongoose.Schema({
   // Photos this person has hidden from their own view of the album (Sort photos). Everyone else
   // still sees them; nothing is deleted
   hidden: { type: [mongoose.Schema.Types.ObjectId], default: [] },
-  // When this person last read the event chat (for the unread count, as in friend groups)
-  chatReadAt: Date,
 }, { timestamps: true });
 
 membershipSchema.index({ album: 1, user: 1 }, { unique: true });

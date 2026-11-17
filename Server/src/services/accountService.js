@@ -5,8 +5,6 @@ import { Membership } from '../models/Membership.js';
 import { deleteGroupsOf } from '../controllers/groupController.js';
 import { removeFile } from './storageService.js';
 import { Photo } from '../models/Photo.js';
-import { Comment } from '../models/Comment.js';
-import { Invite } from '../models/Invite.js';
 import { EmailToken } from '../models/EmailToken.js';
 import { sendEmail, isEmailConfigured } from './emailService.js';
 import { issueToken, redeemTokenRow, peekTokenRow } from './emailTokenService.js';
@@ -95,7 +93,7 @@ export async function finishEmailChange(token) {
 }
 
 // Everything the person owns goes: albums they host (with every photo in them), photos they
-// added to other albums, their memberships and invites, then the account itself.
+// added to other albums, their memberships, then the account itself.
 export async function deleteAccount(user) {
   // Groups they made are deleted (albums stay with their hosts); they leave every other group
   await deleteGroupsOf(user);
@@ -103,16 +101,12 @@ export async function deleteAccount(user) {
   const hostedIds = hosted.map((a) => a._id);
   const photos = await Photo.find({ $or: [{ album: { $in: hostedIds } }, { uploader: user._id }] }, 'storageKey');
   await deletePhotos(photos.map((p) => p.storageKey));
-  // Their comments elsewhere come off each photo's count; their likes come off too
-  const written = await Comment.aggregate([{ $match: { user: user._id } }, { $group: { _id: '$photo', n: { $sum: 1 } } }]);
-  if (written.length) await Photo.bulkWrite(written.map((w) => ({ updateOne: { filter: { _id: w._id }, update: { $inc: { commentCount: -w.n } } } })));
-  await Photo.updateMany({ likes: user._id }, { $pull: { likes: user._id }, $inc: { likeCount: -1 } });
-  await Comment.updateMany({ likes: user._id }, { $pull: { likes: user._id }, $inc: { likeCount: -1 } });
+  // Their likes and reactions come off other people's photos
+  await Photo.updateMany({ likes: user._id }, { $pull: { likes: user._id, likeLog: { user: user._id } }, $inc: { likeCount: -1 } });
+  await Photo.updateMany({ 'reactions.user': user._id }, { $pull: { reactions: { user: user._id } } });
   await Promise.all([
-    Comment.deleteMany({ $or: [{ user: user._id }, { album: { $in: hostedIds } }] }),
     Photo.deleteMany({ _id: { $in: photos.map((p) => p._id) } }),
     Membership.deleteMany({ $or: [{ album: { $in: hostedIds } }, { user: user._id }] }),
-    Invite.deleteMany({ $or: [{ album: { $in: hostedIds } }, { invitedBy: user._id }, { email: user.email }] }),
     EmailToken.deleteMany({ user: user._id }),
     Album.deleteMany({ _id: { $in: hostedIds } }),
   ]);

@@ -33,7 +33,7 @@ export async function admit(album, user, body = {}) {
     return { already: true };
   }
   const previous = album.requests.find(r => r.user.equals(user._id));
-  // A host's decline sticks: the person stays out, and the album's photos and chat stay private
+  // A host's decline sticks: the person stays out, and the album's photos stay private
   if (previous?.status === 'declined') throw new HttpError(403, 'The host declined your request.');
   const deadline = album.joinDeadline ?? album.endsAt ?? new Date(Date.parse(album.date) + 31 * 86400000);
   const closed = !album.joiningOpen || (deadline && deadline <= new Date());
@@ -70,7 +70,7 @@ export async function reviewRequest(req, res) {
 export async function eventPolicy(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Event not found.');
   const update = {};
-  for (const key of ['joiningOpen','locationRequired','chatEnabled']) {
+  for (const key of ['joiningOpen','locationRequired']) {
     if (typeof req.body?.[key] === 'boolean') update[key] = req.body[key];
   }
   if ('joinDeadline' in (req.body || {})) {

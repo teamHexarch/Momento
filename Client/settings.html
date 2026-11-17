@@ -7,6 +7,7 @@
   <style>[hidden] { display: none !important; }</style>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
+  <script src="assets/pickers.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -36,11 +37,11 @@
     } catch (e) {}
   
     // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
-    // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
+    // links into a section (#faq) and when the page is reopened part-way down. Until it ends, a
     // veil (#intro) covers the page; if the script that runs it never loads, the veil is lifted anyway
     try {
       const page = root.dataset.page, seen = sessionStorage.getItem('momento-intro-' + page);
-      if (page && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\b/.test(location.search) || (!seen && !location.hash))) {
+      if (page === 'home' && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\b/.test(location.search) || (!seen && !location.hash))) {
         root.classList.add('intro-on');
         setTimeout(() => {
           if (!root.classList.contains('intro-on')) return;
@@ -686,7 +687,7 @@
       }
   
       /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
-      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .nav-menu) {
+      :root[data-theme="dark"] :is(.glass, .panel, .zone-ctrl, .nav-menu) {
         background:
           linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
           linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
@@ -698,13 +699,7 @@
           0 26px 60px -30px rgba(0, 0, 0, .75);
       }
       :root[data-theme="dark"] .glass { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .15), inset 0 0 16px rgba(150, 140, 210, .06), 0 0 24px -8px rgba(120, 100, 190, .3), 0 12px 30px -14px rgba(0, 0, 0, .7); }
-      :root[data-theme="dark"] :is(.zone-ctrl, .plan) { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
-      :root[data-theme="dark"] .plan-plus {
-        background:
-          radial-gradient(80% 60% at 85% 10%, rgba(255, 255, 255, .1), transparent 60%) padding-box,
-          linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
-          linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
-      }
+      :root[data-theme="dark"] .zone-ctrl { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
       :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
       :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
   
@@ -786,13 +781,13 @@
         :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
       }
   
-      /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
-      :is(.nav-settings, .nav-events, .nav-groups) { display: inline-flex; align-items: center; justify-content: center; }
-      :is(.nav-settings, .nav-events, .nav-groups) svg { display: none; }
+      /* ---------- Social and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
+      :is(.nav-social, .nav-settings) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-social, .nav-settings) svg { display: none; }
       @media (max-width: 520px) {
-        :is(.nav-settings, .nav-events, .nav-groups) .nav-label { display: none; }
-        :is(.nav-settings, .nav-events, .nav-groups) svg { display: block; }
-        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .5rem; padding-right: .5rem; }
+        :is(.nav-social, .nav-settings) .nav-label { display: none; }
+        :is(.nav-social, .nav-settings) svg { display: block; }
+        :is(.nav-social, .nav-settings) { padding-left: .5rem; padding-right: .5rem; }
       }
       /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
          logo, the menu and your account button all fit on one line */
@@ -802,12 +797,12 @@
         .nav { gap: 0 !important; padding: .22rem !important; }
         .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
         .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
-        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .46rem !important; padding-right: .46rem !important; }
-        :is(.nav-settings, .nav-events, .nav-groups) svg { width: 16px; height: 16px; }
+        :is(.nav-social, .nav-settings) { padding-left: .46rem !important; padding-right: .46rem !important; }
+        :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
       }
       @media (max-width: 340px) {
         .nav-item { padding: .45rem .42rem !important; }
-        :is(.nav-settings, .nav-events) { padding-left: .45rem !important; padding-right: .45rem !important; }
+        :is(.nav-social, .nav-settings) { padding-left: .45rem !important; padding-right: .45rem !important; }
       }
   
       /* ---------- The thread ----------
@@ -1476,12 +1471,6 @@
   <!-- /@shared:css -->
 </head>
 <body>
-  <!-- @intro -->
-  <div id="intro" aria-hidden="true">
-    <div class="intro-bg"></div>
-    <svg class="intro-dial" id="idDial" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle id="idK1" cx="16" cy="7" r="2"/><circle id="idK2" cx="8" cy="17" r="2"/></svg>
-  </div>
-  <!-- /@intro -->
   <canvas class="bg" id="bg" aria-hidden="true"></canvas>
   <div class="grain" aria-hidden="true"></div>
   <div class="cursor" id="cursor" aria-hidden="true"><span></span></div>
@@ -1534,15 +1523,13 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item">My albums</a>
-        <a href="groups.html" class="nav-item nav-groups" aria-label="Friend groups"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Groups</span></a>
-        <a href="events.html" class="nav-item nav-events" aria-label="Events"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
+        <a href="events.html" class="nav-item nav-social" aria-label="Social"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Social</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings" aria-current="page"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
       <div class="nav-menu glass" id="navMenu" aria-label="Home page sections">
         <a href="index.html#how-it-works" class="menu-item">How it works</a>
         <a href="index.html#features" class="menu-item">Features</a>
         <a href="index.html#for-hosts" class="menu-item">For hosts</a>
-        <a href="index.html#pricing" class="menu-item">Pricing</a>
         <a href="index.html#faq" class="menu-item">FAQ</a>
       </div>
     </div>
@@ -1569,7 +1556,7 @@
               <div class="s-item">
                 <div class="s-line">
                   <span class="s-avatar" id="avatarNow" aria-hidden="true"></span>
-                  <span class="s-text"><b>Profile photo</b><small id="avatarHint">Shown beside your name in groups, chats and albums</small></span>
+                  <span class="s-text"><b>Profile photo</b><small id="avatarHint">Shown beside your name in groups and albums</small></span>
                   <span class="s-photo-acts">
                     <button class="s-change" type="button" id="avatarPick">Add photo</button>
                     <button class="s-change is-danger" type="button" id="avatarRemove" hidden>Remove</button>
@@ -1641,7 +1628,6 @@
           <section class="s-group" style="--d: .26s" aria-labelledby="g-notify">
             <h2 id="g-notify">Notifications</h2>
             <div class="s-list panel">
-              <div class="s-row" data-row><span class="s-text"><b>Chat messages</b><small>A pop-up and a count on Groups or Events when someone writes in a group or event chat. In the background too, once notifications are allowed below</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Chat messages" data-key="chatNotify"></button><span class="s-state" aria-hidden="true"></span></div>
               <div class="s-row" data-row><span class="s-text"><b>Public events near me</b><small>Tells me when I’m inside a public event’s zone. Needs location</small></span><button class="s-sw" type="button" role="switch" aria-checked="true" aria-label="Public events near me" data-key="nearby"></button><span class="s-state" aria-hidden="true"></span></div>
             </div>
             <p class="s-help">These are saved on this device.</p>
@@ -1663,7 +1649,7 @@
               </div>
               <div class="s-line" data-perm="notifications">
                 <span class="s-perm-ic" aria-hidden="true" data-perm-ic></span>
-                <span class="s-text"><b>Notifications</b><small><span class="s-perm-state" data-state="prompt">Checking…</span> · chat messages and nearby events</small></span>
+                <span class="s-text"><b>Notifications</b><small><span class="s-perm-state" data-state="prompt">Checking…</span> · alerts for public events near you</small></span>
                 <button class="s-change" type="button" data-perm-btn hidden>Allow</button>
               </div>
             </div>
@@ -1933,9 +1919,10 @@
         menu.classList.toggle('is-open', v);
         caret.setAttribute('aria-expanded', v);
       };
-      caret.addEventListener('click', () => setOpen(!open));
+      // A click just after hovering opened it keeps it open (instead of closing it straight away)
+      caret.addEventListener('click', () => { if (open && performance.now() - (caret._hoverAt || 0) < 500) return; setOpen(!open); });
       if (finePointer) for (const zone of [split, menu]) {
-        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') setOpen(true); });
+        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { if (!open) caret._hoverAt = performance.now(); setOpen(true); } });
         zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') timer = setTimeout(() => setOpen(false), 260); });
       }
       document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
@@ -1944,8 +1931,8 @@
 
     // ---- Settings: choices are remembered here; name, email and notifications live in the account ----
     const STORE = 'momento-settings';
-    // Saved on this device: chat pop-ups, and alerts for public events nearby (assets/nearby.js reads it)
-    const DEFAULTS = { chatNotify: true, nearby: true, notify: { photos: true, closing: true, recap: false } };
+    // Saved on this device: alerts for public events nearby (assets/nearby.js reads it)
+    const DEFAULTS = { nearby: true, notify: { photos: true, closing: true, recap: false } };
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) {}
     const S = { ...DEFAULTS, ...saved, notify: { ...DEFAULTS.notify, ...(saved.notify || {}) } };
@@ -2205,7 +2192,7 @@
         try {
           const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
           M.account.set(user);
-          toast('Profile photo updated', 'Your friends will see it in groups and chats.');
+          toast('Profile photo updated', 'Your friends will see it in groups and albums.');
         } catch (err) { toast('Couldn’t update your photo', err.message); }
         finally { avNow.classList.remove('is-busy'); avPick.disabled = false; }
       });
@@ -2226,14 +2213,6 @@
         const ok = await M.permission.ensure('location', { from: nearSw });
         if (!ok) { nearSw.setAttribute('aria-checked', 'false'); set('nearby', false); toast('Public events near me', 'Off: location isn’t allowed'); }
         refreshPerms();
-      });
-      const chatSw = document.querySelector('.s-sw[data-key="chatNotify"]');
-      chatSw.addEventListener('click', async () => {
-        // Turning chat alerts on: offer phone/computer notifications too, if they've never been asked
-        if (chatSw.getAttribute('aria-checked') === 'true' && M.permission && (await M.permission.state('notifications')) === 'prompt') {
-          await M.permission.request('notifications', { from: chatSw });
-          refreshPerms();
-        }
       });
 
       // ---- Permissions, as the browser reports them ----
@@ -2278,8 +2257,8 @@
       const size = (b) => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : b >= 1e3 ? `${(b / 1e3).toFixed(1)} KB` : `${Math.round(b)} bytes`;
       const PARTS = [
         { id: 'cache', name: 'Saved pages and pictures', what: 'Copies the browser keeps so pages and photos open faster', c: '#AFC0F0', clear: 'Clear' },
-        { id: 'alerts', name: 'Notification memory', what: 'Which chat messages and nearby events you’ve already been told about', c: '#C9C0E2', clear: 'Clear', keys: /^momento-(chat-seen|nearby-seen|camera-asked)$/ },
-        { id: 'shortcuts', name: 'Album shortcuts', what: 'Albums and wait-lists remembered on this device for quick access', c: '#C6DEDA', clear: 'Clear', keys: /^momento-(my-albums|removed|waitlist)/ },
+        { id: 'alerts', name: 'Notification memory', what: 'Which nearby events you’ve already been told about', c: '#C9C0E2', clear: 'Clear', keys: /^momento-(nearby-seen|camera-asked)$/ },
+        { id: 'shortcuts', name: 'Album shortcuts', what: 'Albums remembered on this device for quick access', c: '#C6DEDA', clear: 'Clear', keys: /^momento-(my-albums|removed|waitlist)/ },
         { id: 'preview', name: 'Sample albums (local preview)', what: 'The pretend albums used when trying Momento on this computer', c: '#EADCC8', clear: 'Clear', keys: /^momento-dev/ },
         { id: 'choices', name: 'Your choices', what: 'Light or dark, and the switches on this page', c: '#E6CDD6', keep: 'Kept', keys: /^momento-(settings|theme|notify-nearby)$/ },
       ];
@@ -2454,36 +2433,6 @@
     }
     requestAnimationFrame(frame);
   </script>
-  <script>
-    // ---- Intro (once per tab): a dial appears and its two knobs are set to their places, then it shrinks
-    // into the Settings tab in the nav while the groups rise in ----
-    document.addEventListener('DOMContentLoaded', () => window.Momento.intro(async (I) => {
-      const $ = (s) => document.querySelector(s);
-      const dial = $('#idDial'), k1 = $('#idK1'), k2 = $('#idK2'), bg = $('#intro .intro-bg');
-      const OUT = 'cubic-bezier(.2, .8, .2, 1)', SPRING = 'cubic-bezier(.34, 1.4, .64, 1)', GLIDE = 'cubic-bezier(.65, 0, .25, 1)';
-      // The nav shows the icon at phone width and the word otherwise; the dial lands on whichever is there
-      const tab = $('.nav-settings'), icon = $('.nav-settings svg');
-      const target = icon.getBoundingClientRect().width ? icon : tab;
-      I.hold(target);
-
-      await I.play(dial, [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: OUT });
-      // The knobs start on the wrong ends of their tracks and are set where they belong
-      I.play(k1, [{ transform: 'translate(-8px, 0)' }, { transform: 'none' }], { duration: 700, easing: SPRING });
-      await I.play(k2, [{ transform: 'translate(8px, 0)' }, { transform: 'none' }], { duration: 700, delay: 140, easing: SPRING });
-      await I.wait(120);
-
-      // The dial becomes the nav icon and the groups come in
-      I.reveal();
-      const r = target.getBoundingClientRect(), size = Math.min(r.width, r.height);
-      const to = { left: r.left + (r.width - size) / 2, top: r.top + (r.height - size) / 2, width: size, height: size };
-      I.wait(560).then(() => I.play(target, [{ opacity: 0 }, { opacity: 1 }], { duration: 160 }));
-      await Promise.all([
-        I.play(bg, [{ opacity: 1 }, { opacity: 0 }], { duration: 620, delay: 120, easing: 'ease' }),
-        I.play(dial, [{ transform: 'none', opacity: 1 }, { transform: I.flip(dial, to), opacity: 1, offset: .8 }, { transform: I.flip(dial, to), opacity: 0 }], { duration: 720, easing: GLIDE }),
-      ]);
-    }));
-  </script>
-
   <!-- @shared:js (generated block; the same in index.html and albums.html) -->
   <script>
   // Shared by index.html and albums.html: theme, account, account menu.
@@ -2634,7 +2583,7 @@
           <p class="acct-sub">Update your photo, name and email notification preferences.</p>
           <div class="acct-photo">
             <span class="acct-photo-av" aria-hidden="true"></span>
-            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups, chats and albums</small></span>
+            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups and albums</small></span>
             <span class="acct-photo-acts"><button class="acct-photo-btn" type="button" data-photo-pick>Add photo</button><button class="acct-photo-btn is-danger" type="button" data-photo-rm hidden>Remove</button></span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden data-photo-file>
           </div>
@@ -2681,7 +2630,7 @@
         try {
           const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
           Momento.account.set(user);
-          say('Photo updated. Friends see it in groups and chats.');
+          say('Photo updated. Friends see it in groups and albums.');
         } catch (err) { say(err.message, true); }
         finally { photoAv.classList.remove('is-busy'); photoPick.disabled = photoRm.disabled = false; }
       });
@@ -2846,7 +2795,7 @@
       confirmD.querySelector('.acct-ghost').focus();   // the safe choice has focus
     });
 
-    // Asks for one value (an email for the waitlist, say). Resolves the value, or null if cancelled
+    // Asks for one value (an email address, say). Resolves the value, or null if cancelled
     let askD = null, askDone = null;
     Momento.ask = ({ title, body = '', label, type = 'text', value = '', placeholder = '', ok = 'Continue', check, from = null }) => new Promise((resolve) => {
       if (!askD) {
@@ -2973,7 +2922,7 @@
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already, and you can keep talking in the group’s chat. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
         d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
@@ -2999,8 +2948,7 @@
       // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
       const groupField = d.querySelector('.m-group');
       // "Who do you want to share this album with?": one of their friend groups (the album joins that
-      // group, and everyone keeps talking in the group's one chat), or just the people at this event
-      // (event chat starts off; the host can turn it on)
+      // group, and everyone in it sees it), or just the people at this event
       const shareList = groupField.querySelector('.ev-who');
       const shareOption = (value, title, note) => {
         const l = document.createElement('label'), r = document.createElement('input'), b = document.createElement('b'), s = document.createElement('small');
@@ -3011,11 +2959,11 @@
       };
       async function loadGroups(pick) {
         groupField.hidden = true;
-        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code. Event chat starts off, and you can turn it on.'));
+        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code.'));
         shareList.querySelector('input').checked = true;
         let groups = [];
         try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { groups = []; }
-        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it. You keep talking in the group’s chat, so there’s no new chat to follow.`), shareList.lastChild);
+        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it, including people who join the group later.`), shareList.lastChild);
         groupField.hidden = !groups.length;
         const want = pick && groups.some((g) => g.id === pick) ? pick : '';
         const on = [...shareList.querySelectorAll('input')].find((r) => r.value === want);
@@ -3350,6 +3298,20 @@
       setTimeout(() => finish(), 9000);
       Promise.resolve().then(() => run(kit)).then(() => finish(), (e) => { console.error(e); finish(true); });
     };
+
+    // ---- Nav flourish: only home has a page intro. On the other pages the current nav item gives a short
+    // nudge once per tab (the Settings knobs slide into place). Transform only; skipped for reduced motion ----
+    Momento.flourish = () => {
+      const page = document.documentElement.dataset.page;
+      const cur = document.querySelector('.nav > .nav-item[aria-current="page"]');
+      if (!cur || !cur.animate || page === 'home' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      try { if (sessionStorage.getItem('momento-flourish-' + page)) return; sessionStorage.setItem('momento-flourish-' + page, '1'); } catch (e) {}
+      const SPRING = 'cubic-bezier(.34, 1.4, .64, 1)';
+      const knobs = cur.classList.contains('nav-settings') ? [...cur.querySelectorAll('svg circle')] : [];
+      if (knobs.length) knobs.forEach((k, i) => k.animate([{ transform: `translateX(${i ? 3 : -3}px)` }, { transform: 'none' }], { duration: 480, delay: i * 90, easing: SPRING }));
+      else cur.animate([{ transform: 'none' }, { transform: 'translateY(-2px) scale(1.1)', offset: .4 }, { transform: 'none' }], { duration: 380, easing: SPRING });
+    };
+    if (document.documentElement.dataset.page !== 'home') addEventListener('load', () => setTimeout(() => Momento.flourish(), 250), { once: true });
   
     // ---- Site footer: one footer for every page. A page marks it <footer class="site-foot" data-site-foot> ----
     document.querySelectorAll('[data-site-foot]').forEach((foot) => {
@@ -3367,7 +3329,6 @@
               <li><a class="sf-link" href="${P}#how-it-works">How it works</a></li>
               <li><a class="sf-link" href="${P}#features">Features</a></li>
               <li><a class="sf-link" href="${P}#for-hosts">For hosts</a></li>
-              <li><a class="sf-link" href="${P}#pricing">Pricing</a></li>
             </ul>
           </nav>
           <nav class="sf-col" aria-labelledby="sfAlbums">
@@ -3375,8 +3336,7 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
-              <li><a class="sf-link" href="sort.html">Sort photos</a></li>
-              <li><a class="sf-link" href="groups.html">Friend groups</a></li>
+              <li><a class="sf-link" href="events.html#groups">Groups</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
             </ul>
@@ -3384,7 +3344,7 @@
           <nav class="sf-col" aria-labelledby="sfEvents">
             <h2 id="sfEvents">Events</h2>
             <ul>
-              <li><a class="sf-link" href="events.html">Events near you</a></li>
+              <li><a class="sf-link" href="events.html#events">Events near you</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Host a public event</a></li>
               <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>

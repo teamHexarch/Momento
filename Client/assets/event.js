@@ -113,11 +113,6 @@
     .m-share legend { padding: 0; margin-bottom: .5rem; }
     .m-share .ev-who { grid-template-columns: 1fr; }
     .ev-sec[hidden] { display: none; }
-    .ev-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; border-radius: 16px; background: rgba(127, 120, 150, .08); }
-    .ev-switch-row > span { display: grid; gap: .2rem; }
-    .ev-switch-row b { font-size: .92rem; font-weight: 700; color: var(--dusk, #2e2c3a); }
-    .ev-switch-row small { font-size: .8rem; line-height: 1.4; color: var(--slate, #5c596b); }
-    :root[data-theme="dark"] .ev-switch-row b { color: #F2EFF8; }
     .ev-more > summary, .ev-more > summary small { white-space: nowrap; }
     @media (max-width: 480px) { .ev-more > summary small { display: none; } }
     @media (prefers-reduced-motion: reduce) { .ev-more > summary svg { transition: none; } }
@@ -254,9 +249,6 @@
             <label><input type="radio" name="evVisibility" value="public"><b>Public</b><small>Shown on the Events map. Anyone inside the zone can join</small></label>
           </div>
         </div>
-        <div class="ev-sec ev-chat-opt">
-          <div class="ev-switch-row"><span><b id="evChatLabel">Event chat</b><small>Guests in the album can message each other. You can change this later in Settings.</small></span><button class="acct-sw" type="button" role="switch" aria-checked="false" aria-labelledby="evChatLabel" data-ev-chat></button></div>
-        </div>
         <details class="ev-more">
           <summary>Additional settings<small data-more-sum></small>${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</summary>
           <div class="ev-more-body">
@@ -340,18 +332,9 @@
       const picked = form.querySelector('input[name="group"]:checked');
       const grouped = !!picked?.value;
       if (who) who.hidden = grouped;
-      // Albums shared with a friend group talk in the group's own chat, so the event chat there is
-      // only for guests from outside the group. Either way it starts off.
-      const note = box.querySelector('.ev-chat-opt small');
-      if (note) note.textContent = grouped
-        ? `${picked.dataset.name || 'The group'} keeps using its own chat. Turn this on only if people outside the group join: they can see this chat, not the group’s.`
-        : 'Guests in the album can message each other. You can change this later in Settings.';
-      if (grouped) box.querySelector('[data-ev-chat]')?.setAttribute('aria-checked', 'false');
       if (grouped) { const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true; }
     };
     form.addEventListener('change', (e) => { if (e.target.name === 'group') syncWho(); });
-    const chatSw = box.querySelector('[data-ev-chat]');
-    chatSw.addEventListener('click', () => chatSw.setAttribute('aria-checked', String(chatSw.getAttribute('aria-checked') !== 'true')));
     form.addEventListener('reset', () => setTimeout(syncWho));
     syncWho();
     const here = box.querySelector('[data-here]');
@@ -438,7 +421,6 @@
       form.evLeadH.value = '0'; form.evLeadM.value = '30';
       form.evRadius.value = '1';
       const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true;
-      box.querySelector('[data-ev-chat]').setAttribute('aria-checked', 'false');
       box._syncRadius();
       setVenue(null);
       const input = search.querySelector('input'); if (input) input.value = '';
@@ -519,7 +501,6 @@
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
         visibility: !form.group?.value && form.evVisibility?.value === 'public' ? 'public' : 'invite',
-        chatEnabled: box.querySelector('[data-ev-chat]')?.getAttribute('aria-checked') === 'true',
       },
     };
   }

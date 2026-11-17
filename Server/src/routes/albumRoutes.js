@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
@@ -23,6 +23,20 @@ const joinLimit = rateLimit({
 });
 
 export const albumRoutes = Router();
+
+// Before logging in: what an album is, from its code (the code is the secret, so this is capped
+// per visitor: 60 looks per 10 minutes, by account or by IP address)
+const previewLimit = rateLimit({
+  windowMs: 10 * 60000,
+  limit: 60,
+  keyGenerator: (req) => (req.user ? `user:${req.user.id}` : `ip:${ipKeyGenerator(req.ip)}`),
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'That’s a lot of codes. Wait a few minutes, then try again.' },
+});
+albumRoutes.get('/preview/:code', previewLimit, albums.preview);
+
+// Everything else needs an account with a confirmed email
 albumRoutes.use(requireVerified);
 
 albumRoutes.get('/', albums.list);
@@ -36,18 +50,9 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 albumRoutes.post('/:id/photos', albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', albums.download);
-// Sort photos: hide photos from your own view (everyone else still sees them)
+// Hide photos from your own view (everyone else still sees them)
 albumRoutes.post('/:id/hidden', albums.setHidden);
+// The bookmark: saved albums show under Liked
+albumRoutes.post('/:id/save', albums.save);
 
-// Host actions that send email: invites are capped at 20 an hour per account (reminders are
-// already limited to one a day per album in the controller)
-const inviteLimit = rateLimit({
-  windowMs: 60 * 60000,
-  limit: 20,
-  keyGenerator: (req) => `user:${req.user.id}`,
-  standardHeaders: 'draft-8',
-  legacyHeaders: false,
-  message: { error: 'That’s a lot of invites at once. Wait a little before sending more.' },
-});
 albumRoutes.post('/:id/remind', albums.remind);
-albumRoutes.post('/:id/invites', inviteLimit, albums.invite);

@@ -6,6 +6,7 @@ import * as photos from '../controllers/photoController.js';
 export const photoRoutes = Router();
 photoRoutes.use(requireVerified);
 
+photoRoutes.get('/liked', photos.liked);
 photoRoutes.get('/:id', photos.file);
 photoRoutes.get('/:id/download', photos.download);
 photoRoutes.delete('/:id', photos.remove);
@@ -20,7 +21,5 @@ const socialLimit = rateLimit({
   message: { error: 'That’s a lot at once. Wait a few minutes, then try again.' },
 });
 photoRoutes.post('/:id/like', socialLimit, photos.like);
-photoRoutes.get('/:id/comments', photos.comments);
-photoRoutes.post('/:id/comments', socialLimit, photos.addComment);
-photoRoutes.delete('/:id/comments/:commentId', photos.removeComment);
-photoRoutes.post('/:id/comments/:commentId/like', socialLimit, photos.likeComment);
+photoRoutes.post('/:id/reaction', socialLimit, photos.react);
+photoRoutes.get('/:id/reactions', photos.reactions);

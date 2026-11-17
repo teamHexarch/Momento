@@ -1,9 +1,11 @@
 // Throw one of these from a route and the error handler turns it into { error } with that status.
 // `code` (optional) is a short word the pages can act on, such as 'unverified'.
+// `extra` (optional) adds fields to the response, such as { action: 'join' }.
 export class HttpError extends Error {
-  constructor(status, message, code) {
+  constructor(status, message, code, extra) {
     super(message);
     this.status = status;
     this.code = code;
+    this.extra = extra;
   }
 }

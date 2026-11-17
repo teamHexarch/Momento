@@ -20,6 +20,8 @@ const userSchema = new mongoose.Schema({
   // The album code from the invite link they signed up through. Joined (and cleared) once they
   // confirm their email, so the confirm link takes them into the album on any device
   pendingJoin: { type: String, maxlength: 7, select: false },
+  // Albums they saved (the bookmark on My albums; shown under Liked)
+  savedAlbums: { type: [mongoose.Schema.Types.ObjectId], default: [] },
   // One record per login. Never apply a TTL index here: that would delete users.
   deviceVerification: {
     type: new mongoose.Schema({ challenge: String, codeHash: String, ticketHash: String, expiresAt: Date, sentAt: Date, tries: Number }, { _id: false }),

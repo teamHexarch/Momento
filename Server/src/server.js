@@ -3,6 +3,7 @@ import { connectDb } from './config/database.js';
 import { isEmailConfigured, emailProviderName, emailFrom } from './services/emailService.js';
 import { initStorage, storageName } from './services/storageService.js';
 import { app } from './app.js';
+import { purgeExpired } from './controllers/trashController.js';
 
 await connectDb();
 await initStorage();
@@ -13,4 +14,9 @@ if (storageName === 'disk' && config.isProduction) {
 }
 if (isEmailConfigured()) console.log(`Email: ${emailProviderName}, from ${emailFrom}`);
 else console.warn('Email isn’t set up (EMAIL_FROM + the AWS keys); confirm links will be printed here instead.');
+const emptyBin = () => purgeExpired()
+  .then((n) => n && console.log(`Recently deleted: removed ${n} photo(s) older than 30 days`))
+  .catch((err) => console.error(`Emptying the bin failed: ${err.message}`));
+setTimeout(emptyBin, 60000).unref();
+setInterval(emptyBin, 6 * 3600000).unref();
 app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));

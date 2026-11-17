@@ -35,10 +35,8 @@ const albumSchema = new mongoose.Schema({
   joiningOpen: { type: Boolean, default: true },
   joinDeadline: Date,
   locationRequired: { type: Boolean, default: true },
-  chatEnabled: { type: Boolean, default: false },
   requests: [{ _id: false, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: { type: String, enum: ['pending', 'approving', 'declined'] }, name: String }],
-  messages: { type: [{ name: String, body: String, at: Date }], select: false, default: undefined },
   // When a host last emailed guests who haven't added photos (one reminder a day per album)
   lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.

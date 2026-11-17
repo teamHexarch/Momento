@@ -3,6 +3,7 @@
 <head>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
+  <script src="assets/pickers.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
   <script src="assets/qr.js" defer></script>
@@ -36,7 +37,7 @@
     } catch (e) {}
   
     // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
-    // links into a section (#pricing) and when the page is reopened part-way down. Until it ends, a
+    // links into a section (#faq) and when the page is reopened part-way down. Until it ends, a
     // veil (#intro) covers the page; if the script that runs it never loads, the veil is lifted anyway
     try {
       const page = root.dataset.page, seen = sessionStorage.getItem('momento-intro-' + page);
@@ -57,7 +58,7 @@
   <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* Palette from the first Momento page; layout, type and logo from the second */
     :root {
@@ -468,7 +469,26 @@
     /* translate and rotate add to the script's transform, so the bob and the pointer-dodge combine */
     @keyframes floater-bob { from { translate: 0 -10px; rotate: -4deg; } to { translate: 0 10px; rotate: 4deg; } }
     @media (prefers-reduced-motion: reduce) { .floater { animation: none; } }
-    .floater img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 1px; background: var(--fog); filter: saturate(.85); }
+    .floater img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 1px; background: linear-gradient(160deg, #E9E3F4, #F3E6EC 55%, #E2EEEC); filter: saturate(.9); }
+    /* A handwritten caption on the print's white strip */
+    .floater .cap {
+      position: absolute; left: 4px; right: 4px; bottom: 1px; overflow: hidden; color: #4F4A61; text-align: center; white-space: nowrap; text-overflow: ellipsis;
+      font: 600 calc(var(--size) * .135)/21px 'Caveat', 'Segoe Print', 'Bradley Hand', cursive; letter-spacing: .01em;
+    }
+
+    /* The QR card's live pill: the demo event is on, and photos keep arriving */
+    .qr-live {
+      position: absolute; left: 50%; top: 0; z-index: 2; display: inline-flex; align-items: center; gap: .45rem; padding: .38rem .8rem .38rem .65rem;
+      translate: -50% -50%; border-radius: 100px; background: #fff; color: #2E2C3A; font-size: .78rem; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums;
+      box-shadow: 0 0 0 1px rgba(46, 44, 58, .06), 0 8px 20px -8px rgba(60, 50, 90, .35);
+    }
+    .qr-live i { position: relative; width: .5rem; height: .5rem; border-radius: 50%; background: #E0476B; }
+    .qr-live i::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #E0476B; animation: qr-live-ping 1.8s ease-out infinite; }
+    @keyframes qr-live-ping { from { transform: scale(1); opacity: .6; } to { transform: scale(2.8); opacity: 0; } }
+    .qr-live b { font-weight: 750; }
+    @media (prefers-reduced-motion: reduce) { .qr-live i::after { animation: none; } }
+    /* A soft lilac glow lifts the card off the background */
+    .qr-card { box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255,255,255,.75), 0 30px 60px -24px rgba(60,62,100,.38), 0 0 90px -20px rgba(170,155,235,.65); }
 
     /* ---------- The album ---------- */
     .album {
@@ -670,7 +690,7 @@
     /* How it works */
     /* Scrolls like any other section; the steps advance with the wheel while the pointer is over the panel */
     .hiw { position: relative; z-index: 3; }
-    .hiw-sticky { display: grid; place-items: center; padding: 14vh 4% 2rem; box-sizing: border-box; }
+    .hiw-sticky { display: grid; place-items: center; padding: 9vh 4% 2rem; box-sizing: border-box; }
     .hiw-panel {
       display: grid; grid-template-columns: 1fr auto; align-items: center; gap: clamp(2rem, 5vw, 5rem);
       width: min(1180px, 100%); height: clamp(560px, 82vh, 720px);
@@ -873,7 +893,7 @@
     .app-saved { align-self: center; padding: 7px 14px; border-radius: 16px; background: var(--dusk); color: var(--paper); font-weight: 600; font-size: 11.5px; }
 
     /* Features */
-    .feat { display: flex; flex-direction: column; align-items: center; gap: 2rem; padding: 16vh 4% 4vh; }
+    .feat { display: flex; flex-direction: column; align-items: center; gap: 1.6rem; padding: 9vh 4% 4vh; }
     /* Section divider: the name sits in a small pane of liquid glass (the `glass` class gives it
        the same fill and rim as the nav bar, in both themes), then a rule draws across */
     .divider { display: flex; align-items: center; gap: 1.4rem; width: min(1180px, 100%); margin-bottom: .4rem; }
@@ -882,9 +902,9 @@
       color: var(--dusk); font-size: 1.15rem; font-weight: 650; letter-spacing: -.025em;
     }
     .divider-line { flex: 1; height: 1.5px; border-radius: 2px; background: linear-gradient(to right, var(--copper), rgba(154,96,61,.1)); transform-origin: left center; transform: scaleX(0); }
-    .zone-panel, .host-panel { display: grid; grid-template-columns: 1fr minmax(0, 1.05fr); align-items: center; gap: clamp(2rem, 5vw, 4.5rem); width: min(1180px, 100%); padding: clamp(2rem, 4vw, 3.75rem); box-sizing: border-box; }
-    .host-panel { grid-template-columns: 1fr minmax(0, .9fr); }
-    .zone-ctrl { margin-top: 2rem; padding: 1.1rem 1.25rem 1.2rem; border-radius: 22px; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 1px rgba(46,44,58,.06); }
+    .zone-panel, .host-panel { display: grid; grid-template-columns: 1fr minmax(0, 1.05fr); align-items: center; gap: clamp(2rem, 5vw, 4.5rem); width: min(1180px, 100%); padding: clamp(1.75rem, 3.4vw, 3rem); box-sizing: border-box; }
+    .host-panel { grid-template-columns: 1fr minmax(0, .9fr); scroll-margin-top: 90px; }
+    .zone-ctrl { margin-top: 1.6rem; padding: 1.1rem 1.25rem 1.2rem; border-radius: 22px; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 1px rgba(46,44,58,.06); }
     .zone-ctrl-top { display: flex; justify-content: space-between; align-items: baseline; }
     .zone-ctrl label { font-weight: 600; }
     .zone-ctrl output { font-size: 1.5rem; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
@@ -897,9 +917,8 @@
     .zone-ctrl input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 6px; }
     .zone-count { margin: 0; color: var(--slate); }
     .zone-count b { color: var(--dusk); font-size: 1.1rem; }
-    .zone-note { margin: 1.2rem 0 0; max-width: 28rem; font-size: .92rem; line-height: 1.6; color: var(--slate); }
     .zone-map {
-      --r: 74px; position: relative; aspect-ratio: 1; width: 100%; max-width: 460px; justify-self: center; overflow: hidden; border-radius: 32px;
+      --r: 74px; position: relative; aspect-ratio: 1; width: 100%; max-width: 400px; justify-self: center; overflow: hidden; border-radius: 32px;
       background: var(--fog); box-shadow: inset 0 0 0 1px rgba(46,44,58,.06), 0 20px 40px -20px rgba(46,44,58,.35);
     }
     .zone-streets { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -918,8 +937,8 @@
     .guest small { position: absolute; left: 50%; top: calc(100% + 6px); translate: -50% 0; padding: 1px 6px; border-radius: 7px; background: #fff; font-size: 10px; font-weight: 700; white-space: nowrap; color: var(--copper); opacity: 0; transition: opacity .3s ease; }
     .guest:not(.is-in) small { opacity: 1; }
 
-    .feat-list { display: grid; grid-template-columns: repeat(4, 1fr); width: min(1180px, 100%); padding: .5rem; box-sizing: border-box; }
-    .feat-item { padding: 2rem 1.75rem 2.1rem; }
+    .feat-list { display: grid; grid-template-columns: repeat(3, 1fr); width: min(1180px, 100%); padding: .5rem; box-sizing: border-box; }
+    .feat-item { padding: 1.75rem 1.75rem 1.85rem; }
     .feat-item + .feat-item { box-shadow: inset 1px 0 0 rgba(46,44,58,.08); }
     .feat-item svg { width: 2.6rem; height: 2.6rem; padding: .55rem; box-sizing: border-box; border-radius: 14px; background: linear-gradient(var(--lavender), var(--blush)); color: var(--dusk); }
     .feat-item h3 { margin: 1.1rem 0 0; font-size: 1.08rem; font-weight: 700; letter-spacing: -.02em; }
@@ -938,9 +957,8 @@
     .sw[aria-checked="true"]::after { translate: 1.25rem 0; }
     .sw:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
     .live { overflow: hidden; border-radius: 28px; background: #fff; box-shadow: 0 2px 6px rgba(46,44,58,.06), 0 30px 60px -24px rgba(46,44,58,.4); rotate: 1.5deg; }
-    .live-cover { position: relative; height: 150px; overflow: hidden; }
-    .live-cover img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.85); }
-    .live-cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(46,44,58,.35), transparent 60%); }
+    .live-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+    .live-head .live-pill { position: static; background: var(--paper); }
     .live-pill { position: absolute; top: .9rem; left: .9rem; z-index: 1; display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .7rem; border-radius: 100px; background: rgba(255,255,255,.92); font-size: .78rem; font-weight: 700; }
     .live-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--copper); animation: live 1.8s ease-out infinite; }
     @keyframes live { from { box-shadow: 0 0 0 0 rgba(154,96,61,.6); } to { box-shadow: 0 0 0 8px rgba(154,96,61,0); } }
@@ -959,20 +977,6 @@
     .live-code { display: flex; justify-content: space-between; align-items: center; margin-top: 1.1rem; padding: .7rem .9rem; border-radius: 14px; background: var(--dusk); color: var(--paper); font-size: .85rem; }
     .live-code b { letter-spacing: .18em; }
 
-    /* Pricing */
-    .price-panel { width: min(1180px, 100%); padding: clamp(2rem, 4vw, 3.75rem); box-sizing: border-box; }
-    .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 2.2rem; }
-    .plan { display: flex; flex-direction: column; padding: 1.8rem 1.9rem 2rem; border-radius: 26px; background: rgba(255,255,255,.75); box-shadow: inset 0 0 0 1px rgba(46,44,58,.06); }
-    .plan-plus {
-      background: radial-gradient(80% 60% at 85% 10%, rgba(255,255,255,.5), transparent 60%), linear-gradient(165deg, #C9C0E2 0%, #E6CDD6 52%, #A6CCC8 100%);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
-    }
-    .plan h3 { margin: 0; font-size: 1.05rem; font-weight: 650; }
-    .plan-price { margin: .5rem 0 0; font-size: clamp(2.2rem, 3.6vw, 3rem); font-weight: 700; letter-spacing: -.04em; }
-    .plan ul { list-style: none; margin: 1.3rem 0 1.8rem; padding: 0; display: flex; flex-direction: column; gap: .65rem; }
-    .plan li { position: relative; padding-left: 1.6rem; line-height: 1.45; }
-    .plan li::before { content: ""; position: absolute; left: .15rem; top: .35em; width: .7rem; height: .38rem; border-left: 2px solid var(--copper); border-bottom: 2px solid var(--copper); rotate: -45deg; }
-    .plan .btn { margin-top: auto; align-self: flex-start; }
 
     /* FAQ */
     .faq-panel { width: min(860px, 100%); padding: clamp(2rem, 4vw, 3.5rem); box-sizing: border-box; }
@@ -993,14 +997,11 @@
 
 
     @media (max-width: 900px) {
-      .host-panel, .plans, .zone-panel { grid-template-columns: 1fr; }
+      .host-panel, .zone-panel { grid-template-columns: 1fr; }
       .hiw-panel { grid-template-columns: 1fr; height: auto; }
       /* Stacked: the phone sits under the steps, smaller, and still swipes */
       .phone-side { order: 2; }
       .hiw-copy .grow { display: none; }
-      .feat-list { grid-template-columns: 1fr 1fr; }
-      .feat-item:nth-child(3) { box-shadow: inset 0 1px 0 rgba(46,44,58,.08); }
-      .feat-item:nth-child(4) { box-shadow: inset 1px 0 0 rgba(46,44,58,.08), inset 0 1px 0 rgba(46,44,58,.08); }
     }
 
     /* ---------- Liquid glass ----------
@@ -1008,7 +1009,7 @@
        light (bright top-left and bottom-right, a lavender tint through the middle), a soft
        inner glow and a halo of light around it. No backdrop blur, so it stays cheap over
        the moving silk. */
-    .glass, .panel, .qr-card, .plan, .zone-ctrl {
+    .glass, .panel, .qr-card, .zone-ctrl {
       border: 1.5px solid transparent;
       background:
         linear-gradient(135deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.4) 46%, rgba(244,242,252,.58) 100%) padding-box,
@@ -1023,13 +1024,7 @@
     }
     .panel { position: relative; --mx: 50%; --my: 0px; --shine: 0; }
     .qr-card { --radius: 30px; --mx: 50%; --my: 0px; --shine: 0; }
-    .zone-ctrl, .plan { box-shadow: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 24px rgba(255,255,255,.25), 0 0 30px -10px rgba(188,178,236,.5), 0 14px 30px -20px rgba(60,50,90,.3); }
-    .plan-plus {
-      background:
-        radial-gradient(80% 60% at 85% 10%, rgba(255,255,255,.5), transparent 60%) padding-box,
-        linear-gradient(165deg, rgba(201,192,226,.85) 0%, rgba(230,205,214,.8) 52%, rgba(166,204,200,.85) 100%) padding-box,
-        linear-gradient(140deg, #fff, rgba(255,255,255,.3) 40%, rgba(255,255,255,.9)) border-box;
-    }
+    .zone-ctrl { box-shadow: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 24px rgba(255,255,255,.25), 0 0 30px -10px rgba(188,178,236,.5), 0 14px 30px -20px rgba(60,50,90,.3); }
     .glass { box-shadow: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 18px rgba(255,255,255,.25), 0 0 26px -6px rgba(188,178,236,.55), 0 12px 30px -14px rgba(60,50,90,.3); }
     /* The pointer-following rim light also plays across the big panels and the QR card */
     .panel::after, .qr-card::after {
@@ -1324,7 +1319,7 @@
       }
   
       /* Glass: a deep, slightly lifted fill with a rim that catches the light, instead of a bright one */
-      :root[data-theme="dark"] :is(.glass, .panel, .plan, .zone-ctrl, .nav-menu) {
+      :root[data-theme="dark"] :is(.glass, .panel, .zone-ctrl, .nav-menu) {
         background:
           linear-gradient(135deg, rgba(58, 52, 88, .5) 0%, rgba(24, 22, 34, .7) 46%, rgba(16, 15, 24, .8) 100%) padding-box,
           linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box;
@@ -1336,13 +1331,7 @@
           0 26px 60px -30px rgba(0, 0, 0, .75);
       }
       :root[data-theme="dark"] .glass { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .15), inset 0 0 16px rgba(150, 140, 210, .06), 0 0 24px -8px rgba(120, 100, 190, .3), 0 12px 30px -14px rgba(0, 0, 0, .7); }
-      :root[data-theme="dark"] :is(.zone-ctrl, .plan) { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
-      :root[data-theme="dark"] .plan-plus {
-        background:
-          radial-gradient(80% 60% at 85% 10%, rgba(255, 255, 255, .1), transparent 60%) padding-box,
-          linear-gradient(165deg, rgba(110, 96, 200, .72) 0%, rgba(84, 72, 170, .62) 52%, rgba(64, 92, 176, .62) 100%) padding-box,
-          linear-gradient(140deg, rgba(220, 212, 255, .6), rgba(255, 255, 255, .1) 40%, rgba(220, 212, 255, .5)) border-box;
-      }
+      :root[data-theme="dark"] .zone-ctrl { box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12), inset 0 0 24px rgba(150, 140, 210, .05), 0 14px 30px -20px rgba(0, 0, 0, .7); }
       :root[data-theme="dark"] .brand::before { background: radial-gradient(closest-side, rgba(21, 20, 28, .95), rgba(21, 20, 28, .7) 55%, rgba(21, 20, 28, 0)); }
       :root[data-theme="dark"] .header::before { background: linear-gradient(to bottom, rgba(21, 20, 28, .94) 0%, rgba(21, 20, 28, .8) 55%, rgba(21, 20, 28, 0)); }
   
@@ -1432,13 +1421,13 @@
         :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
       }
   
-      /* ---------- Events and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
-      :is(.nav-settings, .nav-events, .nav-groups) { display: inline-flex; align-items: center; justify-content: center; }
-      :is(.nav-settings, .nav-events, .nav-groups) svg { display: none; }
+      /* ---------- Social and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
+      :is(.nav-social, .nav-settings) { display: inline-flex; align-items: center; justify-content: center; }
+      :is(.nav-social, .nav-settings) svg { display: none; }
       @media (max-width: 520px) {
-        :is(.nav-settings, .nav-events, .nav-groups) .nav-label { display: none; }
-        :is(.nav-settings, .nav-events, .nav-groups) svg { display: block; }
-        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .5rem; padding-right: .5rem; }
+        :is(.nav-social, .nav-settings) .nav-label { display: none; }
+        :is(.nav-social, .nav-settings) svg { display: block; }
+        :is(.nav-social, .nav-settings) { padding-left: .5rem; padding-right: .5rem; }
       }
       /* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
          logo, the menu and your account button all fit on one line */
@@ -1448,12 +1437,12 @@
         .nav { gap: 0 !important; padding: .22rem !important; }
         .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
         .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
-        :is(.nav-settings, .nav-events, .nav-groups) { padding-left: .46rem !important; padding-right: .46rem !important; }
-        :is(.nav-settings, .nav-events, .nav-groups) svg { width: 16px; height: 16px; }
+        :is(.nav-social, .nav-settings) { padding-left: .46rem !important; padding-right: .46rem !important; }
+        :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
       }
       @media (max-width: 340px) {
         .nav-item { padding: .45rem .42rem !important; }
-        :is(.nav-settings, .nav-events) { padding-left: .45rem !important; padding-right: .45rem !important; }
+        :is(.nav-social, .nav-settings) { padding-left: .45rem !important; padding-right: .45rem !important; }
       }
   
       /* ---------- The thread ----------
@@ -2205,16 +2194,13 @@
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of this page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
         <a href="albums.html" class="nav-item">My albums</a>
-        <a href="groups.html" class="nav-item nav-groups" aria-label="Friend groups"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Groups</span></a>
-        <a href="events.html" class="nav-item nav-events" aria-label="Events"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span class="nav-label">Events</span></a>
+        <a href="events.html" class="nav-item nav-social" aria-label="Social"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Social</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
       <div class="nav-menu glass" id="navMenu" aria-label="Sections on this page">
         <span class="menu-pill" aria-hidden="true"></span>
         <a href="#how-it-works" class="menu-item">How it works</a>
         <a href="#features" class="menu-item">Features</a>
-        <a href="#for-hosts" class="menu-item">For hosts</a>
-        <a href="#pricing" class="menu-item">Pricing</a>
         <a href="#faq" class="menu-item">FAQ</a>
         <span class="menu-hint">Hold and drag down the list to glide through the page</span>
       </div>
@@ -2294,6 +2280,7 @@
 
         <!-- The QR code a guest would scan at the event; scanning brings out the album -->
         <div class="qr-card" id="qrCard">
+          <span class="qr-live" aria-hidden="true"><i></i>Live · <b id="qrLiveN">248</b> photos</span>
           <div class="qr-event">Scan to join</div>
           <div class="qr-title">Amira &amp; Joel’s wedding</div>
           <div class="qr-frame">
@@ -2331,31 +2318,31 @@
               <li class="step is-on"><button type="button" data-i="0">
                 <span class="step-no">01</span>
                 <span class="step-body"><b>Create the event</b>
-                  <span class="step-more"><span>Name it, drag a sharing zone around the venue, and choose where the photos land: Google Drive, iCloud, Dropbox or OneDrive.</span></span>
+                  <span class="step-more"><span>Name it, drag a sharing zone around the venue, and choose where the photos are saved.</span></span>
                   <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="1">
                 <span class="step-no">02</span>
                 <span class="step-body"><b>Put the code out</b>
-                  <span class="step-more"><span>Momento makes a QR code and a six-letter code. Print it for the tables, put it on the screen, or send the link round.</span></span>
+                  <span class="step-more"><span>Momento makes a QR code and a six-letter code. Print it, show it on a screen, or send the link.</span></span>
                   <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="2">
                 <span class="step-no">03</span>
                 <span class="step-body"><b>Guests scan and join</b>
-                  <span class="step-more"><span>One scan, no sign-up. Momento checks each guest is inside the zone, so the album stays with the people who were there.</span></span>
+                  <span class="step-more"><span>One scan, no sign-up. Only guests inside the zone can join.</span></span>
                   <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="3">
                 <span class="step-no">04</span>
                 <span class="step-body"><b>Everyone shares</b>
-                  <span class="step-more"><span>Guests share straight from their Photos app. Camera files go first, and on mobile data uploads can wait for Wi-Fi.</span></span>
+                  <span class="step-more"><span>Guests share straight from their Photos app, from phones and cameras alike.</span></span>
                   <span class="step-timer"></span>
                 </span></button></li>
               <li class="step"><button type="button" data-i="4">
                 <span class="step-no">05</span>
                 <span class="step-body"><b>It all lands in one album</b>
-                  <span class="step-more"><span>Full quality, grouped by camera and phone, saved in the cloud you chose. Yours to share, print or relive.</span></span>
+                  <span class="step-more"><span>Full quality, grouped by camera and phone, saved to your cloud. Yours to share, print or relive.</span></span>
                   <span class="step-timer"></span>
                 </span></button></li>
             </ol>
@@ -2465,7 +2452,6 @@
             <input type="range" id="zoneR" min="0" max="100" value="40">
             <p class="zone-count"><b id="zoneIn">4</b> of <span id="zoneAll">9</span> guests can join</p>
           </div>
-          <p class="zone-note">Out of range? Momento tells guests how far to move, and lets them know when they’re close enough. Momento Plus unlocks bigger zones.</p>
         </div>
         <div class="zone-map" id="zoneMap" aria-hidden="true">
           <svg class="zone-streets" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice">
@@ -2484,31 +2470,23 @@
       <div class="panel feat-list rise-in">
         <div class="feat-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
-          <h3>Cameras and phones, together</h3>
-          <p>Sony ARW, Canon CR3, iPhone HEIC and ProRAW all land as untouched originals.</p>
+          <h3>Every camera welcome</h3>
+          <p>Sony ARW, Canon CR3, iPhone HEIC and ProRAW all land as untouched originals, from every phone and camera at the event.</p>
         </div>
         <div class="feat-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg>
           <h3>Uploads that behave</h3>
-          <p>Camera files go first. On mobile data uploads can wait for Wi-Fi, and offline shares pick up on their own.</p>
+          <p>Camera files go first. On mobile data, uploads can wait for Wi-Fi, and offline shares pick up on their own.</p>
         </div>
         <div class="feat-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.5 9.6 4.5 4.5 0 0 0 7 18.5Z"/><path d="m9.5 13.5 1.8 1.8 3.4-3.6"/></svg>
           <h3>Your cloud, your copy</h3>
           <p>Photos save to Google Drive, iCloud, Dropbox or OneDrive. Nothing gets locked inside Momento.</p>
         </div>
-        <div class="feat-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3.5"/><circle cx="9" cy="9.5" r="1.8"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5 5"/></svg>
-          <h3>Sorted for you</h3>
-          <p>Each file’s camera data groups the album by device. Filter by phones, cameras or videos.</p>
-        </div>
       </div>
-    </section>
 
-    <!-- For hosts -->
-    <section class="feat" id="for-hosts">
-      <div class="divider rise-in"><span class="divider-label glass">For hosts</span><span class="divider-line" aria-hidden="true"></span></div>
-      <div class="panel host-panel rise-in">
+      <!-- For hosts: the host's side of the same section -->
+      <div class="panel host-panel rise-in" id="for-hosts">
         <div class="host-copy">
           <h2 class="section-title ink" data-text="Set it up once,&#10;enjoy the night">Set it up once,<br>enjoy the night</h2>
           <p class="section-lede">Create the event before the doors open. While everyone celebrates, you can watch the album fill in real time.</p>
@@ -2523,20 +2501,18 @@
               <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Allow videos"></button>
             </li>
             <li>
-              <span><b>Keep originals</b><small>RAW and HEIC files stay untouched</small></span>
+              <span><b>Keep originals</b><small>Every upload stays exactly as it was shot</small></span>
               <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Keep originals"></button>
             </li>
           </ul>
         </div>
 
         <div class="live" id="live" aria-hidden="true">
-          <div class="live-cover">
-            <img data-p="7" data-w="800" data-h="300" alt="">
-            <span class="live-pill"><i></i>Live</span>
-          </div>
           <div class="live-body">
-            <b class="live-name">Rooftop Birthday</b>
-            <small class="live-sub">Sharing zone 150 m, saving to Google Drive</small>
+            <div class="live-head">
+              <b class="live-name">Rooftop Birthday</b>
+              <span class="live-pill"><i></i>Live</span>
+            </div>
             <div class="live-stats">
               <div><b data-count="48">0</b><small>Guests</small></div>
               <div><b data-count="312">0</b><small>Photos</small></div>
@@ -2550,39 +2526,6 @@
               </div>
             </div>
             <div class="live-code"><span>Event code</span><b>RFT829</b></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Pricing (placeholder plans) -->
-    <section class="feat" id="pricing">
-      <div class="divider rise-in"><span class="divider-label glass">Pricing</span><span class="divider-line" aria-hidden="true"></span></div>
-      <div class="panel price-panel rise-in">
-        <h2 class="section-title ink" data-text="Free to start">Free to start</h2>
-        <p class="section-lede">Every event gets the full album. Momento Plus is for bigger venues.</p>
-        <span class="grow"></span>
-        <div class="plans">
-          <div class="plan">
-            <h3>Free</h3>
-            <p class="plan-price">$0</p>
-            <ul>
-              <li>Sharing zones up to 1 km</li>
-              <li>Full-quality photos and videos</li>
-              <li>Saves to Google Drive, iCloud, Dropbox or OneDrive</li>
-              <li>Albums grouped by camera and phone</li>
-            </ul>
-            <button class="btn btn-dark" type="button" data-create>Create an album</button>
-          </div>
-          <div class="plan plan-plus">
-            <h3>Momento Plus</h3>
-            <p class="plan-price">Coming soon</p>
-            <ul>
-              <li>Everything in Free</li>
-              <li>Bigger sharing zones for festivals and venues</li>
-              <li>More to come</li>
-            </ul>
-            <button class="btn btn-light" type="button" id="waitlist">Join the waitlist</button>
           </div>
         </div>
       </div>
@@ -2890,8 +2833,8 @@
                 { p: 2, x: 58, y: 46, w: 36, r: '3/4', rot: -4, mount: 'polaroid', caption: 'The first look' }] },
       },
       {
-        left: { type: 'text', no: '02', title: 'Scan to join',
-                body: 'Guests scan a code at the event and add photos straight from their camera roll. No sign-up needed.',
+        left: { type: 'text', no: '02', title: 'Your people, your groups',
+                body: 'Make a group of the people you see most, and share an album with all of them at once.',
                 photos: [{ p: 1, x: 50, y: 52, w: 34, r: '3/4', rot: 4, mount: 'polaroid', caption: 'One more shot' }] },
         right: { type: 'photos', photos: [
                 { p: 7, x: 6, y: 5, w: 58, r: '4/3', rot: -2, mount: 'corners', caption: 'Waiting for the toast' },
@@ -2900,19 +2843,19 @@
                 { p: 11, x: 58, y: 55, w: 34, r: '1/1', rot: -5, mount: 'corners', caption: 'The walk home' }] },
       },
       {
-        left: { type: 'text', no: '03', title: 'Photos flow in',
-                body: 'Uploads arrive in full quality and land in the album as they happen, from cameras and phones alike.',
+        left: { type: 'text', no: '03', title: 'Events near you',
+                body: 'See public events around you, and get a heads-up when you walk into one’s sharing zone.',
                 photos: [{ p: 6, x: 14, y: 55, w: 62, r: '4/3', rot: -2, mount: 'corners', caption: 'The walk to the falls' }] },
         right: { type: 'photos', photos: [
                 { p: 10, x: 6, y: 6, w: 46, r: '3/4', rot: -3, mount: 'polaroid', caption: 'Made it to the top' },
                 { p: 12, x: 48, y: 38, w: 46, r: '3/4', rot: 4, mount: 'polaroid', caption: 'Wrapped up for later' }] },
       },
       {
-        left: { type: 'text', no: '04', title: 'Keep it forever',
-                body: 'Your album saves to the storage you already use, ready to share, print or relive.',
+        left: { type: 'text', no: '04', title: 'Keep only the best',
+                body: 'Swipe through everyone’s photos. Keep the good ones and hide the rest from your own view.',
                 photos: [{ p: 5, x: 12, y: 56, w: 60, r: '4/3', rot: 3, mount: 'tape', caption: 'The venue, from the hill' }] },
         right: { type: 'cta', title: 'Want to see how it works?',
-                 body: 'Scan a code, share your shots, and the album builds itself. Here’s the whole thing, step by step.',
+                 body: 'Create an event, put the code out, and the album builds itself. Here’s the whole thing, step by step.',
                  button: 'See how it works', href: '#how-it-works',
                  photos: [{ p: 2, x: 50, y: 56, w: 34, r: '3/4', rot: -4, mount: 'polaroid', caption: 'Your shot is next' }] },
       },
@@ -3003,23 +2946,50 @@
     rings.style.transform = `translateZ(${(n + 3) * STEP}px)`;
     album.append(board, lastPage, edge, ...leaves, rings);
 
-    // Floating photos around the QR card: spread evenly on an ellipse around it, kept clear of the
-    // headline. They dodge the pointer and scatter as the album opens. Signed in, they become photos
-    // from your own albums (see the end of this script); otherwise sample photos.
+    // Floating photos around the QR card: mirrored pairs, so there are always as many on the left as on the
+    // right, kept clear of the headline, the card, the header and the edges of the screen (with room for
+    // their bob and tilt, so none is ever cut off). They dodge the pointer and scatter as the album opens.
+    // Signed in, they become photos from your own albums (see the end of this script); otherwise samples.
+    // Your own photos from earlier in this tab (saved at the end of this script) show straight away, so a
+    // signed-in person never sees the stock ones first. Kept in sessionStorage, the same as the account.
+    const HERO_KEY = 'momento-hero-prints';
+    let HERO_MINE = [];
+    try {
+      if (sessionStorage.getItem('momento-account')) {
+        HERO_MINE = JSON.parse(sessionStorage.getItem(HERO_KEY) || '[]').filter((u) => typeof u === 'string' && /^https?:\/\//.test(u) && !/["<>\s]/.test(u));
+      }
+    } catch (e) {}
     const FLOAT_COUNT = vw > 900 ? 10 : 6;
-    const SIZES = [108, 88, 118, 94, 112, 82, 102, 90, 116, 86], ROTS = [-7, 6, -4, 8, -9, 5, -6, 7, -3, 9];
+    const PAIR_SIZES = [112, 98, 118, 92, 106], ROTS = [-7, 6, -4, 8, -9];
+    const CAPTIONS = ['first dance', 'golden hour', 'the toast', 'cake!', 'sparklers', 'the vows', 'best table', 'late night', 'the crew', 'confetti'];
     const floaters = Array.from({ length: FLOAT_COUNT }, (_, i) => {
-      const f = { p: i % PICSUM.length, x: 50, y: 50, size: SIZES[i % SIZES.length], depth: .5 + (i % 4) * .23, rot: ROTS[i % ROTS.length], front: i % 2 === 0 };
-      const d = el('floater', `<img src="${photo(f.p, 240)}" alt="">`);
+      const pair = i >> 1, right = i % 2 === 0;
+      // The two in a pair are close in size and tilt the opposite way, so the sides balance without looking stamped
+      const size = PAIR_SIZES[pair % PAIR_SIZES.length] + (right ? 0 : (pair % 2 ? 6 : -6));
+      const rot = right ? ROTS[pair % ROTS.length] : -ROTS[pair % ROTS.length] * .8;
+      const f = { p: i % PICSUM.length, x: 50, y: 50, size, depth: .5 + (i % 4) * .23, rot, front: (pair + (right ? 0 : 1)) % 2 === 0, right };
+      const d = el('floater', `<img src="${HERO_MINE.length ? HERO_MINE[i % HERO_MINE.length] : photo(f.p, 240)}" alt=""><span class="cap">${CAPTIONS[i % CAPTIONS.length]}</span>`);
       d.style.setProperty('--size', f.size + 'px');
       // Each photo bobs at its own pace (the same rhythm the script used to draw every frame)
       d.style.setProperty('--bob-time', ((5 + f.depth * 3) / 2).toFixed(2) + 's');
       d.style.setProperty('--bob-delay', (-(i * 1.7) % (5 + f.depth * 3)).toFixed(2) + 's');
       document.querySelector(f.front ? '.floaters-front' : '.floaters-back').append(d);
-      return { ...f, el: d, rx: 0, ry: 0, cx: 0, cy: 0 };
+      return { ...f, el: d, rx: 0, ry: 0, cx: 0, cy: 0, room: { l: 0, r: 0, t: 0, b: 0 } };
     });
-    // Where the QR card settles (the per-frame code adds the same shift), then evenly spaced slots on an
-    // ellipse around it, dropping any that would sit on the headline, under the header or off screen
+    // Half a print's width and height, plus room for its bob (10px) and its tilt
+    const halfW = (size) => (size + 12) / 2 + 14, halfH = (size) => (size + 28) / 2 + 18;
+    // The headline's real ink: each line of text, each button and chip (not the whole column they sit in)
+    function heroRects(so) {
+      const out = [];
+      // (the big headline's glow and its comma reach past its letters, so it gets more room)
+      for (const node of heroLeft.querySelectorAll('.hero-title, .hero-copy')) {
+        const range = document.createRange(); range.selectNodeContents(node);
+        const pad = node.classList.contains('hero-title') ? 40 : 18;
+        for (const r of range.getClientRects()) if (r.width) out.push({ r, pad });
+      }
+      heroLeft.querySelectorAll('.hero-cta .btn').forEach((e) => { if (e.offsetParent) out.push({ r: e.getBoundingClientRect(), pad: 18 }); });
+      return out.map(({ r, pad }) => ({ l: r.left - so.left - pad, r: r.right - so.left + pad, t: r.top - so.top - 14, b: r.bottom - so.top + 14 }));
+    }
     function layoutFloaters() {
       const sw = stage.clientWidth, sh = stage.clientHeight;
       if (!sw || !floaters.length) return;
@@ -3027,35 +2997,100 @@
       const cw = card.offsetWidth, ch = card.offsetHeight;
       const cx = sw / 2 + (vw > 900 ? Math.min(vw * .18, 360) : 0);
       const cy = (vw > 900 ? sh * .5 : sh * .62) + 35;
-      const rx = cw / 2 + Math.min(200, sw * .15), ry = ch / 2 + Math.min(120, sh * .13);
-      const hero = heroLeft.getBoundingClientRect(), so = stage.getBoundingClientRect();
-      // (the headline's own box, not the full-height column it is centred in)
-      const tb = heroLeft.firstElementChild.getBoundingClientRect(), lb = heroLeft.lastElementChild.getBoundingClientRect();
-      const heroBox = { l: hero.left - so.left - 24, r: Math.max(tb.right, lb.right) - so.left + 24, t: tb.top - so.top - 24, b: lb.bottom - so.top + 24 };
-      const usable = [];
-      const N = 72, half = 58;
-      for (let k = 0; k < N; k++) {
-        const a = (k / N) * Math.PI * 2 - Math.PI / 2;
-        const x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry;
-        if (x - half < 8 || x + half > sw - 8 || y - half < 86 || y + half > sh - 8) continue;
-        if (x + half > heroBox.l && x - half < heroBox.r && y + half > heroBox.t && y - half < heroBox.b) continue;
-        usable.push({ x, y });
+      const so = stage.getBoundingClientRect();
+      const blocks = heroRects(so);
+      // (the card bobs and leans a little, and its live pill pokes out of the top)
+      blocks.push({ l: cx - cw / 2 - 26, r: cx + cw / 2 + 26, t: cy - ch / 2 - 36, b: cy + ch / 2 + 26 });
+      const top = (document.getElementById('header')?.getBoundingClientRect().bottom || 80) - so.top + 6;
+      const wantPairs = floaters.length >> 1;
+      // Full-size prints if they fit, otherwise a little smaller, so short or narrow windows still get some
+      let best = null;
+      for (const scale of [1, .88, .77, .68]) {
+        const big = Math.max(...floaters.map((f) => f.size)) * scale, hw = halfW(big), hh = halfH(big);
+        const clear = (x, y) => x - hw >= 8 && x + hw <= sw - 8 && y - hh >= top && y + hh <= sh - 8
+          && blocks.every((k) => x + hw <= k.l || x - hw >= k.r || y + hh <= k.t || y - hh >= k.b);
+        const rx = cw / 2 + Math.min(200, sw * .15) * (.8 + scale * .2), ry = ch / 2 + Math.min(120, sh * .13);
+        // A spot on the right half of an ellipse round the card, and a partner on the left: its mirror image
+        // if that's clear, otherwise the nearest clear spot near the same height on the card's left
+        const pairs = [];
+        for (let k = 0; k <= 60; k++) {
+          const ang = -Math.PI / 2 + (k / 60) * Math.PI;
+          const dx = Math.cos(ang) * rx, y = cy + Math.sin(ang) * ry, xr = cx + dx;
+          if (!clear(xr, y)) continue;
+          let left = null;
+          search: for (const dy of [0, 24, -24, 48, -48, 72, -72]) {
+            for (let step = 0; step < 90; step++) {
+              for (const sgn of step ? [1, -1] : [1]) {
+                const x = cx - dx + sgn * step * 6;
+                if (x < cx - cw / 2 && clear(x, y + dy)) { left = { x, y: y + dy }; break search; }
+              }
+            }
+          }
+          if (left) pairs.push({ r: { x: xr, y }, l: left });
+        }
+        // Pairs at least a print apart on both sides, then an even pick from those
+        const gap = Math.max(2 * hw, 2 * hh) - 16, spread = [];
+        for (const p of pairs) {
+          if (spread.every((q) => Math.hypot(q.r.x - p.r.x, q.r.y - p.r.y) >= gap && Math.hypot(q.l.x - p.l.x, q.l.y - p.l.y) >= gap)) spread.push(p);
+        }
+        const n = Math.min(wantPairs, spread.length);
+        if (!best || n > best.n) best = { n, scale, spread };
+        if (n >= Math.min(wantPairs, 3)) break;
       }
-      // Every spot round the whole ellipse that is at least a print's width from the others, then an even
-      // pick from those: spread all the way round, never stacked. Prints that don't fit are left out.
-      const gap = 130, spots = [];
-      for (const s of usable) if (spots.every((c) => Math.hypot(c.x - s.x, c.y - s.y) >= gap)) spots.push(s);
-      const want = Math.min(floaters.length, spots.length);
-      const chosen = Array.from({ length: want }, (_, i) => spots[Math.floor((i * spots.length) / want)]);
+      const chosen = Array.from({ length: best.n }, (_, i) => best.spread[Math.floor((i * best.spread.length) / best.n)]);
       floaters.forEach((f, i) => {
-        if (i >= chosen.length) { f.el.style.display = 'none'; return; }
-        const s = chosen[i];
+        const p = chosen[i >> 1];
+        if (!p) { f.el.style.display = 'none'; return; }
+        const at = f.right ? p.r : p.l, size = Math.round(f.size * best.scale);
         f.el.style.display = '';
-        f.x = (s.x / sw) * 100; f.y = (s.y / sh) * 100;
-        f.el.style.left = `calc(${f.x}% - ${f.size / 2}px)`;
-        f.el.style.top = `calc(${f.y}% - ${f.size / 2}px)`;
+        f.el.style.setProperty('--size', size + 'px');
+        f.x = (at.x / sw) * 100; f.y = (at.y / sh) * 100;
+        f.el.style.left = `calc(${f.x}% - ${(size + 12) / 2}px)`;
+        f.el.style.top = `calc(${f.y}% - ${(size + 28) / 2}px)`;
+        // How far the pointer may push it before it would leave the screen or slip under the header
+        f.room = { l: at.x - halfW(size) - 8, r: sw - 8 - (at.x + halfW(size)), t: at.y - halfH(size) - top, b: sh - 8 - (at.y + halfH(size)) };
       });
     }
+
+    // Sample photos that can't load (offline, or the photo service is slow) become small painted scenes:
+    // a sky, a low sun or string lights, and hills, in the site's colours, instead of grey squares
+    const SCENES = [
+      ['#F6C9A8', '#E7A3B5', '#FFE9B8', '#8E7CC3', '#5E5296'], ['#BFD9F2', '#E9D5F2', '#FFF4D6', '#7FA9A3', '#4F7C76'],
+      ['#2E2A4F', '#6B4E8F', '#FFD58A', '#3C3463', '#221F3A'], ['#FBD9C5', '#F2B5A0', '#FFF1DC', '#C77D8E', '#8E5468'],
+      ['#CFE6E2', '#F4E3EC', '#FFFFFF', '#9CC5BC', '#6F9896'], ['#3B2F5C', '#C2668F', '#FFC38A', '#4B3A70', '#2A2142'],
+    ];
+    function scene(n) {
+      const [s1, s2, sun, h1, h2] = SCENES[n % SCENES.length], night = n % SCENES.length === 2 || n % SCENES.length === 5;
+      const sx = 60 + (n * 47) % 120, sy = 70 + (n * 29) % 50;
+      const lights = night ? Array.from({ length: 9 }, (_, i) => `<circle cx="${14 + i * 27}" cy="${38 + Math.sin(i * .9 + n) * 10}" r="3.2" fill="#FFE3A0" opacity=".95"/>`).join('') + '<path d="M0 34 Q60 58 120 40 T240 40" stroke="#FFE3A0" stroke-opacity=".35" fill="none"/>' : '';
+      const confetti = !night && n % 3 === 0 ? Array.from({ length: 14 }, (_, i) => `<rect x="${(i * 37 + n * 13) % 230}" y="${(i * 53 + n * 7) % 130}" width="5" height="9" rx="1.5" fill="${['#FFFFFF', '#E0476B', '#8E7CC3', '#FFD58A'][i % 4]}" opacity=".8" transform="rotate(${(i * 41) % 90} ${(i * 37 + n * 13) % 230} ${(i * 53 + n * 7) % 130})"/>`).join('') : '';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s1}"/><stop offset="1" stop-color="${s2}"/></linearGradient><radialGradient id="g"><stop offset="0" stop-color="${sun}"/><stop offset="1" stop-color="${sun}" stop-opacity="0"/></radialGradient></defs><rect width="240" height="240" fill="url(#s)"/><circle cx="${sx}" cy="${sy}" r="70" fill="url(#g)" opacity=".7"/><circle cx="${sx}" cy="${sy}" r="${night ? 16 : 24}" fill="${sun}"/>${lights}${confetti}<path d="M0 ${170 - n % 4 * 6} C60 ${140 + n % 3 * 8} 120 ${190 - n % 5 * 4} 240 ${150 + n % 4 * 6} V240 H0Z" fill="${h1}"/><path d="M0 ${205 - n % 3 * 5} C80 ${180 + n % 4 * 5} 150 ${220 - n % 3 * 6} 240 ${195} V240 H0Z" fill="${h2}"/></svg>`;
+      return 'data:image/svg+xml,' + encodeURIComponent(svg);
+    }
+    document.addEventListener('error', (e) => {
+      const img = e.target;
+      if (img?.tagName !== 'IMG' || img.dataset.scene || !/picsum\.photos/.test(img.src)) return;
+      img.dataset.scene = '1';
+      img.src = scene([...img.src].reduce((t, c) => t + c.charCodeAt(0), 0));
+    }, true);
+    // (and if a print's photo still hasn't arrived after a few seconds, it gets its scene too)
+    setTimeout(() => floaters.forEach((f) => { const img = f.el.querySelector('img'); if (!img.naturalWidth && !img.dataset.scene) { img.dataset.scene = '1'; img.src = scene(f.p + 3); } }), 4000);
+
+    // The QR card's live count: photos keep arriving at the demo event, every few seconds
+    (() => {
+      const out = document.getElementById('qrLiveN');
+      if (!out) return;
+      let n = 248;
+      const tick = () => {
+        if (!document.hidden && !document.getElementById('qrCard').classList.contains('is-gone')) {
+          n += 1 + Math.floor(Math.random() * 3);
+          out.textContent = n;
+          if (!still) out.animate?.([{ transform: 'translateY(4px)', opacity: .2 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+        }
+        setTimeout(tick, 2600 + Math.random() * 2600);
+      };
+      setTimeout(tick, 2400);
+    })();
 
     let W = 0;
     function measure() {
@@ -3083,14 +3118,19 @@
 
     // Signed in: the prints show photos from your own albums
     document.addEventListener('DOMContentLoaded', async () => {
+      // Signing out (or never having signed in) forgets the saved photos
+      const forget = () => { try { sessionStorage.removeItem(HERO_KEY); } catch (e) {} };
+      window.Momento?.account?.onChange((u) => { if (!u) forget(); });
       try {
         const user = await window.Momento?.sessionReady;
-        if (!user?.emailVerified) return;
+        if (!user?.emailVerified) { forget(); return; }
         const { albums = [], recent = [] } = await momentoApi('/api/albums');
         const pics = [...new Set([...recent.map((r) => r.url), ...albums.flatMap((a) => a.pics || [])].filter(Boolean))];
         if (!pics.length) return;
+        try { sessionStorage.setItem(HERO_KEY, JSON.stringify(pics.slice(0, 12))); } catch (e) {}
         floaters.forEach((f, i) => {
           const img = f.el.querySelector('img'), next = new Image();
+          if (img.getAttribute('src') === pics[i % pics.length]) return;   // already showing it, from earlier in this tab
           next.onload = () => {
             img.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: 'forwards' }).finished.then(() => {
               img.src = next.src;
@@ -3191,26 +3231,6 @@
     document.querySelector('.hero-cta [data-go]')?.addEventListener('click', (e) => {
       const item = document.querySelector(`.menu-item[href="${e.currentTarget.dataset.go}"]`);
       if (item) { e.preventDefault(); item.click(); }
-    });
-
-    // Momento Plus waitlist: uses the account's email (or asks for one) and confirms
-    const waitBtn = document.getElementById('waitlist'), WAIT = 'momento-waitlist';
-    const relabel = (btn, text) => { const parts = btn.querySelectorAll('.roll > span'); if (parts.length) parts.forEach((x) => { x.textContent = text; }); else btn.textContent = text; };
-    const onList = () => { try { return localStorage.getItem(WAIT); } catch (e) { return null; } };
-    if (onList()) requestAnimationFrame(() => relabel(waitBtn, 'On the waitlist'));
-    waitBtn.addEventListener('click', async () => {
-      const M = window.Momento, was = onList();
-      if (was) { M.toast('You’re already on the waitlist', `We’ll email ${was} when Momento Plus opens`); return; }
-      const email = M.account.get()?.email || await M.ask({
-        from: waitBtn, title: 'Join the Momento Plus waitlist', ok: 'Join waitlist',
-        body: 'We’ll email you once, when bigger sharing zones are ready. Nothing else.',
-        label: 'Email', type: 'email', placeholder: 'name@example.com',
-        check: (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'Enter an email address like name@example.com.'),
-      });
-      if (!email) return;
-      try { localStorage.setItem(WAIT, email); } catch (e) {}
-      relabel(waitBtn, 'On the waitlist');
-      M.toast('You’re on the waitlist', `We’ll email ${email} when Momento Plus opens`);
     });
 
     // Arrows, arrow keys, a swipe or a click on a page turn between spreads; the page itself
@@ -3363,7 +3383,8 @@
         const px = tilt.x * 40 * f.depth * motion, py = tilt.y * 40 * f.depth * motion;
         // The gentle bob is a CSS animation (run by the graphics card); this only follows the pointer,
         // and is skipped while nothing has moved
-        setIf(f.el, 'transform', `translate(${(f.rx + px + scatterX).toFixed(1)}px, ${(f.ry + py + scatterY).toFixed(1)}px) rotate(${f.rot}deg)`);
+        const mx = Math.min(Math.max(f.rx + px, -f.room.l), f.room.r), my = Math.min(Math.max(f.ry + py, -f.room.t), f.room.b);
+        setIf(f.el, 'transform', `translate(${(mx + scatterX).toFixed(1)}px, ${(my + scatterY).toFixed(1)}px) rotate(${f.rot}deg)`);
         setIf(f.el, 'opacity', String(1 - intro));
       }
     };
@@ -3424,10 +3445,11 @@
 
       home.addEventListener('click', (e) => { e.preventDefault(); setOpen(false); go(null); });
       document.querySelector('.brand').addEventListener('click', (e) => { e.preventDefault(); go(null); window.resetHome?.(); });
-      caret.addEventListener('click', () => setOpen(!open));
+      // A click just after hovering opened it keeps it open (instead of closing it straight away)
+      caret.addEventListener('click', () => { if (open && performance.now() - (caret._hoverAt || 0) < 500) return; setOpen(!open); });
       // With a mouse, hovering Home or the list opens it; it waits a moment before closing
       if (finePointer) for (const zone of [split, menu]) {
-        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') setOpen(true); });
+        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { if (!open) caret._hoverAt = performance.now(); setOpen(true); } });
         zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !drag?.on) closeTimer = setTimeout(() => setOpen(false), 260); });
       }
       document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
@@ -3509,7 +3531,7 @@
       addEventListener('resize', snap);
       document.fonts.ready.then(snap);
       pill.style.opacity = 0;
-      // Arriving from another page with a section in the address (e.g. #pricing)
+      // Arriving from another page with a section in the address (e.g. #faq)
       const fromHash = items.find((i) => i.getAttribute('href') === location.hash);
       if (fromHash) addEventListener('load', () => setTimeout(() => go(fromHash), 60));
     })();
@@ -4543,7 +4565,7 @@
           <p class="acct-sub">Update your photo, name and email notification preferences.</p>
           <div class="acct-photo">
             <span class="acct-photo-av" aria-hidden="true"></span>
-            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups, chats and albums</small></span>
+            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups and albums</small></span>
             <span class="acct-photo-acts"><button class="acct-photo-btn" type="button" data-photo-pick>Add photo</button><button class="acct-photo-btn is-danger" type="button" data-photo-rm hidden>Remove</button></span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden data-photo-file>
           </div>
@@ -4590,7 +4612,7 @@
         try {
           const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
           Momento.account.set(user);
-          say('Photo updated. Friends see it in groups and chats.');
+          say('Photo updated. Friends see it in groups and albums.');
         } catch (err) { say(err.message, true); }
         finally { photoAv.classList.remove('is-busy'); photoPick.disabled = photoRm.disabled = false; }
       });
@@ -4755,7 +4777,7 @@
       confirmD.querySelector('.acct-ghost').focus();   // the safe choice has focus
     });
 
-    // Asks for one value (an email for the waitlist, say). Resolves the value, or null if cancelled
+    // Asks for one value (an email address, say). Resolves the value, or null if cancelled
     let askD = null, askDone = null;
     Momento.ask = ({ title, body = '', label, type = 'text', value = '', placeholder = '', ok = 'Continue', check, from = null }) => new Promise((resolve) => {
       if (!askD) {
@@ -4882,7 +4904,7 @@
         } catch (err) { say(err.message); return; }
         finally { delete form.dataset.busy; submit.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already, and you can keep talking in the group’s chat. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
         d.querySelector('.m-copy').textContent = 'Copy code';
         d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
@@ -4908,8 +4930,7 @@
       // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
       const groupField = d.querySelector('.m-group');
       // "Who do you want to share this album with?": one of their friend groups (the album joins that
-      // group, and everyone keeps talking in the group's one chat), or just the people at this event
-      // (event chat starts off; the host can turn it on)
+      // group, and everyone in it sees it), or just the people at this event
       const shareList = groupField.querySelector('.ev-who');
       const shareOption = (value, title, note) => {
         const l = document.createElement('label'), r = document.createElement('input'), b = document.createElement('b'), s = document.createElement('small');
@@ -4920,11 +4941,11 @@
       };
       async function loadGroups(pick) {
         groupField.hidden = true;
-        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code. Event chat starts off, and you can turn it on.'));
+        shareList.replaceChildren(shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code.'));
         shareList.querySelector('input').checked = true;
         let groups = [];
         try { ({ groups } = await momentoApi('/api/groups')); } catch (err) { groups = []; }
-        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it. You keep talking in the group’s chat, so there’s no new chat to follow.`), shareList.lastChild);
+        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it, including people who join the group later.`), shareList.lastChild);
         groupField.hidden = !groups.length;
         const want = pick && groups.some((g) => g.id === pick) ? pick : '';
         const on = [...shareList.querySelectorAll('input')].find((r) => r.value === want);
@@ -5261,6 +5282,20 @@
       setTimeout(() => finish(), 9000);
       Promise.resolve().then(() => run(kit)).then(() => finish(), (e) => { console.error(e); finish(true); });
     };
+
+    // ---- Nav flourish: only home has a page intro. On the other pages the current nav item gives a short
+    // nudge once per tab (the Settings knobs slide into place). Transform only; skipped for reduced motion ----
+    Momento.flourish = () => {
+      const page = document.documentElement.dataset.page;
+      const cur = document.querySelector('.nav > .nav-item[aria-current="page"]');
+      if (!cur || !cur.animate || page === 'home' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      try { if (sessionStorage.getItem('momento-flourish-' + page)) return; sessionStorage.setItem('momento-flourish-' + page, '1'); } catch (e) {}
+      const SPRING = 'cubic-bezier(.34, 1.4, .64, 1)';
+      const knobs = cur.classList.contains('nav-settings') ? [...cur.querySelectorAll('svg circle')] : [];
+      if (knobs.length) knobs.forEach((k, i) => k.animate([{ transform: `translateX(${i ? 3 : -3}px)` }, { transform: 'none' }], { duration: 480, delay: i * 90, easing: SPRING }));
+      else cur.animate([{ transform: 'none' }, { transform: 'translateY(-2px) scale(1.1)', offset: .4 }, { transform: 'none' }], { duration: 380, easing: SPRING });
+    };
+    if (document.documentElement.dataset.page !== 'home') addEventListener('load', () => setTimeout(() => Momento.flourish(), 250), { once: true });
   
     // ---- Site footer: one footer for every page. A page marks it <footer class="site-foot" data-site-foot> ----
     document.querySelectorAll('[data-site-foot]').forEach((foot) => {
@@ -5278,7 +5313,6 @@
               <li><a class="sf-link" href="${P}#how-it-works">How it works</a></li>
               <li><a class="sf-link" href="${P}#features">Features</a></li>
               <li><a class="sf-link" href="${P}#for-hosts">For hosts</a></li>
-              <li><a class="sf-link" href="${P}#pricing">Pricing</a></li>
             </ul>
           </nav>
           <nav class="sf-col" aria-labelledby="sfAlbums">
@@ -5286,8 +5320,7 @@
             <ul>
               <li><a class="sf-link" href="albums.html">My albums</a></li>
               <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
-              <li><a class="sf-link" href="sort.html">Sort photos</a></li>
-              <li><a class="sf-link" href="groups.html">Friend groups</a></li>
+              <li><a class="sf-link" href="events.html#groups">Groups</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Create an album</a></li>
               <li><a class="sf-link" href="settings.html">Settings</a></li>
             </ul>
@@ -5295,7 +5328,7 @@
           <nav class="sf-col" aria-labelledby="sfEvents">
             <h2 id="sfEvents">Events</h2>
             <ul>
-              <li><a class="sf-link" href="events.html">Events near you</a></li>
+              <li><a class="sf-link" href="events.html#events">Events near you</a></li>
               <li><a class="sf-link" href="${P}#for-hosts" data-create>Host a public event</a></li>
               <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>

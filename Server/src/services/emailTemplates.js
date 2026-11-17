@@ -109,14 +109,6 @@ export function emailChangedHtml(user, newEmail) {
   });
 }
 
-export function supportHtml({ name, email, topic, message, account }) {
-  return layout({
-    heading: `Support: ${topic}`,
-    paragraphs: [`From ${name} <${email}>${account ? ` (Momento account ${account})` : ' (not logged in)'}`, ...message.split(/\n{2,}/)],
-    footer: 'Reply to this email to answer them directly.',
-  });
-}
-
 export function reminderHtml(guest, album, hostName, link) {
   const first = firstName(guest);
   return layout({
@@ -127,17 +119,6 @@ export function reminderHtml(guest, album, hostName, link) {
   });
 }
 
-export function inviteHtml(album, hostName, link, code) {
-  return layout({
-    heading: `${hostName || 'Someone'} invited you to ${album.name}`,
-    paragraphs: [
-      `${hostName || 'The host'} is collecting everyone’s photos from ${album.name}${album.place ? ` (${album.place})` : ''} in one shared Momento album.`,
-      `Join to see the photos and add yours. The album code is ${code}.`,
-    ],
-    button: { href: link, label: 'Join the album' },
-    footer: 'If you don’t know who sent this, you can ignore it.',
-  });
-}
 
 export function groupInviteHtml(groupName, inviterName, link) {
   return layout({

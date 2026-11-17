@@ -148,8 +148,6 @@ S3_BUCKET=
 EMAIL_FROM=Momento <team@hexarch.org>
 # Where replies go
 EMAIL_REPLY_TO=team@hexarch.org
-# Where the support form's messages go (default: EMAIL_REPLY_TO)
-SUPPORT_EMAIL=
 ```
 
 ## 1. MongoDB Atlas
@@ -184,7 +182,7 @@ Changing it later logs everyone out.
 
 ## 4. Email (Amazon SES)
 
-Momento's emails (confirm, reset, password changed, invites, reminders, support) go through **Amazon
+Momento's emails (confirm, reset, password changed, group invites, reminders) go through **Amazon
 SES** from `EMAIL_FROM`, using the AWS key in `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. Replies go to
 `EMAIL_REPLY_TO`. The server logs it at startup (`Email: ses, from …`). hexarch.org is verified in SES
 (3 DKIM records at GoDaddy) and the account has production access. Setup: see "Moving the API to AWS".
@@ -236,15 +234,15 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/auth/verify-email/resend` | Emails a new confirm link to the logged-in person |
 | POST | `/api/auth/password/forgot` | `{ email }` emails a reset link; always `{ ok: true }` |
 | POST | `/api/auth/password/reset` | `{ token, password }` from the reset link; logs in and logs out other devices |
-| GET | `/api/albums` | Your albums (host and guest, with `status`, `closes`, `open`, and for hosts `waiting`), the 12 newest photos, `feed` (who added what, in batches) and `invites` waiting for you |
+| GET | `/api/albums` | Your albums (host and guest, with `status`, `closes`, `open`, `saved`, and for hosts `waiting` and `trashCount`), the 12 newest photos, `feed` (who added what, in batches), and totals `trashCount` (your bin) and `hiddenCount` |
 | POST | `/api/albums` | `{ name, date: "YYYY-MM-DD", place?, zone?, visibility? }` creates an album with a join code; `visibility: "public"` also lists it on the Events map |
-| POST | `/api/albums/join` | `{ code }` joins as a guest; any case, dash optional; uses up any invite to that album |
+| POST | `/api/albums/join` | `{ code, location? }` joins as a guest; any case, dash optional. Follows the album's rules: location check, host approval when closed |
+| GET | `/api/albums/preview/:code` | **No login needed.** What an album is (name, host's first name, counts, how joining works), never its photos. See GUEST-AND-NEARBY-API.md |
 | POST | `/api/albums/:id/remind` | Host only: emails guests who haven't added photos (once a day per album, at most 25 people) |
-| POST | `/api/albums/:id/invites` | Host only: `{ email }` emails an invite with the code; it also shows on their albums page |
-| POST | `/api/support` | `{ name, email, topic, message }` from the Support page, emailed to `SUPPORT_EMAIL` (default `EMAIL_REPLY_TO`, then `SENDER_EMAIL`) with Reply-To set to the sender |
-| GET | `/api/events/nearby` | `?lat&lng&km` Public events (albums made with `visibility: "public"`) that haven't finished, within `km` (25 by default, at most 100): `distanceM`, `inside` (within the zone), `joined`, a few previews |
-| POST | `/api/events/:id/join` | `{ lat, lng, accuracy }` joins a public event as a guest, only from inside its zone |
-| GET | `/api/albums/:id` | One album with its photos, minus any you've hidden (`album.hiddenCount` says how many); `?hidden=1` includes them, marked `hidden: true` |
+| GET | `/api/events/nearby` | **No login needed.** `?lat&lng&radius` (metres, 100 m to 100 km; or `km`) Public events that haven't finished, nearest first, with `distanceM`, `bearing`, `direction`, `inside`, `inScan`. See GUEST-AND-NEARBY-API.md |
+| POST | `/api/events/:id/join` | `{ location }` joins a public event as a guest (inside its zone, or the host approves) |
+| GET | `/api/albums/:id` | One album with its photos (each with `likes`, `liked`, `reactions`, `reaction`), minus any you've hidden or the host has deleted; `album.hiddenCount`, `album.saved`, and for the host `album.trashCount`. `?hidden=1` includes your hidden ones, marked `hidden: true` |
+| POST | `/api/albums/:id/save` | `{ saved }` the bookmark (saved albums show under Liked) |
 | POST | `/api/albums/:id/hidden` | `{ photoIds, hidden }` hides photos from your own view, or shows them again; `{ all: true, hidden: false }` shows every hidden photo. Other people still see them |
 | PATCH | `/api/albums/:id` | Host only: change name, date, place or zone |
 | DELETE | `/api/albums/:id` | Host only: deletes the album and its photos |
@@ -252,21 +250,25 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF) |
 | GET | `/api/albums/:id/download` | Every photo as a .zip |
 | GET | `/api/photos/:id` | The image file, for album members only |
-| DELETE | `/api/photos/:id` | The person who added it, or the host (its comments go too) |
+| DELETE | `/api/photos/:id` | Host only: deletes for good at once (the pages use the bin below instead) |
 | POST | `/api/photos/:id/like` | `{ liked }` likes or unlikes it; returns `{ likes, liked }`. An album's most-liked photo is its cover |
-| GET | `/api/photos/:id/comments` | The comments under a photo, oldest first (`parent` for replies; `likes`, `liked`, `mine`, `canDelete` for each) |
-| POST | `/api/photos/:id/comments` | `{ text, replyTo? }` (up to 500 characters) adds a comment, or a reply (one level deep) |
-| DELETE | `/api/photos/:id/comments/:commentId` | The person who wrote it, or the host (its replies go too) |
-| POST | `/api/photos/:id/comments/:commentId/like` | `{ liked }` likes or unlikes a comment |
+| GET | `/api/photos/liked` | The photos you liked, newest like first (the Liked tab) |
+| POST | `/api/photos/:id/reaction` | `{ emoji }` one of 😍 😂 🔥 👏 🥹 😮 (one per person; `null` removes yours); returns `{ reactions, reaction }` |
+| GET | `/api/photos/:id/reactions` | Who reacted with what: `{ people: [{ by, emoji, mine, avatarUrl }] }` |
+| POST | `/api/trash` | Host only: `{ photoIds }` moves photos to the Recently deleted bin; returns `{ moved, skipped }` |
+| GET | `/api/trash` | `?album=` Photos in your bin (albums you host), with `deletedAt` and `purgeAt` (30 days later, when they go for good) |
+| POST | `/api/trash/restore` | `{ photoIds }` or `{ all: true, album? }` puts photos back |
+| POST | `/api/trash/purge` | `{ photoIds }` or `{ all: true, album? }` deletes them for good now |
+| GET | `/api/hidden` | `?album=` The photos you hid from your own view |
 
 Anyone who isn't in an album gets "not found" for it and its photos, so album ids can't be probed.
+Logged-out visitors get a 401 with `code: "login-required"` and an `action` (join, upload, react, ...)
+for anything other than the album preview and the nearby scan. See GUEST-AND-NEARBY-API.md.
 
 ## Not built yet
 
-- **Sharing zone.** Albums store a location and radius (`zone`), but joining by code doesn't check it yet.
-- **Saving to the host's Google Drive, Dropbox or OneDrive.** Photos go to this server's disk. All file handling is in `src/services/storageService.js`, so that is the one file to change. iCloud has no public API for this.
-- **Thumbnails.** Full-size photos are served everywhere; adding `sharp` to make small copies on upload would speed up the albums page.
-- **QR codes** for an album's join code.
+- **Saving to the host's Google Drive, Dropbox or OneDrive.** Photos go to Amazon S3 (or this PC's disk
+  locally). All file handling is in `src/services/storageService.js`, so that is the one file to change.
 - **Plans.** `plan` is stored on each user, but nothing is limited by it yet.
 
 ## Deploying
@@ -450,7 +452,6 @@ Render settings, except where shown). Save with **Ctrl+O**, **Enter**, then exit
 | `AWS_SECRET_ACCESS_KEY` | from step 3 |
 | `EMAIL_FROM` | `Momento <team@hexarch.org>` |
 | `EMAIL_REPLY_TO` | same as now |
-| `SUPPORT_EMAIL` | same as now |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | same as now |
 | `GOOGLE_MAPS_API_KEY` | when you have it |
 | `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | from "Signup CAPTCHA" above |
@@ -484,27 +485,11 @@ So the live site isn't touched while testing, the server first answers on **aws-
 If it says *no AWS access found* or *access was refused*, check the step 3 key and policy and the
 `server.env` lines, then run `sudo momento-update` again.
 
-## 8. Copy the existing photos from R2 to S3
+## 8. Copy the existing photos from R2 to S3 (done)
 
-`scripts/copyR2ToS3.js` is the only thing left that talks to Cloudflare R2; delete it once the move is
-done. On this PC, `Server/.env` still has the old `R2_*` settings; add these next to them
-**temporarily** (the step 3 key may read and write the bucket):
-
-```
-S3_BUCKET=momento-photos-hexarch
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-```
-
-Then, in `Server/`:
-
-```
-npm run aws:copy-photos -- --dry
-npm run aws:copy-photos
-```
-
-It keeps every file's name, so the photo records in MongoDB work unchanged, and skips files already
-copied, so it's safe to run again.
+Done in November 2026: every photo was copied from Cloudflare R2 into the S3 bucket, keeping each
+file's name. Momento no longer uses Cloudflare at all, so the copy script and the `R2_*` settings have
+been removed.
 
 ## 9. Switch api.hexarch.org to AWS
 
@@ -517,8 +502,7 @@ copied, so it's safe to run again.
    sudo momento-update
    ```
 
-3. Run `npm run aws:copy-photos` once more on the PC, to pick up anything uploaded to R2 in the meantime.
-4. Check on hexarch.org: log in (with email and with Google), open an album, upload a photo, and trigger
+3. Check on hexarch.org: log in (with email and with Google), open an album, upload a photo, and trigger
    an email ("Forgot your password").
 
 DNS changes can take up to an hour to reach everyone; Render keeps answering for anyone still on the old
@@ -526,10 +510,9 @@ record, so nobody is cut off in between.
 
 ## 10. Tidy up
 
-- Tidy the PC's `Server/.env`: remove the `R2_*`, `RESEND_API_KEY`, `MS_*`, `SENDER_EMAIL`,
-  `TURNSTILE_*` and `APPLE_CLIENT_ID` lines (nothing reads them any more), and the temporary AWS lines too
-  if you'd rather keep local photos on disk and emails printed in the terminal.
-- Delete `scripts/copyR2ToS3.js` and its `aws:copy-photos` line in `package.json`.
+- Done: the PC's `Server/.env` has no Cloudflare (`R2_*`, Turnstile), Resend, Microsoft or Apple settings
+  left, and `scripts/copyR2ToS3.js` is gone. (Remove the AWS lines there too if you'd rather keep local
+  photos on disk and emails printed in the terminal.)
 - After a few days without problems: delete the Render service, the R2 bucket, the Resend account and the
   Turnstile widget, and in Microsoft Entra the "Momento-Backend" app registration (its Mail.Send permission
   isn't needed any more).
