@@ -6,6 +6,7 @@ import { HttpError } from '../utils/httpError.js';
 import { hasGroupAccess } from '../services/groupAccess.js';
 import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { config } from '../config/env.js';
+import { notify, unnotify } from '../services/notifyService.js';
 import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageService.js';
 
 // A photo plus the caller's membership of its album; anyone outside the album gets a 404
@@ -58,10 +59,14 @@ const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 export async function like(req, res) {
   const { photo } = await photoFor(req, { react: true });
   const uid = req.user._id;
+  const who = { user: photo.uploader, actor: uid, album: photo.album, photo: photo._id };
   if (req.body?.liked === false) {
-    await Photo.updateOne({ _id: photo._id, likes: uid }, { $pull: { likes: uid, likeLog: { user: uid } }, $inc: { likeCount: -1 } });
+    const r = await Photo.updateOne({ _id: photo._id, likes: uid }, { $pull: { likes: uid, likeLog: { user: uid } }, $inc: { likeCount: -1 } });
+    if (r.modifiedCount) await unnotify({ ...who, type: 'like' });
   } else {
-    await Photo.updateOne({ _id: photo._id, likes: { $ne: uid } }, { $push: { likes: uid, likeLog: { user: uid, at: new Date() } }, $inc: { likeCount: 1 } });
+    const r = await Photo.updateOne({ _id: photo._id, likes: { $ne: uid } }, { $push: { likes: uid, likeLog: { user: uid, at: new Date() } }, $inc: { likeCount: 1 } });
+    // The person who added the photo hears about it
+    if (r.modifiedCount) await notify({ ...who, type: 'like' });
   }
   const now = await Photo.findById(photo._id, 'likes likeCount');
   res.json({ likes: Math.max(0, now.likeCount || 0), liked: now.likes.some((id) => id.equals(uid)) });
@@ -93,6 +98,8 @@ export async function react(req, res) {
   const uid = req.user._id;
   await Photo.updateOne({ _id: photo._id }, { $pull: { reactions: { user: uid } } });
   if (want) await Photo.updateOne({ _id: photo._id }, { $push: { reactions: { user: uid, emoji: want } } });
+  const who = { user: photo.uploader, actor: uid, album: photo.album, photo: photo._id, type: 'reaction' };
+  if (want) await notify({ ...who, emoji: want }); else await unnotify(who);
   const now = await Photo.findById(photo._id, 'reactions');
   res.json({ reactions: reactionCounts(now), reaction: myReaction(now, uid) });
 }

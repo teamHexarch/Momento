@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { savePhoto, openPhoto, deletePhoto, storageName } from '../src/services/storageService.js';
+import os from 'node:os';
+import path from 'node:path';
+
+// Without settings (no .env), it uses a temporary folder on this computer instead of real storage
+if (!process.env.JWT_SECRET) Object.assign(process.env, { NODE_ENV: 'test', JWT_SECRET: 'isolated-privacy-test', MONGODB_URI: 'mongodb://unused', UPLOAD_DIR: path.join(os.tmpdir(), 'momento-privacy-test') });
+const { savePhoto, openPhoto, deletePhoto, storageName } = await import('../src/services/storageService.js');
 
 // Only creates and deletes its own randomly named synthetic test object.
 let key;

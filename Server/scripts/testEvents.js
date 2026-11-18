@@ -70,40 +70,30 @@ try {
   assert.equal(album.zone.radiusM, 1000);
   assert.equal(album.venue.address, 'Bennelong Point, Sydney');
   assert.equal(new Date(album.opensAt).getTime(), new Date(base.startsAt).getTime() - 30 * 60000);
-  await call('/api/albums/join', 201, g, 'POST', { code: album.code });
+  // Since V2.3, joining an album with a sharing zone needs a recent location inside it
+  await call('/api/albums/join', 201, g, 'POST', { code: album.code, location: { ...venue, accuracy: 10, timestamp: Date.now() } });
 
-  const bytes = await sharp({ create: { width: 400, height: 300, channels: 3, background: 'blue' } }).jpeg().toBuffer();
-  const photo = () => { const f = new FormData(); f.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'p.jpg'); return f; };
-  const up = (status, cookie, loc) => call(`/api/albums/${album.id}/photos`, status, cookie, 'POST', photo(), loc ? { 'X-Momento-Location': loc } : {});
+  // Each upload a different picture (the same file twice is skipped as a duplicate)
+  let shade = 0;
+  const photo = async () => { const f = new FormData(); f.append('photos', new Blob([await sharp({ create: { width: 400, height: 300, channels: 3, background: { r: 10 + 7 * shade++, g: 60, b: 200 } } }).jpeg().toBuffer()], { type: 'image/jpeg' }), 'p.jpg'); return f; };
+  const up = async (status, cookie) => call(`/api/albums/${album.id}/photos`, status, cookie, 'POST', await photo());
 
-  // Before the window: guests are turned away, the host isn't
-  let r = await json(await up(403, g, north(0.5)));
+  // Uploads are open from the lead time before the start until the end, for everyone (host too).
+  // Location is checked once, when joining; after that, members can add photos from anywhere.
+  let r = await json(await up(403, g));
   assert.equal(r.code, 'not-open-yet');
-  await up(201, h);
+  assert.equal((await json(await up(403, h))).code, 'not-open-yet');
 
   // Inside the window (start moved to 10 minutes from now: within the 30-minute lead)
   await Album.updateOne({ _id: album.id }, { startsAt: new Date(Date.now() + 10 * 60000) });
   assert.equal(r = (await json(await call('/api/albums/' + album.id, 200, g))).album.status, 'live');
-  r = await json(await up(403, g));
-  assert.equal(r.code, 'location-needed');
-  r = await json(await up(403, g, north(1.5)));
-  assert.equal(r.code, 'outside-zone');
-  assert.match(r.error, /1\.5 km/);
-  await up(201, g, north(0.5));
-  // A 2 km zone lets the guest 1.5 km away in
-  await Album.updateOne({ _id: album.id }, { 'zone.radiusM': 2000 });
-  await up(201, g, north(1.5));
-  r = await json(await up(403, g, north(5)));
-  assert.equal(r.code, 'outside-zone');
-  // Up to 10 km
-  await Album.updateOne({ _id: album.id }, { 'zone.radiusM': 10000 });
-  await up(201, g, north(5));
-
-  // After the end: closed for guests, still open to the host
-  await Album.updateOne({ _id: album.id }, { startsAt: new Date(Date.now() - 3 * HOUR), endsAt: new Date(Date.now() - HOUR) });
-  r = await json(await up(403, g, north(0.5)));
-  assert.equal(r.code, 'closed');
+  await up(201, g);   // no location needed to upload
   await up(201, h);
+
+  // After the end: closed to new photos, still there to look at
+  await Album.updateOne({ _id: album.id }, { startsAt: new Date(Date.now() - 3 * HOUR), endsAt: new Date(Date.now() - HOUR) });
+  r = await json(await up(403, g));
+  assert.equal(r.code, 'closed');
   assert.equal((await json(await call('/api/albums/' + album.id, 200, h))).album.status, 'kept');
 
   // The browser is allowed to send the location header across origins
@@ -115,7 +105,7 @@ try {
   const old = await Album.create({ name: 'Old album', date: new Date().toISOString().slice(0, 10), code: 'OLDCODE', host: (await User.findOne({ email: 'host@example.invalid' }))._id });
   const { Membership } = await import('../src/models/Membership.js');
   await Membership.create({ album: old._id, user: (await User.findOne({ email: 'guest@example.invalid' }))._id, role: 'guest' });
-  await call(`/api/albums/${old.id}/photos`, 201, g, 'POST', photo());
+  await call(`/api/albums/${old.id}/photos`, 201, g, 'POST', await photo());
 
   // A 7.5 km zone is accepted when creating
   const wide = (await json(await call('/api/albums', 201, h, 'POST', { ...base, name: 'Wide', zone: { ...venue, radiusM: 7500 } }))).album;

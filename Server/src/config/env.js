@@ -53,6 +53,13 @@ export const config = {
     region: env.AWS_REGION || 'ap-southeast-2',
     s3Bucket: env.S3_BUCKET || '',
     hasKeys: Boolean(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY),
+    // Optional: photos served through Amazon CloudFront (faster, cheaper) instead of straight from the
+    // bucket. All three are needed; see "Faster photos with CloudFront" in README.md.
+    cloudfront: {
+      domain: (env.CLOUDFRONT_DOMAIN || '').replace(/^https?:\/\//, '').replace(/\/+$/, ''),
+      keyPairId: env.CLOUDFRONT_KEY_PAIR_ID || '',
+      privateKey: (env.CLOUDFRONT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    },
   },
   google: { clientId: env.GOOGLE_CLIENT_ID || '', clientSecret: env.GOOGLE_CLIENT_SECRET || '' },
   // Google Maps JavaScript API key for picking the venue (a browser key: restrict it to your site's
@@ -64,6 +71,12 @@ export const config = {
     // Where replies go, so "reply to this email" reaches a person
     replyTo: env.EMAIL_REPLY_TO || '',
   },
-  // Where the support form's messages go
+  // Push notifications to phones and computers (Web Push). Make the pair once with
+  // "npx web-push generate-vapid-keys"; without them, notifications only show in the inbox.
+  push: {
+    publicKey: env.VAPID_PUBLIC_KEY || '',
+    privateKey: env.VAPID_PRIVATE_KEY || '',
+    subject: env.VAPID_SUBJECT || 'mailto:team@hexarch.org',
+  },
   isProduction: env.NODE_ENV === 'production',
 };

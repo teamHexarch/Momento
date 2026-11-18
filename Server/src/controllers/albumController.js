@@ -1,5 +1,6 @@
 import { admit } from '../services/eventAdmission.js';
 import { once } from 'node:events';
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { ZipArchive } from 'archiver';
 import { config } from '../config/env.js';
@@ -18,6 +19,8 @@ import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
 import { savePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
 import { reactionCounts, myReaction } from './photoController.js';
 import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
+import { notifyPhotos } from '../services/notifyService.js';
+import { isBig, requestZip, ZipFile } from '../services/zipService.js';
 import { sendPhoto } from '../services/storageService.js';
 
 const PREVIEW_PICS = 12;
@@ -553,20 +556,41 @@ export async function addPhotos(req, res) {
   if (!files.length) throw new HttpError(400, 'Choose at least one photo.');
   const album = req.membership.album;
   const saved = [];
-  for (const f of files) {
+  // The same file twice (in this upload, or already in the album and not deleted): skipped
+  const hashes = files.map((f) => crypto.createHash('sha256').update(f.buffer).digest('hex'));
+  const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
+  let skipped = 0;
+  for (const [i, f] of files.entries()) {
+    const hash = hashes[i];
+    if (there.has(hash)) { skipped++; continue; }
+    there.add(hash);
     const stored = await savePhoto(album.id, f.buffer);
     let p;
     try { p = await Photo.create({
-      album: album._id, uploader: req.user._id, ...stored,
+      album: album._id, uploader: req.user._id, ...stored, hash,
       originalName: f.originalname.slice(0, 200),
     }); } catch (err) { await deletePhotos([stored.storageKey]); throw err; }
     saved.push({ id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), by: 'You', mine: true, at: p.createdAt });
   }
-  res.status(201).json({ photos: saved });
+  // Everyone else in the album hears (one notification per person, adding up while unread)
+  if (saved.length) {
+    const [rows, group] = await Promise.all([
+      Membership.find({ album: album._id, via: { $ne: 'group' } }, 'user'),
+      album.group ? GroupMember.find({ group: album.group }, 'user') : [],
+    ]);
+    notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length });
+  }
+  // skipped: photos that were already in the album (or twice in this upload)
+  res.status(201).json({ photos: saved, skipped });
 }
 
 export async function download(req, res) {
   const m = await membershipOf(req, req.params.id);
+  // A big album: zipped in the background and emailed, rather than making the browser wait
+  if (await isBig(m.album._id, m.hidden || [])) {
+    await requestZip(m.album, req.user, m.hidden || []);
+    return res.redirect(303, `${config.frontendUrl}/albums.html?album=${m.album.id}&zip=preparing`);
+  }
   const photos = await Photo.find({ album: m.album._id, _id: { $nin: m.hidden || [] }, deletedAt: null }).sort({ createdAt: 1 });
   if (!photos.length) throw new HttpError(404, 'This album has no photos yet.');
   const safeName = m.album.name.replace(/[^\w\- ]+/g, '').trim() || 'album';
@@ -586,6 +610,15 @@ export async function download(req, res) {
     // The download has already started, so the only way to report a failure is to cut it off
     console.error(`Zip of album ${m.album.id} failed: ${err.message}`);
     res.destroy(err);
+  }
+}
+
+// GET /api/albums/:id/zip/:token  The link in the "your download is ready" email
+export async function zipFile(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  const z = await ZipFile.findOne({ album: m.album._id, user: req.user._id, token: String(req.params.token), status: 'ready', expiresAt: { $gt: new Date() } });
+  if (!z || !(await sendPhoto(res, z.key, 'application/zip', { filename: z.name }))) {
+    throw new HttpError(404, 'This download has expired. Download the album again from Momento.');
   }
 }
 

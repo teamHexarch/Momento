@@ -4,6 +4,8 @@ import { Membership } from '../models/Membership.js';
 import { HttpError } from '../utils/httpError.js';
 import { hasGroupAccess } from './groupAccess.js';
 
+import { notify } from './notifyService.js';
+
 async function grant(album, user, via) {
   try {
     await Membership.updateOne({ album: album._id, user }, { $setOnInsert: { role: 'guest', via } }, { upsert: true });
@@ -41,12 +43,15 @@ export async function admit(album, user, body = {}) {
   if (!closed && needsLocation && body.location === undefined) throw new HttpError(409, 'Check your location to join this event.', 'check-location');
   if (closed || (needsLocation && !inZone(body.location, album.zone))) {
     await Album.updateOne({ _id: album._id, 'requests.user': { $ne: user._id } },
-      { $push: { requests: { user: user._id, name: user.name || 'Guest', status: 'pending' } } });
+      { $push: { requests: { user: user._id, name: user.name || 'Guest', status: 'pending', at: new Date() } } });
+    // The host hears someone is waiting
+    await notify({ user: album.host, type: 'request', actor: user._id, album: album._id });
     return { pending: true };
   }
   // Someone still waiting who now passes the checks (joining reopened, or they reached the venue)
   // gets in straight away, and their request leaves the host's list
   await grant(album, user._id, needsLocation ? 'location' : 'invite');
+  await notify({ user: album.host, type: 'joined', actor: user._id, album: album._id });
   if (previous) await Album.updateOne({ _id: album._id }, { $pull: { requests: { user: user._id, status: { $in: ['pending', 'approving'] } } } });
   return { already: false };
 }
@@ -62,6 +67,7 @@ export async function reviewRequest(req, res) {
   if (!album) throw new HttpError(404, 'This request is no longer pending.');
   if (approve) {
     await grant(album, guest, 'approval');
+    await notify({ user: guest, type: 'approved', actor: req.user._id, album: album._id });
     await Album.updateOne({ _id: id }, { $pull: { requests: { user: guest, status: 'approving' } } });
   }
   res.json({ ok: true });

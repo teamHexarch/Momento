@@ -28,6 +28,9 @@ export async function resetPassword(token, newPassword) {
   const user = await redeemToken(token, 'reset');
   if (!user) return null;
   user.passwordHash = await bcrypt.hash(newPassword, 12);
+  // A reset also lifts a lock from too many wrong passwords
+  user.loginFails = 0;
+  user.lockedUntil = undefined;
   user.passwordChangedAt = new Date();
   user.sessions = [];
   // Opening the link proved they own the address

@@ -23,11 +23,20 @@ export async function save(key, buffer) {
   await fsp.writeFile(file, buffer);
 }
 
+// A big file (a background zip) written as it's made
+export async function saveStream(key, stream) {
+  const file = fullPath(key);
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  const { pipeline } = await import('node:stream/promises');
+  await pipeline(stream, fs.createWriteStream(file));
+}
+
 // Answers the browser's request for the photo with the file itself; false if it's missing
-export async function send(res, key, mimeType) {
+export async function send(res, key, mimeType, { filename } = {}) {
   const file = fullPath(key);
   if (!(await fsp.access(file).then(() => true, () => false))) return false;
   res.set('Cache-Control', 'private, max-age=86400');
+  if (filename) res.attachment(filename);
   res.type(mimeType);
   res.sendFile(file);
   return true;

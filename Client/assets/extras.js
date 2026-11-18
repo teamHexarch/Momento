@@ -189,6 +189,7 @@
     if (now === 'denied' || now === 'unsupported') { await sheet({ kind, blocked: true, from }); return false; }
     if (!(await sheet({ kind, blocked: false, from }))) return false;
     const ok = await ask(kind);
+    if (ok && kind === 'notifications') setUpPush();
     if (!ok && (await state(kind)) === 'denied') M.toast?.(`${WHY[kind].name} not allowed`, 'You can allow it any time in Settings.');
     return ok;
   }
@@ -281,6 +282,15 @@
       return M.needLogin({ action: 'create', from, next: `${page}?create=1` });
     }, { guarded: true, original: make });
   };
+  // A big album's download is made in the background and emailed: say so
+  function zipNotice() {
+    const q = new URLSearchParams(location.search);
+    if (q.get('zip') !== 'preparing') return;
+    q.delete('zip');
+    history.replaceState(null, '', location.pathname + (q.size ? '?' + q : '') + location.hash);
+    setTimeout(() => M.toast?.('Preparing your download', 'This album is big, so we’re zipping it for you. We’ll email you a link in a few minutes.'), 600);
+  }
+
   async function afterLogin() {
     const q = new URLSearchParams(location.search);
     if (!q.has('create')) return;
@@ -307,6 +317,27 @@
     slot.hidden = false;
   }
 
-  const go = () => { wrapCreate(); afterLogin(); guestHeader(); start(); };
+  // ---------- Push notifications (likes, reactions, joins) ----------
+  // Once someone signed in has allowed notifications, this device subscribes to Momento's pushes, so
+  // they arrive even when Momento isn't open. Nothing is asked here: Settings and the permission
+  // popups ask. Turning notifications off in the browser stops them.
+  async function setUpPush() {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.isSecureContext) return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const user = await M.sessionReady?.catch?.(() => null);
+      if (!user?.emailVerified) return;
+      const { key } = await momentoApi('/api/notifications/push/key').catch(() => ({}));
+      if (!key) return;
+      const reg = await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
+      const toBytes = (b64) => { const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, (c) => c.charCodeAt(0)); };
+      const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toBytes(key) });
+      await momentoApi('/api/notifications/push', momentoJson('POST', { subscription: sub.toJSON() }));
+    } catch (err) { /* push isn't available here; the inbox still works */ }
+  }
+  M.setUpPush = setUpPush;
+
+  const go = () => { wrapCreate(); afterLogin(); zipNotice(); guestHeader(); start(); setUpPush(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 })();

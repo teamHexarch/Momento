@@ -71,14 +71,31 @@ export async function signup(req, res) {
   sendVerificationEmail(user).catch((err) => console.error(`Confirm email to ${user.email} failed: ${err.message}`));
 }
 
+// After 5 wrong passwords in a row, the account can't log in for 15 minutes (on top of the per-address
+// limit), so a password can't be guessed by spreading tries over many addresses. Resetting the
+// password, or the time passing, opens it again.
+const MAX_FAILS = 5, LOCK_MS = 15 * 60000;
+const minutesLeft = (until) => Math.max(1, Math.ceil((until - Date.now()) / 60000));
 export async function login(req, res) {
   const { email, password } = readCredentials(req.body, { needName: false });
-  const user = await User.findOne({ email }).select('+passwordHash');
+  const user = await User.findOne({ email }).select('+passwordHash +loginFails +lockedUntil');
+  if (user?.lockedUntil > new Date()) {
+    throw new HttpError(429, `Too many wrong passwords. Try again in ${minutesLeft(user.lockedUntil)} minutes, or reset your password.`, 'locked');
+  }
   const ok = await bcrypt.compare(password, user?.passwordHash || DUMMY_HASH);
   if (user && !user.passwordHash && providerNames(user)) {
     throw new HttpError(401, `This account signs in with ${providerNames(user)}. Use that button above.`);
   }
+  if (user && !ok) {
+    // Counted in one step, so tries sent at the same moment can't slip past the limit
+    const now = await User.findOneAndUpdate({ _id: user._id }, { $inc: { loginFails: 1 } }, { returnDocument: 'after', projection: { loginFails: 1 } });
+    if (now.loginFails >= MAX_FAILS) {
+      await User.updateOne({ _id: user._id }, { $set: { loginFails: 0, lockedUntil: new Date(Date.now() + LOCK_MS) } });
+      throw new HttpError(429, 'Too many wrong passwords. Try again in 15 minutes, or reset your password.', 'locked');
+    }
+  }
   if (!user || !ok) throw new HttpError(401, 'That email and password don’t match an account.');
+  if (user.loginFails || user.lockedUntil) await User.updateOne({ _id: user._id }, { $set: { loginFails: 0 }, $unset: { lockedUntil: 1 } });
   await signedIn(res, user);
 }
 
@@ -314,7 +331,7 @@ export async function resendVerification(req, res) {
   const claimed = await User.findOneAndUpdate({
     _id: req.user._id,
     $or: [{ verificationResendAt: null }, { verificationResendAt: { $lte: now } }],
-  }, { $set: { verificationResendAt: retryAt } }, { new: true });
+  }, { $set: { verificationResendAt: retryAt } }, { returnDocument: 'after' });
   if (!claimed) {
     const current = await User.findById(req.user._id);
     const retryAfter = Math.max(1, Math.ceil((current.verificationResendAt - now) / 1000));

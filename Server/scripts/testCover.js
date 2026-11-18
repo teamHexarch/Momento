@@ -82,7 +82,8 @@ try {
   // ---- During the event ----
   const now = await make('Tonight', -HOUR);
   const bytes = await sharp({ create: { width: 300, height: 200, channels: 3, background: 'red' } }).jpeg().toBuffer();
-  const upload = async () => { const fd = new FormData(); fd.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'p.jpg'); return (await json(await call(`/api/albums/${now.id}/photos`, 201, h, 'POST', fd))).photos[0]; };
+  let shade = 0;
+  const upload = async () => { const pic = await sharp({ create: { width: 300, height: 200, channels: 3, background: { r: 30 + 50 * shade++, g: 60, b: 120 } } }).jpeg().toBuffer(); const fd = new FormData(); fd.append('photos', new Blob([pic], { type: 'image/jpeg' }), 'p.jpg'); return (await json(await call(`/api/albums/${now.id}/photos`, 201, h, 'POST', fd))).photos[0]; };
   const p1 = await upload(); await new Promise((r) => setTimeout(r, 20)); const p2 = await upload();
   // No picture, no likes yet: the newest photo
   a = (await json(await call(`/api/albums/${now.id}`, 200, h))).album;

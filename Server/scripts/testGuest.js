@@ -52,6 +52,21 @@ try {
   await event('Beach day', far20k, 1000);                     // 20 km away
   const priv = await event('Private dinner', north600, 1000, 'invite');
 
+  // ---- Password guessing: 5 wrong in a row locks the account for 15 minutes ----
+  {
+    const { User: U } = await import('../src/models/User.js');
+    await U.create({ name: 'Target', email: 'target@example.invalid', passwordHash: await bcrypt.hash(password, 12), emailVerified: true });
+    for (let i = 0; i < 4; i++) await call('/api/auth/login', 401, '', 'POST', { email: 'target@example.invalid', password: 'wrong-password-' + i });
+    const fifth = await json(await call('/api/auth/login', 429, '', 'POST', { email: 'target@example.invalid', password: 'wrong-password-5' }));
+    assert.equal(fifth.code, 'locked');
+    // Even the right password waits now
+    assert.equal((await json(await call('/api/auth/login', 429, '', 'POST', { email: 'target@example.invalid', password }))).code, 'locked');
+    // When the lock runs out, the right password works and the count starts again
+    await U.updateOne({ email: 'target@example.invalid' }, { lockedUntil: new Date(Date.now() - 1000) });
+    await call('/api/auth/login', 200, '', 'POST', { email: 'target@example.invalid', password });
+    assert.equal((await U.findOne({ email: 'target@example.invalid' }).select('+loginFails')).loginFails, 0);
+  }
+
   // ---- The scan, logged out ----
   const scan = await json(await call(`/api/events/nearby?lat=${here.lat}&lng=${here.lng}&radius=1000`, 200));
   assert.equal(scan.signedIn, false);

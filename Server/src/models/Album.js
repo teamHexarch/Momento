@@ -38,7 +38,9 @@ const albumSchema = new mongoose.Schema({
   joinDeadline: Date,
   locationRequired: { type: Boolean, default: true },
   requests: [{ _id: false, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    status: { type: String, enum: ['pending', 'approving', 'declined'] }, name: String }],
+    status: { type: String, enum: ['pending', 'approving', 'declined'] }, name: String, at: { type: Date, default: Date.now } }],
+  // When the "closes soon" email went out (once per album)
+  closingNoticeAt: { type: Date, default: null },
   // The host's own cover picture (see services/coverService.js), and whether it stays the cover once the
   // event starts (otherwise the most loved photo takes over)
   cover: { key: String, thumbKey: String, token: String, at: Date },

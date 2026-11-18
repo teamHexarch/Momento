@@ -1,0 +1,60 @@
+import { Router } from 'express';
+import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
+import { requireVerified } from '../middleware/authMiddleware.js';
+import { Notification } from '../models/Notification.js';
+import { PushSubscription } from '../models/PushSubscription.js';
+import { describe, isPushConfigured } from '../services/notifyService.js';
+import { config } from '../config/env.js';
+import { HttpError } from '../utils/httpError.js';
+
+// The notifications inbox, and turning phone/computer push on or off
+export const notificationRoutes = Router();
+
+// The public half of the push key (browsers need it to subscribe). No login needed
+notificationRoutes.get('/push/key', (req, res) => res.json({ key: isPushConfigured() ? config.push.publicKey : null }));
+
+notificationRoutes.use(requireVerified);
+
+// GET /api/notifications[?before=<ISO time>]  The newest 30 (or the 30 before), and how many are unread
+notificationRoutes.get('/', async (req, res) => {
+  const before = req.query.before ? new Date(String(req.query.before)) : null;
+  const filter = { user: req.user._id, ...(before && !Number.isNaN(before.getTime()) && { at: { $lt: before } }) };
+  const [list, unread] = await Promise.all([
+    Notification.find(filter).sort({ at: -1 }).limit(30),
+    Notification.countDocuments({ user: req.user._id, read: false }),
+  ]);
+  res.set('Cache-Control', 'no-store').json({ notifications: await describe(list), unread, more: list.length === 30 });
+});
+
+// GET /api/notifications/unread  Just the count, for a badge (cheap enough to check often)
+notificationRoutes.get('/unread', async (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ unread: await Notification.countDocuments({ user: req.user._id, read: false }) });
+});
+
+// POST /api/notifications/read  { ids: [...] } or { all: true }
+notificationRoutes.post('/read', async (req, res) => {
+  const filter = { user: req.user._id, read: false };
+  if (req.body?.all !== true) {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter((id) => mongoose.isValidObjectId(id)).slice(0, 200);
+    if (!ids.length) throw new HttpError(400, 'Say which notifications to mark as read.');
+    filter._id = { $in: ids };
+  }
+  const r = await Notification.updateMany(filter, { read: true });
+  res.json({ marked: r.modifiedCount, unread: await Notification.countDocuments({ user: req.user._id, read: false }) });
+});
+
+// Push: a browser hands over its subscription (from PushManager.subscribe), or takes it back
+const pushLimit = rateLimit({ windowMs: 60 * 60000, limit: 30, keyGenerator: (req) => 'user:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many tries. Wait a while.' } });
+notificationRoutes.post('/push', pushLimit, async (req, res) => {
+  if (!isPushConfigured()) throw new HttpError(503, 'Push notifications aren’t set up on this server yet.');
+  const s = req.body?.subscription;
+  const endpoint = String(s?.endpoint || '');
+  if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000 || !s?.keys?.p256dh || !s?.keys?.auth) throw new HttpError(400, 'That push subscription isn’t valid.');
+  await PushSubscription.findOneAndUpdate({ endpoint }, { user: req.user._id, endpoint, keys: { p256dh: String(s.keys.p256dh), auth: String(s.keys.auth) } }, { upsert: true });
+  res.status(201).json({ ok: true });
+});
+notificationRoutes.delete('/push', async (req, res) => {
+  await PushSubscription.deleteOne({ endpoint: String(req.body?.endpoint || ''), user: req.user._id });
+  res.json({ ok: true });
+});

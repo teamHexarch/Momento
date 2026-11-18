@@ -11,6 +11,7 @@ const store = objectStorage({
   bucket: config.aws.s3Bucket,
   keyHint: 'give the IAM user in AWS_ACCESS_KEY_ID s3:GetObject, s3:PutObject, s3:DeleteObject and s3:ListBucket on this bucket',
   client: new S3Client({ region: config.aws.region }),
+  cdn: config.aws.cloudfront,
 });
 
-export const { name, init, save, send, open, remove } = store;
+export const { name, init, save, saveStream, send, open, remove } = store;

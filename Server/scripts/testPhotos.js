@@ -48,11 +48,33 @@ try {
   }))).album;
   await call('/api/albums/join', 201, g, 'POST', { code: album.code, location: { ...venue, accuracy: 10, timestamp: Date.now() } });
   const bytes = await sharp({ create: { width: 300, height: 200, channels: 3, background: 'red' } }).jpeg().toBuffer();
+  // A different picture each time (the same file twice is skipped as a duplicate)
+  let shade = 0;
   const upload = async (cookie) => {
-    const fd = new FormData(); fd.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'p.jpg');
+    const pic = shade++ ? await sharp({ create: { width: 300, height: 200, channels: 3, background: { r: 40 * shade, g: 90, b: 160 } } }).jpeg().toBuffer() : bytes;
+    const fd = new FormData(); fd.append('photos', new Blob([pic], { type: 'image/jpeg' }), 'p.jpg');
     return (await json(await call(`/api/albums/${album.id}/photos`, 201, cookie, 'POST', fd))).photos[0];
   };
   const hostPic = await upload(h), guestPic = await upload(g), third = await upload(h);
+
+  // ---- The same photo twice is skipped (the same file, in the same album) ----
+  {
+    const twice = new FormData();
+    twice.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'again.jpg');
+    twice.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'again2.jpg');
+    const r = await json(await call(`/api/albums/${album.id}/photos`, 201, g, 'POST', twice));
+    assert.equal(r.photos.length, 0, 'already in the album');
+    assert.equal(r.skipped, 2);
+    const other = await sharp({ create: { width: 300, height: 200, channels: 3, background: 'green' } }).jpeg().toBuffer();
+    const mix = new FormData();
+    mix.append('photos', new Blob([other], { type: 'image/jpeg' }), 'a.jpg');
+    mix.append('photos', new Blob([other], { type: 'image/jpeg' }), 'b.jpg');
+    const m = await json(await call(`/api/albums/${album.id}/photos`, 201, g, 'POST', mix));
+    assert.equal(m.photos.length, 1, 'twice in one upload: kept once');
+    assert.equal(m.skipped, 1);
+    await call('/api/trash', 200, h, 'POST', { photoIds: [m.photos[0].id] });
+    await call('/api/trash/purge', 200, h, 'POST', { photoIds: [m.photos[0].id] });
+  }
 
   // ---- Emoji reactions: one each, switchable, removable; who reacted ----
   await call(`/api/photos/${hostPic.id}/reaction`, 200, g, 'POST', { emoji: '🥳' });

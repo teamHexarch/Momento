@@ -22,7 +22,7 @@ export async function savePhoto(albumId, inputBuffer) {
   const thumbnailKey = `${key}.thumb.webp`;
   const previewKey = `${key}.preview${EXT[previewMimeType]}`;
   try {
-    await driver.save(key, buffer, mimeType);
+    await driver.save(key, buffer, mimeType, { tier: true });
     await driver.save(thumbnailKey, thumbnail, 'image/webp');
     await driver.save(previewKey, preview, previewMimeType);
   } catch (err) {
@@ -37,7 +37,9 @@ export const saveFile = (key, buffer, mimeType) => driver.save(key, buffer, mime
 export const removeFile = (key) => driver.remove(key);
 
 // Answers a request for the photo; false when the file is gone
-export const sendPhoto = (res, key, mimeType) => driver.send(res, key, mimeType);
+export const sendPhoto = (res, key, mimeType, opts) => driver.send(res, key, mimeType, opts);
+// A big file written as it's made (background zips)
+export const saveStream = (key, stream, mimeType) => driver.saveStream(key, stream, mimeType);
 
 // A readable stream of the photo (for zip downloads)
 export const openPhoto = (key) => driver.open(key);

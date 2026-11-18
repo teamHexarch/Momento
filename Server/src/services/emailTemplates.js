@@ -109,6 +109,39 @@ export function emailChangedHtml(user, newEmail) {
   });
 }
 
+export function zipReadyHtml(user, albumName, count, link) {
+  const first = firstName(user);
+  return layout({
+    heading: `Your download of ${albumName} is ready`,
+    paragraphs: [`${first ? `Hi ${first}, ` : ''}all ${count} photo${count === 1 ? '' : 's'} from ${albumName} are in one zip file. The link works for 3 days (you may need to log in to Momento first).`],
+    button: { href: link, label: 'Download the zip' },
+    footer: 'You asked to download this album from Momento.',
+  });
+}
+
+export function closingHtml(user, album, hoursLeft, link) {
+  const first = firstName(user);
+  return layout({
+    heading: `Last chance to add your photos to ${album.name}`,
+    paragraphs: [`${first ? `Hi ${first}, ` : ''}${album.name} takes new photos for about ${hoursLeft} more hour${hoursLeft === 1 ? '' : 's'}. After that you can still see and download everything, but nobody can add more.`],
+    button: { href: link, label: 'Add my photos' },
+    footer: 'You can turn these emails off in Momento: Account settings, "An album is about to close".',
+  });
+}
+
+export function recapHtml(user, total, albums, link) {
+  const first = firstName(user);
+  return layout({
+    heading: `${total} new photo${total === 1 ? '' : 's'} this week`,
+    paragraphs: [
+      `${first ? `Hi ${first}, ` : ''}here’s what people added to your albums in the last 7 days:`,
+      ...albums.map((a) => `${a.name}: ${a.n} new photo${a.n === 1 ? '' : 's'}`),
+    ],
+    button: { href: link, label: 'See my albums' },
+    footer: 'You asked for a weekly recap. Turn it off any time in Momento: Account settings, "Weekly recap".',
+  });
+}
+
 export function reminderHtml(guest, album, hostName, link) {
   const first = firstName(guest);
   return layout({

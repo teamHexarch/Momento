@@ -20,6 +20,11 @@ const userSchema = new mongoose.Schema({
   // The album code from the invite link they signed up through. Joined (and cleared) once they
   // confirm their email, so the confirm link takes them into the album on any device
   pendingJoin: { type: String, maxlength: 7, select: false },
+  // Wrong passwords in a row, and (after 5) when logging in is allowed again
+  loginFails: { type: Number, default: 0, select: false },
+  // When the last weekly recap went out
+  recapAt: { type: Date, default: null },
+  lockedUntil: { type: Date, select: false },
   // Albums they saved (the bookmark on My albums; shown under Liked)
   savedAlbums: { type: [mongoose.Schema.Types.ObjectId], default: [] },
   // One record per login. Never apply a TTL index here: that would delete users.

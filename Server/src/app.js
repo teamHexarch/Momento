@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import express from 'express';
+import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env.js';
 import { loadUser } from './middleware/authMiddleware.js';
@@ -13,6 +14,7 @@ import { eventRoutes } from './routes/eventRoutes.js';
 import { groupRoutes } from './routes/groupRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { trashRoutes } from './routes/trashRoutes.js';
+import { notificationRoutes } from './routes/notificationRoutes.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -39,13 +41,26 @@ app.get('/api/config', (req, res) => {
     mapsApiKey: config.mapsApiKey || null,
   });
 });
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+// For uptime alerts: 200 only when the server can really reach the database, otherwise 503
+app.get('/api/health', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    await Promise.race([
+      mongoose.connection.db.admin().ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false, error: 'The database can’t be reached.' });
+  }
+});
 app.use('/api/auth', authRoutes);
 app.use('/api/albums', albumRoutes);
 app.use('/api/photos', photoRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', trashRoutes);   // /api/trash and /api/hidden
 app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 

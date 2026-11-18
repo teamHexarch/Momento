@@ -97,6 +97,8 @@ export async function finishEmailChange(token) {
 export async function deleteAccount(user) {
   // Groups they made are deleted (albums stay with their hosts); they leave every other group
   await deleteGroupsOf(user);
+  const { forgetUser } = await import('./notifyService.js');
+  await forgetUser(user._id);
   const hosted = await Album.find({ host: user._id }, '_id cover');
   const { removeCoverFiles } = await import('./coverService.js');
   await removeCoverFiles(hosted.flatMap((a) => [a.cover?.key, a.cover?.thumbKey]));

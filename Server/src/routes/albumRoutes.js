@@ -52,6 +52,8 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 albumRoutes.post('/:id/photos', albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', albums.download);
+// The emailed link to a big album's zip (made in the background)
+albumRoutes.get('/:id/zip/:token', albums.zipFile);
 // Hide photos from your own view (everyone else still sees them)
 albumRoutes.post('/:id/hidden', albums.setHidden);
 // The bookmark: saved albums show under Liked

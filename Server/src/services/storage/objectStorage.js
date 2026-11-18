@@ -1,5 +1,7 @@
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getSignedUrl as cloudFrontUrl } from '@aws-sdk/cloudfront-signer';
+import { Upload } from '@aws-sdk/lib-storage';
 
 // Photos in a private Amazon S3 bucket.
 // The bucket stays private: the API checks someone is in the album, then sends their browser to a
@@ -15,7 +17,9 @@ const LINK_SECONDS = 3600;
  * @param {string} o.bucket
  * @param {string} o.keyHint what to check when access is refused
  */
-export function objectStorage({ name, label, client, bucket, keyHint }) {
+export function objectStorage({ name, label, client, bucket, keyHint, cdn }) {
+  const useCdn = Boolean(cdn?.domain && cdn.keyPairId && cdn.privateKey);
+  if (useCdn) console.log(`Photos: served through CloudFront (${cdn.domain})`);
   return {
     name,
     bucket,
@@ -33,11 +37,21 @@ export function objectStorage({ name, label, client, bucket, keyHint }) {
         throw new Error(`${label}: ${why}.`);
       }
     },
-    async save(key, buffer, mimeType) {
-      await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: mimeType }));
+    // tier: an original photo, kept in S3 Intelligent-Tiering (the same speed, cheaper once it hasn't been
+    // opened for a while). Files under 128 KB don't benefit, so they stay in the standard class.
+    async save(key, buffer, mimeType, { tier = false } = {}) {
+      const StorageClass = tier && buffer.length >= 128 * 1024 ? 'INTELLIGENT_TIERING' : undefined;
+      await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: mimeType, StorageClass }));
     },
-    async send(res, key) {
-      const url = await getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: LINK_SECONDS });
+    // A file too big to hold in memory (a background zip), uploaded in parts as it's made
+    async saveStream(key, stream, mimeType) {
+      await new Upload({ client, params: { Bucket: bucket, Key: key, Body: stream, ContentType: mimeType }, queueSize: 2, partSize: 8 * 1024 * 1024 }).done();
+    },
+    async send(res, key, mimeType, { filename } = {}) {
+      // Through CloudFront when it's set up (a signed link, also good for an hour); else straight from S3
+      const url = useCdn && !filename
+        ? cloudFrontUrl({ url: `https://${cdn.domain}/${key.split('/').map(encodeURIComponent).join('/')}`, keyPairId: cdn.keyPairId, privateKey: cdn.privateKey, dateLessThan: new Date(Date.now() + LINK_SECONDS * 1000).toISOString() })
+        : await getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key, ...(filename && { ResponseContentDisposition: `attachment; filename="${filename.replace(/"/g, '')}"` }) }), { expiresIn: LINK_SECONDS });
       // The browser may reuse this redirect for a while, so the same photo isn't re-signed on every view
       res.set('Cache-Control', `private, max-age=${LINK_SECONDS - 300}`);
       res.redirect(302, url);

@@ -37,7 +37,8 @@ try {
   const guest = await User.create({ name: 'Guest', email: 'guest@example.invalid', passwordHash, emailVerified: true });
   const pending = await User.create({ name: 'Pending', email: 'pending@example.invalid', passwordHash });
   const login = async email => cookieOf(await call('/api/auth/login', 200, '', 'POST', { email, password }));
-  for (const page of ['/', '/albums.html', '/settings.html', '/support.html', '/sort.html', '/privacy.html', '/api/health']) await call(page, 200);
+  for (const page of ['/', '/albums.html', '/events.html', '/settings.html', '/support.html', '/privacy.html', '/api/health']) await call(page, 200);
+  await call('/sort.html', 404);   // the swipe sorter was removed
   await call('/api/albums', 401);
   await call('/api/auth/login', 401, '', 'POST', { email: host.email, password: 'wrong-password' });
   const h = await login(host.email), g = await login(guest.email), p = await login(pending.email);
@@ -54,7 +55,8 @@ try {
   await call('/api/auth/me', 200, h, 'PATCH', { name: 'Updated', notify: { photos: false } });
   const album = (await (await call('/api/albums', 201, h, 'POST', { name: 'Test album', date: new Date().toISOString().slice(0, 10), place: 'Test', startsAt: new Date(Date.now() - 3600000).toISOString(), endsAt: new Date(Date.now() + 3600000).toISOString(), uploadLeadMin: 0, zone: { lat: -33.8688, lng: 151.2093, radiusM: 1000 }, venue: { address: 'Test venue' } })).json()).album;
   await call('/api/albums/' + album.id, 404, v);
-  await call('/api/albums/join', 201, g, 'POST', { code: album.code });
+  // Since V2.3, joining an album with a sharing zone needs a recent location inside it
+  await call('/api/albums/join', 201, g, 'POST', { code: album.code, location: { lat: -33.8688, lng: 151.2093, accuracy: 10, timestamp: Date.now() } });
   await call('/api/albums/' + album.id, 403, g, 'DELETE');
   const bytes = await sharp({ create: { width: 1200, height: 800, channels: 3, background: 'red' } }).png().toBuffer();
   const form = new FormData(); form.append('photos', new Blob([bytes], { type: 'image/png' }), 'test.png');
@@ -75,9 +77,14 @@ try {
   await call('/api/auth/logout', 200, h, 'POST');
   assert.equal((await (await call('/api/auth/me', 200, h)).json()).user, null);
   const reset = await issueToken(guest, 'reset', 10);
+  // At most 3 devices logged in at once on the free plan (admins, the default since V2.3, aren't limited)
+  const admin = (await User.findById(guest.id)).plan;
   await login(guest.email);
   await login(guest.email);
+  if (admin === 'admin') await login(guest.email);   // a fourth: fine for an admin
+  await User.updateOne({ _id: guest.id }, { plan: 'free' });
   await call('/api/auth/login', 409, '', 'POST', { email: guest.email, password });
+  await User.updateOne({ _id: guest.id }, { plan: admin });
   await call('/api/auth/password/reset', 200, '', 'POST', { token: reset, password: 'New-password-123!' });
   assert.equal((await (await call('/api/auth/me', 200, g)).json()).user, null);
   // Email change: the current inbox approves, the new inbox confirms, then every device is logged out
