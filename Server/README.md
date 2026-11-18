@@ -243,6 +243,9 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/events/:id/join` | `{ location }` joins a public event as a guest (inside its zone, or the host approves) |
 | GET | `/api/albums/:id` | One album with its photos (each with `likes`, `liked`, `reactions`, `reaction`), minus any you've hidden or the host has deleted; `album.hiddenCount`, `album.saved`, and for the host `album.trashCount`. `?hidden=1` includes your hidden ones, marked `hidden: true` |
 | POST | `/api/albums/:id/save` | `{ saved }` the bookmark (saved albums show under Liked) |
+| PUT | `/api/albums/:id/cover` | Host only: multipart field `cover` (one image, up to 15 MB) sets the album's cover picture, re-encoded as WebP |
+| DELETE | `/api/albums/:id/cover` | Host only: takes the cover picture off |
+| GET | `/api/albums/:id/cover/:token` | **No login needed.** The cover picture (`?size=thumb` for the small one). The address comes with the album as `cover.url` |
 | POST | `/api/albums/:id/hidden` | `{ photoIds, hidden }` hides photos from your own view, or shows them again; `{ all: true, hidden: false }` shows every hidden photo. Other people still see them |
 | PATCH | `/api/albums/:id` | Host only: change name, date, place or zone |
 | DELETE | `/api/albums/:id` | Host only: deletes the album and its photos |

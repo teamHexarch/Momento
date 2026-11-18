@@ -39,6 +39,10 @@ const albumSchema = new mongoose.Schema({
   locationRequired: { type: Boolean, default: true },
   requests: [{ _id: false, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: { type: String, enum: ['pending', 'approving', 'declined'] }, name: String }],
+  // The host's own cover picture (see services/coverService.js), and whether it stays the cover once the
+  // event starts (otherwise the most loved photo takes over)
+  cover: { key: String, thumbKey: String, token: String, at: Date },
+  keepHostCover: { type: Boolean, default: false },
   // When a host last emailed guests who haven't added photos (one reminder a day per album)
   lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.

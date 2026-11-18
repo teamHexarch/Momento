@@ -6,6 +6,7 @@ import { Membership } from '../models/Membership.js';
 import { Photo } from '../models/Photo.js';
 import { HttpError } from '../utils/httpError.js';
 import { albumLifecycle, distanceM } from './albumController.js';
+import { hostCover } from '../services/coverService.js';
 
 // Events: public albums (the host chose "Public" when creating it) that anyone can find on the
 // Events map and join, as long as they're inside the album's zone. Invite-only albums never show here.
@@ -73,6 +74,7 @@ export async function nearby(req, res) {
       bearing: Math.round(bearing(at, a.zone)), direction: d < 30 ? 'here' : COMPASS[Math.round(bearing(at, a.zone) / 45) % 8],
       photos: s?.photos || 0, pics: joined.has(String(a.id)) ? (s?.pics || []).map(thumbnailUrl) : [], guests: countOf.get(String(a.id)) || 0,
       hostName: firstName(a.host?.name), joined: joined.has(String(a.id)),
+      cover: hostCover(a),
     };
   }).sort((x, y) => (y.live - x.live) || (x.distanceM - y.distanceM));
   res.json({ events, scan: { lat: at.lat, lng: at.lng, radiusM, count: events.filter((e) => e.inScan).length }, signedIn: !!req.user });

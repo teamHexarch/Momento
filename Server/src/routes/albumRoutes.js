@@ -35,6 +35,8 @@ const previewLimit = rateLimit({
   message: { error: 'That’s a lot of codes. Wait a few minutes, then try again.' },
 });
 albumRoutes.get('/preview/:code', previewLimit, albums.preview);
+// The cover picture: shown on invites and the Events map too, so no login (its address has a token)
+albumRoutes.get('/:id/cover/:token', albums.coverFile);
 
 // Everything else needs an account with a confirmed email
 albumRoutes.use(requireVerified);
@@ -54,5 +56,9 @@ albumRoutes.get('/:id/download', albums.download);
 albumRoutes.post('/:id/hidden', albums.setHidden);
 // The bookmark: saved albums show under Liked
 albumRoutes.post('/:id/save', albums.save);
+// The host's cover picture: one image up to 15 MB, re-encoded small on the server
+const coverUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
+albumRoutes.put('/:id/cover', coverUpload.single('cover'), albums.putCover);
+albumRoutes.delete('/:id/cover', albums.deleteCover);
 
 albumRoutes.post('/:id/remind', albums.remind);

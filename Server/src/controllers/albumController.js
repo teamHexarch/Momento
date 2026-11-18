@@ -17,6 +17,8 @@ import { HttpError } from '../utils/httpError.js';
 import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
 import { savePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
 import { reactionCounts, myReaction } from './photoController.js';
+import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
+import { sendPhoto } from '../services/storageService.js';
 
 const PREVIEW_PICS = 12;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
@@ -93,12 +95,16 @@ async function statsFor(albumIds, userId, hidden = []) {
   const [photoStats, memberStats, hosts, grouped] = await Promise.all([
     Photo.aggregate([
       { $match: { album: { $in: albumIds }, _id: { $nin: hidden }, deletedAt: null } },
+      // How loved each photo is: its likes plus its emoji reactions
+      { $addFields: { score: { $add: [{ $ifNull: ['$likeCount', 0] }, { $size: { $ifNull: ['$reactions', []] } }] } } },
       { $group: {
         _id: '$album',
         photos: { $sum: 1 },
         mine: { $sum: { $cond: [{ $eq: ['$uploader', userId] }, 1, 0] } },
-        // Most liked first, so the album's cover is its favourite photo (newest first among equals)
-        pics: { $topN: { n: PREVIEW_PICS, sortBy: { likeCount: -1, createdAt: -1 }, output: '$_id' } },
+        // Most loved first (newest first among equals)
+        pics: { $topN: { n: PREVIEW_PICS, sortBy: { score: -1, createdAt: -1 }, output: '$_id' } },
+        top: { $top: { sortBy: { score: -1, createdAt: -1 }, output: { id: '$_id', score: '$score' } } },
+        newest: { $top: { sortBy: { createdAt: -1 }, output: '$_id' } },
       } },
     ]),
     Membership.aggregate([
@@ -120,7 +126,7 @@ async function statsFor(albumIds, userId, hidden = []) {
     }
   }
   const byAlbum = new Map(albumIds.map((id) => [String(id), { photos: 0, mine: 0, pics: [], guests: 0, hostName: '', hostIsYou: false }]));
-  for (const s of photoStats) Object.assign(byAlbum.get(String(s._id)), { photos: s.photos, mine: s.mine, pics: s.pics.map(thumbnailUrl) });
+  for (const s of photoStats) Object.assign(byAlbum.get(String(s._id)), { photos: s.photos, mine: s.mine, pics: s.pics.map(thumbnailUrl), _top: s.top, _newest: s.newest });
   const people = new Map(memberStats.map((s) => [String(s._id), new Set(s.users.map(String))]));
   for (const a of grouped) {
     if (!a.group) continue;
@@ -138,7 +144,21 @@ async function statsFor(albumIds, userId, hidden = []) {
   return byAlbum;
 }
 
-function summary(album, role, stats) {
+// Which picture is the album's cover:
+// - before the event: the host's picture (if they added one)
+// - once it starts: the photo with the most likes and reactions, unless the host chose to keep theirs;
+//   the host's picture stays until some photo gets its first like or reaction
+// - no host picture: the most loved photo, or the newest one while none has any
+export function coverOf(album, stats = {}) {
+  const host = hostCover(album);
+  const top = stats._top?.score > 0 ? { source: 'top', id: String(stats._top.id), url: photoUrl(stats._top.id), thumbUrl: thumbnailUrl(stats._top.id), score: stats._top.score } : null;
+  const newest = stats._newest ? { source: 'newest', id: String(stats._newest), url: photoUrl(stats._newest), thumbUrl: thumbnailUrl(stats._newest) } : null;
+  if (host && (albumLifecycle(album).status === 'upcoming' || album.keepHostCover)) return host;
+  return top || host || newest || null;
+}
+
+function summary(album, role, stats = {}) {
+  const { _top, _newest, ...shown } = stats;
   return {
     id: album.id,
     name: album.name,
@@ -156,7 +176,10 @@ function summary(album, role, stats) {
     code: role === 'host' ? album.displayCode : undefined,
     zone: album.zone?.radiusM ? album.zone : undefined,
     visibility: album.visibility || 'invite',
-    ...stats,
+    cover: coverOf(album, stats),
+    hasHostCover: !!album.cover?.key,
+    keepHostCover: !!album.keepHostCover,
+    ...shown,
   };
 }
 
@@ -344,6 +367,7 @@ export async function preview(req, res) {
       photos, guests,
       visibility: album.visibility || 'invite',
       group: !!album.group,
+      cover: hostCover(album),
       // How joining works, so the page can say it before they log in
       joining: {
         open,
@@ -358,6 +382,37 @@ export async function preview(req, res) {
 }
 
 // POST /api/albums/:id/save  { saved: true|false }  The bookmark on My albums (only albums you're in)
+// ---- The cover picture ----
+
+// PUT /api/albums/:id/cover  (multipart field "cover")  The host's own picture for the album
+export async function putCover(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the cover.');
+  if (!req.file) throw new HttpError(400, 'Choose a photo for the cover.');
+  await saveCover(m.album, req.file.buffer);
+  const stats = await statsFor([m.album._id], req.user._id, m.hidden || []);
+  res.json({ album: summary(m.album, 'host', stats.get(String(m.album._id))) });
+}
+
+// DELETE /api/albums/:id/cover  Back to the album's photos for the cover
+export async function deleteCover(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the cover.');
+  await removeCover(m.album);
+  const stats = await statsFor([m.album._id], req.user._id, m.hidden || []);
+  res.json({ album: summary(m.album, 'host', stats.get(String(m.album._id))) });
+}
+
+// GET /api/albums/:id/cover/:token[?size=thumb]  The picture itself. No login needed: the token in
+// the address is the key (it's only given out with the album's details, invite or Events listing)
+export async function coverFile(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'No cover.');
+  const album = await Album.findById(req.params.id, 'cover');
+  if (!album?.cover?.token || album.cover.token !== req.params.token) throw new HttpError(404, 'No cover.');
+  const key = req.query.size === 'thumb' ? album.cover.thumbKey : album.cover.key;
+  if (!(await sendPhoto(res, key, 'image/webp'))) throw new HttpError(404, 'No cover.');
+}
+
 export async function save(req, res) {
   const m = await membershipOf(req, req.params.id);
   const want = req.body?.saved !== false;
@@ -435,6 +490,7 @@ export async function update(req, res) {
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the album.');
   const fields = readAlbumFields({ name: m.album.name, date: m.album.date, place: m.album.place, zone: m.album.zone, ...req.body });
   Object.assign(m.album, fields);
+  if (typeof req.body?.keepHostCover === 'boolean') m.album.keepHostCover = req.body.keepHostCover;
   // groupId: a friend group the host is in, or null to stop sharing it with its group
   if (req.body && 'groupId' in req.body) {
     const before = m.album.group;
@@ -457,6 +513,7 @@ export async function remove(req, res) {
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can delete the album.');
   const photos = await Photo.find({ album: m.album._id }, 'storageKey');
   await deletePhotos(photos.map((p) => p.storageKey));
+  await removeCoverFiles([m.album.cover?.key, m.album.cover?.thumbKey]);
   await Promise.all([
     Photo.deleteMany({ album: m.album._id }),
     Membership.deleteMany({ album: m.album._id }),
