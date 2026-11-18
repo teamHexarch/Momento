@@ -1,6 +1,6 @@
 {
   "name": "momento-server",
-  "version": "0.1.0",
+  "version": "2.9.0",
   "private": true,
   "type": "module",
   "description": "Momento API: accounts (email, Google, email confirmation), albums, join codes and photo uploads.",
