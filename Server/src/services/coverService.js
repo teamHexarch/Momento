@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { config } from '../config/env.js';
 import { saveFile, removeFile } from './storageService.js';
 import { HttpError } from '../utils/httpError.js';
+import { assertAllowed } from './nsfwService.js';
 
 // An album's cover picture, chosen by its host. The upload is decoded and re-encoded (so only the
 // picture is kept: no location or camera details), as a large WebP and a small one for cards.
@@ -10,6 +11,7 @@ import { HttpError } from '../utils/httpError.js';
 // the albums list without logging in, but can't be found by guessing album ids.
 
 export async function saveCover(album, buffer) {
+  await assertAllowed(buffer, 'This cover');
   let big, small;
   try {
     const img = sharp(buffer, { limitInputPixels: 100_000_000 }).autoOrient();

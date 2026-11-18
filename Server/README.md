@@ -161,6 +161,11 @@ CLOUDFRONT_DOMAIN=
 CLOUDFRONT_KEY_PAIR_ID=
 # The private key, on one line with \n where the line breaks go
 CLOUDFRONT_PRIVATE_KEY=
+
+# ---- Nudity check (on by default; see "What the server does by itself") ----
+# NSFW_CHECK=off
+# How sure the model must be before a photo is refused (0 to 1)
+# NSFW_THRESHOLD=0.6
 ```
 
 ## 1. MongoDB Atlas
@@ -263,7 +268,7 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | PATCH | `/api/albums/:id` | Host only: change name, date, place or zone |
 | DELETE | `/api/albums/:id` | Host only: deletes the album and its photos |
 | DELETE | `/api/albums/:id/membership` | A guest leaves the album |
-| POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF) |
+| POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF). Returns `{ photos, skipped, blocked }`: `skipped` were duplicates, `blocked` looked like nudity and were refused. If every photo is refused: 422 with `code: "nsfw"` |
 | GET | `/api/albums/:id/download` | Every photo as a .zip. Albums over 300 photos or 1 GB are zipped in the background instead: the page is told (`?zip=preparing`) and an email brings the link |
 | GET | `/api/albums/:id/zip/:token` | The emailed link to a background zip (members only; 3 days) |
 | GET | `/api/notifications` | Your inbox, newest first (`?before=` for more): likes, reactions, photos added, joins, requests to join, being let in. Each has `text`, `by`, `avatarUrl`, `albumId`, and for photos `photoId` and `thumbUrl`; plus `unread` |
@@ -303,6 +308,10 @@ Every hour (src/services/jobs.js), each job claiming its work first so nothing h
 Every 6 hours: photos more than 30 days in the Recently deleted bin are removed for good.
 
 Other things to know:
+- **Nudity check**: every album photo, cover and profile picture is checked by a free model that runs on
+  the server itself (NSFW.js, about 160 MB of memory, under a second per photo, one at a time). Explicit
+  photos are refused with a clear message (422, `code: "nsfw"`); swimwear and party photos are allowed.
+  If the model can't load, uploads still work and the problem is logged. `NSFW_CHECK=off` turns it off.
 - New photos skip duplicates (the same file twice in one album), and their originals are stored in S3
   Intelligent-Tiering (the same speed, cheaper once a photo hasn't been opened for a while).
 - 5 wrong passwords in a row lock that account for 15 minutes (resetting the password lifts it).

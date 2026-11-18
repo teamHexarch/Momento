@@ -21,6 +21,7 @@ import { reactionCounts, myReaction } from './photoController.js';
 import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
 import { notifyPhotos } from '../services/notifyService.js';
 import { isBig, requestZip, ZipFile } from '../services/zipService.js';
+import { scan, isExplicit } from '../services/nsfwService.js';
 import { sendPhoto } from '../services/storageService.js';
 
 const PREVIEW_PICS = 12;
@@ -559,10 +560,12 @@ export async function addPhotos(req, res) {
   // The same file twice (in this upload, or already in the album and not deleted): skipped
   const hashes = files.map((f) => crypto.createHash('sha256').update(f.buffer).digest('hex'));
   const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
-  let skipped = 0;
+  let skipped = 0, blocked = 0;
   for (const [i, f] of files.entries()) {
     const hash = hashes[i];
     if (there.has(hash)) { skipped++; continue; }
+    // Nudity isn't allowed: that photo is refused (the others in the upload still go in)
+    if (isExplicit(await scan(f.buffer))) { blocked++; continue; }
     there.add(hash);
     const stored = await savePhoto(album.id, f.buffer);
     let p;
@@ -580,8 +583,14 @@ export async function addPhotos(req, res) {
     ]);
     notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length });
   }
+  if (blocked && !saved.length && !skipped) {
+    throw new HttpError(422, blocked === 1
+      ? 'This photo can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.'
+      : 'These photos can’t be added: they look like they contain nudity, which isn’t allowed on Momento.', 'nsfw');
+  }
   // skipped: photos that were already in the album (or twice in this upload)
-  res.status(201).json({ photos: saved, skipped });
+  // blocked: photos refused because they look like they contain nudity
+  res.status(201).json({ photos: saved, skipped, blocked });
 }
 
 export async function download(req, res) {

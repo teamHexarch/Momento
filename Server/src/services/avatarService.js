@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { config } from '../config/env.js';
 import { saveFile, removeFile } from './storageService.js';
 import { HttpError } from '../utils/httpError.js';
+import { assertAllowed } from './nsfwService.js';
 
 // Profile photos. An uploaded photo is decoded and re-encoded as a 256 x 256 WebP (so nothing but
 // the picture is kept: no location or camera data), stored under avatars/<userId>/, and served
@@ -24,6 +25,7 @@ export function avatarOf(user) {
 }
 
 export async function saveAvatar(user, buffer) {
+  await assertAllowed(buffer, 'This profile photo');
   let webp;
   try {
     webp = await sharp(buffer, { limitInputPixels: 50_000_000 })

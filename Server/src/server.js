@@ -5,6 +5,7 @@ import { initStorage, storageName } from './services/storageService.js';
 import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
+import { warmUp } from './services/nsfwService.js';
 
 await connectDb();
 await initStorage();
@@ -23,4 +24,6 @@ setInterval(emptyBin, 6 * 3600000).unref();
 // Every hour: "closes soon" emails, weekly recaps, tidying, and the daily backup (see services/jobs.js)
 setTimeout(runJobs, 2 * 60000).unref();
 setInterval(runJobs, 3600000).unref();
+// The nudity check's model loads in the background, so the first upload isn't slow
+setTimeout(warmUp, 5000).unref();
 app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
