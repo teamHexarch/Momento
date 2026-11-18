@@ -55,6 +55,8 @@ try {
   const hostPic = await upload(h), guestPic = await upload(g), third = await upload(h);
 
   // ---- Emoji reactions: one each, switchable, removable; who reacted ----
+  await call(`/api/photos/${hostPic.id}/reaction`, 200, g, 'POST', { emoji: '🥳' });
+  assert.equal((await json(await call(`/api/photos/${hostPic.id}/reactions`, 200, h))).people[0].emoji, '🥳');
   await call(`/api/photos/${hostPic.id}/reaction`, 400, g, 'POST', { emoji: '💩' });
   let r = await json(await call(`/api/photos/${hostPic.id}/reaction`, 200, g, 'POST', { emoji: '😍' }));
   assert.deepEqual(r, { reactions: { '😍': 1 }, reaction: '😍' });
@@ -75,6 +77,7 @@ try {
 
   // ---- Liked tab: likes keep their time, newest first ----
   await call(`/api/photos/${third.id}/like`, 200, g, 'POST', { liked: true });
+  assert.deepEqual((await json(await call(`/api/photos/${third.id}/likes`, 200, h))).people.map(p => p.by), ['guest']);
   await new Promise((res) => setTimeout(res, 20));
   await call(`/api/photos/${hostPic.id}/like`, 200, g, 'POST', { liked: true });
   let liked = (await json(await call('/api/photos/liked', 200, g))).photos;
@@ -82,6 +85,7 @@ try {
   assert.equal(liked[0].albumName, 'Picnic');
   assert.ok(liked[0].likedAt);
   await call(`/api/photos/${third.id}/like`, 200, g, 'POST', { liked: false });
+  assert.deepEqual((await json(await call(`/api/photos/${third.id}/likes`, 200, h))).people, []);
   liked = (await json(await call('/api/photos/liked', 200, g))).photos;
   assert.deepEqual(liked.map((p) => p.id), [hostPic.id]);
 

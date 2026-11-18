@@ -21,5 +21,6 @@ const socialLimit = rateLimit({
   message: { error: 'That’s a lot at once. Wait a few minutes, then try again.' },
 });
 photoRoutes.post('/:id/like', socialLimit, photos.like);
+photoRoutes.get('/:id/likes', photos.likes);
 photoRoutes.post('/:id/reaction', socialLimit, photos.react);
 photoRoutes.get('/:id/reactions', photos.reactions);

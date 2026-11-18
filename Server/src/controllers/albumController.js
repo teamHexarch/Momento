@@ -43,6 +43,7 @@ export function lifecycle(date) {
 // Albums with event times: photos can be added from uploadLeadMin before the start until the end,
 // then the album is kept (still there to look at and download).
 export function albumLifecycle(album, now = Date.now()) {
+  if (album.group && !album.eventUploadWindow) return { status: 'live', open: true, anytimeUploads: true };
   if (!album.startsAt || !album.endsAt) return lifecycle(album.date);
   const opensAt = album.startsAt.getTime() - (album.uploadLeadMin || 0) * 60000;
   const endsAt = album.endsAt.getTime();
@@ -287,9 +288,9 @@ export async function create(req, res) {
   const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body), visibility: req.body?.visibility === 'public' ? 'public' : 'invite' };
   const group = req.body?.groupId ? await groupFor(req.user._id, req.body.groupId) : null;
   // Group albums are for the group (and anyone given the code), never listed publicly on Events
-  if (group) Object.assign(fields, { group: group._id, visibility: 'invite' });
+  if (group) Object.assign(fields, { group: group._id, visibility: 'invite', eventUploadWindow: req.body.eventUploadWindow === true });
+  else fields.eventUploadWindow = true;
 
-  // group album this is only for guests from outside the group (they never see the group's chat).
   let album;
   // Codes are random; on the rare clash with an existing one, draw again
   for (let tries = 0; !album; tries++) {
@@ -567,7 +568,7 @@ export async function remind(req, res) {
   const ids = guests.map((g) => g.user).filter((u) => !added.has(String(u))).slice(0, REMIND_MAX);
   const people = await User.find({ _id: { $in: ids } }, 'name email');
   const link = `${config.frontendUrl}/albums.html?album=${album.id}`;
-  const info = { name: album.name, closesLabel: closesLabel(closes) };
+  const info = { name: album.name, closesLabel: closes && closesLabel(closes) };
   const results = await Promise.allSettled(people.map((p) => sendEmail({
     to: p.email,
     subject: `Add your photos to ${album.name}`,

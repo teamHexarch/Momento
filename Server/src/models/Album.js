@@ -16,6 +16,8 @@ const albumSchema = new mongoose.Schema({
   endsAt: Date,
   // Guests can add photos from this many minutes before startsAt until endsAt
   uploadLeadMin: { type: Number, min: 0, max: 1440, default: 0 },
+  // Set when the Events form creates an event and shares it with a friend group.
+  eventUploadWindow: Boolean,
   // Join code, stored without the dash: K7Q48DM is shown as K7Q-48DM
   code: { type: String, required: true, unique: true },
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },

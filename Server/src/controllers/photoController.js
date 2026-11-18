@@ -67,8 +67,17 @@ export async function like(req, res) {
   res.json({ likes: Math.max(0, now.likeCount || 0), liked: now.likes.some((id) => id.equals(uid)) });
 }
 
-// ---- Emoji reactions: one per person per photo, from these six ----
-export const REACTIONS = ['😍', '😂', '🔥', '👏', '🥹', '😮'];
+export async function likes(req, res) {
+  const { photo } = await photoFor(req, { react: true });
+  await photo.populate({ path: 'likes', model: 'User', select: AVATAR_FIELDS });
+  const people = photo.likes.map((user) => {
+    const mine = user._id.equals(req.user._id);
+    return { by: mine ? 'You' : firstName(user.name), mine, avatarUrl: avatarOf(user) };
+  }).sort((a, b) => b.mine - a.mine);
+  res.json({ people });
+}
+
+export const REACTIONS = ['😍', '😂', '🔥', '👏', '🥹', '😮', '🎉', '🥳', '❤️', '🙌', '✨', '🤩'];
 export function reactionCounts(photo) {
   const counts = {};
   for (const r of photo.reactions || []) if (REACTIONS.includes(r.emoji)) counts[r.emoji] = (counts[r.emoji] || 0) + 1;
@@ -91,7 +100,7 @@ export async function react(req, res) {
 // GET /api/photos/:id/reactions  Who reacted with what (yours first)
 export async function reactions(req, res) {
   const { photo } = await photoFor(req, { react: true });
-  await photo.populate('reactions.user', AVATAR_FIELDS);
+  await photo.populate({ path: 'reactions.user', model: 'User', select: AVATAR_FIELDS });
   const people = (photo.reactions || []).filter((r) => r.user && REACTIONS.includes(r.emoji)).map((r) => {
     const mine = r.user._id.equals(req.user._id);
     return { by: mine ? 'You' : firstName(r.user.name), emoji: r.emoji, mine, avatarUrl: avatarOf(r.user) };

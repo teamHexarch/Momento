@@ -73,6 +73,17 @@ try {
   }
   const bytes = await sharp({ create: { width: 300, height: 200, channels: 3, background: 'red' } }).jpeg().toBuffer();
   const photo = () => { const fd = new FormData(); fd.append('photos', new Blob([bytes], { type: 'image/jpeg' }), 'p.jpg'); return fd; };
+  // Old group albums may have event times saved. The upload route must ignore those times.
+  for (const eventUploadWindow of [undefined, true]) {
+    const startsAt = new Date(Date.now() + 24 * HOUR).toISOString();
+    const endsAt = new Date(Date.now() + 26 * HOUR).toISOString();
+    const { album: future } = await json(await call('/api/albums', 201, o, 'POST', {
+      ...base, groupId: group.id, startsAt, endsAt, eventUploadWindow,
+    }));
+    assert.equal(future.open, !eventUploadWindow);
+    await call(`/api/albums/${future.id}/photos`, eventUploadWindow ? 403 : 201, o, 'POST', photo());
+    await call(`/api/albums/${future.id}`, 200, o, 'DELETE');
+  }
   const [p1] = (await json(await call(`/api/albums/${album.id}/photos`, 201, o, 'POST', photo()))).photos;
 
   // Not in the group yet: no access at all
@@ -172,7 +183,7 @@ try {
   assert.equal(group.members.length, 1);
   await call(`/api/albums/${album.id}`, 200, x);
 
-  // Profile photos: upload, shown beside the owner's name in the group and the chat, removed again
+  // Profile photos: upload, shown beside the owner's name in the group, removed again
   {
     const fd = new FormData();
     fd.append('avatar', new Blob([await sharp({ create: { width: 800, height: 600, channels: 3, background: 'blue' } }).png().toBuffer()], { type: 'image/png' }), 'me.png');

@@ -5,7 +5,7 @@ import { User } from '../models/User.js';
 import { sendPhoto } from '../services/storageService.js';
 import { HttpError } from '../utils/httpError.js';
 
-// Profile photos, for people who are logged in (they show beside names in groups, chat and albums)
+// Profile photos, for people who are logged in (they show beside names in groups and albums)
 export const userRoutes = Router();
 userRoutes.use(requireUser);
 

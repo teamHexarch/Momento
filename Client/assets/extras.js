@@ -20,16 +20,12 @@
     .pw-wrap > input { width: 100%; box-sizing: border-box; padding-right: 3rem !important; }
     .pw-eye {
       position: absolute; right: .35rem; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 2.3rem; height: 2.3rem;
-      border: none; border-radius: 50%; background: none; color: var(--stone, #8A869A); cursor: pointer;
-      transition: background-color .2s ease, color .2s ease, scale .3s cubic-bezier(.34, 1.4, .64, 1);
+      border-radius: 50%; color: var(--stone, #8A869A); cursor: pointer;   /* a ghost GlassButton (assets/glass.css) */
     }
-    .pw-eye:hover { background: rgba(46, 44, 58, .07); color: var(--dusk, #2E2C3A); }
-    .pw-eye:active { scale: .9; }
-    .pw-eye:focus-visible { outline: 2px solid var(--dusk, #2E2C3A); outline-offset: 1px; }
+    .pw-eye:hover { color: var(--dusk, #2E2C3A); }
     .pw-eye svg { width: 1.2rem; height: 1.2rem; }
     .pw-eye .slash { stroke-dasharray: 26; stroke-dashoffset: 26; transition: stroke-dashoffset .3s ease; }
     .pw-eye[aria-pressed="false"] .slash { stroke-dashoffset: 0; }
-    :root[data-theme="dark"] .pw-eye:hover { background: rgba(255, 255, 255, .1); }
 
     .perm-ic { display: grid; place-items: center; width: 3.2rem; height: 3.2rem; margin-bottom: .8rem; border-radius: 1rem; background: linear-gradient(135deg, #D9D0EE, #EDD6DF 55%, #CFE3E0); color: #2E2C3A; }
     .perm-ic svg { width: 1.6rem; height: 1.6rem; }
@@ -50,18 +46,9 @@
     .acct-photo-text b { font-size: .95rem; }
     .acct-photo-text small { font-size: .8rem; color: var(--slate, #5C596B); }
     .acct-photo-acts { display: flex; flex-direction: column; gap: .3rem; align-items: stretch; }
-    .acct-photo-btn { padding: .45rem .9rem; border: none; border-radius: 100px; background: rgba(46, 44, 58, .08); color: var(--dusk, #2E2C3A); font: 600 .84rem var(--font-main, system-ui); cursor: pointer;
-      transition: background-color .2s ease, scale .3s cubic-bezier(.34, 1.4, .64, 1); }
-    .acct-photo-btn:hover { background: rgba(46, 44, 58, .14); }
-    .acct-photo-btn:active { scale: .95; }
-    .acct-photo-btn:focus-visible { outline: 2px solid var(--dusk, #2E2C3A); outline-offset: 2px; }
-    .acct-photo-btn:disabled { opacity: .5; cursor: default; }
-    .acct-photo-btn.is-danger { background: none; color: #9A3D3D; }
-    .acct-photo-btn.is-danger:hover { background: rgba(154, 61, 61, .08); }
+    .acct-photo-btn { padding: .45rem .9rem; border-radius: 100px; font: 600 .84rem var(--font-main, system-ui); cursor: pointer; }   /* clear glass; Remove is the red-label danger tier (assets/glass.css) */
     .acct-photo-btn[hidden] { display: none; }
     :root[data-theme="dark"] .acct-photo { background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
-    :root[data-theme="dark"] .acct-photo-btn { background: rgba(255, 255, 255, .1); }
-    :root[data-theme="dark"] .acct-photo-btn:hover { background: rgba(255, 255, 255, .16); }
     :root[data-theme="dark"] .acct-photo-btn.is-danger { background: none; color: #F0A3A3; }
     /* The header for visitors: a Log in button where the account button would be */
     .nl-login { min-height: 2.6rem; padding: 0 1.2rem; font-size: .92rem; }
@@ -69,6 +56,8 @@
     .nl-album { display: flex; align-items: center; gap: .8rem; margin: .2rem 0 1rem; padding: .7rem .8rem; border-radius: 18px; background: rgba(255, 255, 255, .5); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .08); }
     .nl-album[hidden] { display: none; }
     .nl-cover { display: grid; place-items: center; flex: none; width: 3rem; height: 3rem; border-radius: 14px; background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-weight: 700; font-size: 1.2rem; }
+    .nl-cover.has-pic { overflow: hidden; width: 4.2rem; height: 3rem; box-shadow: 0 6px 16px -8px rgba(46, 44, 58, .5); }
+    .nl-cover img { width: 100%; height: 100%; object-fit: cover; }
     .nl-text { display: grid; min-width: 0; }
     .nl-text b { font-size: 1rem; }
     .nl-text small { font-size: .82rem; color: var(--slate, #5C596B); }
@@ -221,6 +210,7 @@
     upload: ['Log in to add your photos', 'Your photos go straight into the album, in full quality.'],
     react: ['Log in to like and react', 'Show some love for the best photos.'],
     groups: ['Log in to see your groups', 'Share albums with the people you see most, in one place.'],
+    joinGroup: ['Log in to join this group', 'It only takes a moment, and then you’ll see every album shared with the group.'],
     view: ['Log in to see the photos', 'Join the album to see everything everyone added.'],
     continue: ['Log in to continue', 'Log in or sign up. It only takes a moment.'],
   };
@@ -251,7 +241,10 @@
       // What they're about to join, so it's worth the sign-up
       const box = d.querySelector('.nl-album');
       box.hidden = false;
-      box.querySelector('.nl-cover').textContent = (album.name || '·').trim()[0]?.toUpperCase() || '·';
+      const cover = box.querySelector('.nl-cover'), pic = album.cover?.thumbUrl;
+      // The host's cover when there is one, otherwise the album's first letter
+      if (pic) { const img = new Image(); img.alt = ''; img.src = pic; img.onerror = () => { img.remove(); cover.textContent = (album.name || '·').trim()[0]?.toUpperCase() || '·'; }; cover.append(img); cover.classList.add('has-pic'); }
+      else cover.textContent = (album.name || '·').trim()[0]?.toUpperCase() || '·';
       box.querySelector('b').textContent = album.name;
       const bits = [album.hostName && `Hosted by ${album.hostName}`, album.photos ? `${album.photos} photo${album.photos === 1 ? '' : 's'}` : 'No photos yet', album.guests ? `${album.guests} in it` : '', album.live ? 'Happening now' : ''];
       box.querySelector('small').textContent = bits.filter(Boolean).join(' · ');

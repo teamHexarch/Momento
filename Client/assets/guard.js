@@ -31,7 +31,7 @@
   const fetchUser = () => window.momentoApi('/api/auth/me').then((r) => r.user).catch(() => null);
   const GATE_CSS = `
     .vgate { border: none; padding: 0; background: transparent; max-width: calc(100vw - 32px); width: 440px; color: var(--dusk, #2E2C3A); }
-    .vgate-card { position: relative; box-sizing: border-box; padding: 2rem 1.75rem 1.5rem; border-radius: 30px;
+    .vgate-card { position: relative; box-sizing: border-box; padding: 2rem 1.75rem 1.5rem; border-radius: var(--r-card, 28px);
       text-align: center; font-family: var(--font-main, system-ui, sans-serif); }
     .vgate-ic { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 1rem; border-radius: 50%; background: rgba(46, 44, 58, .07); }
     .vgate h2 { margin: 0 0 .5rem; font-size: 1.5rem; letter-spacing: -.02em; }
@@ -42,15 +42,11 @@
     .vgate-actions { display: flex; flex-direction: column; gap: .6rem; }
     .vgate button { padding: .85rem 1.2rem; border: none; border-radius: 100px; font: 650 .95rem var(--font-main, system-ui, sans-serif); cursor: pointer;
       transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), opacity .2s ease; }
-    .vgate button:active { transform: scale(.97); }
-    .vgate button:focus-visible { outline: 2px solid var(--dusk, #2E2C3A); outline-offset: 2px; }
+    .vgate-link:focus-visible { outline: 2px solid var(--focus-ring, #2E2C3A); outline-offset: 2px; }
     .vgate button:disabled { opacity: .55; cursor: default; transform: none; }
-    .vgate-primary { background: var(--dusk, #2E2C3A); color: var(--paper, #FBF8F3); }
-    .vgate-primary:hover { opacity: .9; }
-    .vgate-ghost { background: rgba(46, 44, 58, .07); color: inherit; }
+    /* .vgate-primary and .vgate-ghost are the smoke and clear GlassButton tiers (assets/glass.css) */
     .vgate-link { background: none !important; color: var(--slate, #5D5A6B) !important; font-weight: 600 !important; }
     .vgate-link:hover { color: var(--dusk, #2E2C3A) !important; }
-    .vgate-ghost:hover { background: rgba(46, 44, 58, .12); }
     :root[data-theme="dark"] .vgate-status.is-error { color: #F0A3A3; }
     :root[data-theme="dark"] .vgate-ghost, :root[data-theme="dark"] .vgate-ic { background: rgba(255, 255, 255, .09); }
     :root[data-theme="dark"] .vgate-ghost:hover { background: rgba(255, 255, 255, .15); }

@@ -23,11 +23,9 @@
     :root[data-theme="dark"] input.mp-on[type="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
 
     .mp {
-      position: fixed; inset: auto; margin: 0; z-index: 2147483000; box-sizing: border-box; max-width: calc(100vw - 16px); padding: .7rem; border: none; border-radius: 24px; overflow: visible;
-      background: rgba(255, 255, 255, .97); color: var(--dusk, #2E2C3A); font-family: var(--font-main, system-ui, sans-serif);
-      box-shadow: 0 0 0 1px rgba(46, 44, 58, .08), 0 24px 50px -18px rgba(40, 30, 70, .45);
-      -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5);
-    }
+      position: fixed; inset: auto; margin: 0; z-index: 2147483000; box-sizing: border-box; max-width: calc(100vw - 16px); padding: .7rem; overflow: visible;
+      color: var(--dusk, #2E2C3A); font-family: var(--font-main, system-ui, sans-serif);
+    }   /* the pane (fill, rim, radius, shadow) is the GlassPopover in assets/glass.css: no blur, it often opens over a dialog */
     .mp[hidden] { display: none; }
     .mp-body { display: flex; gap: .7rem; align-items: stretch; }
     .mp-cal { width: 17.5rem; max-width: 100%; }
@@ -36,19 +34,19 @@
     .mp-nav { display: flex; gap: .2rem; }
     .mp-btn {
       display: grid; place-items: center; min-width: 2.4rem; height: 2.4rem; padding: 0; border: none; border-radius: 50%; background: none; color: inherit;
-      font: 600 .9rem var(--font-main, system-ui, sans-serif); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .18s ease, color .18s ease, transform .25s cubic-bezier(.34, 1.56, .64, 1);
+      font: 600 .9rem var(--font-main, system-ui, sans-serif); font-variant-numeric: tabular-nums; cursor: pointer; transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
       -webkit-tap-highlight-color: transparent;
     }
-    .mp-btn:hover { background: rgba(46, 44, 58, .07); }
     .mp-btn:active { transform: scale(.92); }
-    .mp-btn:focus-visible { outline: 2px solid var(--dusk, #2E2C3A); outline-offset: 1px; }
+    .mp-btn:focus-visible { outline: 2px solid var(--focus-ring, #2E2C3A); outline-offset: 1px; }
     .mp-btn:disabled { opacity: .3; cursor: default; background: none; transform: none; }
     .mp-week, .mp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: .1rem; }
     .mp-week span { display: grid; place-items: center; height: 1.9rem; color: var(--slate, #5C596B); font-size: .74rem; font-weight: 650; }
     .mp-days .mp-btn { width: 100%; height: 2.35rem; border-radius: 12px; }
     .mp-days .is-out { color: var(--stone, #8E8A9C); }
     .mp-days .is-today { box-shadow: inset 0 0 0 1.5px rgba(46, 44, 58, .35); }
-    .mp-btn[aria-pressed="true"], .mp-btn[aria-selected="true"] { background: var(--dusk, #2E2C3A); color: var(--paper, #F8F7FA); box-shadow: none; }
+    /* The chosen day or time: deep smoke glass, the strongest tier, so the choice is unmistakable */
+    .mp-btn[aria-pressed="true"], .mp-btn[aria-selected="true"] { background: var(--gb-smoke-sheen) padding-box, var(--gb-smoke-fill) padding-box; color: var(--paper, #F8F7FA); box-shadow: var(--gb-smoke-shadow); }
     .mp-time { display: flex; gap: .3rem; }
     .mp-col { display: grid; align-content: start; gap: .15rem; width: 3.6rem; max-height: 15.4rem; padding: .1rem; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y proximity; scrollbar-width: none; }
     .mp-col::-webkit-scrollbar { display: none; }
@@ -56,16 +54,11 @@
     .mp-cal + .mp-time { padding-left: .7rem; border-left: 1px solid rgba(46, 44, 58, .1); }
     .mp-foot { display: flex; justify-content: space-between; gap: .5rem; margin-top: .6rem; padding-top: .55rem; border-top: 1px solid rgba(46, 44, 58, .08); }
     .mp-foot .mp-btn { height: 2.3rem; padding: 0 .9rem; border-radius: 100px; font-size: .86rem; font-weight: 650; }
-    .mp-foot .mp-done { background: var(--dusk, #2E2C3A); color: var(--paper, #F8F7FA); }
-    .mp-foot .mp-done:hover { background: var(--dusk, #2E2C3A); opacity: .9; }
     .mp-foot span { flex: 1; }
-    :root[data-theme="dark"] .mp { background: rgba(36, 34, 48, .97); color: #F2EFF8; box-shadow: 0 0 0 1px rgba(255, 255, 255, .1), 0 24px 50px -18px rgba(0, 0, 0, .8); }
-    :root[data-theme="dark"] .mp-btn:hover { background: rgba(255, 255, 255, .09); }
-    :root[data-theme="dark"] .mp-btn:focus-visible { outline-color: #F2EFF8; }
+    :root[data-theme="dark"] .mp { color: #F2EFF8; }
     :root[data-theme="dark"] .mp-week span { color: #A8A3B8; }
     :root[data-theme="dark"] .mp-days .is-out { color: #7D7890; }
     :root[data-theme="dark"] .mp-days .is-today { box-shadow: inset 0 0 0 1.5px rgba(242, 239, 248, .4); }
-    :root[data-theme="dark"] .mp-btn[aria-pressed="true"], :root[data-theme="dark"] .mp-btn[aria-selected="true"], :root[data-theme="dark"] .mp-foot .mp-done { background: #F2EFF8; color: #1C1A26; }
     :root[data-theme="dark"] .mp-cal + .mp-time { border-left-color: rgba(255, 255, 255, .1); }
     :root[data-theme="dark"] .mp-foot { border-top-color: rgba(255, 255, 255, .08); }
     /* Phones: bigger targets, and date over time when both are asked for */

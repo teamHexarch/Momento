@@ -19,6 +19,7 @@
   // The same rules as the server's albumLifecycle(): albums with event times take photos from
   // uploadLeadMin before the start until the end, then they're kept
   function albumLifecycle(a) {
+    if (a.groupId && !a.eventUploadWindow) return { status: 'live', open: true, anytimeUploads: true };
     if (!a.startsAt || !a.endsAt) return lifecycle(a.date);
     const now = Date.now();
     const opensAt = Date.parse(a.startsAt) - (a.uploadLeadMin || 0) * 60000, endsAt = Date.parse(a.endsAt);
@@ -36,13 +37,35 @@
     requests: [{ user: 'u-dev-1', name: 'Leila Haddad', status: 'pending' }, { user: 'u-dev-2', name: 'Tom Okafor', status: 'pending' }],
     zone: { lat: -37.8355756, lng: 145.0347419, radiusM: 1000 }, venue: { address: '13 Gardiner Road, Hawthorn, Melbourne, Australia', placeId: '' } });
 
+  // A public album you host, with some joins and photo bursts for the host's activity tab. Always live, like Imaad's.
+  // Each activity row is { id, type: 'joined'|'left'|'photos', people: [first three], n, at }: for joins n is how many
+  // people, for photos it is how many photos (one uploader per row). Rows newer than activitySeenAt are unread.
+  const minsAgo = (m) => new Date(Date.now() - m * 60000).toISOString();
+  const publicTimes = () => ({ date: iso(0), startsAt: at(Date.now() - 3 * 3600000), endsAt: at(Date.now() + 5 * 3600000) });
+  const whoIs = (id, name) => ({ id, name, avatarUrl: '' });
+  const publicAlbum = () => ({ id: 'a8', name: 'Sunset Rooftop Social', place: 'Rooftop Gardens, Fitzroy', role: 'host', code: 'S5R-21QT', visibility: 'public', photos: 14, mine: 5, guests: 23, waiting: 0, hostName: 'Priya Shah',
+    ...publicTimes(), uploadLeadMin: 30,
+    zone: { lat: -37.7998, lng: 144.9780, radiusM: 1000 }, venue: { address: 'Rooftop Gardens, Fitzroy, Melbourne, Australia', placeId: '' },
+    activitySeenAt: minsAgo(90),
+    activity: [
+      { id: 'x1', type: 'joined', people: [whoIs('u-leila', 'Leila Haddad')], n: 1, at: minsAgo(3) },
+      { id: 'x2', type: 'joined', people: [whoIs('u-tom', 'Tom Okafor'), whoIs('u-noor', 'Noor Aziz'), whoIs('u-theo', 'Theo Marsh')], n: 5, at: minsAgo(22) },
+      { id: 'x3', type: 'photos', people: [whoIs('u-sam', 'Sam Reid')], n: 8, at: minsAgo(41) },
+      { id: 'x4', type: 'left', people: [whoIs('u-ben', 'Ben Cole')], n: 1, at: minsAgo(66) },
+      { id: 'x5', type: 'joined', people: [whoIs('u-lena', 'Lena Park')], n: 1, at: minsAgo(150) },
+      { id: 'x6', type: 'photos', people: [whoIs('u-ruby', 'Ruby Shah')], n: 12, at: minsAgo(310) },
+      { id: 'x7', type: 'joined', people: [whoIs('u-jon', 'Jon Park'), whoIs('u-isla', 'Isla Grey')], n: 2, at: minsAgo(1500) },
+    ] });
+
   const seed = () => ({
     signedIn: true,
     seq: 10,
-    user: { id: 'dev-user', name: 'Priya Shah', email: 'priya@example.com', avatarUrl: '', emailVerified: true, verificationResendAt: null, plan: 'free', hasPassword: true, providers: [], notify: { photos: true, closing: true, recap: false } },
+    user: { id: 'dev-user', name: 'Priya Shah', email: 'priya@example.com', avatarUrl: '', emailVerified: true, verificationResendAt: null, plan: 'free', hasPassword: true, providers: [], notify: { photos: true, closing: true, recap: false, activity: true } },
     seededA7: 2,
+    seededActivity: 1,
     albums: [
       imaadsAlbum(),
+      publicAlbum(),
       { id: 'a1', name: 'Maya’s 30th', date: iso(0), place: 'Rooftop, Shoreditch', role: 'host', code: 'K7Q-48DM', photos: 24, mine: 9, guests: 12, waiting: 3, hostName: 'Priya Shah',
         startsAt: at(Date.now() - 2 * 3600000), endsAt: at(Date.now() + 4 * 3600000), uploadLeadMin: 60,
         zone: { lat: 51.5246, lng: -0.0786, radiusM: 1000 }, venue: { address: 'Rooftop, Shoreditch, London', placeId: '' } },
@@ -69,6 +92,9 @@
   if (state.seededA7 !== 2) { state.seededA7 = 2; state.albums = [imaadsAlbum(), ...state.albums.filter((a) => a.id !== 'a7')]; save(); }
   // and it stays live whichever day it's opened
   { const a7 = state.albums.find((a) => a.id === 'a7'); if (a7) { Object.assign(a7, imaadsTimes()); save(); } }
+  // The public album with an activity tab arrives once for browsers already using the preview, and stays live too
+  if (!state.seededActivity) { state.seededActivity = 1; if (!state.albums.some((a) => a.id === 'a8')) state.albums.splice(1, 0, publicAlbum()); state.user.notify = { activity: true, ...state.user.notify }; save(); }
+  { const a8 = state.albums.find((a) => a.id === 'a8'); if (a8) { Object.assign(a8, publicTimes()); save(); } }
   // Friend groups (added after the rest, so browsers already using the preview get them once)
   const seedGroups = () => {
     const you = { id: 'dev-user', name: 'You', avatarUrl: '', role: 'member', you: true, since: new Date(Date.now() - 40 * DAY).toISOString() };
@@ -99,7 +125,7 @@
     return live;
   };
   // Emoji reactions: one per person per photo (the same six as the album page)
-  const RX = ['😍', '😂', '🔥', '👏', '🥹', '😮'];
+  const RX = ['😍', '😂', '🔥', '👏', '🥹', '😮', '🎉', '🥳', '❤️', '🙌', '✨', '🤩'];
   const REACTORS = [...NAMES, 'Alex', 'Noor', 'Theo', 'Zara', 'Ben', 'Isla', 'Omar', 'Chloe', 'Dev', 'Hana', 'Leo', 'Mina', 'Rory', 'Tess', 'Yusuf'];
   const socialOf = (a, i, mine) => {
     const id = `${a.id}-p${i}`;
@@ -124,6 +150,22 @@
   const hiddenOf = (a) => new Set((state.hidden || {})[a.id] || []);
   const visibleOf = (a) => { const h = hiddenOf(a); return photosOf(a).filter((p) => !h.has(p.id)); };
   const hiddenCount = (a) => { const h = hiddenOf(a); return photosOf(a).filter((p) => h.has(p.id)).length; };
+  // ---- The album cover (same rules as the server: see COVER-API-NOTES.md) ----
+  // A photo's score is its likes plus all its emoji reactions. While upcoming, the cover is the host's own
+  // image (a.coverData) if they set one. From live on, the best-scoring photo takes over (newest wins a tie)
+  // unless the host keeps their cover; with no likes or reactions yet it stays the host's, then the newest photo.
+  const scoreOf = (p) => (p.likes || 0) + Object.values(p.reactions || {}).reduce((t, n) => t + n, 0);
+  const hostCover = (a) => (a.coverData ? { url: a.coverData, thumbUrl: a.coverData, source: 'host' } : null);
+  const coverOf = (a) => {
+    const host = hostCover(a);
+    if (host && (a.keepHostCover || albumLifecycle(a).status === 'upcoming')) return host;
+    const photos = visibleOf(a);   // newest first, so a strict > keeps the newest on a tie
+    const top = photos.reduce((best, p) => (scoreOf(p) >= 1 && (!best || scoreOf(p) > scoreOf(best)) ? p : best), null);
+    const of = (p, source) => p && { url: p.url, thumbUrl: p.thumbnailUrl, source, photoId: p.id, score: scoreOf(p) };
+    return of(top, 'top') || host || of(photos[0], 'latest') || null;
+  };
+  // People who aren't in the album (the join preview, the Events map) only ever see the host's cover
+  const outsideCover = (a, member) => (member ? coverOf(a) : hostCover(a));
   // A few liked photos and two saved albums, so the Liked tab has something to show (once)
   if (!state.seededLikes) {
     state.seededLikes = 1;
@@ -143,6 +185,21 @@
     save();
   }
   const groupOf = (a) => a.groupId && (state.groups || []).find((g) => g.id === a.groupId);
+  // ---- Host activity on public albums (same rules as the server: see ACTIVITY-API-NOTES.md) ----
+  // Joins and photo bursts close together fold into one row; the list keeps 30 days or 100 rows
+  const MERGE_MS = 10 * 60000, ACTIVITY_KEEP = 100;
+  const hasPulse = (a) => a.role === 'host' && a.visibility === 'public';
+  const unreadOf = (a) => (hasPulse(a) && !a.muteActivity ? (a.activity || []).filter((x) => x.at > (a.activitySeenAt || '')).length : 0);
+  function logActivity(a, type, person, n = 1) {
+    const now = Date.now(), list = (a.activity ||= []), top = list[0];
+    if (top && top.type === type && now - Date.parse(top.at) < MERGE_MS && (type !== 'photos' || top.people[0]?.id === person.id)) {
+      if (type === 'photos') top.n += n;
+      else { top.n += 1; if (top.people.length < 3 && !top.people.some((x) => x.id === person.id)) top.people.push(person); }
+      top.at = new Date(now).toISOString();
+    } else list.unshift({ id: 'x' + (++state.seq), type, people: [person], n, at: new Date(now).toISOString() });
+    a.activity = list.filter((x) => now - Date.parse(x.at) < 30 * DAY).slice(0, ACTIVITY_KEEP);
+    save();
+  }
   const summary = (a) => ({
     id: a.id, name: a.name, date: a.date, place: a.place, saved: !!a.saved,
     venue: a.venue?.address || a.venue?.placeId ? a.venue : undefined,
@@ -153,9 +210,11 @@
     joinDeadline: a.joinDeadline, requests: a.requests || [],
     zone: a.zone?.radiusM ? a.zone : undefined, visibility: a.visibility || 'invite',
     code: a.role === 'host' ? a.code : undefined, photos: a.photos - hiddenCount(a), mine: a.mine, guests: a.guests, trashCount: a.role === 'host' ? trashOf(a).length : 0,
-    pics: [...visibleOf(a)].sort((x, y) => y.likes - x.likes).slice(0, 12).map((p) => p.thumbnailUrl), hostName: a.hostName, hostIsYou: a.role === 'host',
+    pics: [...visibleOf(a)].sort((x, y) => scoreOf(y) - scoreOf(x)).slice(0, 12).map((p) => p.thumbnailUrl), hostName: a.hostName, hostIsYou: a.role === 'host',
+    cover: coverOf(a), hasHostCover: !!a.coverData, keepHostCover: !!a.keepHostCover,
     ...(groupOf(a) && { group: { id: a.groupId, name: groupOf(a).name }, anywhere: true }),
     ...(a.role === 'host' && { waiting: a.waiting || 0 }),
+    ...(hasPulse(a) && { unread: unreadOf(a), muteActivity: !!a.muteActivity }),
   });
   const list = () => {
     const withPics = state.albums.filter((a) => a.photos);
@@ -176,6 +235,9 @@
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h));
   }
+  // An upcoming public event shows its host's cover on the Events map (browsers already using the preview get it once)
+  const EVENT_COVER = 'https://picsum.photos/id/1011/1200/750';
+  if (!state.seededCovers) { state.seededCovers = 1; const e5 = (state.events || []).find((e) => e.id === 'e5'); if (e5) e5.coverData = EVENT_COVER; save(); }
   // Five public events around a spot: two you're inside (so you can try joining), the rest a bit further
   function seedEvents(at) {
     const off = (n, e) => ({ lat: at.lat + n / 111320, lng: at.lng + e / (111320 * Math.cos(at.lat * Math.PI / 180)) });
@@ -191,7 +253,7 @@
       ev('e2', 'Jazz in the Park', 'Bandstand, Central Park', 900, 600, 1500, -1, 4, 27, 58, 'Lena'),
       ev('e3', 'Night Market', 'Old Warehouse Lane', -1500, 1800, 1000, -1.5, 5, 41, 130, 'Market Co.'),
       ev('e4', 'Open-air Cinema', 'Rooftop Gardens', 2500, 1200, 1500, 5, 3, 6, 34, 'Sam'),
-      ev('e5', 'Beach Clean-up', 'North Beach car park', -6000, -4000, 2000, 20, 3, 0, 18, 'Green Team'),
+      { ...ev('e5', 'Beach Clean-up', 'North Beach car park', -6000, -4000, 2000, 20, 3, 0, 18, 'Green Team'), coverData: EVENT_COVER },
     ];
   }
 
@@ -240,7 +302,26 @@
       const a = all.find((x) => String(x.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === want);
       if (!a) return fail(404, 'No album has that code. Check it against the host’s card.');
       return { body: { album: { code: a.code, name: a.name, date: a.date, place: a.place, hostName: a.hostName || a.by || 'The host', photos: a.photos || 0, guests: a.guests || 0,
-        live: a.date ? albumLifecycle(a).status === 'live' : false, joining: { open: true } }, signedIn: !!state.signedIn, member: state.albums.includes(a) } };
+        live: a.date ? albumLifecycle(a).status === 'live' : false, joining: { open: true }, cover: outsideCover(a, state.albums.includes(a)) }, signedIn: !!state.signedIn, member: state.albums.includes(a) } };
+    }
+    // Friend groups join by link or QR code (events.html?group=CODE). Visitors can preview one before logging in
+    const GROUP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const newGroupCode = () => Array.from({ length: 10 }, () => GROUP_ALPHABET[Math.floor(Math.random() * GROUP_ALPHABET.length)]).join('');
+    const cleanCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // A group someone else made, to try joining by its link: events.html?group=BOOKCLUB42
+    const OPEN_GROUPS = [{ id: 'g3', name: 'Thursday book club', inviteCode: 'BOOKCLUB42', by: 'Hannah', members: 6, albums: 2 }];
+    const groupByCode = (code) => {
+      const want = cleanCode(code);
+      const mine = (state.groups || []).find((g) => g.inviteCode && g.inviteCode === want);
+      if (mine) return { mine, name: mine.name, id: mine.id, by: mine.members.find((m) => m.role === 'owner')?.name || 'Someone', members: mine.members.length, albums: state.albums.filter((a) => a.groupId === mine.id).length };
+      const open = OPEN_GROUPS.find((g) => g.inviteCode === want);
+      return open ? { open, name: open.name, id: open.id, by: open.by, members: open.members, albums: open.albums } : null;
+    };
+    const gp = /^\/api\/groups\/preview\/([^/]+)$/.exec(path);
+    if (gp && method === 'GET') {
+      const g = groupByCode(decodeURIComponent(gp[1]));
+      if (!g) return fail(404, 'This group link no longer works. Ask for a new one.');
+      return { body: { group: { id: g.id, name: g.name, by: g.by, members: g.members, albums: g.albums }, signedIn: !!state.signedIn, member: !!g.mine || (state.groups || []).some((x) => x.id === g.id) } };
     }
     if (!state.signedIn && !(path === '/api/events/nearby' && method === 'GET')) {
       const action = method === 'POST' && /join$/.test(path) ? 'join' : method === 'POST' && path === '/api/albums' ? 'create' : 'continue';
@@ -248,13 +329,25 @@
     }
 
     // ---- Groups ----
-    const describeGroup = (g) => ({ ...g, members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });
+    const describeGroup = (g) => ({ ...g, inviteCode: g.inviteCode || ((g.inviteCode = newGroupCode()), save(), g.inviteCode), members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });
     const groupOut = () => ({ groups: (state.groups || []).map(describeGroup), invites: state.groupInvites || [] });
     // Leaving a group: albums you were in through it go, albums you host leave the group
     const dropGroup = (g) => {
       state.albums = state.albums.filter((a) => !(a.groupId === g.id && a.viaGroup));
       state.albums.forEach((a) => { if (a.groupId === g.id) delete a.groupId; });
       state.groups = state.groups.filter((x) => x !== g);
+    };
+    // Being added to someone else's group (by accepting an invite, or with its link): its people and two shared albums
+    const joinedGroup = (id, name) => {
+      const g = { id, name, role: 'member', invites: [],
+        members: [{ id: 'u-hannah', name: 'Hannah Lee', avatarUrl: '', role: 'owner', you: false, since: new Date(Date.now() - 200 * DAY).toISOString() },
+          ...['Tom Hale', 'Isla Grey', 'Raj Patel', 'Zoe Fox'].map((n, k) => ({ id: 'u-b' + k, name: n, avatarUrl: '', role: 'member', you: false, since: new Date(Date.now() - (100 - k * 20) * DAY).toISOString() })),
+          { id: 'dev-user', name: 'You', avatarUrl: '', role: 'member', you: true, since: new Date().toISOString() }] };
+      (state.groups ||= []).unshift(g);
+      state.albums.push(
+        { id: 'a' + (++state.seq), name: 'Book swap picnic', date: iso(-14), place: 'Regent’s Park', role: 'guest', photos: 32, mine: 0, guests: 6, hostName: 'Hannah', groupId: g.id, viaGroup: true },
+        { id: 'a' + (++state.seq), name: 'Author talk night', date: iso(-60), place: 'Daunt Books', role: 'guest', photos: 14, mine: 0, guests: 5, hostName: 'Tom', groupId: g.id, viaGroup: true });
+      return g;
     };
     if (path === '/api/groups' && method === 'GET') return { body: groupOut() };
     if (path === '/api/groups' && method === 'POST') {
@@ -270,15 +363,24 @@
       if (!inv) return fail(404, 'That invite has expired or was taken back.');
       state.groupInvites = state.groupInvites.filter((i) => i !== inv);
       if (gi[2] === 'decline') { save(); return { body: { ok: true } }; }
-      const g = { id: inv.group.id, name: inv.group.name, role: 'member', invites: [],
-        members: [{ id: 'u-hannah', name: 'Hannah Lee', avatarUrl: '', role: 'owner', you: false, since: new Date(Date.now() - 200 * DAY).toISOString() },
-          ...['Tom Hale', 'Isla Grey', 'Raj Patel', 'Zoe Fox'].map((n, k) => ({ id: 'u-b' + k, name: n, avatarUrl: '', role: 'member', you: false, since: new Date(Date.now() - (100 - k * 20) * DAY).toISOString() })),
-          { id: 'dev-user', name: 'You', avatarUrl: '', role: 'member', you: true, since: new Date().toISOString() }] };
-      (state.groups ||= []).unshift(g);
-      state.albums.push(
-        { id: 'a' + (++state.seq), name: 'Book swap picnic', date: iso(-14), place: 'Regent’s Park', role: 'guest', photos: 32, mine: 0, guests: 6, hostName: 'Hannah', groupId: g.id, viaGroup: true },
-        { id: 'a' + (++state.seq), name: 'Author talk night', date: iso(-60), place: 'Daunt Books', role: 'guest', photos: 14, mine: 0, guests: 5, hostName: 'Tom', groupId: g.id, viaGroup: true });
+      const g = joinedGroup(inv.group.id, inv.group.name);
       save();
+      return { body: { group: describeGroup(g) } };
+    }
+    if (path === '/api/groups/join' && method === 'POST') {
+      const g = groupByCode(body.code);
+      if (!g) return fail(404, 'This group link no longer works. Ask for a new one.');
+      const already = (state.groups || []).find((x) => x.id === g.id);
+      if (already) return { body: { already: true, group: describeGroup(already) } };
+      const made = joinedGroup(g.id, g.name); save();
+      return { status: 201, body: { already: false, group: describeGroup(made) } };
+    }
+    const gl = /^\/api\/groups\/([^/]+)\/invite-link$/.exec(path);
+    if (gl && method === 'POST') {
+      const g = (state.groups || []).find((x) => x.id === gl[1]);
+      if (!g) return fail(404, 'Group not found.');
+      if (g.role !== 'owner') return fail(403, 'Only the person who made the group can do that.');
+      g.inviteCode = newGroupCode(); save();
       return { body: { group: describeGroup(g) } };
     }
     const gm = /^\/api\/groups\/([^/]+)(?:\/(invites|members)(?:\/([^/]+))?)?$/.exec(path);
@@ -337,7 +439,7 @@
       if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng)) return fail(400, 'Your location is needed to find events near you.');
       // Like the server: radius in metres (100 m to 100 km), or the older km
       const want = Number(query?.get('radius')) || (Number(query?.get('km')) || 1) * 1000;
-      const radiusM = want > 1000 ? 5000 : 1000;
+      const radiusM = Math.min(Math.max(want, 100), 100000);
       const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
       const bearing = (to) => { const r = Math.PI / 180, dl = (to.lng - at.lng) * r; return (Math.atan2(Math.sin(dl) * Math.cos(to.lat * r), Math.cos(at.lat * r) * Math.sin(to.lat * r) - Math.sin(at.lat * r) * Math.cos(to.lat * r) * Math.cos(dl)) / r + 360) % 360; };
       if (!state.events) { state.events = seedEvents(at); save(); }
@@ -347,7 +449,7 @@
         const d = Math.round(distM(at, e.zone)), life = albumLifecycle(e);
         return { id: e.id, name: e.name, date: e.date, place: e.place, venue: e.venue, startsAt: e.startsAt, endsAt: e.endsAt, status: life.status, live: life.status === 'live', opensAt: life.opensAt,
           zone: e.zone, distanceM: d, inside: d <= e.zone.radiusM, inScan: d <= radiusM, bearing: Math.round(bearing(e.zone)), direction: d < 30 ? 'here' : DIRS[Math.round(bearing(e.zone) / 45) % 8], photos: e.photos, pics: mineIds.has(e.id) ? visibleOf(e).slice(0, 9).map(p => p.thumbnailUrl) : [],
-          guests: e.guests, hostName: e.hostName, joined: mineIds.has(e.id) };
+          cover: outsideCover(e, mineIds.has(e.id)), guests: e.guests, hostName: e.hostName, joined: mineIds.has(e.id) };
       }).filter((e) => (e.distanceM <= radiusM || e.inside) && e.status !== 'kept').sort((x, y) => (y.live - x.live) || (x.distanceM - y.distanceM));
       return { body: { events, scan: { lat: at.lat, lng: at.lng, radiusM, count: events.filter((e) => e.inScan).length } } };
     }
@@ -357,11 +459,12 @@
       if (!e) return fail(404, 'Event not found.');
       if (state.albums.some((x) => x.id === e.id)) return { body: { already: true, id: e.id } };
       if (body.location === undefined) return fail(409, 'Check your location to join.', 'check-location');
-      if (!body.location || distM(body.location, e.zone) > e.zone.radiusM + Math.min(200,body.location.accuracy)) {
-        state.eventRequests ||= [];
-        if (!state.eventRequests.some(r => r.id === e.id)) state.eventRequests.push({ id: e.id, name: e.name, status: 'pending' });
-        save(); return { status: 202, body: { pending: true } };
+      // Public events never wait for the host: being inside the zone is the only rule, so outside it (or with no
+      // location) the join is simply refused, with a plain sentence, and no request reaches the host
+      if (!body.location || distM(body.location, e.zone) > e.zone.radiusM + Math.min(200, body.location.accuracy || 0)) {
+        return fail(403, 'This public event is for people at the venue. Move inside the zone and try again.', 'outside-zone');
       }
+      // (the real server also adds a "joined" row to the host's activity here)
       state.albums.unshift({ ...e, role: 'guest', mine: 0, waiting: 0, guests: e.guests + 1 }); save();
       return { status: 201, body: { already: false, id: e.id } };
     }
@@ -388,11 +491,18 @@
       return { body: { photos } };
     }
     // Deleting a photo: the host can take down any photo in their album, a guest only their own
-    const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|reaction|reactions)$/.exec(path);
+    const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|likes|reaction|reactions)$/.exec(path);
     if (sm) {
       const a = state.albums.find((x) => x.id === sm[1]), i = Number(sm[2]), pid = `${sm[1]}-p${sm[2]}`;
       if (!a || goneOf(a).has(i)) return fail(404, 'Photo not found.');
       const s = structuredClone(socialOf(a, i));
+      if (sm[3] === 'likes' && method === 'GET') {
+        const people = Array.from({ length: s.likes }, (_, n) => {
+          const mine = s.liked && n === 0;
+          return { mine, by: mine ? 'You' : REACTORS[(i + n) % REACTORS.length] };
+        });
+        return { body: { people } };
+      }
       if (sm[3] === 'like' && method === 'POST') {
         const want = body.liked !== false;
         if (want !== s.liked) { s.liked = want; s.likes = Math.max(0, s.likes + (want ? 1 : -1)); if (want) s.likedAt = new Date().toISOString(); saveSocial(pid, s); }
@@ -496,6 +606,7 @@
       if (!name) return fail(400, 'Give the album a name.');
       const a = { id: 'a' + (++state.seq), name, date: body.date || iso(0), place: String(body.place || '').trim(), role: 'host', code: newCode(), photos: 0, mine: 0, guests: 1, waiting: 0, hostName: state.user.name };
       if (body.groupId && (state.groups || []).some((g) => g.id === body.groupId)) a.groupId = body.groupId;
+      a.eventUploadWindow = !a.groupId || body.eventUploadWindow === true;
       // Event times, venue and zone, as assets/event.js sends them
       for (const k of ['startsAt', 'endsAt', 'uploadLeadMin', 'zone', 'venue', 'visibility']) if (body[k] != null) a[k] = body[k];
       state.albums.unshift(a); save();
@@ -522,9 +633,23 @@
       state.albums.unshift(a); state.invites = state.invites.filter((i) => i !== inv); save();
       return { status: 201, body: { already: false, album: summary(a) } };
     }
-    const m = /^\/api\/albums\/([^/]+)(?:\/(membership|remind|download|hidden))?$/.exec(path);
+    const m = /^\/api\/albums\/([^/]+)(?:\/(membership|remind|download|hidden|activity\/seen|activity))?$/.exec(path);
     const a = m && state.albums.find((x) => x.id === m[1]);
     if (m && !a) return fail(404, 'Album not found.');
+    // The host's activity tab: who joined, who left, who added photos. Host of a public album only
+    if (m && (m[2] === 'activity' || m[2] === 'activity/seen')) {
+      if (!hasPulse(a)) return fail(403, 'Only the host of a public album can see its activity.');
+      if (m[2] === 'activity' && method === 'GET') {
+        const since = query?.get('since');
+        return { body: { items: (a.activity || []).filter((x) => !since || x.at > since), seenAt: a.activitySeenAt || null, unread: unreadOf(a) } };
+      }
+      // { upTo } marks what the host has seen so far; anything newer stays unread. Without it, everything is seen
+      if (m[2] === 'activity/seen' && method === 'POST') {
+        const now = new Date().toISOString(), upTo = typeof body.upTo === 'string' && !Number.isNaN(Date.parse(body.upTo)) ? new Date(body.upTo).toISOString() : now;
+        if (upTo > (a.activitySeenAt || '')) a.activitySeenAt = upTo > now ? now : upTo;
+        save(); return { body: { seenAt: a.activitySeenAt, unread: unreadOf(a) } };
+      }
+    }
     if (m && !m[2]) {
       if (method === 'GET') {
         const h = hiddenOf(a);
@@ -532,7 +657,12 @@
         return { body: { album: { ...summary(a), hiddenCount: hiddenCount(a) }, photos } };
       }
       if (a.role !== 'host') return fail(403, 'Only the host can change the album.');
-      if (method === 'PATCH') { Object.assign(a, ['name', 'date', 'place'].reduce((o, k) => (body[k] != null ? { ...o, [k]: body[k] } : o), {})); save(); return { body: { album: summary(a) } }; }
+      if (method === 'PATCH') {
+        Object.assign(a, ['name', 'date', 'place'].reduce((o, k) => (body[k] != null ? { ...o, [k]: body[k] } : o), {}));
+        if (typeof body.muteActivity === 'boolean') a.muteActivity = body.muteActivity;
+        if (typeof body.keepHostCover === 'boolean') a.keepHostCover = body.keepHostCover;
+        save(); return { body: { album: summary(a) } };
+      }
       if (method === 'DELETE') { state.albums = state.albums.filter((x) => x !== a); save(); return { body: { ok: true } }; }
     }
     if (m && m[2] === 'membership' && method === 'DELETE') { state.albums = state.albums.filter((x) => x !== a); save(); return { body: { ok: true } }; }
@@ -566,6 +696,33 @@
       }
       state.user.hasAvatar = !!state.user.avatarUrl; save();
       return new Response(JSON.stringify({ user: state.user }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    // The host's album cover: PUT (FormData field "cover") sets it, DELETE takes it off
+    const cv = /^\/api\/albums\/([^/]+)\/cover$/.exec(url.pathname), verb = (opts.method || 'GET').toUpperCase();
+    if (cv && (verb === 'PUT' || verb === 'DELETE')) {
+      const json = (status, out) => new Response(JSON.stringify(out), { status, headers: { 'Content-Type': 'application/json' } });
+      await sleep(250);
+      if (!state.signedIn) return json(401, { error: 'Log in to continue.', code: 'login-required' });
+      const a = state.albums.find((x) => x.id === cv[1]);
+      if (!a) return json(404, { error: 'Album not found.' });
+      if (a.role !== 'host') return json(403, { error: 'Only the host can change the album.' });
+      if (verb === 'DELETE') { delete a.coverData; a.keepHostCover = false; save(); return json(200, { album: summary(a) }); }
+      const f = opts.body instanceof FormData ? opts.body.get('cover') : null;
+      if (!f) return json(400, { error: 'Choose a photo first.' });
+      // Kept small (1000 px, in this browser's storage); the real server keeps a 2500 px preview and a thumbnail
+      const data = await new Promise((resolve, reject) => {
+        const img = new Image(), u = URL.createObjectURL(f);
+        img.onload = () => {
+          const k = Math.min(1, 1000 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+          c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); resolve(c.toDataURL('image/webp', .8));
+        };
+        img.onerror = () => { URL.revokeObjectURL(u); reject(new Error('bad')); };
+        img.src = u;
+      }).catch(() => null);
+      if (!data) return json(400, { error: 'That file isn’t a photo Momento can read.' });
+      a.coverData = data; save();
+      return json(200, { album: summary(a) });
     }
     let body = {};
     try { body = opts.body ? JSON.parse(opts.body) : {}; } catch (e) {}
@@ -603,6 +760,40 @@
     abort() {}
   }
   window.XMLHttpRequest = FakeXHR;
+
+  // Other people's actions can't happen in a preview with one visitor, so this plays them: in the console,
+  // momentoDev.guestJoins(), momentoDev.guestLeaves() or momentoDev.guestAddsPhotos(8) adds a row to the activity of
+  // the public album you host (pass an album id to pick another). The open page picks it up within a minute,
+  // or straight away after any refresh of the album list.
+  const GUESTS = ['Ava Brooks', 'Kai Nguyen', 'Mia Romano', 'Zane Patel', 'Ines Duarte', 'Omar Haddad', 'Chloe Wen', 'Liam Ford'];
+  const playGuest = (type, n, albumId) => {
+    const a = state.albums.find((x) => hasPulse(x) && (!albumId || x.id === albumId));
+    if (!a) return console.warn('No public album that you host. Create one with "Who can join: public".');
+    const name = GUESTS[Math.floor(Math.random() * GUESTS.length)];
+    logActivity(a, type, whoIs('u-' + name.split(' ')[0].toLowerCase(), name), n);
+    if (type === 'joined') a.guests = (a.guests || 0) + 1;
+    if (type === 'left') a.guests = Math.max(0, (a.guests || 1) - 1);
+    if (type === 'photos') a.photos += n;
+    save();
+    document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'refresh' } }));
+    return `${name} ${type}`;
+  };
+  window.momentoDev = {
+    guestJoins: (albumId) => playGuest('joined', 1, albumId),
+    guestLeaves: (albumId) => playGuest('left', 1, albumId),
+    guestAddsPhotos: (n = 5, albumId) => playGuest('photos', n, albumId),
+    // Guests loving one photo: momentoDev.cheer('a7', 5) gives Imaad's photo 6 (index 5) n more likes and
+    // reactions, so it becomes the cover while the album is live
+    cheer: (albumId = 'a7', index = 0, n = 6) => {
+      const a = state.albums.find((x) => x.id === albumId);
+      if (!a) return console.warn('No album with that id.');
+      const s = structuredClone(socialOf(a, index));
+      s.likes += n; s.reactions['😍'] = (s.reactions['😍'] || 0) + n; saveSocial(`${a.id}-p${index}`, s);
+      document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'refresh' } }));
+      const c = coverOf(a);
+      return `Cover of ${a.name}: ${c ? `${c.source}${c.photoId ? ' ' + c.photoId : ''}` : 'none'}`;
+    },
+  };
 
   // A small reminder on screen, with the way out
   addEventListener('DOMContentLoaded', () => {

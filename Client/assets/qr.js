@@ -1,8 +1,9 @@
 // Album QR codes: showing one (hosts) and scanning one (guests). Shared by every page.
-// - Momento.qr.show(album, from)  a glass slab with the QR for { name, code }, grown out of `from`; the screen stays awake
+// - Momento.qr.show(item, from)   a glass slab with the QR for { name, code } (an album) or { name, url, kicker, hideCode } (a group
+//                               link, say), grown out of `from`; the screen stays awake
 // - Momento.qr.scan()       camera scanner; a Momento QR (or a bare code) joins that album
 // - Momento.qr.mount(el, album)  a small QR tile inside el (the "Album created" screen uses it)
-// The QR holds the album's invite link (events.html?join=CODE), so a phone's own camera app works too.
+// The QR holds the album's invite link (events.html?join=CODE) or a group's (events.html?group=CODE), so a phone's own camera app works too.
 // Libraries are loaded only when needed: qrcode-generator to draw, jsQR to read where the browser
 // has no built-in BarcodeDetector (Firefox, Safari, desktop Chrome on some systems).
 (() => {
@@ -41,14 +42,10 @@
     .mq-dlg::backdrop { background: rgba(10, 9, 14, .6); }
     .mq-dlg[open] { animation: mq-in .4s var(--out, cubic-bezier(.16, 1, .3, 1)); }
     @keyframes mq-in { from { opacity: 0; transform: scale(.97); } }
-    .mq-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.9rem; padding: 0 1.25rem; border: none; border-radius: 100px; font-family: inherit; font-size: .92rem; font-weight: 650; line-height: 1; cursor: pointer; text-decoration: none; transition: transform .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), opacity .2s ease, background-color .2s ease; }
-    .mq-btn:hover { transform: translateY(-1px); }
-    .mq-btn:active { transform: scale(.96); }
-    .mq-btn:focus-visible, .mq-x:focus-visible, .mq-tile:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-    .mq-btn[disabled] { opacity: .5; cursor: default; transform: none; }
-    .mq-x { position: absolute; top: max(1rem, env(safe-area-inset-top)); right: 1rem; z-index: 3; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: none; border-radius: 50%; cursor: pointer; transition: transform .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), background-color .2s ease; }
+    .mq-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.9rem; padding: 0 1.25rem; border: none; border-radius: 100px; font-family: inherit; font-size: .92rem; font-weight: 650; line-height: 1; cursor: pointer; text-decoration: none; }   /* glass, states and motion: GlassButton in assets/glass.css */
+    .mq-tile:focus-visible { outline: 2px solid var(--focus-ring, currentColor); outline-offset: 3px; }
+    .mq-x { position: absolute; top: max(1rem, env(safe-area-inset-top)); right: 1rem; z-index: 3; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: none; border-radius: 50%; cursor: pointer; }
     .mq-x:hover { transform: rotate(90deg); }
-    .mq-x:active { transform: scale(.9); }
 
     /* Showing a code: a small slab of the site's popup glass that grows out of the button pressed.
        The QR itself sits on a pure white tile, so it scans in dark mode too. */
@@ -71,15 +68,11 @@
       transition: transform .45s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), box-shadow .3s ease; }
     .mq-tile:hover { transform: translateY(-2px) scale(1.02); }
     .mq-tile:active { transform: scale(.97); }
-    .mq-tile-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .7rem; border: none; border-radius: 100px; background: none; color: var(--slate, #5c596b); font-family: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; transition: background-color .2s ease, color .2s ease; }
-    .mq-tile-btn:hover { background: rgba(127, 120, 150, .12); color: var(--dusk, #2e2c3a); }
-    .mq-tile-btn:active { background: rgba(127, 120, 150, .2); }
-    .mq-tile-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .mq-tile-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .7rem; border: none; border-radius: 100px; color: var(--slate, #5c596b); font-family: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
+    .mq-tile-btn:hover { color: var(--dusk, #2e2c3a); }
 
     /* Scanning */
     .mq-scan { background: #0b0a10; color: #fff; }
-    .mq-scan .mq-x { background: rgba(255, 255, 255, .14); color: #fff; backdrop-filter: blur(10px); }
-    .mq-scan .mq-x:hover { background: rgba(255, 255, 255, .24); }
     .mq-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .mq-shade { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; }
     .mq-win { position: relative; width: min(72vw, 46dvh, 340px); aspect-ratio: 1; border-radius: 28px; box-shadow: 0 0 0 200vmax rgba(8, 7, 12, .58); transition: transform .5s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
@@ -99,18 +92,15 @@
     .mq-status { margin: .3rem 0 0; color: rgba(255, 255, 255, .78); font-size: .92rem; line-height: 1.5; min-height: 1.4em; }
     .mq-status.is-error { color: #ffb4a8; }
     .mq-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; padding: 1.4rem 16px max(1.4rem, env(safe-area-inset-bottom)); background: linear-gradient(to top, rgba(8, 7, 12, .8), rgba(8, 7, 12, 0)); }
-    .mq-scan .mq-btn { background: rgba(255, 255, 255, .16); color: #fff; backdrop-filter: blur(12px); }
-    .mq-scan .mq-btn:hover { background: rgba(255, 255, 255, .26); }
-    .mq-scan .mq-btn.is-main { background: #fff; color: #17161d; }
+    /* The scanner's buttons are HUD glass over the camera, the main one a white disc (assets/glass.css) */
     .mq-off { position: absolute; inset: 0; z-index: 1; display: grid; place-content: center; justify-items: center; gap: .9rem; padding: 0 16px; text-align: center; }
     .mq-off[hidden] { display: none; }
     .mq-off .mq-ic { display: grid; place-items: center; width: 4rem; height: 4rem; border-radius: 50%; background: rgba(255, 255, 255, .12); }
     .mq-off p { margin: 0; max-width: 24rem; color: rgba(255, 255, 255, .78); line-height: 1.6; }
 
     /* Asking a phone for its camera, once */
-    .mq-ask { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 60; box-sizing: border-box; max-width: 26rem; margin: 0 auto; padding: 1.1rem 1.1rem 1rem; border-radius: 24px;
-      background: var(--surface, #fff); color: var(--dusk, #2e2c3a); font-family: var(--font-main, -apple-system, BlinkMacSystemFont, 'Inter', sans-serif);
-      box-shadow: 0 0 0 1px rgba(46, 44, 58, .08), 0 24px 48px -24px rgba(46, 44, 58, .5), 0 6px 14px -8px rgba(46, 44, 58, .25);
+    .mq-ask { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 60; box-sizing: border-box; max-width: 26rem; margin: 0 auto; padding: 1.1rem 1.1rem 1rem; border-radius: var(--r-card, 28px);
+      color: var(--dusk, #2e2c3a); font-family: var(--font-main, -apple-system, BlinkMacSystemFont, 'Inter', sans-serif);
       animation: mq-up .55s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
     @keyframes mq-up { from { opacity: 0; transform: translateY(24px); } }
     .mq-ask.is-going { opacity: 0; transform: translateY(24px); transition: opacity .25s ease, transform .3s ease; }
@@ -119,8 +109,7 @@
     .mq-ask b { display: block; font-size: 1rem; letter-spacing: -.01em; }
     .mq-ask p { margin: .15rem 0 0; color: var(--slate, #5c596b); font-size: .86rem; line-height: 1.5; }
     .mq-ask .mq-row { justify-content: flex-end; margin-top: .9rem; }
-    .mq-ask .mq-btn { min-height: 2.6rem; background: var(--dusk, #2e2c3a); color: var(--paper, #fff); }
-    .mq-ask .mq-btn.is-light { background: rgba(127, 120, 150, .14); color: var(--dusk, #2e2c3a); }
+    .mq-ask .mq-btn { min-height: 2.6rem; }
 
     @media (prefers-reduced-motion: reduce) {
       .mq-dlg[open], .mq-ask { animation: none; }
@@ -167,8 +156,8 @@
   const stillMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   async function show(album, from) {
-    if (!album?.code) return;
-    const url = linkFor(album.code);
+    if (!album?.code && !album?.url) return;
+    const url = album.url || linkFor(album.code);
     // Built from the site's popup glass (.acct-dialog / .acct-card), so it matches every other popup
     const d = document.createElement('dialog');
     d.className = 'acct-dialog mq-pop';
@@ -176,10 +165,10 @@
     d.innerHTML = `
       <div class="acct-card mq-slab">
         <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
-        <p class="mq-slab-kick">Scan to join</p>
+        <p class="mq-slab-kick">${esc(album.kicker || 'Scan to join')}</p>
         <h2 class="mq-slab-name" id="mqPopName">${esc(album.name || 'Momento album')}</h2>
         <div class="mq-slab-qr"></div>
-        <p class="mq-slab-code">${esc(album.code)}</p>
+        ${album.hideCode || !album.code ? '' : `<p class="mq-slab-code">${esc(album.code)}</p>`}
         <div class="acct-actions">
           <button class="acct-ghost" type="button" data-copy>Copy link</button>
           <button class="acct-primary" type="button" data-close autofocus>Done</button>
@@ -230,8 +219,8 @@
         { duration: 420, delay: 160 + i * 40, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' }));
       try { d.animate({ opacity: [0, 1] }, { duration: 300, pseudoElement: '::backdrop' }); } catch (e) {}
     }
-    try { card.querySelector('.mq-slab-qr').innerHTML = await qrSvg(url, `QR code to join ${album.name || 'the album'}`); }
-    catch (err) { card.querySelector('.mq-slab-qr').innerHTML = `<p class="mq-slab-err">The QR code could not be drawn. Share the code ${esc(album.code)} instead.</p>`; }
+    try { card.querySelector('.mq-slab-qr').innerHTML = await qrSvg(url, `QR code to join ${album.name || (album.url ? 'the group' : 'the album')}`); }
+    catch (err) { card.querySelector('.mq-slab-qr').innerHTML = `<p class="mq-slab-err">The QR code could not be drawn. ${album.code ? `Share the code ${esc(album.code)} instead.` : 'Copy the link instead.'}</p>`; }
   }
 
   // ---- A small tile, e.g. on the "Album created" screen ----
@@ -246,6 +235,11 @@
   }
 
   // ---- Reading a code ----
+  // A group's invite link (any address with ?group=): its code, or ''
+  function groupCodeFrom(text) {
+    try { return (new URL(String(text || '').trim()).searchParams.get('group') || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); } catch (e) { return ''; }
+  }
+
   // A Momento invite link (any address with ?join=) or a bare 7-character code
   function codeFrom(text) {
     const t = String(text || '').trim();
@@ -322,7 +316,7 @@
         if (done || !d.open) return stop();
         video.srcObject = stream;
         await video.play().catch(() => {});
-        say('Point the camera at the album’s QR code.');
+        say('Point the camera at an album or group QR code.');
         const cams = (await navigator.mediaDevices.enumerateDevices()).filter((x) => x.kind === 'videoinput');
         flip.hidden = cams.length < 2;
         tick();
@@ -344,9 +338,23 @@
       if (!done && stream) timer = setTimeout(tick, 140);
     }
     function found(text) {
+      const group = groupCodeFrom(text);
+      if (group) {
+        done = true;
+        d.classList.add('is-found');
+        say('Group found. Joining…');
+        navigator.vibrate?.(40);
+        stop();
+        setTimeout(() => {
+          d.close();
+          if (Momento.joinGroupFromLink) Momento.joinGroupFromLink(group);
+          else location.href = Momento.groupLink ? Momento.groupLink(group) : new URL('events.html?group=' + encodeURIComponent(group), location.href).href;
+        }, 550);
+        return;
+      }
       const code = codeFrom(text);
       if (!code) {
-        if (text !== lastBad) { lastBad = text; say('That QR code isn’t a Momento album. Try the host’s code.', true); }
+        if (text !== lastBad) { lastBad = text; say('That QR code isn’t a Momento album or group. Try the host’s code.', true); }
         return;
       }
       done = true;
@@ -422,7 +430,7 @@
     document.body.append(card);
   }
 
-  Momento.qr = { show, scan, mount, codeFrom, askCamera };
+  Momento.qr = { show, scan, mount, codeFrom, groupCodeFrom, askCamera };
 
   // Any control on any page: <button data-qr-scan>
   document.addEventListener('click', (e) => {

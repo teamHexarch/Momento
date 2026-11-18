@@ -113,7 +113,7 @@ export function reminderHtml(guest, album, hostName, link) {
   const first = firstName(guest);
   return layout({
     heading: `Add your photos to ${album.name}`,
-    paragraphs: [`${first ? `Hi ${first}, ` : ''}${hostName || 'The host'} would love your photos from ${album.name}. Everyone in the album will see what you add, and the album takes new photos until ${album.closesLabel}.`],
+    paragraphs: [`${first ? `Hi ${first}, ` : ''}${hostName || 'The host'} would love your photos from ${album.name}. Everyone in the album will see what you add.${album.closesLabel ? ` The album takes new photos until ${album.closesLabel}.` : ''}`],
     button: { href: link, label: 'Add my photos' },
     footer: 'You’re getting this because you joined this album and the host sent a reminder.',
   });

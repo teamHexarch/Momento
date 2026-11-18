@@ -201,8 +201,6 @@
     // ---- Events you host: a row each, and a sheet to manage who gets in ----
     const joined = document.getElementById('joinedEvents');
     const total = document.getElementById('eaTotal');
-    const sheetDialog = document.getElementById('eaDialog');
-    const sheet = document.getElementById('eaSheet');
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const num = (n) => Number(n || 0).toLocaleString('en-GB');
     const day = (d) => { const t = Date.parse(String(d).slice(0, 10) + 'T12:00:00Z'); return Number.isNaN(t) ? String(d || '') : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); };
@@ -241,7 +239,7 @@
       const el = document.createElement('article');
       el.className = 'eh panel';
       el.dataset.id = a.id;
-      const pic = (a.pics || [])[0];
+      const pic = a.cover?.thumbUrl || (a.pics || [])[0];   // the host's cover while upcoming, then the most loved photo
       const waiting = waitingOf(a).length;
       const place = a.venue?.address || a.place;
       const s = statusOf(a);
@@ -258,94 +256,8 @@
       return el;
     }
 
-    // ---- Settings (hosts): who gets in, the join deadline, and people waiting to be let in ----
-    let sheetId = null, sheetFocus = 'manage', opener = null;
-    const api = (id) => '/api/events/' + encodeURIComponent(id);
-    function say(text, bad) {
-      const s = sheet.querySelector('.ea-status');
-      if (!s) return;
-      s.textContent = text || '';
-      s.classList.toggle('error', !!bad);
-    }
-    function closeSheet() { if (sheetDialog.open) sheetDialog.close(); }
-    sheetDialog.addEventListener('close', () => {
-      sheetId = null;
-      if (opener?.isConnected) opener.focus();
-    });
-    sheetDialog.addEventListener('pointerdown', (e) => { sheetDialog._downOutside = e.target === sheetDialog; });
-    sheetDialog.addEventListener('click', (e) => { if (e.target === sheetDialog && sheetDialog._downOutside) closeSheet(); });
-
-    function openSheet(id, focus, from) {
-      sheetId = id; sheetFocus = focus; opener = from || opener;
-      renderSheet();
-      if (!sheetDialog.open) sheetDialog.showModal();
-      const target = sheet.querySelector('.acct-sw, .ea-x');
-      target?.focus();
-    }
-    function renderSheet() {
-      const a = byId.get(sheetId);
-      if (!a) { closeSheet(); return; }
-      const host = a.role === 'host';
-      const waiting = waitingOf(a);
-      const deadline = a.joinDeadline ? new Date(a.joinDeadline) : null;
-      const local = deadline ? new Date(+deadline - deadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
-      const sw = (key, on, title, note, disabled) => `<div class="ea-row"><span><b id="eaL-${key}">${title}</b><small>${note}</small></span><button class="acct-sw" type="button" role="switch" data-key="${key}" aria-labelledby="eaL-${key}" aria-checked="${on}"${disabled ? ' disabled' : ''}></button></div>`;
-      const km = a.zone?.radiusM ? `${+(a.zone.radiusM / 1000).toFixed(1)} km` : '';
-      sheet.innerHTML = `
-        <button class="acct-x ea-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
-        <p class="ea-kicker">Settings</p>
-        <h2 id="eaTitle">${esc(a.name)}</h2>
-        <p class="ea-sub">${esc([day(a.date), a.venue?.address || a.place].filter(Boolean).join(' · '))}</p>
-        ${host ? `
-        <section class="ea-sec" aria-labelledby="eaRules">
-          <h3 id="eaRules">Who gets in</h3>
-          ${sw('joiningOpen', a.joiningOpen !== false, 'Accept new guests', 'When off, anyone with the code asks you first')}
-          ${a.group ? '' : sw('locationRequired', !!a.zone && a.locationRequired !== false, 'Check location on entry', a.zone ? `Guests within ${km} of the venue get straight in. Anyone else waits for you` : 'Add a venue to the album to use this', !a.zone)}
-          <label class="ea-row ea-deadline"><span><b>Join deadline</b><small>Leave empty to close joining when the event ends</small></span><input type="datetime-local" id="eaDeadline" value="${local}"></label>
-        </section>
-        <section class="ea-sec" aria-labelledby="eaReqs">
-          <h3 id="eaReqs">Waiting for you ${waiting.length ? `<b class="ea-badge">${waiting.length}</b>` : ''}</h3>
-          ${waiting.length ? `<ul class="ea-reqs">${waiting.map((r) => `
-            <li data-guest="${esc(r.user)}"><i class="ea-av" aria-hidden="true">${esc((String(r.name || 'G').trim()[0] || 'G').toUpperCase())}</i>
-              <span><b>${esc(r.name || 'Guest')}</b><small>${r.status === 'approving' ? 'Being let in…' : 'Asked to join'}</small></span>
-              <button class="ea-mini dark" type="button" data-approve="1">Approve</button><button class="ea-mini" type="button" data-approve="0">Decline</button></li>`).join('')}</ul>`
-          : '<p class="ea-none">No one is waiting. Guests who can’t check in, or who try after joining closes, show up here.</p>'}
-        </section>` : ''}
-        <p class="ea-status" role="status"></p>`;
-      sheet.querySelector('[data-close]').addEventListener('click', closeSheet);
-      sheet.querySelectorAll('.btn').forEach((b) => window.rollButton?.(b));
-      // Switches save straight away and flip back if the server says no
-      sheet.querySelectorAll('.acct-sw[data-key]').forEach((btn) => btn.addEventListener('click', async () => {
-        const on = btn.getAttribute('aria-checked') !== 'true';
-        btn.setAttribute('aria-checked', String(on)); btn.setAttribute('aria-disabled', 'true'); btn.style.pointerEvents = 'none';
-        try { await momentoApi(api(a.id) + '/policy', momentoJson('PATCH', { [btn.dataset.key]: on })); say('Saved.'); await refresh(); }
-        catch (err) { btn.setAttribute('aria-checked', String(!on)); btn.removeAttribute('aria-disabled'); btn.style.pointerEvents = ''; say(err.message, true); }
-      }));
-      sheet.querySelector('#eaDeadline')?.addEventListener('change', async (e) => {
-        const v = e.target.value;
-        try { await momentoApi(api(a.id) + '/policy', momentoJson('PATCH', { joinDeadline: v ? new Date(v).toISOString() : null })); say(v ? 'Deadline saved.' : 'Deadline cleared: joining closes when the event ends.'); await refresh(); }
-        catch (err) { say(err.message, true); }
-      });
-      sheet.querySelectorAll('[data-approve]').forEach((btn) => btn.addEventListener('click', async () => {
-        const row = btn.closest('li'), approve = btn.dataset.approve === '1';
-        row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-        try { await momentoApi(api(a.id) + '/requests/' + encodeURIComponent(row.dataset.guest), momentoJson('POST', { approve })); say(approve ? 'Let in. They’re now a guest.' : 'Declined. They won’t see the album.'); await refresh(); }
-        catch (err) { row.querySelectorAll('button').forEach((b) => { b.disabled = false; }); say(err.message, true); }
-      }));
-    }
-
-    async function refresh() {
-      await loadJoined();
-      if (sheetDialog.open && sheetId) {
-        const scroll = sheet.scrollTop, focusKey = document.activeElement?.dataset?.key;
-        const status = sheet.querySelector('.ea-status');
-        const note = [status?.textContent, status?.classList.contains('error')];
-        renderSheet();
-        say(...note);
-        sheet.scrollTop = scroll;
-        if (focusKey) sheet.querySelector(`[data-key="${focusKey}"]`)?.focus();
-      }
-    }
+    // Settings (hosts) live in assets/album-settings.js, so every page opens the same sheet
+    const openSheet = (id, focus, from) => Momento.albumSettings?.open(id, from);
 
     // ---- "Needs you": rows for invitations and for guests waiting at the door ----
     // The Social page stacks these above everything else (and hides the stack when there are none).
