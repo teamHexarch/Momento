@@ -48,6 +48,12 @@ try {
     zone: { ...venue, radiusM: 1000 }, venue: { address: 'Park' },
   }))).album;
 
+  // ---- The browser may send it: the site is on another address, so the cover's PUT must be allowed ----
+  const pre = await fetch('http://localhost:4110/api/albums/x/cover', { method: 'OPTIONS', headers: { Origin: 'http://localhost:3000', 'Access-Control-Request-Method': 'PUT' } });
+  assert.equal(pre.status, 204);
+  assert.match(pre.headers.get('access-control-allow-methods') || '', /\bPUT\b/, 'PUT allowed from the site');
+  checks++;
+
   // ---- Before the event: the host's picture ----
   const soon = await make('Next week', 7 * 24 * HOUR);
   assert.equal(soon.cover, null);
