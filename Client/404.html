@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Page not found | Momento</title>
+  <meta name="description" content="This page doesn't exist on Momento.">
+  <!-- GitHub Pages serves this file for any address that doesn't exist, at that address,
+       so every link here starts with / (the site is at the root of hexarch.org) -->
+  <link rel="icon" href="/assets/momento-icon.png">
+  <script>
+    // Same theme choice as the rest of the site
+    (() => {
+      let pref = 'system';
+      try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
+      const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <style>
+    :root {
+      --paper: #F8F7FA; --surface: #FFFFFF; --dusk: #2E2C3A; --slate: #5C596B; --line: #E3E0EA;
+      --accent: #9A603D; --tint: rgba(111, 152, 150, .12);
+      --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', sans-serif;
+    }
+    :root[data-theme="dark"] {
+      --paper: #121119; --surface: #1C1B25; --dusk: #ECEAF4; --slate: #B4AFC8; --line: #2C2A38;
+      --accent: #B8AEF5; --tint: rgba(143, 168, 232, .12);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--paper); color: var(--dusk); font: 400 1rem/1.7 var(--font); -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; max-width: 46rem; margin: 0 auto; padding: 1.5rem 16px 0; }
+    .brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--dusk); font-weight: 750; letter-spacing: -.02em; text-decoration: none; font-size: 1.1rem; }
+    .brand img { width: 2rem; height: 2rem; border-radius: 9px; }
+    main { flex: 1; width: 100%; max-width: 46rem; margin: 0 auto; padding: 4rem 16px; }
+    h1 { margin: 0 0 .8rem; font-size: clamp(2rem, 6vw, 2.8rem); line-height: 1.1; letter-spacing: -.035em; }
+    p { margin: 0 0 1.6rem; max-width: 36rem; color: var(--slate); font-size: 1.05rem; }
+    .acts { display: flex; flex-wrap: wrap; gap: .7rem; }
+    .btn { display: inline-flex; align-items: center; min-height: 3rem; padding: 0 1.4rem; border-radius: 100px; font-weight: 650; text-decoration: none; transition: transform .3s cubic-bezier(.34, 1.56, .64, 1); }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: scale(.97); }
+    .btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; border-radius: 100px; }
+    .btn-dark { background: var(--dusk); color: var(--paper); }
+    .btn-light { background: var(--surface); color: var(--dusk); box-shadow: inset 0 0 0 1px var(--line); }
+    footer { width: 100%; max-width: 46rem; margin: 0 auto; padding: 1.5rem 16px 3rem; border-top: 1px solid var(--line); color: var(--slate); font-size: .9rem; }
+    @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/index.html"><img src="/assets/momento-icon.png" alt="">Momento</a>
+  </header>
+
+  <main>
+    <h1>This page doesn’t exist</h1>
+    <p>The link may be mistyped or out of date. If someone sent you an album, ask them for its code or QR code again.</p>
+    <div class="acts">
+      <a class="btn btn-dark" href="/albums.html">Go to my albums</a>
+      <a class="btn btn-light" href="/index.html">Momento home</a>
+    </div>
+  </main>
+
+  <footer>© 2026 HexArch Limited · <a href="/support.html">Support</a> · <a href="/privacy.html">Privacy policy</a></footer>
+</body>
+</html>

@@ -30,8 +30,11 @@ async function photoFor(req, { react = false } = {}) {
 export async function file(req, res) {
   const { photo } = await photoFor(req);
   // From disk: the file itself. From S3: a short-lived link straight to the bucket.
+  // Seeing a photo means its preview (up to 2500 px, a few hundred KB) unless ?size=original is asked for:
+  // the original can be tens of MB (or a camera RAW no browser can show), which made the viewer slow.
+  // "Download" (/download) always gives the original.
   const thumbnail = req.query.size === 'thumb' && await ensureThumbnail(photo);
-  const preview = req.query.size === 'preview' && photo.previewKey;
+  const preview = req.query.size !== 'original' && photo.previewKey;
   if (!(await sendPhoto(res, thumbnail || preview || photo.storageKey, thumbnail ? 'image/webp' : preview ? photo.previewMimeType : photo.mimeType))) throw new HttpError(404, 'Photo file is missing.');
 }
 

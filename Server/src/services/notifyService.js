@@ -38,10 +38,42 @@ const BODY = {
 };
 export const textOf = (n) => (TEXT[n.type] || (() => 'Something new on Momento'))(n);
 
+// Settings → "Activity on my public albums" (notify.activity): when the host turns it off, joins and new
+// photos in the public albums they host don't reach their inbox. Returns the people who still want to hear.
+const ACTIVITY = new Set(['joined', 'photos']);
+async function wantActivity(users, album) {
+  if (!album || !users.length) return users;
+  const [{ Album }, { User }] = await Promise.all([import('../models/Album.js'), import('../models/User.js')]);
+  const a = await Album.findById(album, 'visibility host').lean();
+  if (a?.visibility !== 'public' || !users.some((u) => String(u) === String(a.host))) return users;
+  const off = await User.exists({ _id: a.host, 'notify.activity': false });
+  return off ? users.filter((u) => String(u) !== String(a.host)) : users;
+}
+
+// Reactions, likes and new photos only reach people who are in that album (joined it, host it, or are in
+// its group): someone who left, or was removed, hears nothing more about it
+const MEMBERS_ONLY = new Set(['like', 'reaction', 'photos']);
+async function inAlbum(users, album) {
+  if (!album || !users.length) return users;
+  const [{ Album }, { Membership }, { GroupMember }] = await Promise.all([
+    import('../models/Album.js'), import('../models/Membership.js'), import('../models/GroupMember.js')]);
+  const a = await Album.findById(album, 'host group').lean();
+  if (!a) return [];
+  const [rows, group] = await Promise.all([
+    // ('group' rows only remember hidden photos; group access is checked through the group itself)
+    Membership.find({ album, user: { $in: users }, via: { $ne: 'group' } }, 'user').lean(),
+    a.group ? GroupMember.find({ group: a.group, user: { $in: users } }, 'user').lean() : [],
+  ]);
+  const ok = new Set([String(a.host), ...rows.map((r) => String(r.user)), ...group.map((r) => String(r.user))]);
+  return users.filter((u) => ok.has(String(u)));
+}
+
 // notify({ user, type, actor, album, photo, emoji })   user: who it's for. Never for your own actions.
 export async function notify({ user, type, actor, album, photo, emoji, group }) {
   try {
     if (!user || (actor && String(actor) === String(user))) return;
+    if (MEMBERS_ONLY.has(type) && !(await inAlbum([user], album)).length) return;
+    if (ACTIVITY.has(type) && !(await wantActivity([user], album)).length) return;
     // One reaction per person per photo (a change updates it and makes it unread again); one join, request,
     // group invite and "closing soon" per album or group
     const key = { user, type, ...(actor && { actor }), ...(album && { album }), ...(photo && { photo }), ...(group && { group }) };
@@ -59,7 +91,7 @@ export async function notify({ user, type, actor, album, photo, emoji, group }) 
 // once they've read it, or an hour after the last one, so a long upload doesn't buzz phones over and over.
 export async function notifyPhotos({ users, actor, album, count, photoIds = [] }) {
   try {
-    const targets = [...new Set(users.map(String))].filter((u) => u !== String(actor));
+    const targets = await wantActivity(await inAlbum([...new Set(users.map(String))].filter((u) => u !== String(actor)), album), album);
     if (!targets.length || !count) return;
     const filter = { type: 'photos', actor, album };
     const before = new Map((await Notification.find({ ...filter, user: { $in: targets } }, 'user read at')).map((n) => [String(n.user), n]));

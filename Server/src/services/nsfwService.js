@@ -76,10 +76,12 @@ export async function isAllowedFile(hash) {
  * Checks one upload: { blocked: false } or { blocked: true, decisionId } (the refusal is recorded).
  * ctx: { user, album?, kind: 'photo' | 'cover' | 'avatar' }
  */
+// ctx.hash: the uploaded file's fingerprint, when `buffer` is a smaller copy of it (album photos are checked
+// on their thumbnail: the model only looks at 224×224 pixels anyway, and it's far quicker to read)
 export async function judge(buffer, ctx) {
   const scores = await scan(buffer);
   if (!isExplicit(scores)) return { blocked: false };
-  const hash = sha256(buffer);
+  const hash = ctx.hash || sha256(buffer);
   if (await isAllowedFile(hash)) return { blocked: false };
   const { ModerationDecision } = await import('../models/ModerationDecision.js');
   const d = await ModerationDecision.create({ user: ctx.user, album: ctx.album, kind: ctx.kind, hash, model: MODEL_NAME, threshold: THRESHOLD, scores });

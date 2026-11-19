@@ -11,8 +11,8 @@ export function errorHandler(err, req, res, next) {
     return res.status(502).json({ error: 'We couldn’t send the email just now. Try again in a few minutes.' });
   }
   if (err.name === 'MulterError') {
-    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'That photo is too large.' : 'That upload could not be read.';
-    return res.status(400).json({ error: msg });
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'That file is too large.', code: 'too-big' });
+    return res.status(400).json({ error: 'That upload could not be read.' });
   }
   if (err.name === 'ValidationError') return res.status(400).json({ error: Object.values(err.errors)[0]?.message || 'Invalid data.' });
   if (err.name === 'CastError') return res.status(404).json({ error: 'Not found.' });

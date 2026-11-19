@@ -75,6 +75,7 @@ const userSchema = new mongoose.Schema({
     photos: { type: Boolean, default: true },    // someone adds photos to an album I'm in
     closing: { type: Boolean, default: true },   // an album is about to close
     recap: { type: Boolean, default: false },    // weekly recap
+    activity: { type: Boolean, default: true },  // inbox: joins and new photos in my public albums
   },
 }, { timestamps: true });
 
@@ -90,7 +91,7 @@ userSchema.methods.toPublic = function () {
     verificationResendAt: this.verificationResendAt || null,
     plan: this.plan,
     hasPassword: !!this.passwordHash,
-    notify: { photos: this.notify?.photos ?? true, closing: this.notify?.closing ?? true, recap: this.notify?.recap ?? false },
+    notify: { photos: this.notify?.photos ?? true, closing: this.notify?.closing ?? true, recap: this.notify?.recap ?? false, activity: this.notify?.activity ?? true },
     providers: this.googleId ? ['google'] : [],
   };
 };

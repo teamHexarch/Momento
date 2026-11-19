@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en" data-page="albums">
 <head>
+  <script src="assets/i18n.js"></script>
   <script>if (location.hash === "#join" || new URLSearchParams(location.search).has("join")) location.replace("events.html" + location.search + location.hash);</script>
   <script>
     // Embedded (albums.html?album=<id>&embed=1 inside another Momento page): only the album window shows,
@@ -17,6 +18,7 @@
     html.is-embed, html.is-embed body { background: transparent !important; }
     html.is-embed .bg, html.is-embed .grain, html.is-embed .header, html.is-embed .page-wrap, html.is-embed #intro { display: none !important; }
   </style>
+  <script src="assets/emoji.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -112,7 +114,7 @@
     /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
     /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
-    .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: transform; }
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
@@ -581,8 +583,75 @@
 
     /* ---------- Full size ----------
        Always dark, like any photo viewer, so the picture is the only bright thing on screen */
-    .viewer { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #0A090E; color: #F2EFF8; overflow: hidden; font-family: var(--font-main); }
-    .viewer::backdrop { background: rgba(9, 8, 13, .6); }   /* the viewer is opaque, so a blur behind it would never be seen */
+    .viewer { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: transparent; color: #F2EFF8; overflow: hidden; font-family: var(--font-main); overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+    .viewer::backdrop { background: transparent; }   /* the dark comes from .vw-bg, which fades on its own */
+    .vw-bg { position: absolute; inset: 0; z-index: 0; isolation: isolate; overflow: hidden; background: #0A090E; pointer-events: none; }
+    /* The room takes on the photo's colours: a heavily blurred copy glows behind it (two layers, so a new photo
+       crossfades in), then a vignette keeps the bars readable and a fine grain stops it looking like a flat fill */
+    .vw-amb { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; opacity: 0; filter: blur(48px) saturate(1.5) brightness(.75); transform: translateZ(0) scale(1.05); transition: opacity .7s ease; pointer-events: none; }
+    .vw-amb.is-on { opacity: .62; }
+    .vw-bg::before { content: ""; position: absolute; inset: 0; z-index: 1;
+      background: radial-gradient(120% 75% at 50% 50%, rgba(10, 9, 14, 0) 30%, rgba(10, 9, 14, .55) 75%, rgba(10, 9, 14, .9) 100%),
+                  linear-gradient(to bottom, rgba(10, 9, 14, .55), transparent 22%, transparent 70%, rgba(10, 9, 14, .7)); }
+    .vw-bg::after { content: ""; position: absolute; inset: 0; z-index: 2; opacity: .09; mix-blend-mode: overlay; pointer-events: none;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+    /* Who added it: their initial in a small coloured circle, before the name */
+    .vw-count { display: grid; grid-template-columns: auto 1fr; column-gap: .6rem; align-items: center; }
+    .vw-count .vw-num { grid-column: 1 / -1; font-size: 1rem; letter-spacing: -.01em; }
+    .vw-count .vw-num b { font-size: 1.15rem; font-weight: 700; }
+    .vw-count .vw-num span { opacity: .6; font-weight: 600; }
+    .vw-av { grid-row: 2; display: grid; place-items: center; width: 1.45rem; height: 1.45rem; margin-top: .3rem; border-radius: 50%; background: var(--c, #D9D0EA); color: #2E2C3A; font-size: .7rem; font-weight: 700; box-shadow: 0 0 0 2px rgba(10, 9, 14, .6); }
+    .vw-count .vw-av + small { grid-row: 2; display: block; margin: .3rem 0 0; }
+    /* The strip of photos: the one you're on stands taller with a light rim; the rest wait, dimmed */
+    .vw-film {
+      position: absolute; left: 0; right: 0; bottom: calc(max(1.1rem, env(safe-area-inset-bottom)) + 3.3rem); z-index: 3;
+      display: flex; gap: 3px; padding: .4rem calc(50% - .8rem); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; scroll-behavior: smooth;
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+      transition: opacity .28s ease, transform .4s var(--out);
+    }
+    .vw-film::-webkit-scrollbar { display: none; }
+    .vw-film:empty { display: none; }
+    .vw-film button { flex: none; width: 1.6rem; height: 2.1rem; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: rgba(255, 255, 255, .08); cursor: pointer; opacity: .5;
+      transition: opacity .3s ease, transform .4s var(--spring); -webkit-tap-highlight-color: transparent; }
+    .vw-film img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .vw-film button[aria-current="true"] { opacity: 1; transform: scale(1.16); box-shadow: 0 0 0 1.5px #F2EFF8, 0 6px 14px -6px rgba(0, 0, 0, .8); z-index: 1; margin: 0 4px; }
+    @media (hover: hover) { .vw-film button:hover { opacity: .85; } }
+    .vw-film button:active { transform: scale(.94); }
+    .vw-film button:focus-visible { outline: 2px solid #F2EFF8; outline-offset: 2px; opacity: 1; }
+    .viewer.is-bare .vw-film { opacity: 0; transform: translateY(14px); pointer-events: none; }
+    .viewer.is-zoomed .vw-film, .viewer.is-zoomed .vw-swipe { opacity: 0; pointer-events: none; }
+    /* First visits: how to move between photos, the arrows nudging side to side */
+    .vw-swipe { position: absolute; left: 50%; bottom: calc(max(1.1rem, env(safe-area-inset-bottom)) + 8.4rem); z-index: 3; display: flex; align-items: center; gap: .55rem; margin: 0; padding: .55rem 1rem .55rem .7rem;
+      translate: -50% 0; border-radius: 100px; background: rgba(28, 26, 38, .82); box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 12px 30px -10px rgba(0, 0, 0, .8);
+      color: #F2EFF8; font-size: .88rem; font-weight: 600; white-space: nowrap; pointer-events: none; transition: opacity .4s ease; }
+    .vw-swipe[hidden] { display: none; }
+    .vw-swipe.is-gone { opacity: 0; }
+    .vw-swipe-ic { display: flex; color: #E8C48A; }
+    .vw-swipe-ic svg:first-child { animation: nudge-l 1.6s var(--out) infinite; }
+    .vw-swipe-ic svg:last-child { margin-left: -4px; animation: nudge-r 1.6s var(--out) infinite; }
+    @keyframes nudge-l { 0%, 100% { transform: none; } 40% { transform: translateX(-4px); } }
+    @keyframes nudge-r { 0%, 100% { transform: none; } 40% { transform: translateX(4px); } }
+    @media (prefers-reduced-motion: reduce) { .vw-swipe-ic svg { animation: none !important; } .vw-amb, .vw-film, .vw-film button { transition: none; } .vw-film { scroll-behavior: auto; } }
+    /* The album grid: more below, and a nudge to scroll until you do */
+    .ab-more { position: sticky; bottom: .9rem; z-index: 2; display: flex; align-items: center; gap: .45rem; margin: -3.6rem auto 1rem; padding: .6rem 1.05rem .6rem .85rem; border: 0; border-radius: 100px;
+      background: rgba(28, 26, 38, .86); color: #F2EFF8; box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 14px 30px -10px rgba(20, 16, 40, .7); font: 600 .86rem var(--font-main); cursor: pointer;
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); transition: opacity .35s ease, transform .45s var(--spring); }
+    .ab-more[hidden] { display: none; }
+    .ab-more svg { color: #E8C48A; animation: nudge-d 1.6s var(--out) infinite; }
+    @keyframes nudge-d { 0%, 100% { transform: none; } 40% { transform: translateY(3px); } }
+    .ab-more.is-gone { opacity: 0; transform: translateY(10px) scale(.96); pointer-events: none; }
+    .ab-more:active { transform: scale(.95); }
+    .ab-more:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    @media (hover: hover) { .ab-more:hover { transform: translateY(-2px); } }
+    :root[data-theme="dark"] .ab-more { background: rgba(236, 234, 244, .92); color: #1C1A26; box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .8); }
+    :root[data-theme="dark"] .ab-more svg { color: #8A5232; }
+    @media (prefers-reduced-motion: reduce) { .ab-more svg { animation: none; } .ab-more { transition: none; } }
+    /* The top bar and the reactions step aside when you tap the photo (or while you drag it) */
+    .vw-top, .vw-foot { transition: opacity .28s ease, transform .4s var(--out); }
+    .viewer.is-bare .vw-top { opacity: 0; transform: translateY(-14px); pointer-events: none; }
+    .viewer.is-bare .vw-foot { opacity: 0; transform: translateY(14px); }
+    .viewer.is-bare .vw-foot > * { pointer-events: none; }
+    .viewer.is-bare .vw-nav { opacity: 0; pointer-events: none; }
     .vw-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: max(.9rem, env(safe-area-inset-top)) 1rem .9rem 1.4rem; background: linear-gradient(to bottom, rgba(9, 8, 13, .7), transparent); transition: opacity .25s ease; }
     .vw-count { margin: 0; overflow: hidden; font-size: .95rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
     .vw-count small { margin-left: .55rem; font-size: .88rem; font-weight: 500; opacity: .75; }
@@ -597,10 +666,14 @@
     .vw-mark[aria-pressed="true"] svg { fill: currentColor; }
     /* Double-tap: a heart pops up where you tapped, then floats away */
     .vw-burst { position: absolute; left: 0; top: 0; z-index: 4; font-size: 5.5rem; line-height: 1; opacity: 0; pointer-events: none; translate: -50% -50%; filter: drop-shadow(0 12px 28px rgba(0, 0, 0, .5)); }
-    .vw-stage { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; touch-action: pan-y pinch-zoom; }
-    .vw-stage img { display: block; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 9rem); object-fit: contain; border-radius: 6px; cursor: zoom-in; user-select: none; -webkit-user-select: none; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); }
+    /* Every touch gesture on the photo is ours: swipe sideways to move, down to close, pinch or tap twice to zoom */
+    .vw-stage { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; touch-action: none; transition: opacity .3s ease; }
+    .vw-stage img { will-change: transform; }
+    .vw-side { position: absolute; top: 50%; left: 50%; translate: -50% -50%; pointer-events: none; }
+    .vw-side:not([src]), .vw-stage.is-zoomed .vw-side { visibility: hidden; }
+    .vw-stage img { display: block; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 13rem); object-fit: contain; border-radius: 6px; cursor: zoom-in; user-select: none; -webkit-user-select: none; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); }
     /* Zoomed: the photo at its real size; drag (or scroll) to look around, click to fit it again */
-    .vw-stage.is-zoomed { display: block; overflow: auto; touch-action: auto; scrollbar-width: none; }
+    .vw-stage.is-zoomed { display: block; overflow: auto; touch-action: pan-x pan-y; scrollbar-width: none; overscroll-behavior: contain; }
     .vw-stage.is-zoomed::-webkit-scrollbar { display: none; }
     .vw-stage.is-zoomed img { max-width: none; max-height: none; margin: auto; border-radius: 0; cursor: grab; }
     .vw-stage.is-dragging img { cursor: grabbing; }
@@ -619,6 +692,14 @@
       .vw-top { padding-left: 1rem; }
     }
     @media (hover: none) { .vw-hint { display: none; } }
+    /* Phones and tablets swipe between photos: no arrow buttons over the picture */
+    @media (hover: none), (pointer: coarse) { .vw-nav { display: none; } }
+    @media (max-width: 600px) {
+      .vw-top { align-items: flex-start; padding: max(.75rem, env(safe-area-inset-top)) .75rem 1.6rem 1rem; }
+      .vw-count { padding-top: .55rem; font-size: .92rem; }
+      .vw-count small { display: block; margin: .15rem 0 0; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; }
+      .vw-stage img { max-height: calc(100dvh - 15rem); }
+    }
 
     /* ---------- Reactions and bookmarks ----------
        Along the bottom of the photo: React (opens the emoji above it), the reactions so far as
@@ -666,6 +747,7 @@
       background: rgba(255, 255, 255, .98); box-shadow: 0 0 0 1px rgba(46, 44, 58, .08), 0 22px 44px -16px rgba(40, 30, 70, .45);
     }
     .rx-who[hidden] { display: none; }
+    .viewer .rx-who { position: fixed; z-index: 7; grid-template-rows: auto auto minmax(0, 1fr); }
     .rx-who-tabs { display: flex; gap: .25rem; overflow-x: auto; padding: .1rem; scrollbar-width: none; }
     .rx-who-tabs::-webkit-scrollbar { display: none; }
     .rx-who-tab {
@@ -688,27 +770,76 @@
 
 
 
-    :root[data-theme="dark"] .rx-who-tab:hover { background: rgba(255, 255, 255, .08); color: #F2EFF8; }
-    :root[data-theme="dark"] .rx-who-tab[aria-pressed="true"] { background: #F2EFF8; color: #1C1A26; }
+    :root[data-theme="dark"] .rx-who-tab:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, .08); color: #F2EFF8; }
     :root[data-theme="dark"] .rx-name { color: #F2EFF8; }
     :root[data-theme="dark"] .rx-who-list li.is-mine { background: rgba(232, 196, 138, .12); }
     :root[data-theme="dark"] .rx-undo { color: #F2EFF8; }
+    /* The viewer's "who reacted" popup sits outside the shared GlassPopover (glass.css skips .viewer *),
+       so it needs its own dark surface; otherwise the light names land on a white card */
+    .viewer .rx-who { background: rgba(28, 26, 38, .97); box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 22px 44px -16px rgba(0, 0, 0, .8); color: #F2EFF8; }
+    .viewer .rx-who-tab { color: rgba(242, 239, 248, .7); }
+    .viewer .rx-who-tab:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, .08); color: #F2EFF8; }
+    .viewer .rx-who-tab:focus-visible { outline-color: #F2EFF8; }
+    .viewer .rx-who-tab[aria-pressed="true"] { background: rgba(255, 255, 255, .16); color: #F2EFF8; }
+    .viewer .rx-who :is(.rx-name, .rx-undo) { color: #F2EFF8; }
+    .viewer .rx-who-list li.is-mine { background: rgba(232, 196, 138, .12); }
+    .viewer .rx-who-list .note { color: rgba(242, 239, 248, .65); }
     @media (pointer: coarse) { .rx-who-tab { min-height: 2.6rem; } .rx-undo { min-height: 2.4rem; } }
-    /* In the full-size viewer: always dark, and it rises from the React button at the bottom */
-    .vw-picker { top: auto; bottom: calc(100% + .6rem); left: 50%; right: auto; translate: -50% 0; background: rgba(28, 26, 38, .96); box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 18px 40px -14px rgba(0, 0, 0, .8); }
-    :root[data-theme="dark"] .vw-picker { background: rgba(28, 26, 38, .94); }
-    .vw-picker .rx:focus-visible { outline-color: #fff; }
-    #vwPicker { display: block; width: min(19rem, calc(100vw - 2rem)); max-height: 70dvh; overflow: auto; box-sizing: border-box; padding: .8rem; border-radius: 18px; color: white; text-align: left; }
-    #vwPicker[hidden], #vwChoices[hidden] { display: none; }
-    #vwPicker h3 { margin: .15rem .4rem .45rem; font-size: .88rem; }
-    #vwPeople { max-height: 26dvh; }
-    #vwPeople li { grid-template-columns: auto 1fr auto; }
-    #vwPeople .rx-name { color: inherit; }
-    #vwChoices { border-top: 1px solid #ffffff30; margin-top: .6rem; padding-top: .6rem; }
-    #vwEmoji { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); }
-    #vwEmoji .rx { width: 100%; }
+    /* Choose a reaction, in the full-size viewer: always dark. On a computer it rises from the React button
+       (placed by the script); on a phone it's a sheet from the bottom of the screen (below). A search field,
+       then every emoji in groups, scrolling on its own */
+    .viewer .vw-picker {
+      position: fixed; z-index: 7; display: flex; flex-direction: column; gap: .55rem; box-sizing: border-box;
+      width: min(23rem, calc(100vw - 1.5rem)); height: min(25rem, calc(100dvh - 9rem)); padding: .7rem .6rem .4rem; border-radius: 22px;
+      background: rgb(28, 26, 38); box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 24px 50px -16px rgba(0, 0, 0, .85); color: #F2EFF8; outline: none;
+    }
+    .viewer .vw-picker[hidden] { display: none; }
+    .rx-grab { display: none; }
+    .rx-search {
+      flex: none; display: flex; align-items: center; gap: .55rem; height: 2.6rem; margin: 0 .1rem; padding: 0 .85rem; border-radius: 100px;
+      background: rgba(255, 255, 255, .08); color: rgba(242, 239, 248, .6); transition: background-color .2s ease, box-shadow .2s ease;
+    }
+    .rx-search:focus-within { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1.5px rgba(242, 239, 248, .55); }
+    .rx-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: #F2EFF8; font: 500 16px var(--font-main); }
+    .rx-search input::placeholder { color: rgba(242, 239, 248, .5); }
+    .rx-search input:focus { outline: none; }
+    .rx-search input::-webkit-search-cancel-button {
+      -webkit-appearance: none; appearance: none; width: 1.1rem; height: 1.1rem; border-radius: 50%; cursor: pointer;
+      background: rgba(242, 239, 248, .7) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231C1A26' stroke-width='3.2' stroke-linecap='round'%3E%3Cpath d='M8 8l8 8M16 8l-8 8'/%3E%3C/svg%3E") center / 70% no-repeat;
+    }
+    .rx-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; padding: 0 .1rem .3rem; }
+    .rx-sec h4 { position: sticky; top: 0; z-index: 1; margin: 0; padding: .45rem .45rem .3rem; background: rgb(28, 26, 38); color: rgba(242, 239, 248, .62); font-size: .78rem; font-weight: 650; letter-spacing: .01em; }
+    .rx-sec[hidden], .rx-scroll .rx[hidden], .rx-none[hidden] { display: none; }
+    .rx-scroll.is-searching h4 { display: none; }
+    /* Searching: the matches run as one grid, not a short row per group */
+    .rx-scroll.is-searching { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.7rem, 1fr)); align-content: start; }
+    .rx-scroll.is-searching :is(.rx-sec:not([hidden]), .rx-grid) { display: contents; }
+    .viewer:has(.vw-picker:not([hidden]), .rx-who:not([hidden])) .vw-hint { opacity: 0; }
+    .rx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.7rem, 1fr)); }
+    .rx-scroll .rx { width: 100%; height: 2.85rem; border-radius: 14px; font-size: 1.6rem; }
+    .rx-scroll .rx:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+    .rx-scroll .rx[aria-pressed="true"] { background: rgba(232, 196, 138, .24); box-shadow: inset 0 0 0 1.5px rgba(232, 196, 138, .7); }
+    @media (hover: hover) { .rx-scroll .rx:hover { transform: scale(1.18); background: rgba(255, 255, 255, .08); } }
+    .rx-none { margin: 0; padding: 1.6rem 1rem; color: rgba(242, 239, 248, .65); font-size: .9rem; line-height: 1.5; text-align: center; }
     .vw-react.has-mine { background: rgba(232, 196, 138, .2); box-shadow: inset 0 0 0 1.5px rgba(232, 196, 138, .7); }
-    .vw-react { padding-right: 1rem; }
+    .vw-react { flex: none; padding-right: 1rem; }
+    /* With a sheet open, the photo steps back */
+    .viewer.has-sheet .vw-stage { opacity: .4; }
+    /* Phones: both panels are sheets from the bottom edge, above the keyboard when you search
+       (--kb and --vvh come from the script, from the visual viewport) */
+    @media (max-width: 600px) {
+      .viewer .vw-picker, .viewer .rx-who {
+        position: fixed; left: 0 !important; right: 0; top: auto !important; bottom: var(--kb, 0px) !important; width: auto; translate: none;
+        border-radius: 26px 26px 0 0; padding: 0 .55rem calc(.6rem + env(safe-area-inset-bottom));
+        background: rgb(28, 26, 38); box-shadow: 0 0 0 1px rgba(255, 255, 255, .1), 0 -20px 50px -10px rgba(0, 0, 0, .7);
+      }
+      .viewer .vw-picker { height: min(30rem, 64dvh, calc(var(--vvh, 100dvh) - 4rem)); gap: .45rem; }
+      .viewer .rx-who { max-height: min(30rem, 64dvh); }
+      .viewer .rx-who-list { max-height: none; min-height: 0; }
+      .rx-grab { display: grid; place-items: center; flex: none; height: 1.6rem; margin: 0 -.55rem; cursor: grab; touch-action: none; }
+      .rx-grab i { width: 2.4rem; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, .28); }
+      .rx-grid, .rx-scroll.is-searching { grid-template-columns: repeat(auto-fill, minmax(2.65rem, 1fr)); }
+    }
     /* Phones and tablets: bigger targets for fingers, and a row that still fits a 320px screen */
     @media (pointer: coarse) {
       .pb-chip { min-height: 2.6rem; padding: 0 .8rem 0 .65rem; }
@@ -1000,16 +1131,28 @@
     /* In the full-size viewer: hide / delete next to download, and everyone's reactions along the bottom */
     .vw-danger:hover { background: rgba(190,70,70,.6); }
     .vw-btn[hidden] { display: none; }
-    .vw-foot { position: absolute; left: 0; right: 0; bottom: max(1.1rem, env(safe-area-inset-bottom)); z-index: 3; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem; padding: 0 1rem; pointer-events: none; }
+    .vw-foot { position: absolute; left: 0; right: 0; bottom: max(1.1rem, env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; justify-content: center; gap: .5rem; padding: 0 1rem; pointer-events: none; }
     .vw-foot > * { pointer-events: auto; }
-    .vw-foot .pb-tally { justify-content: center; }
+    .vw-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem; min-width: 0; }
+    .vw-chips .pb-tally { flex-wrap: wrap; justify-content: center; gap: .5rem; }
+    .vw-chips:not(:has(.pb-chip, .pb-cover:not([hidden]))) { display: none; }
+    /* Phones: React stays put on the left and the reactions scroll sideways beside it, in one row, never on top of each other */
+    @media (max-width: 600px) {
+      .vw-foot { justify-content: flex-start; padding: 0 0 0 .75rem; gap: .4rem; }
+      .vw-chips { flex: 1 1 auto; flex-wrap: nowrap; justify-content: flex-start; gap: .4rem; overflow-x: auto; padding: .3rem .75rem .3rem .1rem; scrollbar-width: none; overscroll-behavior-x: contain;
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 .5rem, #000 calc(100% - 1.6rem), transparent); mask-image: linear-gradient(to right, transparent, #000 .5rem, #000 calc(100% - 1.6rem), transparent); }
+      .vw-chips::-webkit-scrollbar { display: none; }
+      .vw-chips .pb-tally { flex-wrap: nowrap; gap: .4rem; }
+      .vw-chips > *, .vw-chips .pb-chip { flex: none; }
+      .vw-foot .pb-cover { white-space: nowrap; }
+    }
     /* Reaction chips over the photo: HUD tint, no blur (there can be many) */
     .vw-foot .pb-chip { border: 1px solid transparent; background: var(--g-hud) padding-box, var(--g-rim-hud) border-box; box-shadow: var(--g-sh-hud); color: #F2EFF8; }
     .vw-foot .pb-chip:hover { background: rgba(255,255,255,.18); }
     .vw-foot .pb-chip:focus-visible { outline-color: #fff; }
     .vw-foot .pb-chip[aria-pressed="true"] { background: rgba(232,196,138,.2); box-shadow: inset 0 0 0 1.5px rgba(232,196,138,.7); }
     .vw-foot .pb-cover { margin-left: 0; color: #E8C48A; background: rgba(232,196,138,.14); }
-    .vw-hint { bottom: calc(max(1.1rem, env(safe-area-inset-bottom)) + 3.4rem); }
+    .vw-hint { bottom: calc(max(1.1rem, env(safe-area-inset-bottom)) + 8.2rem); }
 
     @media (max-width: 600px) {
       .album-card, .album-card.activity-card { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
@@ -1277,6 +1420,7 @@
           <p class="lede intro" id="lede" style="--d: .3s"></p>
           <div class="hero-acts intro" style="--d: .4s">
             <button class="btn btn-dark" type="button" data-create><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New album</button>
+            <a class="btn btn-light" href="events.html#join"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l4-4-4-4M14 12H4"/></svg>Join an album</a>
           </div>
         </div>
         <article class="live panel intro" id="live" style="--d: .5s" aria-labelledby="liveTitle"></article>
@@ -1387,6 +1531,8 @@
           </span>
         </div>
         <div class="ab-grid" id="thumbs" role="group" aria-label="Photos"></div>
+        <!-- More photos below: a nudge to scroll, gone once you do -->
+        <button class="ab-more" type="button" id="abScrollHint" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg><span>Scroll to see more photos</span></button>
         <div class="album-empty" id="albumEmpty" hidden>
           <b>No photos yet</b>
           <span id="albumEmptyText"></span>
@@ -1399,7 +1545,7 @@
       </div>
       <p class="note" id="albumNote" role="status"></p>
       <footer class="ab-bar" id="abBar">
-        <button class="btn btn-dark" type="button" id="albumAdd">Add photos</button>
+        <button class="btn btn-dark" type="button" id="albumAdd" title="Up to 50 MB a photo. Camera RAW files can be bigger.">Add photos</button>
         <button class="btn btn-light btn-icon" type="button" id="albumCamera" aria-label="Take a photo" title="Take a photo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
       </footer>
       <footer class="ab-bar ab-selbar" id="abSelBar" hidden>
@@ -1463,6 +1609,8 @@
 
   <!-- Full size: the photo as large as the screen allows; click it to see it at its real size -->
   <dialog class="viewer" id="viewer" aria-label="Photo at full size">
+    <!-- The dark behind the photo: its own layer, so it can fade while the photo moves (open, close, swipe down) -->
+    <div class="vw-bg" id="vwBg" aria-hidden="true"><img class="vw-amb" alt=""><img class="vw-amb" alt=""></div>
     <div class="vw-top">
       <p class="vw-count" id="vwCount"></p>
       <div class="vw-tools">
@@ -1473,24 +1621,33 @@
         <button class="vw-btn" type="button" id="vwClose" aria-label="Close full size" title="Close (Esc)"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
     </div>
-    <div class="vw-stage" id="vwStage"><img id="vwImg" alt="" draggable="false"></div>
+    <!-- Swipe left or right: the photos either side ride along with your finger -->
+    <div class="vw-stage" id="vwStage"><img class="vw-side" id="vwPrevImg" alt="" draggable="false" aria-hidden="true"><img id="vwImg" alt="" draggable="false"><img class="vw-side" id="vwNextImg" alt="" draggable="false" aria-hidden="true"></div>
     <!-- Double-tap (or double-click) a photo: a heart pops where you tapped -->
     <span class="vw-burst" id="vwBurst" aria-hidden="true"></span>
     <button class="vw-nav prev" type="button" id="vwPrev" aria-label="Previous photo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     <button class="vw-nav next" type="button" id="vwNext" aria-label="Next photo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     <!-- Along the bottom: React (opens the emoji above it), everyone's reactions (tap one to see who),
          and a star when it's the album's cover -->
+    <!-- Every photo in a strip: where you are in the album, and a tap to jump anywhere -->
+    <div class="vw-film" id="vwFilm" role="group" aria-label="All photos"></div>
+    <p class="vw-swipe" id="vwSwipe" aria-hidden="true" hidden><span class="vw-swipe-ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7l-5 5 5 5"/></svg><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7l5 5-5 5"/></svg></span>Swipe to see more photos</p>
     <div class="vw-foot" id="vwFoot">
-      <button class="vw-btn vw-react" type="button" id="vwReact" aria-haspopup="true" aria-expanded="false" aria-controls="vwPicker"><span class="vw-face" id="vwFace"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.6 14.2c.8 1.2 2 1.9 3.4 1.9s2.6-.7 3.4-1.9"/><path d="M9.2 9.6h.01M14.8 9.6h.01" stroke-width="2.6"/></svg></span><span class="vw-react-label">React</span></button>
-      <div class="rx-picker vw-picker" id="vwPicker" role="group" aria-labelledby="vwPeopleTitle" hidden>
-        <h3 id="vwPeopleTitle">Reactions</h3>
-        <ul class="rx-who-list" id="vwPeople" aria-live="polite"></ul>
-        <section id="vwChoices"><h3>Choose a reaction</h3><div id="vwEmoji"></div></section>
+      <button class="vw-btn vw-react" type="button" id="vwReact" aria-haspopup="dialog" aria-expanded="false" aria-controls="vwPicker"><span class="vw-face" id="vwFace"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.6 14.2c.8 1.2 2 1.9 3.4 1.9s2.6-.7 3.4-1.9"/><path d="M9.2 9.6h.01M14.8 9.6h.01" stroke-width="2.6"/></svg></span><span class="vw-react-label">React</span></button>
+      <!-- Everyone's reactions (tap one to see who) and a star when it's the album's cover; scrolls sideways on a phone -->
+      <div class="vw-chips" id="vwChips">
+        <span class="pb-cover" id="pbCover" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 3.8l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8Z"/></svg>Album cover</span>
+        <div class="pb-tally" id="pbTally"></div>
       </div>
-      <span class="pb-cover" id="pbCover" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 3.8l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8Z"/></svg>Album cover</span>
-      <div class="pb-tally" id="pbTally"></div>
-      <div class="rx-who" id="pbWho" role="dialog" aria-label="Who reacted" hidden><div class="rx-who-tabs" id="pbWhoTabs"></div><ul class="rx-who-list" id="pbWhoList" aria-live="polite"></ul></div>
     </div>
+    <!-- Choose a reaction: search, then every emoji in groups. A popover on a computer, a sheet from the bottom on a phone -->
+    <div class="rx-picker vw-picker" id="vwPicker" role="dialog" aria-label="Choose a reaction" tabindex="-1" hidden>
+      <div class="rx-grab" aria-hidden="true"><i></i></div>
+      <label class="rx-search"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="rxSearch" placeholder="Search emoji" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search emoji" aria-controls="vwEmoji"></label>
+      <div class="rx-scroll" id="vwEmoji"></div>
+      <p class="rx-none" id="rxNone" role="status" hidden></p>
+    </div>
+    <div class="rx-who" id="pbWho" role="dialog" aria-label="Who reacted" hidden><div class="rx-grab" aria-hidden="true"><i></i></div><div class="rx-who-tabs" id="pbWhoTabs"></div><ul class="rx-who-list" id="pbWhoList" aria-live="polite"></ul></div>
     <p class="vw-hint" id="vwHint">Click to zoom in. Double-click to react with a ❤️</p>
   </dialog>
 
@@ -1910,23 +2067,41 @@
       // The custom cursor can't draw above a modal, so the normal cursor comes back
       root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
       m.showModal();
+      // A finger didn't choose the first button, so it shouldn't wear a focus ring
+      if (!finePointer && m.contains(document.activeElement)) document.activeElement.blur();
       // The dimmed backdrop fades in rather than snapping on
       if (!still) try { m.animate({ opacity: [0, 1] }, { duration: 380, easing: 'ease-out', pseudoElement: '::backdrop' }); } catch (e) {}
     }
     // Closing a window: its card sinks and fades while the backdrop lifts, together, and only then
     // does it close, so nothing snaps away at the end. `extra` are animations to wait for too
+    // Phones: the album, Recently deleted and Just added fill the screen, so they rise like a sheet from the
+    // bottom edge and slide back down when closed (or when you pull them down by the header)
+    const phoneSheet = matchMedia('(max-width: 600px)');
+    const SHEET_IN = 'cubic-bezier(.32, .72, 0, 1)';
+    function cardIn(card) {
+      if (still) return;
+      card.getAnimations().forEach((a) => a.cancel());
+      if (phoneSheet.matches && card.classList.contains('album-card')) card.animate([{ transform: 'translateY(100%)' }, { transform: 'none' }], { duration: 520, easing: SHEET_IN });
+      else card.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 440, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+    }
     async function softClose(d, card = d.querySelector('.modal-card'), extra = []) {
       if (d._closing || !d.open) return;
       d._closing = true;
       if (!still) {
         const ease = 'cubic-bezier(.4, 0, .2, 1)';
         const jobs = [...extra];
-        if (card) jobs.push(card.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px) scale(.975)' }], { duration: 260, easing: ease, fill: 'forwards' }).finished);
+        const from = card?.style.transform || 'none';
+        if (card && phoneSheet.matches && card.classList.contains('album-card')) {
+          // From wherever a pull left it, down and away; the rest of the way feels like it carries on
+          const left = 1 - (card._pulled || 0) / (card.offsetHeight || innerHeight);
+          jobs.push(card.animate([{ transform: from }, { transform: 'translateY(100%)' }], { duration: Math.max(180, 340 * left), easing: 'cubic-bezier(.3, 0, .8, .15)', fill: 'forwards' }).finished);
+        } else if (card) jobs.push(card.animate([{ opacity: 1, transform: from }, { opacity: 0, transform: 'translateY(8px) scale(.975)' }], { duration: 260, easing: ease, fill: 'forwards' }).finished);
         try { jobs.push(d.animate({ opacity: [1, 0] }, { duration: 420, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' }).finished); } catch (e) {}
         await Promise.all(jobs).catch(() => {});
       }
       d.close();
       d.getAnimations({ subtree: true }).forEach((a) => a.cancel());
+      if (card) { card.style.transform = ''; card._pulled = 0; }
       d._closing = false;
     }
     // Which photo the full-size viewer is on (or will open on). Moving while it's open flips the viewer too
@@ -2005,11 +2180,13 @@
       }
       showModal(albumModal);
       albumModal.querySelector('.album-scroll').scrollTop = 0;
+      paintMore();
+      if (!still && !abMore.hidden) abMore.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 600, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' });
       if (!still) {
         const SOFT = 'cubic-bezier(.22, 1, .36, 1)';
-        albumCard.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 460, easing: SOFT });
+        cardIn(albumCard);
         // The photos settle in just behind the window
-        [...thumbsEl.children].slice(0, 24).forEach((t, n) => t.animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 120 + n * 14, easing: SOFT, fill: 'backwards' }));
+        [...thumbsEl.children].slice(0, 24).forEach((t, n) => t.animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: (phoneSheet.matches ? 200 : 120) + n * 14, easing: SOFT, fill: 'backwards' }));
       }
       if (peek >= 0) openPhoto(peek, thumbsEl.children[peek]?.querySelector('img'));
     }
@@ -2035,6 +2212,57 @@
     });
     albumModal.addEventListener('pointerdown', (e) => { albumModal._downOutside = e.target === albumModal; }); albumModal.addEventListener('click', (e) => { if (e.target === albumModal && albumModal._downOutside) closeAlbum(); });
     albumModal.querySelector('[data-close]').addEventListener('click', closeAlbum);
+    // Phones: pull the album down to close it, by its header, or by the photos once they're scrolled to the top
+    function pullToClose(card, scroller, close, blocked = () => false) {
+      let d = null;
+      const begin = (y, fromScroll) => { if (!phoneSheet.matches || still || blocked()) return; d = { y, y0: y, t: performance.now(), dy: 0, fromScroll, on: !fromScroll }; };
+      const move = (y, e) => {
+        if (!d) return;
+        const dy = y - d.y0;
+        if (!d.on) {
+          // From the photos: only once they're at the top and the finger moves down; otherwise it's a scroll
+          if (scroller.scrollTop > 0 || dy < -4) { d = null; return; }
+          if (dy < 8) return;
+          d.on = true; d.y0 = y; card.getAnimations().forEach((a) => a.cancel());
+          return;
+        }
+        if (e.cancelable) e.preventDefault();
+        d.dy = Math.max(0, y - d.y0); d.v = (y - d.y) / Math.max(1, performance.now() - d.t); d.y = y; d.t = performance.now();
+        card._pulled = d.dy;
+        card.style.transform = `translateY(${d.dy}px)`;
+      };
+      const end = () => {
+        if (!d) return;
+        const { dy, v = 0, on } = d; d = null;
+        if (!on) return;
+        if (dy > 110 || (v > .55 && dy > 24)) { close(); return; }
+        const from = card.style.transform;
+        card.style.transform = ''; card._pulled = 0;
+        if (from) card.animate([{ transform: from }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      };
+      const head = card.querySelector('.ab-head');
+      for (const [el, fromScroll] of [[head, false], [scroller, true]]) {
+        if (!el) continue;
+        el.addEventListener('touchstart', (e) => { if (e.touches.length === 1 && !e.target.closest('button, input, a, .ab-menu, .ab-pulse')) begin(e.touches[0].clientY, fromScroll); else d = null; }, { passive: true });
+        el.addEventListener('touchmove', (e) => { if (e.touches.length === 1) move(e.touches[0].clientY, e); else d = null; }, { passive: false });
+        el.addEventListener('touchend', end); el.addEventListener('touchcancel', () => { if (d) { d.dy = 0; d.v = 0; } end(); });
+      }
+    }
+    // "Scroll to see more photos": while there's a good deal more below and you haven't started scrolling
+    const abMore = document.getElementById('abScrollHint'), abScroll = albumModal.querySelector('.album-scroll');
+    let moreFrame = 0;
+    function paintMore() {
+      moreFrame = 0;
+      const below = abScroll.scrollHeight - abScroll.clientHeight - abScroll.scrollTop;
+      const room = abScroll.scrollHeight - abScroll.clientHeight > 160 && !albumCard.classList.contains('is-empty');
+      abMore.hidden = !room;
+      abMore.classList.toggle('is-gone', !room || abScroll.scrollTop > 60 || below < 120 || albumSel.on);
+    }
+    abScroll.addEventListener('scroll', () => { if (!moreFrame) moreFrame = requestAnimationFrame(paintMore); }, { passive: true });
+    new ResizeObserver(() => { if (albumModal.open) paintMore(); }).observe(thumbsEl);
+    albumModal.addEventListener('close', () => { abMore.hidden = true; });
+    abMore.addEventListener('click', () => abScroll.scrollBy({ top: abScroll.clientHeight * .75, behavior: still ? 'auto' : 'smooth' }));
+    pullToClose(albumCard, albumModal.querySelector('.album-scroll'), closeAlbum, () => albumSel.on || !menuEl.hidden || !pulseEl.hidden || M.closing);
     // Arrow keys move between photos in the grid
     thumbsEl.addEventListener('keydown', (e) => {
       const tile = e.target.closest('.ab-tile');
@@ -2205,7 +2433,7 @@
           const data = xhr.response || {};
           if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
           const err = new Error(data.error || 'The upload failed. Please try again.');
-          err.status = xhr.status; err.code = data.code;
+          err.status = xhr.status; err.code = data.code; err.data = data;
           reject(err);
         });
         xhr.addEventListener('error', () => reject(new Error('The connection dropped during the upload.')));
@@ -2227,37 +2455,145 @@
       uploadTrack.setAttribute('aria-valuenow', pct);
       if (label) uploadLabel.textContent = label;
     }
+    // Does this photo carry a GPS location? Reads the start of the file and looks for an Exif (TIFF) block
+    // whose first directory points to a non-empty GPS directory. Works for JPEG, HEIC, PNG and WebP.
+    async function hasGps(file) {
+      try {
+        const buf = new Uint8Array(await file.slice(0, 262144).arrayBuffer());
+        const dv = new DataView(buf.buffer);
+        for (let i = 0; i + 8 < buf.length; i++) {
+          const le = buf[i] === 0x49 && buf[i + 1] === 0x49 && buf[i + 2] === 0x2A && buf[i + 3] === 0;
+          const be = buf[i] === 0x4D && buf[i + 1] === 0x4D && buf[i + 2] === 0 && buf[i + 3] === 0x2A;
+          if (!le && !be) continue;
+          const u16 = (o) => dv.getUint16(o, le), u32 = (o) => dv.getUint32(o, le);
+          const ifd = i + u32(i + 4);
+          if (ifd + 2 > buf.length) continue;
+          const n = u16(ifd);
+          if (!n || n > 500 || ifd + 2 + n * 12 > buf.length) continue;
+          for (let e = 0; e < n; e++) {
+            const at = ifd + 2 + e * 12;
+            if (u16(at) !== 0x8825) continue;
+            const gps = i + u32(at + 8);
+            return gps + 2 > buf.length || u16(gps) > 0;   // past what was read: assume it has one
+          }
+          return false;
+        }
+      } catch (e) {}
+      return false;
+    }
+    // ---- Upload limits: up to 50 MB a photo; camera RAW files (much bigger by nature) only have a high safety
+    // ceiling. The server says its numbers in /api/config; these are the same, until that answers ----
+    const RAW_EXTS = ['3fr', 'arw', 'cr2', 'cr3', 'crw', 'dcr', 'dng', 'erf', 'fff', 'iiq', 'kdc', 'mef', 'mos', 'mrw', 'nef', 'nrw', 'orf', 'pef', 'raf', 'raw', 'rw2', 'rwl', 'sr2', 'srf', 'srw', 'x3f'];
+    let LIMITS = { maxPhotoMB: 50, maxRawMB: 300 };
+    momentoApi('/api/config').then((c) => {
+      const u = c?.uploads;
+      if (u && Number(u.maxPhotoMB) > 0) LIMITS = { maxPhotoMB: Number(u.maxPhotoMB), maxRawMB: Number(u.maxRawMB) || LIMITS.maxRawMB };
+    }, () => {});
+    const isRawFile = (f) => RAW_EXTS.includes(String(f?.name || '').split('.').pop().toLowerCase());
+    Momento.isRawFile = isRawFile;
+    Momento.uploadLimits = () => LIMITS;
+    // The photo picker shows RAW files too (they have no image/ type on most computers)
+    albumFiles.accept = 'image/*,' + RAW_EXTS.map((e) => '.' + e).join(',');
+
     let uploading = false;
     albumFiles.addEventListener('change', () => { const files = [...albumFiles.files]; albumFiles.value = ''; uploadFiles(files); });
+    // Any number of photos: sent as small uploads (up to 6 photos or ~48 MB each), three at a time side by
+    // side, so a big selection goes up quickly and one problem photo (too big, unreadable) never stops the rest
     async function uploadFiles(files) {
       const a = M.a;
       if (!a || !files.length || uploading) return;
       const note = document.getElementById('albumNote');
-      if (files.length > 30) { note.textContent = 'Choose up to 30 photos at a time.'; return; }
+      const MB = 1048576;
+      const limitOf = (f) => (isRawFile(f) ? LIMITS.maxRawMB : LIMITS.maxPhotoMB) * MB;
+      const left = files.filter((f) => f.size > limitOf(f));
+      files = files.filter((f) => f.size <= limitOf(f));
+      const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+      const listNames = (names) => names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+      const bigLine = (names) => `${listNames(names)} ${names.length === 1 ? 'is' : 'are'} over ${LIMITS.maxPhotoMB} MB, so ${names.length === 1 ? 'it was' : 'they were'} left out (the limit is ${LIMITS.maxPhotoMB} MB a photo; camera RAW files can be bigger).`;
+      if (!files.length) { note.textContent = bigLine(left.map((f) => f.name)); return; }
       // Ask first (and get the guest's location when the album has a zone): assets/event.js
       const ok = Momento.event ? await Momento.event.confirmUpload(a, files) : { location: '' };
       if (!ok || M.a !== a || uploading) return;
       uploading = true;
       const add = document.getElementById('albumAdd'); add.disabled = true; document.getElementById('albumCamera').disabled = true;
-      note.textContent = '';
-      const count = `${files.length} ${files.length === 1 ? 'photo' : 'photos'}`;
-      const size = files.reduce((t, f) => t + f.size, 0);
-      const mb = (b) => (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB';
+      note.textContent = left.length ? bigLine(left.map((f) => f.name)) : '';
+      const count = plural(files.length, 'photo', 'photos');
+      const total = files.reduce((t, f) => t + f.size, 0) || 1;
+      const mb = (b) => (b / MB).toFixed(b < 10 * MB ? 1 : 0) + ' MB';
       setUpload('sending', 0, `Uploading ${count}`);
       uploadEl.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
-      const form = new FormData();
-      files.forEach((file) => form.append('photos', file));
+      // Checked alongside the upload, so the note only mentions location when a photo had one
+      let hadGps = false;
+      const gpsCheck = Promise.all(files.map(hasGps)).then((r) => { hadGps = r.some(Boolean); });
+      // Into small uploads
+      const batches = [];
+      for (let cur = [], bytes = 0, i = 0; i < files.length; i++) {
+        const f = files[i];
+        if (cur.length && (cur.length >= 6 || bytes + f.size > 48 * MB)) { batches.push(cur); cur = []; bytes = 0; }
+        cur.push(f); bytes += f.size;
+        if (i === files.length - 1) batches.push(cur);
+      }
+      const sizeOf = (b) => b.reduce((t, f) => t + f.size, 0);
+      const sent = batches.map(() => 0);
+      const r = { added: 0, dupes: 0, blocked: 0, removed: 0, tooBig: [], failed: [], errors: [] };
+      let stop = false, lastRefresh = 0;
+      const paint = () => {
+        const done = sent.reduce((t, n) => t + n, 0), p = Math.min(1, done / total);
+        if (p >= 1) setUpload('processing', 1, hadGps ? `Finishing ${count}, removing location data…` : `Finishing ${count}…`);
+        else setUpload('sending', p, `Uploading ${count}, ${mb(total * p)} of ${mb(total)}`);
+      };
+      const headers = ok.location ? { 'X-Momento-Location': ok.location } : {};
+      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+      async function sendBatch(b, k) {
+        for (let attempt = 0; !stop; attempt++) {
+          const form = new FormData();
+          b.forEach((file) => form.append('photos', file));
+          try {
+            const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => { sent[k] = sizeOf(b) * Math.min(1, p); paint(); }, headers);
+            r.added += d.photos?.length || 0; r.dupes += d.skipped || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
+            r.tooBig.push(...(d.tooBig || [])); r.failed.push(...(d.failed || []));
+            sent[k] = sizeOf(b); paint();
+            // The photos show up in the album while the rest are still going (not while one is open full size)
+            if (!viewer.open && Date.now() - lastRefresh > 2000) { lastRefresh = Date.now(); fetchAlbum(a).then(() => { if (!viewer.open) photosChanged(a, 0); }, () => {}); }
+            return;
+          } catch (err) {
+            sent[k] = 0; paint();
+            // Busy for a moment, or the connection dropped: tried again, a little later each time
+            const again = attempt < 3 && (!err.status || err.status >= 500 || (err.status === 429 && err.code === 'upload-busy'));
+            if (again) { await wait(700 * 2 ** attempt); continue; }
+            sent[k] = sizeOf(b); paint();
+            if (err.code === 'too-big') r.tooBig.push(...(err.data?.tooBig || b.map((f) => f.name)));
+            else if (err.code === 'unreadable') { r.failed.push(...(err.data?.failed || b.map((f) => f.name))); r.tooBig.push(...(err.data?.tooBig || [])); }
+            else if (err.code === 'nsfw') r.blocked += err.data?.decisionIds?.length || b.length;
+            else if (err.code === 'removed-content') r.removed += b.length;
+            else {
+              r.errors.push(err.message);
+              // The album closed, or this account may not add photos: no point sending the rest
+              if (err.status === 403 || err.status === 401 || err.status === 404 || err.status === 429) stop = true;
+            }
+            return;
+          }
+        }
+      }
       try {
-        await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => {
-          if (p >= 1) setUpload('processing', 1, `Finishing ${count}, removing location data…`);
-          else setUpload('sending', p, `Uploading ${count}, ${mb(size * p)} of ${mb(size)}`);
-        }, ok.location ? { 'X-Momento-Location': ok.location } : {});
-        setUpload('done', 1, `${count[0].toUpperCase() + count.slice(1)} uploaded`);
+        let next = 0;
+        await Promise.all([0, 1, 2].map(async () => { while (!stop && next < batches.length) { const k = next++; await sendBatch(batches[k], k); } }));
+        const lines = [];
+        if (left.length || r.tooBig.length) lines.push(bigLine([...left.map((f) => f.name), ...r.tooBig]));
+        if (r.failed.length) lines.push(`${listNames(r.failed)} couldn’t be read. Try exporting ${r.failed.length === 1 ? 'it' : 'them'} as JPEG.`);
+        if (r.dupes) lines.push(`${plural(r.dupes, 'photo was', 'photos were')} already in the album.`);
+        if (r.blocked) lines.push(`${plural(r.blocked, 'photo', 'photos')} couldn’t be added: ${r.blocked === 1 ? 'it looks' : 'they look'} like ${r.blocked === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
+        if (r.removed) lines.push(`${plural(r.removed, 'photo was', 'photos were')} removed from Momento before and can’t be added again.`);
+        if (r.errors.length) lines.push(r.errors[0]);
+        if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
+        else { setUpload('failed', 1, 'Nothing was uploaded'); uploadPct.textContent = ''; }
         await loadAlbums();
         await fetchAlbum(a);
         photosChanged(a, 0);
-        note.textContent = 'Location data was removed from these photos.';
-        uploadHide = setTimeout(() => setUpload('off'), 2500);
+        await gpsCheck;
+        if (hadGps && r.added) lines.push(r.added === 1 ? 'Location data was removed from this photo.' : 'Location data was removed from these photos.');
+        note.textContent = lines.join(' ');
+        if (r.added) uploadHide = setTimeout(() => setUpload('off'), 2500);
       } catch (err) {
         setUpload('failed', 1, 'Upload didn’t finish');
         uploadPct.textContent = '';
@@ -2437,7 +2773,10 @@
     // ---- Likes and emoji reactions ----
     // One reaction per person per photo: pick another to switch, pick yours again to take it back
     const pbTally = document.getElementById('pbTally');
-    const REACT_NAME = { '😍': 'Love it', '😂': 'Haha', '🔥': 'Fire', '👏': 'Applause', '🥹': 'So sweet', '😮': 'Wow', '🎉': 'Celebrate', '🥳': 'Party', '❤️': 'Heart', '🙌': 'Hooray', '✨': 'Sparkles', '🤩': 'Starstruck' };
+    // Every emoji you can react with (assets/emoji.js), the original twelve first; just those twelve if it didn't load
+    const REACT_NAME = window.MomentoEmoji
+      ? Object.fromEntries(MomentoEmoji.all.map((it) => [it.e, it.name]))
+      : { '😍': 'Love it', '😂': 'Haha', '🔥': 'Fire', '👏': 'Applause', '🥹': 'So sweet', '😮': 'Wow', '🎉': 'Celebrate', '🥳': 'Party', '❤️': 'Heart', '🙌': 'Hooray', '✨': 'Sparkles', '🤩': 'Starstruck' };
     const REACTIONS = Object.keys(REACT_NAME);
     const VW_SMILE = document.getElementById('vwFace').innerHTML;
     const reactTotal = (p) => Object.values(p.reactions || {}).reduce((s, n) => s + n, 0);
@@ -2495,16 +2834,26 @@
 
     // ---- Full size ----
     const viewer = document.getElementById('viewer'), vwStage = document.getElementById('vwStage'), vwImg = document.getElementById('vwImg');
+    const vwPrevImg = document.getElementById('vwPrevImg'), vwNextImg = document.getElementById('vwNextImg'), vwBg = document.getElementById('vwBg');
     const vwMark = document.getElementById('vwMark'), vwHint = document.getElementById('vwHint');
     const SOFT_EASE = 'cubic-bezier(.22, 1, .36, 1)';
-    let vwHinted = false;
+    const SLIDE_GAP = 24;   // the dark gap between two photos while you swipe
+    let vwHinted = false, sliding = false;
     function vwPaint() {
       const p = current();
       if (!p) return;
       const countEl = document.getElementById('vwCount');
       const k = M.only ? M.only.indexOf(M.i) : -1;
-      countEl.textContent = k >= 0 ? `${k + 1} of ${M.only.length}` : `${M.i + 1} of ${M.a.pics.length}`;
-      if (p.by) { const s = document.createElement('small'); s.textContent = `Added by ${p.by}`; countEl.append(s); }
+      const num = document.createElement('span'); num.className = 'vw-num';
+      num.innerHTML = '<b></b> <span></span>';
+      num.firstChild.textContent = k >= 0 ? k + 1 : M.i + 1; num.lastChild.textContent = `of ${k >= 0 ? M.only.length : M.a.pics.length}`;
+      countEl.replaceChildren(num);
+      if (p.by) {
+        const av = document.createElement('span'); av.className = 'vw-av'; av.setAttribute('aria-hidden', 'true');
+        av.textContent = (String(p.by).trim()[0] || '·').toUpperCase(); av.style.setProperty('--c', avColor(p.by));
+        const s = document.createElement('small'); s.textContent = `Added by ${p.by}`;
+        countEl.append(av, s);
+      }
       const marked = isBookmarked(p);
       vwMark.setAttribute('aria-pressed', marked);
       vwMark.setAttribute('aria-label', marked ? 'Remove this photo’s bookmark' : 'Bookmark this photo');
@@ -2513,64 +2862,253 @@
       if (p.reaction) vwFace.textContent = p.reaction; else vwFace.innerHTML = VW_SMILE;
       vwReact.classList.toggle('has-mine', !!p.reaction);
       vwReact.querySelector('.vw-react-label').textContent = p.reaction ? 'Reacted' : 'React';
-      vwReact.setAttribute('aria-label', `${p.reaction ? `Your reaction: ${REACT_NAME[p.reaction]}. Change or remove it` : 'React to this photo'}, ${plural(total, 'reaction', 'reactions')} so far`);
+      vwReact.setAttribute('aria-label', `${p.reaction ? `Your reaction: ${REACT_NAME[p.reaction] || p.reaction}. Change or remove it` : 'React to this photo'}, ${plural(total, 'reaction', 'reactions')} so far`);
       // "Album cover" on the photo that's the cover now (moving between photos doesn't run renderSocial)
       const cover = coverOf(M.a);
       document.getElementById('pbCover').hidden = !(cover && cover.id === p.id);
-      const many = M.a.pics.length > 1;
-      document.getElementById('vwPrev').hidden = !many; document.getElementById('vwNext').hidden = !many;
+      // The arrows (computers only) stop at the first and last photo, like a swipe does
+      document.getElementById('vwPrev').hidden = stepTarget(-1) == null; document.getElementById('vwNext').hidden = stepTarget(1) == null;
       // Delete is for photos you added (or any, as the host); Hide is for other people's photos
       document.getElementById('vwDel').hidden = !canDel(M.a);
       document.getElementById('vwHide').hidden = !canHide(M.a, p);
+    }
+    // The photo d steps away (1 = next, -1 = previous), among just a notification's photos when that's what's
+    // showing. null past the first or last one, unless `wrap` (the keyboard goes round)
+    function stepTarget(d, wrap = false) {
+      const list = M.only && M.only.includes(M.i) ? M.only : null, n = list ? list.length : (M.a?.pics.length || 0);
+      if (n < 2) return null;
+      const j = (list ? list.indexOf(M.i) : M.i) + d;
+      if (!wrap && (j < 0 || j >= n)) return null;
+      const at = (j + n) % n;
+      return list ? list[at] : at;
+    }
+    const thumbAt = (i) => { const p = M.a?.photoItems?.[i]; return p ? (p.thumbnailUrl || pic(p.url, 400, 400)) : ''; };
+    // The glow behind the photo: the new one fades in on the layer that isn't showing
+    let ambAt = 0;
+    function setAmbient(url) {
+      const layers = vwBg.querySelectorAll('.vw-amb'), on = layers[ambAt];
+      if (!url || on.getAttribute('src') === url) return;
+      ambAt = 1 - ambAt;
+      const next = layers[ambAt];
+      next.onload = () => { next.classList.add('is-on'); on.classList.remove('is-on'); };
+      next.src = url;
+    }
+    // The strip along the bottom: one small photo for each (or for just a notification's photos)
+    const vwFilm = document.getElementById('vwFilm');
+    function paintFilm() {
+      const list = M.only && M.only.includes(M.i) ? M.only : (M.a?.photoItems || []).map((_, n) => n);
+      const key = (M.a?.id || '') + ':' + list.join(',');
+      if (list.length < 2) { vwFilm.replaceChildren(); vwFilm.dataset.key = ''; return; }
+      if (vwFilm.dataset.key !== key) {
+        vwFilm.dataset.key = key;
+        vwFilm.replaceChildren(...list.map((n, k) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.dataset.n = n; b.setAttribute('aria-label', `Photo ${k + 1} of ${list.length}`);
+          const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.src = thumbAt(n);
+          b.append(img);
+          return b;
+        }));
+      }
+      let cur = null;
+      for (const b of vwFilm.children) { const on = +b.dataset.n === M.i; b.setAttribute('aria-current', on); if (on) cur = b; }
+      if (cur) {
+        const left = cur.offsetLeft + cur.offsetWidth / 2 - vwFilm.clientWidth / 2;
+        // First paint of an album jumps straight there; after that it glides along
+        vwFilm.scrollTo({ left, behavior: vwFilm._shown && !still ? 'smooth' : 'auto' });
+        vwFilm._shown = true;
+      }
+    }
+    vwFilm.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b || sliding) return;
+      const n = +b.dataset.n;
+      if (n === M.i) return;
+      if (n === stepTarget(1)) slideTo(1); else if (n === stepTarget(-1)) slideTo(-1); else show(n);
+      hideSwipeHint(true);
+    });
+    // "Swipe to see more photos": on the first few visits, until you've moved between photos once
+    const vwSwipe = document.getElementById('vwSwipe');
+    let swipeTimer = 0;
+    const swipeLearned = () => { try { return localStorage.getItem('momento.swiped') === '1'; } catch { return false; } };
+    function showSwipeHint() {
+      clearTimeout(swipeTimer);
+      if (swipeLearned() || finePointer || stepTarget(1) == null && stepTarget(-1) == null) { vwSwipe.hidden = true; return; }
+      vwSwipe.hidden = false; vwSwipe.classList.remove('is-gone');
+      if (!still) vwSwipe.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 500, easing: SOFT_EASE, fill: 'backwards' });
+      swipeTimer = setTimeout(() => hideSwipeHint(false), 4200);
+    }
+    function hideSwipeHint(learned) {
+      clearTimeout(swipeTimer);
+      if (learned) try { localStorage.setItem('momento.swiped', '1'); } catch {}
+      if (vwSwipe.hidden) return;
+      vwSwipe.classList.add('is-gone');
+      setTimeout(() => { vwSwipe.hidden = true; }, 420);
+    }
+    const urlAt = (i) => { const p = M.a?.photoItems?.[i]; return p ? (p.url || pic(M.a.pics[i], 1600, 1000)) : ''; };
+    const sideOff = () => innerWidth + SLIDE_GAP;
+    // Where the three photos sit, dx pixels into a swipe
+    function place(dx) {
+      const off = sideOff();
+      vwImg.style.transform = dx ? `translate3d(${dx}px, 0, 0)` : '';
+      vwPrevImg.style.transform = `translate3d(${dx - off}px, 0, 0)`;
+      vwNextImg.style.transform = `translate3d(${dx + off}px, 0, 0)`;
+    }
+    // The photos either side load in the background, so a swipe shows them straight away
+    function paintSides() {
+      for (const [el, d] of [[vwPrevImg, -1], [vwNextImg, 1]]) {
+        const t = stepTarget(d);
+        if (t == null) { el.removeAttribute('src'); continue; }
+        const u = urlAt(t);
+        if (el.getAttribute('src') !== u) { el.decoding = 'async'; el.src = u; }
+      }
+      place(0);
+    }
+    // Puts photo i on the main image straight away, so the last photo never lingers while the new one loads:
+    // the full size when it's already loaded, otherwise its small grid picture (already loaded for the grid)
+    // stretched to the full size's place, swapped for the sharp one the moment that has loaded
+    let vwSeq = 0;
+    function fitBox(w, h) {
+      const cs = getComputedStyle(vwImg);
+      const mw = parseFloat(cs.maxWidth) || innerWidth, mh = parseFloat(cs.maxHeight) || innerHeight;
+      const s = Math.min(mw / w, mh / h);
+      return [Math.round(w * s), Math.round(h * s)];
+    }
+    function setPhoto(i, alt) {
+      const seq = ++vwSeq, url = urlAt(i), small = thumbAt(i);
+      const sharp = () => { vwImg.style.width = ''; vwImg.style.height = ''; vwImg.style.opacity = ''; vwImg.src = url; vwImg.alt = alt; };
+      const full = new Image(); full.decoding = 'async'; full.src = url;
+      if (full.complete && full.naturalWidth) { sharp(); return; }
+      const thumb = new Image(); thumb.src = small;
+      const blurry = () => {
+        if (seq !== vwSeq || !thumb.naturalWidth) return;
+        const [w, h] = fitBox(thumb.naturalWidth, thumb.naturalHeight);
+        vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px'; vwImg.style.opacity = '';
+        vwImg.src = small; vwImg.alt = alt;
+      };
+      if (small && thumb.complete && thumb.naturalWidth) blurry();
+      else {
+        // Nothing of this photo is loaded yet: hide the last one rather than show the wrong photo
+        vwImg.style.opacity = '0';
+        thumb.decode().then(blurry, () => {});
+      }
+      full.decode().catch(() => {}).then(() => { if (seq === vwSeq && !viewer.classList.contains('is-zoomed')) sharp(); });
+    }
+    // The next two photos either way load in the background too, so moving along never waits
+    function prefetchAround() {
+      for (const d of [2, -2]) { const t = stepTarget(d > 0 ? 1 : -1) != null ? stepTarget(d) : null; if (t != null) { const im = new Image(); im.decoding = 'async'; im.src = urlAt(t); } }
     }
     function vwLoad(fade) {
       const p = current();
       if (!p) return;
       unzoom();
-      const url = p.url || pic(M.a.pics[M.i], 1600, 1000);
-      const swap = () => { vwImg.src = url; vwImg.alt = `Photo ${M.i + 1}${p.by ? ', added by ' + p.by : ''}`; };
       // This photo's own reactions (not the last photo's), its React button and its cover badge
       renderSocial();
       if (!viewer.open) vwPaint();
-      if (!fade || still) { swap(); return; }
-      const pre = new Image(); pre.src = url;
-      pre.decode().catch(() => {}).then(() => {
-        vwImg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
-          swap();
-          vwImg.getAnimations().forEach((a) => a.cancel());
-          vwImg.animate([{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: SOFT_EASE });
-        });
-      });
+      setPhoto(M.i, `Photo ${M.i + 1}${p.by ? ', added by ' + p.by : ''}`);
+      paintSides();
+      setAmbient(thumbAt(M.i));
+      paintFilm();
+      prefetchAround();
+      if (!fade || still) return;
+      // A jump (the strip along the bottom): a quick soft fade, never a wait
+      vwImg.getAnimations().forEach((a) => a.cancel());
+      vwImg.animate([{ opacity: .35, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: SOFT_EASE });
+    }
+    // Slide to the next (1) or previous (-1) photo, carrying on from dx pixels into a swipe. False at either end
+    function slideTo(d, fromDx = 0, speed = 0) {
+      const t = stepTarget(d);
+      if (t == null || sliding) return false;
+      if (still) { show(t); return true; }
+      sliding = true;
+      const off = sideOff(), side = d > 0 ? vwNextImg : vwPrevImg, left = Math.abs(-d * off - fromDx);
+      // Quicker when the finger was moving fast, never slower than a calm 340ms
+      const duration = clamp(speed ? left / Math.max(Math.abs(speed) * 1.6, .9) : 340, 160, 340);
+      const go = (el, a) => el.animate([{ transform: `translate3d(${a}px, 0, 0)` }, { transform: `translate3d(${a - d * off - fromDx}px, 0, 0)` }], { duration, easing: 'cubic-bezier(.2, .9, .3, 1)', fill: 'forwards' });
+      const runs = [go(vwImg, fromDx), go(vwPrevImg, fromDx - off), go(vwNextImg, fromDx + off)];
+      hideSwipeHint(true);
+      runs[0].finished.then(async () => {
+        // The main photo takes over the picture that slid in (already loaded), then everything snaps back home unseen
+        M.i = t;
+        vwImg.src = side.currentSrc || side.src;
+        try { await vwImg.decode(); } catch {}
+        runs.forEach((a) => a.cancel());
+        sliding = false;
+        vwLoad(false);
+      }, () => { sliding = false; });
+      navigator.vibrate?.(4);
+      return true;
+    }
+    // Back into place after a swipe that didn't go far enough (or ran into the first or last photo)
+    function settleX(fromDx) {
+      place(0);
+      if (still || !fromDx) return;
+      const off = sideOff(), o = { duration: 420, easing: 'cubic-bezier(.25, 1.25, .5, 1)' };
+      vwImg.animate([{ transform: `translate3d(${fromDx}px, 0, 0)` }, { transform: 'none' }], o);
+      vwPrevImg.animate([{ transform: `translate3d(${fromDx - off}px, 0, 0)` }, { transform: `translate3d(${-off}px, 0, 0)` }], o);
+      vwNextImg.animate([{ transform: `translate3d(${fromDx + off}px, 0, 0)` }, { transform: `translate3d(${off}px, 0, 0)` }], o);
     }
     function openViewer(from = null) {
       if (!M.a || !M.a.pics.length || viewer.open) return;
-      viewer.classList.remove('is-zoomed');
+      viewer.classList.remove('is-zoomed', 'is-bare', 'is-pulling', 'has-sheet');
+      vwBg.style.opacity = '';
       vwLoad(false);
       vwHint.hidden = vwHinted; vwHinted = true;
       viewer.showModal();
+      vwFilm._shown = false; paintFilm();
+      showSwipeHint();
+      if (!finePointer && viewer.contains(document.activeElement)) document.activeElement.blur();
       if (still) return;
-      viewer.animate({ opacity: [0, 1] }, { duration: 260, easing: 'ease-out' });
-      // The photo grows out of the album's photo into place
+      // The dark fades up, the bars follow, and the photo grows out of the album's photo into place
+      vwBg.animate({ opacity: [0, 1] }, { duration: 320, easing: 'ease-out' });
+      for (const el of viewer.querySelectorAll('.vw-top, .vw-foot, .vw-film')) el.animate({ opacity: [0, 1] }, { duration: 260, delay: 160, easing: 'ease-out', fill: 'backwards' });
       const go = () => {
         const a = from?.getBoundingClientRect(), b = vwImg.getBoundingClientRect();
-        if (!a || !b.width) return;
+        if (!a || !a.width || !b.width) { vwImg.animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: SOFT_EASE }); return; }
         vwImg.animate([
           { transform: `translate(${a.left + a.width / 2 - (b.left + b.width / 2)}px, ${a.top + a.height / 2 - (b.top + b.height / 2)}px) scale(${Math.max(a.width / b.width, a.height / b.height)})`, borderRadius: '22px' },
           { transform: 'none', borderRadius: '6px' },
-        ], { duration: 460, easing: SOFT_EASE });
+        ], { duration: 480, easing: SOFT_EASE });
       };
-      vwImg.complete ? go() : vwImg.addEventListener('load', go, { once: true });
+      vwImg.complete && vwImg.naturalWidth ? go() : vwImg.addEventListener('load', go, { once: true });
     }
+    // Closing: the photo shrinks back into its place in the album while the dark fades away. From a pull
+    // down, it carries on from wherever your finger let go
     function closeViewer() {
-      if (!viewer.open) return;
+      if (!viewer.open || viewer._closing) return;
+      closePicker(false);
       if (still) { viewer.close(); return; }
-      viewer.animate({ opacity: [1, 0] }, { duration: 200, easing: 'ease-in', fill: 'forwards' }).finished.then(() => { viewer.close(); viewer.getAnimations().forEach((a) => a.cancel()); }, () => viewer.close());
+      viewer._closing = true;
+      const tile = thumbsEl.children[M.i], tImg = tile && !tile.hidden ? tile.querySelector('img') : null;
+      tile?.scrollIntoView({ block: 'nearest' });
+      const from = vwImg.style.transform || 'none', fromBg = +(vwBg.style.opacity || 1);
+      vwImg.getAnimations().forEach((a) => a.cancel());
+      vwImg.style.transform = '';
+      const a = tImg?.getBoundingClientRect(), b = vwImg.getBoundingClientRect();
+      const box = albumModal.querySelector('.album-scroll')?.getBoundingClientRect();
+      const seen = a && b.width && box && a.bottom > box.top && a.top < box.bottom;
+      const ease = 'cubic-bezier(.32, .72, 0, 1)', duration = 380;
+      const to = seen
+        ? `translate(${a.left + a.width / 2 - (b.left + b.width / 2)}px, ${a.top + a.height / 2 - (b.top + b.height / 2)}px) scale(${Math.max(a.width / b.width, a.height / b.height)})`
+        : `translateY(${from === 'none' ? 60 : innerHeight * .5}px) scale(.8)`;
+      const jobs = [
+        vwImg.animate(seen
+          ? [{ transform: from, opacity: 1, borderRadius: '6px' }, { transform: to, opacity: 1, borderRadius: '4px', offset: .85 }, { transform: to, opacity: 0, borderRadius: '4px' }]
+          : [{ transform: from, opacity: 1 }, { transform: to, opacity: 0 }], { duration, easing: ease, fill: 'forwards' }).finished,
+        vwBg.animate({ opacity: [fromBg, 0] }, { duration: duration - 60, easing: 'ease-out', fill: 'forwards' }).finished,
+      ];
+      for (const el of viewer.querySelectorAll('.vw-top, .vw-foot, .vw-nav, .vw-film, .vw-swipe')) el.animate({ opacity: [getComputedStyle(el).opacity, 0] }, { duration: 160, easing: 'ease-out', fill: 'forwards' });
+      Promise.all(jobs).catch(() => {}).then(() => {
+        viewer.close();
+        viewer.getAnimations({ subtree: true }).forEach((x) => x.cancel());
+        vwBg.style.opacity = ''; viewer.classList.remove('is-bare', 'is-pulling');
+        viewer._closing = false;
+      });
     }
-    const vwStep = (d) => {   // (show flips the open viewer)
-      // Showing just a notification's photos: step through those
-      const k = M.only ? M.only.indexOf(M.i) : -1;
-      if (k >= 0) { if (M.only.length > 1) show(M.only[(k + d + M.only.length) % M.only.length]); return; }
-      if (M.a.pics.length > 1) show(M.i + d);
+    // Arrow keys and the arrow buttons: slide along, going round from the last photo to the first
+    const vwStep = (d) => {
+      if (sliding || slideTo(d)) return;
+      const t = stepTarget(d, true);
+      if (t != null) show(t);
     };
     document.getElementById('vwClose').addEventListener('click', closeViewer);
     document.getElementById('vwDel').addEventListener('click', (e) => { const p = current(); if (p) binPhotos([p], e.currentTarget); });
@@ -2583,18 +3121,21 @@
     vwMark.addEventListener('click', () => setBookmark(!isBookmarked(current())));
     viewer.addEventListener('cancel', (e) => { e.preventDefault(); if (viewer.classList.contains('is-zoomed')) unzoom(); else closeViewer(); });
     viewer.addEventListener('keydown', (e) => {
+      if (e.target.closest?.('input, .rx-picker, .rx-who')) return;   // typing a search, or moving through the emoji
       if (e.key === 'ArrowRight') { e.preventDefault(); vwStep(1); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); vwStep(-1); }
     });
-    // Zoom: a click shows the photo at its real size (at least twice the fitted size), centred on the
-    // spot you clicked; drag to look around; a click without dragging fits it again
+    // Zoom: a click (or a pinch) shows the photo at its real size (at least twice the fitted size), centred on
+    // the spot you picked; drag to look around; a click or tap without dragging fits it again
     function unzoom() {
       viewer.classList.remove('is-zoomed'); vwStage.classList.remove('is-zoomed', 'is-dragging');
       vwImg.style.width = ''; vwImg.style.height = '';
     }
     function zoomAt(x, y) {
+      vwImg.style.transform = '';
       const r = vwImg.getBoundingClientRect();
-      const fx = (x - r.left) / r.width, fy = (y - r.top) / r.height;
+      if (!r.width) return;
+      const fx = clamp((x - r.left) / r.width, 0, 1), fy = clamp((y - r.top) / r.height, 0, 1);
       const w = Math.max(vwImg.naturalWidth, r.width * 2), h = w * (r.height / r.width);
       viewer.classList.add('is-zoomed'); vwStage.classList.add('is-zoomed');
       vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px';
@@ -2603,45 +3144,140 @@
       if (!still) vwImg.animate([{ transform: `scale(${r.width / w})`, transformOrigin: `${fx * 100}% ${fy * 100}%` }, { transform: 'none', transformOrigin: `${fx * 100}% ${fy * 100}%` }], { duration: 320, easing: SOFT_EASE });
       vwHint.hidden = true;
     }
-    let pan = null, vwSwipe = null;
+    // Gestures on the photo. Touch: swipe sideways to move between photos (the next one rides in with your
+    // finger), pull down to close, pinch to zoom, tap to hide or show the bars, tap twice for a ❤️.
+    // Mouse: drag works the same; a click zooms in, a click on the dark closes
+    const DOUBLE_MS = 280;
+    let lastTap = null, tapTimer = 0, pan = null, g = null;
+    const fingers = new Map();
+    const toggleBars = () => viewer.classList.toggle('is-bare');
     vwStage.addEventListener('pointerdown', (e) => {
-      if (e.button > 0) return;
-      if (vwStage.classList.contains('is-zoomed') && e.pointerType === 'mouse') {
+      if (e.button > 0 || viewer._closing) return;
+      const zoomed = vwStage.classList.contains('is-zoomed');
+      if (zoomed && e.pointerType === 'mouse') {
         pan = { x: e.clientX, y: e.clientY, sl: vwStage.scrollLeft, st: vwStage.scrollTop, moved: false };
         vwStage.setPointerCapture(e.pointerId);
-      } else vwSwipe = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Zoomed with a finger: the browser scrolls the big photo; a tap that doesn't move fits it again
+      if (zoomed) { g = { tapOnly: true, x: e.clientX, y: e.clientY, moved: false }; return; }
+      if (sliding) return;
+      if (fingers.size === 2) {
+        // A second finger: this is a pinch. Whatever the first finger was doing is put back
+        if (g?.axis === 'x') settleX(g.dx); else if (g?.axis === 'y') settleY(g);
+        const [a, b] = [...fingers.values()];
+        g = { pinch: true, d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, r: 1 };
+        clearTimeout(tapTimer); lastTap = null;
+        return;
+      }
+      if (fingers.size > 2) return;
+      try { vwStage.setPointerCapture(e.pointerId); } catch {}
+      const now = performance.now();
+      g = { x: e.clientX, y: e.clientY, axis: null, dx: 0, dy: 0, type: e.pointerType, target: e.target, lx: e.clientX, ly: e.clientY, lt: now, vx: 0, vy: 0 };
     });
     vwStage.addEventListener('pointermove', (e) => {
-      if (!pan) return;
-      const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
-      if (Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vwStage.classList.add('is-dragging'); }
-      vwStage.scrollLeft = pan.sl - dx; vwStage.scrollTop = pan.st - dy;
-    });
-    vwStage.addEventListener('pointerup', (e) => {
-      if (pan) { const moved = pan.moved; pan = null; vwStage.classList.remove('is-dragging'); if (!moved) unzoom(); return; }
-      const s0 = vwSwipe; vwSwipe = null;
-      if (!s0 || justDismissed()) return;
-      const dx = e.clientX - s0.x, dy = e.clientY - s0.y;
-      if (vwStage.classList.contains('is-zoomed')) { if (Math.abs(dx) + Math.abs(dy) < 6) unzoom(); return; }
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { vwStep(dx < 0 ? 1 : -1); return; }
-      if (Math.abs(dx) + Math.abs(dy) < 6) {
-        // Two taps (or clicks) close together on the photo: react with a heart. One tap waits a moment to be
-        // sure it isn't the first of two, then zooms in (on the photo) or closes the viewer (on the dark area)
-        const now = performance.now(), x = e.clientX, y = e.clientY, onImg = e.target === vwImg;
-        clearTimeout(tapTimer);
-        if (lastTap && now - lastTap.t < DOUBLE_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < 40 && lastTap.onImg && onImg) {
-          lastTap = null;
-          doubleTap(x, y);
-          return;
-        }
-        lastTap = { t: now, x, y, onImg };
-        tapTimer = setTimeout(() => { lastTap = null; if (!viewer.open) return; if (onImg) zoomAt(x, y); else closeViewer(); }, onImg ? DOUBLE_MS : 0);
+      if (pan) {
+        const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vwStage.classList.add('is-dragging'); }
+        vwStage.scrollLeft = pan.sl - dx; vwStage.scrollTop = pan.st - dy;
+        return;
+      }
+      if (!fingers.has(e.pointerId)) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!g) return;
+      if (g.tapOnly) { if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 8) g.moved = true; return; }
+      if (g.pinch) {
+        if (fingers.size < 2) return;
+        const [a, b] = [...fingers.values()];
+        g.r = Math.hypot(a.x - b.x, a.y - b.y) / g.d0;
+        g.cx = (a.x + b.x) / 2; g.cy = (a.y + b.y) / 2;
+        vwImg.style.transform = `scale(${clamp(g.r, .8, 3)})`;
+        return;
+      }
+      const now = performance.now(), dt = Math.max(1, now - g.lt);
+      g.vx = .7 * ((e.clientX - g.lx) / dt) + .3 * g.vx; g.vy = .7 * ((e.clientY - g.ly) / dt) + .3 * g.vy;
+      g.lx = e.clientX; g.ly = e.clientY; g.lt = now;
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.axis) {
+        if (Math.hypot(dx, dy) < 8) return;
+        g.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        clearTimeout(tapTimer); lastTap = null;
+        g.wasBare = viewer.classList.contains('is-bare');
+        [vwImg, vwPrevImg, vwNextImg].forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
+        if (openPick) closePicker(false);
+      }
+      g.dx = dx; g.dy = dy;
+      if (g.axis === 'x') {
+        // Past the first or last photo it gives a little, like a rubber band
+        const can = stepTarget(dx < 0 ? 1 : -1) != null;
+        place(can ? dx : dx / (1 + Math.abs(dx) / 120) );
+      } else {
+        // Pulling down: the photo follows (and shrinks a touch) as the dark thins out; up only gives a little
+        const y = dy > 0 ? dy : dy / (1 + Math.abs(dy) / 80), p = clamp(Math.max(0, dy) / (innerHeight * .45), 0, 1);
+        vwImg.style.transform = `translate3d(${dx * .5}px, ${y}px, 0) scale(${1 - p * .22})`;
+        vwBg.style.opacity = String(1 - p * .85);
+        viewer.classList.add('is-pulling', 'is-bare');
       }
     });
-    // The browser's own double-click (selecting, zooming) is replaced by ours
+    function settleY(s) {
+      const from = vwImg.style.transform, fromBg = +(vwBg.style.opacity || 1);
+      vwImg.style.transform = ''; vwBg.style.opacity = '';
+      viewer.classList.remove('is-pulling');
+      if (!s.wasBare) viewer.classList.remove('is-bare');
+      if (still || !from) return;
+      vwImg.animate([{ transform: from }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.25, 1.2, .5, 1)' });
+      vwBg.animate({ opacity: [fromBg, 1] }, { duration: 300, easing: 'ease-out' });
+    }
+    function endGesture(e) {
+      if (pan) { const moved = pan.moved; pan = null; vwStage.classList.remove('is-dragging'); if (!moved && e.type === 'pointerup') unzoom(); return; }
+      fingers.delete(e.pointerId);
+      const s = g;
+      if (!s) return;
+      if (s.pinch) {
+        g = null;
+        vwImg.style.transform = '';
+        if (s.r > 1.12) zoomAt(s.cx, s.cy);
+        else if (!still && s.r !== 1) vwImg.animate([{ transform: `scale(${clamp(s.r, .8, 3)})` }, { transform: 'none' }], { duration: 300, easing: SOFT_EASE });
+        return;
+      }
+      g = null;
+      if (s.tapOnly) { if (!s.moved && e.type === 'pointerup') unzoom(); return; }
+      if (e.type === 'pointercancel') { if (s.axis === 'x') settleX(s.dx); else if (s.axis === 'y') settleY(s); return; }
+      if (s.axis === 'x') {
+        const d = s.dx < 0 ? 1 : -1, flick = Math.abs(s.vx) > .35 && Math.sign(s.vx) === Math.sign(s.dx);
+        if ((Math.abs(s.dx) > innerWidth * .22 || flick) && slideTo(d, s.dx, flick ? s.vx : 0)) return;
+        settleX(s.dx);
+        return;
+      }
+      if (s.axis === 'y') {
+        if (s.dy > 0 && (s.dy > innerHeight * .14 || (s.vy > .45 && s.dy > 30))) closeViewer();
+        else settleY(s);
+        return;
+      }
+      // A tap. Two close together on the photo: react with a heart. One waits a moment to be sure it isn't the
+      // first of two, then (touch) hides or shows the bars, or (mouse) zooms in on the photo / closes on the dark
+      if (justDismissed()) return;
+      const now = performance.now(), x = e.clientX, y = e.clientY, onImg = s.target === vwImg, touch = s.type !== 'mouse';
+      clearTimeout(tapTimer);
+      if (lastTap && now - lastTap.t < DOUBLE_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < 40 && lastTap.onImg && onImg) {
+        lastTap = null;
+        doubleTap(x, y);
+        return;
+      }
+      lastTap = { t: now, x, y, onImg };
+      tapTimer = setTimeout(() => {
+        lastTap = null;
+        if (!viewer.open) return;
+        if (touch) toggleBars();
+        else if (onImg) zoomAt(x, y); else closeViewer();
+      }, onImg || touch ? DOUBLE_MS : 0);
+    }
+    vwStage.addEventListener('pointerup', endGesture);
+    vwStage.addEventListener('pointercancel', endGesture);
+    // The browser's own double-click (selecting, zooming) and long-press menu are replaced by ours
     vwStage.addEventListener('dblclick', (e) => e.preventDefault());
-    const DOUBLE_MS = 280;
-    let lastTap = null, tapTimer = 0;
+    vwStage.addEventListener('contextmenu', (e) => { if (e.pointerType && e.pointerType !== 'mouse') e.preventDefault(); });
     // A double-tap gives the photo a ❤️ reaction. It never takes one away: if you've already reacted, your
     // reaction stays and just pops again
     function doubleTap(x, y) {
@@ -2667,96 +3303,192 @@
           { opacity: 0, transform: 'translateY(-60px) scale(.85)' },
         ], { duration: 900, easing: 'cubic-bezier(.22, 1, .36, 1)' });
     }
-    viewer.addEventListener('close', () => { clearTimeout(tapTimer); lastTap = null; });
-    addEventListener('resize', () => { if (viewer.open) unzoom(); });
+    viewer.addEventListener('close', () => { clearTimeout(tapTimer); lastTap = null; g = null; pan = null; fingers.clear(); sliding = false; place(0); hideSwipeHint(false); });
+    // Only a real change of width (a phone turned round, a window resized) resets things: the keyboard
+    // opening for the emoji search changes the height, and mustn't close anything
+    let lastW = innerWidth;
+    addEventListener('resize', () => {
+      if (innerWidth === lastW) return;
+      lastW = innerWidth;
+      if (viewer.open) { unzoom(); place(0); }
+      closePicker(false);
+    });
 
-    // Reactions: the row of emoji opens from the React button (under the photo, or in the full-size
-    // viewer), follows you if you flip to another photo by closing, and shuts on Esc or a tap elsewhere
+    // Reactions: React opens every emoji, with a search, above the button (or as a sheet on a phone). It shuts
+    // on Esc, a tap elsewhere, a pull down on its handle, or when you move to another photo
+    const emojiEl = document.getElementById('vwEmoji'), rxSearch = document.getElementById('rxSearch'), rxNone = document.getElementById('rxNone');
     function fillPicker(el) {
-      el.replaceChildren(...REACTIONS.map((e) => {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'rx'; b.dataset.e = e; b.textContent = e;
-        b.setAttribute('aria-label', REACT_NAME[e]); b.title = REACT_NAME[e];
-        return b;
+      const E = window.MomentoEmoji;
+      const groups = E ? E.groups.map((name) => [name, E.all.filter((it) => it.group === name)]) : [['Popular', REACTIONS.map((e) => ({ e, name: REACT_NAME[e] }))]];
+      el.replaceChildren(...groups.map(([name, list]) => {
+        const sec = document.createElement('section');
+        sec.className = 'rx-sec';
+        const h = document.createElement('h4'); h.textContent = name; h.id = 'rxg-' + name.toLowerCase();
+        const grid = document.createElement('div');
+        grid.className = 'rx-grid'; grid.setAttribute('role', 'group'); grid.setAttribute('aria-labelledby', h.id);
+        grid.append(...list.map(({ e, name: label }) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'rx'; b.dataset.e = e; b.textContent = e;
+          b.setAttribute('aria-label', label); b.title = label;
+          return b;
+        }));
+        sec.append(h, grid);
+        return sec;
       }));
       el.addEventListener('click', (ev) => {
         const b = ev.target.closest('.rx');
         if (!b) return;
-        const p = current(), e = b.dataset.e;
+        const p = current(), e = b.dataset.e, adding = p && p.reaction !== e;
         closePicker(true);
-        if (p) toggleReaction(e, true);
+        if (!p) return;
+        toggleReaction(e, true);
+        if (adding) { const r = vwImg.getBoundingClientRect(); burst(e, r.left + r.width / 2, r.top + r.height / 2); }
       });
-      // Left and right arrows move along the row (and stop the album flipping underneath)
+      // Arrows move through the emoji (left, right, and a row up or down); up from the top row goes back to the search
       el.addEventListener('keydown', (ev) => {
-        if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft' && ev.key !== 'Home' && ev.key !== 'End') return;
+        if (!['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(ev.key)) return;
         ev.preventDefault(); ev.stopPropagation();
-        const all = [...el.querySelectorAll('.rx')], at = all.indexOf(document.activeElement);
-        const to = ev.key === 'Home' ? 0 : ev.key === 'End' ? all.length - 1 : (at + (ev.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length;
+        const all = [...el.querySelectorAll('.rx:not([hidden])')], at = all.indexOf(document.activeElement);
+        if (!all.length) return;
+        const gridEl = el.classList.contains('is-searching') ? el : all[0].parentElement;
+        const cols = Math.max(1, getComputedStyle(gridEl).gridTemplateColumns.split(' ').length);
+        const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[ev.key];
+        let to = ev.key === 'Home' ? 0 : ev.key === 'End' ? all.length - 1 : at + step;
+        if (to < 0 && ev.key === 'ArrowUp') { rxSearch.focus(); return; }
+        to = clamp(to, 0, all.length - 1);
         all[to].focus();
+        all[to].scrollIntoView({ block: 'nearest' });
       });
     }
     const picker = document.getElementById('vwPicker'), reactButton = document.getElementById('vwReact');
-    fillPicker(document.getElementById('vwEmoji'));
-    async function loadViewerPeople(panel) {
-      const list = document.getElementById('vwPeople');
-      const request = panel.request = (panel.request || 0) + 1;
-      const message = (s) => { const li = document.createElement('li'); li.textContent = s; list.replaceChildren(li); };
-      message('Loading…');
-      try {
-        const { people } = await momentoApi('/api/photos/' + encodeURIComponent(panel.for) + '/reactions');
-        if (openPick !== panel || request !== panel.request) return;
-        if (!people.length) { message('No reactions yet. Be the first.'); return; }
-        list.replaceChildren(...people.map((r) => {
-          const row = personRow(r);
-          row.children[2].remove();
-          return row;
-        }));
-      } catch { if (openPick === panel && request === panel.request) message('Couldn’t load the list.'); }
+    fillPicker(emojiEl);
+    // Search: by name or a word for it ("love", "party", "cat"); Enter picks the first one found
+    function filterEmoji() {
+      const q = rxSearch.value.trim(), E = window.MomentoEmoji;
+      const hits = q && E ? new Set(E.search(q).map((it) => it.e)) : null;
+      emojiEl.classList.toggle('is-searching', !!hits);
+      for (const sec of emojiEl.querySelectorAll('.rx-sec')) {
+        let any = false;
+        for (const b of sec.querySelectorAll('.rx')) { const on = !hits || hits.has(b.dataset.e); b.hidden = !on; any ||= on; }
+        sec.hidden = !any;
+      }
+      rxNone.hidden = !hits || hits.size > 0;
+      if (hits && !hits.size) rxNone.textContent = `No emoji for “${q}”. Try another word, like love, party or wow.`;
+      emojiEl.scrollTop = 0;
+    }
+    rxSearch.addEventListener('input', filterEmoji);
+    rxSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') return;   // closes the picker (the document's Esc handler)
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); emojiEl.querySelector('.rx:not([hidden])')?.click(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); emojiEl.querySelector('.rx:not([hidden])')?.focus(); }
+    });
+    // The keyboard (for the search) covers the bottom of a phone screen: the sheet rides up above it
+    const vv = window.visualViewport;
+    const syncKeyboard = () => {
+      if (!vv) return;
+      viewer.style.setProperty('--kb', Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) + 'px');
+      viewer.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+    };
+    vv?.addEventListener('resize', syncKeyboard); vv?.addEventListener('scroll', syncKeyboard);
+    const asSheet = () => phoneSheet.matches;
+    // On a computer, a panel sits just above the button that opened it, kept inside the screen. (On a phone the
+    // CSS makes it a sheet along the bottom and these are overridden)
+    function placePanel(el, trigger, align = 'center') {
+      el.style.transform = '';
+      if (asSheet()) return;
+      const r = trigger.getBoundingClientRect(), w = el.offsetWidth;
+      const want = align === 'center' ? r.left + r.width / 2 - w / 2 : r.left - 6;
+      el.style.left = clamp(want, 12, Math.max(12, innerWidth - w - 12)) + 'px';
+      el.style.top = 'auto';
+      el.style.bottom = Math.max(12, innerHeight - r.top + 10) + 'px';
+    }
+    function panelIn(el) {
+      el._out = null;
+      el.getAnimations().forEach((a) => a.cancel());
+      el.hidden = false;
+      viewer.classList.toggle('has-sheet', asSheet());
+      syncKeyboard();
+      if (still) return;
+      if (asSheet()) el.animate([{ transform: 'translateY(100%)' }, { transform: 'none' }], { duration: 420, easing: SHEET_IN });
+      else el.animate([{ opacity: 0, transform: 'translateY(8px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.34, 1.3, .64, 1)' });
+    }
+    function panelOut(el) {
+      viewer.classList.remove('has-sheet');
+      if (still || el.hidden || !viewer.open) { el.hidden = true; el.style.transform = ''; return; }
+      const sheet = asSheet(), from = el.style.transform || 'none';
+      el.getAnimations().forEach((a) => a.cancel());
+      const run = el.animate(sheet ? [{ transform: from }, { transform: 'translateY(100%)' }] : [{ opacity: 1, transform: from }, { opacity: 0, transform: 'translateY(6px) scale(.97)' }],
+        { duration: sheet ? 260 : 150, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' });
+      el._out = run;
+      run.finished.then(() => { if (el._out !== run) return; el.hidden = true; el.style.transform = ''; run.cancel(); }, () => {});
     }
     function openPicker(el, trigger, hover = false) {
       const p = current();
       if (!p) return;
       if (openPick) closePicker(false);
       openPick = { el, trigger, for: p.id, hover };
-      document.getElementById('vwChoices').hidden = false;
-      document.getElementById('vwPeopleTitle').textContent = 'Reactions';
-      loadViewerPeople(openPick);
+      if (rxSearch.value) { rxSearch.value = ''; filterEmoji(); }
       el.querySelectorAll('.rx').forEach((b) => b.setAttribute('aria-pressed', b.dataset.e === p.reaction));
       el.hidden = false;
+      placePanel(el, trigger);
+      panelIn(el);
       trigger.setAttribute('aria-expanded', 'true');
-      if (!still) {
-        el.animate([{ opacity: 0, transform: 'translateY(-8px) scale(.92)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
-        el.querySelectorAll('.rx').forEach((b, n) => b.animate([{ opacity: 0, transform: 'translateY(6px) scale(.6)' }, { opacity: 1, transform: 'none' }], { duration: 300, delay: 30 + n * 28, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
-      }
-      if (!hover) (el.querySelector('.rx[aria-pressed="true"]') || el.querySelector('.rx')).focus({ preventScroll: true });
+      // Your reaction in view, if it's further down
+      const mine = emojiEl.querySelector('.rx[aria-pressed="true"]');
+      emojiEl.scrollTop = 0;
+      if (mine && mine.offsetTop > emojiEl.clientHeight - 40) mine.scrollIntoView({ block: 'center' });
+      if (!still) emojiEl.querySelectorAll('.rx-sec:first-child .rx').forEach((b, n) => b.animate([{ opacity: 0, transform: 'translateY(6px) scale(.6)' }, { opacity: 1, transform: 'none' }], { duration: 300, delay: 60 + n * 22, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+      // A computer goes straight to the search; a phone waits to be asked, so the keyboard doesn't jump up
+      if (!hover) (finePointer ? rxSearch : el).focus({ preventScroll: true });
     }
     function closePicker(returnFocus) {
       if (!openPick) return;
       const { el, trigger } = openPick;
       openPick = null;
-      el.hidden = true;
       trigger.setAttribute('aria-expanded', 'false');
-      if (returnFocus) trigger.focus({ preventScroll: true });
+      if (el.contains(document.activeElement)) document.activeElement.blur();
+      panelOut(el);
+      if (returnFocus && trigger.isConnected) trigger.focus({ preventScroll: true });
     }
     reactButton.addEventListener('click', () => {
       if (openPick?.trigger === reactButton && !openPick.hover) closePicker(true);
       else openPicker(picker, reactButton);
     });
     let leaveTimer;
-    for (const trigger of [reactButton]) {
-      trigger.addEventListener('pointerenter', (e) => {
-        clearTimeout(leaveTimer);
-        if (e.pointerType === 'mouse' && openPick?.trigger !== trigger) openPicker(picker, trigger, true);
-      });
-      trigger.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowDown') { e.preventDefault(); openPicker(picker, trigger); }
-      });
-    }
-    picker.addEventListener('pointerenter', () => clearTimeout(leaveTimer));
-    for (const el of [reactButton, picker]) el.addEventListener('pointerleave', () => {
+    reactButton.addEventListener('pointerenter', (e) => {
       clearTimeout(leaveTimer);
-      leaveTimer = setTimeout(() => { if (openPick?.hover) closePicker(false); }, 220);
+      if (e.pointerType === 'mouse' && openPick?.trigger !== reactButton) openPicker(picker, reactButton, true);
     });
+    reactButton.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); openPicker(picker, reactButton); } });
+    // Clicking into the search (or anywhere in it) keeps a hover-opened picker open
+    picker.addEventListener('pointerdown', () => { if (openPick?.el === picker) openPick.hover = false; });
+    picker.addEventListener('pointerenter', () => clearTimeout(leaveTimer));
+    for (const el of [reactButton, picker]) el.addEventListener('pointerleave', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(leaveTimer);
+      leaveTimer = setTimeout(() => { if (openPick?.hover) closePicker(false); }, 260);
+    });
+    // Phones: pull a sheet down by its handle to close it
+    for (const sheet of [picker, document.getElementById('pbWho')]) {
+      const grab = sheet.querySelector('.rx-grab');
+      let d = null;
+      grab.addEventListener('pointerdown', (e) => { d = { y: e.clientY, t: performance.now(), dy: 0, v: 0 }; grab.setPointerCapture(e.pointerId); sheet.getAnimations().forEach((a) => a.cancel()); });
+      grab.addEventListener('pointermove', (e) => {
+        if (!d) return;
+        const now = performance.now(), dy = Math.max(0, e.clientY - d.y);
+        d.v = (dy - d.dy) / Math.max(1, now - d.t); d.dy = dy; d.t = now;
+        sheet.style.transform = `translateY(${dy}px)`;
+      });
+      const end = () => {
+        if (!d) return;
+        const { dy, v } = d; d = null;
+        if (dy > 80 || (v > .5 && dy > 16)) { closePicker(false); return; }
+        const from = sheet.style.transform; sheet.style.transform = '';
+        if (from && !still) sheet.animate([{ transform: from }, { transform: 'none' }], { duration: 320, easing: SOFT_EASE });
+      };
+      grab.addEventListener('pointerup', end); grab.addEventListener('pointercancel', end);
+    }
     // Who reacted: tap a chip to see everyone behind it (and the other emoji, one tab each)
     const pbWho = document.getElementById('pbWho'), whoTabs = document.getElementById('pbWhoTabs'), whoList = document.getElementById('pbWhoList');
     const AV = ['#D9D0EA', '#C6DEDA', '#EBDCCB', '#E6CDD6', '#C9C0E2'];
@@ -2829,12 +3561,8 @@
       chip.setAttribute('aria-expanded', 'true');
       pbWho.hidden = false;
       loadWho();
-      // Just above the chip (the reactions run along the bottom of the photo), kept inside the screen
-      const foot = pbWho.offsetParent, maxLeft = Math.max(0, (foot?.clientWidth || innerWidth) - pbWho.offsetWidth);
-      pbWho.style.left = Math.min(Math.max(0, chip.offsetLeft - 6), maxLeft) + 'px';
-      pbWho.style.top = 'auto';
-      pbWho.style.bottom = ((foot?.clientHeight || 0) - chip.offsetTop + 8) + 'px';
-      if (!still) pbWho.animate([{ opacity: 0, transform: 'translateY(6px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      placePanel(pbWho, chip, 'start');
+      panelIn(pbWho);
       (whoTabs.querySelector('[aria-pressed="true"]') || whoTabs.firstChild)?.focus({ preventScroll: true });
     }
     pbTally.addEventListener('click', (e) => {
@@ -2852,8 +3580,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && openPick) { e.preventDefault(); e.stopPropagation(); closePicker(true); }
     }, true);
-    viewer.addEventListener('close', () => closePicker(false));
-    addEventListener('resize', () => closePicker(false));
+    viewer.addEventListener('close', () => { closePicker(false); [picker, pbWho].forEach((el) => { el.hidden = true; el.style.transform = ''; }); viewer.classList.remove('has-sheet'); });
     async function toggleReaction(emoji, fromPicker) {
       const p = current();
       if (!p || reactBusy || !REACT_NAME[emoji]) return;
@@ -2963,10 +3690,11 @@
       binPeek.hidden = true; binSel.stop();
       try { await loadBin(); } catch (err) { Momento.toast('Couldn’t open Recently deleted', err.message); return; }
       paintBin();
-      if (!binModal.open) { showModal(binModal); if (!still) binCard.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.22, 1, .36, 1)' }); }
+      if (!binModal.open) { showModal(binModal); cardIn(binCard); }
       binModal.querySelector('.album-scroll').scrollTop = 0;
     }
     async function closeBin() { if (binModal.open) await softClose(binModal, binCard); }
+    pullToClose(binCard, document.getElementById('binScroll'), closeBin, () => binSel.on || !binPeek.hidden);
     binModal.addEventListener('close', () => {
       binCard.getAnimations().forEach((a) => a.cancel());
       binSel.stop(); binPeek.hidden = true;
@@ -3322,6 +4050,10 @@
       a.pics = result.photos.map((p) => p.thumbnailUrl || p.url + '?size=thumb');
     }
     async function loadAlbums() {
+      // Until the email is confirmed the server refuses the list (403), and the confirm-your-email popup
+      // covers the page anyway: wait for the session check and don't ask
+      const me = await Momento.sessionReady?.catch?.(() => null);
+      if (me && !me.emailVerified) return;
       const result = await momentoApi('/api/albums');
       cards.clear();
       const updated = result.albums.map((item) => Object.assign(byId(item.id) || {}, fromStore(item)));
@@ -3448,9 +4180,10 @@
     // The feed lives in a sheet opened from the toolbar; picking a photo or album closes it and opens that album
     const activityModal = document.getElementById('activityModal'), activityCard = activityModal.querySelector('.activity-card');
     const closeActivity = () => softClose(activityModal, activityCard);
+    pullToClose(activityCard, activityCard.querySelector('.album-scroll'), closeActivity);
     document.getElementById('activityOpen').addEventListener('click', () => {
       showModal(activityModal);
-      if (!still) activityCard.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      cardIn(activityCard);
       activityModal.querySelector('.album-scroll').scrollTop = 0;
     });
     activityModal.querySelector('[data-close]').addEventListener('click', closeActivity);
@@ -3714,10 +4447,14 @@
       const next = resolve(p);
       const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
       if (root.dataset.theme === next) root.dataset.themePref = p;
-      else if (animate && document.startViewTransition && !reduced.matches) {
+      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
         root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
         const done = () => root.classList.remove('theming');
-        document.startViewTransition(flip).finished.then(done, done);
+        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
+        const vt = document.startViewTransition(flip);
+        vt.ready.catch(() => {});
+        vt.updateCallbackDone.catch(() => {});
+        vt.finished.then(done, done);
       } else flip();
       themeListeners.forEach((fn) => fn(p, next));
     }

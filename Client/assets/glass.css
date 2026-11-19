@@ -217,6 +217,10 @@
    The tokens flip here (--copper becomes the lavender accent); the book, QR card, phone, map
    and photo prints stay light on purpose, like real objects in a dim room, with a deeper
    lavender accent of their own. */
+/* No visible scrollbars anywhere: the page and every list still scroll by wheel, trackpad, touch and keys */
+* { scrollbar-width: none !important; }
+*::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
 :root { color-scheme: light; --veil: 236 236 243; }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -1029,6 +1033,37 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
 /* Lavender fills need dark text, not the white the daylight rules use */
 :root[data-theme="dark"] :is(.todo-act:hover, .btn-dark:hover) { color: var(--fog); }
 
+/* ---------- GlassSlider: range inputs (the sharing zone, the event reach) ----------
+   A thick track filled in the accent (copper by day, lavender at night), a white knob ringed in that
+   accent, and the value beside it in the same accent. The page sets --fill (0-100%) as the slider moves. */
+:is(.zone-ctrl, .ev-range) { --sl-lo: #C08A66; --sl-hi: #9A603D; --sl-track: rgba(46,44,58,.16); --sl-lift: rgba(46,44,58,.3); }
+:root[data-theme="dark"] :is(.zone-ctrl, .ev-range) { --sl-lo: #8E80F2; --sl-hi: #B9AEFF; --sl-track: rgba(255,255,255,.18); --sl-lift: rgba(0,0,0,.45); }
+.zone-ctrl input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 10px; border-radius: 5px; cursor: pointer;
+  background: linear-gradient(to right, var(--sl-lo), var(--sl-hi) var(--fill), var(--sl-track) var(--fill));
+}
+.ev-range { -webkit-appearance: none; appearance: none; cursor: pointer; }
+.ev-range::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: linear-gradient(to right, var(--sl-lo), var(--sl-hi) var(--fill), var(--sl-track) var(--fill)); }
+.ev-range::-moz-range-track { height: 10px; border-radius: 5px; background: var(--sl-track); }
+.ev-range::-moz-range-progress { height: 10px; border-radius: 5px; background: linear-gradient(to right, var(--sl-lo), var(--sl-hi)); }
+:is(.zone-ctrl input[type="range"], .ev-range)::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 0 4px var(--sl-hi), 0 4px 14px var(--sl-lift); transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1));
+}
+:is(.zone-ctrl input[type="range"], .ev-range)::-moz-range-thumb {
+  width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 0 4px var(--sl-hi), 0 4px 14px var(--sl-lift); transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1));
+}
+.ev-range::-webkit-slider-thumb { margin-top: -9px; }   /* centres the 28px knob on the 10px track */
+:is(.zone-ctrl input[type="range"], .ev-range):hover::-webkit-slider-thumb { transform: scale(1.08); }
+:is(.zone-ctrl input[type="range"], .ev-range):active::-webkit-slider-thumb { transform: scale(.95); }
+:is(.zone-ctrl input[type="range"], .ev-range):hover::-moz-range-thumb { transform: scale(1.08); }
+:is(.zone-ctrl input[type="range"], .ev-range):active::-moz-range-thumb { transform: scale(.95); }
+:is(.zone-ctrl input[type="range"], .ev-range):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 6px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.zone-ctrl input[type="range"], .ev-range)::-webkit-slider-thumb, :is(.zone-ctrl input[type="range"], .ev-range)::-moz-range-thumb { transition: none; }
+}
+
 /* ---------- GlassSegment: tab bars and segmented controls ----------
    The track is a faint recess; the selected option is a brighter pane of the same glass. */
 :is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill, .ev-reach .ev-reach-pill, .menu-pill,
@@ -1051,8 +1086,8 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
 :is(.nav-item, .menu-item, .acct-item, .ab-item, .s-row, .acct-adv, .acct-help summary, .qa button, .mp-btn) {
   transition-property: transform, translate, scale, opacity;
 }
-:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .qa button, .mp-btn):hover:not(:disabled) { background-color: var(--g-wash); }
-:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .qa button, .mp-btn):active:not(:disabled) { background-color: var(--g-wash-press); }
+:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .mp-btn):hover:not(:disabled) { background-color: var(--g-wash); }
+:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .mp-btn):active:not(:disabled) { background-color: var(--g-wash-press); }
 :is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .qa button, .acct-help summary):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .acct-help summary:hover { color: var(--dusk); }
 
@@ -1107,12 +1142,12 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
 @media (forced-colors: active) { #mCreate .ms-select, .ms-menu { border: 1px solid CanvasText; } .ms-option[aria-selected="true"] { outline: 1px solid Highlight; outline-offset: -2px; } }
 
 /* Choice cards (one of several, like who can join or which device to sign out) */
-:is(.ev-who label, .device-choice) {
+:is(.ev-who label, .device-choice, dialog .m-kind label) {
   border-radius: var(--r-group); background-color: var(--g-input); box-shadow: var(--g-input-rim); transition: none;
 }
-:is(.ev-who label, .device-choice):hover { box-shadow: var(--g-input-rim-hover); }
-:is(.ev-who label, .device-choice):has(input:checked) { box-shadow: inset 0 0 0 2px var(--focus-ring); }
-:is(.ev-who label, .device-choice):has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+:is(.ev-who label, .device-choice, dialog .m-kind label):hover { box-shadow: var(--g-input-rim-hover); }
+:is(.ev-who label, .device-choice, dialog .m-kind label):has(input:checked) { box-shadow: inset 0 0 0 2px var(--focus-ring); }
+:is(.ev-who label, .device-choice, dialog .m-kind label):has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
 
 /* ---------- Glass switches ----------
    The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
@@ -1151,6 +1186,8 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
     linear-gradient(140deg, rgba(0,0,0,.4) 0%, rgba(200,192,240,.25) 60%, rgba(200,192,240,.4) 100%) border-box;
   box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06);
 }
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"]:hover:not(:disabled, [aria-checked="true"]) { box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06), 0 0 0 3px var(--g-wash); }
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"]:hover:not(:disabled) { box-shadow: inset 0 1px 2px rgba(0,0,0,.3), 0 0 16px -4px color-mix(in srgb, var(--copper) 75%, transparent), 0 0 0 3px var(--g-wash); }
 :root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
   background:
     linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 60%) padding-box,

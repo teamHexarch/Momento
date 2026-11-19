@@ -6,6 +6,7 @@
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
+  <script src="assets/i18n.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -131,7 +132,7 @@
     /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
     /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
-    .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: transform; }
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
@@ -959,10 +960,14 @@
       const next = resolve(p);
       const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
       if (root.dataset.theme === next) root.dataset.themePref = p;
-      else if (animate && document.startViewTransition && !reduced.matches) {
+      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
         root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
         const done = () => root.classList.remove('theming');
-        document.startViewTransition(flip).finished.then(done, done);
+        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
+        const vt = document.startViewTransition(flip);
+        vt.ready.catch(() => {});
+        vt.updateCallbackDone.catch(() => {});
+        vt.finished.then(done, done);
       } else flip();
       themeListeners.forEach((fn) => fn(p, next));
     }

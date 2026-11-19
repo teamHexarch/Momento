@@ -6,6 +6,7 @@
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
+  <script src="assets/i18n.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -131,7 +132,7 @@
     /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
     /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
-    .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: transform; }
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
@@ -391,8 +392,8 @@
     .s-sw:active::after { width: 2.1rem; }
     .s-state { order: -1; flex: none; min-width: 1.9rem; margin-left: auto; text-align: right; font-size: .95rem; font-weight: 700; color: var(--slate); }
     .s-row .s-text + .s-sw { order: 1; }
-    .s-state::before { content: "Off"; }
-    .s-sw[aria-checked="true"] + .s-state::before { content: "On"; }
+    .s-state::before { content: var(--t-off, "Off"); }
+    .s-sw[aria-checked="true"] + .s-state::before { content: var(--t-on, "On"); }
     .s-sw[aria-checked="true"] + .s-state { color: var(--copper); }
     .s-row .s-text { order: -2; }
 
@@ -407,6 +408,35 @@
 
     .s-cancel { color: var(--slate); }
     .s-cancel:hover { color: var(--dusk); }
+    /* Language: a native menu (best on phones), dressed as the same pill as Change */
+    /* Language: the same glass pill as Change, opening a GlassPopover list (built on <body> so the groups'
+       entrance transform can't clip or shift it) */
+    .s-lang-btn { display: inline-flex; align-items: center; gap: .55rem; max-width: 16rem; }
+    .s-lang-btn span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .s-lang-btn svg { flex: none; color: var(--slate); transition: rotate .35s var(--spring); }
+    .s-lang-btn[aria-expanded="true"] svg { rotate: 180deg; color: inherit; }
+    .s-lang-menu {
+      position: fixed; z-index: 200; box-sizing: border-box; width: min(19rem, calc(100vw - 2rem)); max-height: min(26rem, calc(100dvh - 2rem));
+      overflow-y: auto; overscroll-behavior: contain; padding: .35rem; border: 1px solid transparent; border-radius: var(--r-pop);
+      background: var(--g-menu) padding-box, var(--g-rim-menu) border-box; box-shadow: var(--g-sh-pop); color: var(--dusk);
+      transform-origin: var(--o, top right);
+    }
+    .s-lang-menu[hidden] { display: none; }
+    .s-lang-opt {
+      display: grid; grid-template-columns: minmax(0, 1fr) 1.1rem; align-items: center; gap: .1rem .75rem; width: 100%; min-height: 3.1rem;
+      padding: .45rem .85rem; border: none; border-radius: calc(var(--r-pop) - .4rem); background: none; color: inherit; text-align: left; cursor: pointer;
+      font: 650 .98rem var(--font-main); transition: background-color .15s ease;
+    }
+    .s-lang-opt b { font-weight: 650; letter-spacing: -.01em; }
+    .s-lang-opt small { grid-column: 1; color: var(--slate); font-size: .8rem; font-weight: 500; }
+    .s-lang-opt svg { grid-column: 2; grid-row: 1 / span 2; color: var(--copper); opacity: 0; }
+    .s-lang-opt[aria-selected="true"] svg { opacity: 1; }
+    .s-lang-opt[aria-selected="true"] b { color: var(--copper); }
+    .s-lang-opt:hover, .s-lang-opt.is-active { background: var(--g-wash); }
+    .s-lang-opt:active { background: var(--g-wash-press); }
+    .s-lang-opt:focus-visible { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: -2px; }
+    @media (max-width: 520px) { .s-lang-line { flex-wrap: wrap; } .s-lang-btn { width: 100%; max-width: none; justify-content: space-between; margin-left: 0; } }
+    @media (pointer: coarse) { .s-lang-opt { min-height: 3.5rem; } }
     .s-panel { padding: 0 1.35rem 1.2rem; }
     .s-panel[hidden] { display: none !important; }
     .s-panel .s-profile { display: grid; padding: 0; }
@@ -419,8 +449,7 @@
     .s-code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 1.35rem !important; letter-spacing: .45em; text-align: center; }
     .s-help { margin: 0 0 .8rem; color: var(--slate); font-size: .95rem; line-height: 1.55; }
     .s-dests { display: grid; gap: .3rem; padding-top: .1rem; }
-    .s-dests .s-row { min-height: 3.8rem; padding: .75rem 1rem; border-radius: 18px; background: rgba(46, 44, 58, .04); }
-    .s-dests .s-row[aria-checked="true"] { background: rgba(154, 96, 61, .1); box-shadow: inset 0 0 0 2px var(--copper); }
+    .s-dests .s-row { min-height: 3.8rem; padding: .75rem 1rem; }   /* the look is the shared choice card (assets/glass.css) */
     .s-dests .s-row + .s-row::before { display: none; }
 
     /* More photo options: folded away */
@@ -441,6 +470,7 @@
     .s-legend { font-size: .9rem; }
 
     .s-leave { display: grid; justify-items: center; gap: .9rem; padding-top: .5rem; }
+    .s-leave[hidden] { display: none; }
     .s-logout { width: 100%; min-height: 3.5rem; font-size: 1.1rem; }
     .s-delete-btn { padding: .6rem 1rem; border-radius: 100px; color: #9A3D3D; font: 650 .98rem var(--font-main); cursor: pointer; }
 
@@ -452,8 +482,6 @@
 
 
     :root[data-theme="dark"] :is(.s-row + .s-row, .s-item + .s-row, .s-row + .s-item, .s-item + .s-item, .s-item + .s-more)::before { background: rgba(255, 255, 255, .08); }
-    :root[data-theme="dark"] .s-dests .s-row { background: rgba(255, 255, 255, .05); }
-    :root[data-theme="dark"] .s-dests .s-row[aria-checked="true"] { background: rgba(184, 174, 245, .12); }
     :root[data-theme="dark"] .s-more > summary:hover { background: rgba(255, 255, 255, .05); }
     :root[data-theme="dark"] .s-delete-btn { color: #F0A3A3; }
     @media (max-width: 600px) {
@@ -815,6 +843,13 @@
                   </form>
                 </div>
               </div>
+              <!-- A copy of everything the account holds, as one file (GET /api/auth/me/export) -->
+              <div class="s-item">
+                <div class="s-line">
+                  <span class="s-text"><b>Your data</b><small id="exportHint">A file with your profile, albums, photo list and choices</small></span>
+                  <button class="s-change" type="button" id="exportData">Download my data</button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -875,6 +910,87 @@
               </div>
               <p class="s-help s-seg-help">System follows your device’s own setting.</p>
             </div>
+          </section>
+
+          <!-- Language: menus, buttons and settings (assets/i18n.js). Picking one reloads the page in it -->
+          <section class="s-group" style="--d: .4s" aria-labelledby="g-lang">
+            <h2 id="g-lang">Language</h2>
+            <div class="s-list panel">
+              <div class="s-line s-lang-line">
+                <span class="s-text"><b id="langLabel">Language</b><small>Every page, menu and message, in the language you choose.</small></span>
+                <button class="s-change s-lang-btn" type="button" id="langBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="langLabel langBtnText"><span id="langBtnText" data-no-i18n></span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+              </div>
+            </div>
+            <script>
+              (() => {
+                const i18n = window.Momento?.i18n, btn = document.getElementById('langBtn');
+                if (!i18n) { btn.closest('.s-group').hidden = true; return; }
+                const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+                const cur = i18n.langs.find((l) => l.code === i18n.get()) || i18n.langs[0];
+                document.getElementById('langBtnText').textContent = cur.name;
+                const tick = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+                // Each language in its own words, with the English name under it for anyone who can't read it
+                const menu = document.createElement('div');
+                menu.className = 's-lang-menu'; menu.id = 'langMenu'; menu.hidden = true;
+                menu.setAttribute('role', 'listbox'); menu.setAttribute('aria-labelledby', 'langLabel'); menu.dataset.noI18n = '';
+                const opts = i18n.langs.map((l) => {
+                  const o = document.createElement('button');
+                  o.type = 'button'; o.className = 's-lang-opt'; o.dataset.code = l.code; o.tabIndex = -1;
+                  o.setAttribute('role', 'option'); o.setAttribute('aria-selected', l === cur); o.lang = l.html;
+                  o.innerHTML = `<b dir="auto"></b>${tick}${l.code === 'en' ? '' : '<small lang="en"></small>'}`;
+                  o.querySelector('b').textContent = l.name;
+                  if (l.code !== 'en') o.querySelector('small').textContent = l.en;
+                  o.addEventListener('click', () => choose(l.code));
+                  return o;
+                });
+                menu.append(...opts);
+                btn.setAttribute('aria-controls', menu.id);
+                document.body.append(menu);
+
+                let active = 0;
+                const focusOpt = (i) => { active = (i + opts.length) % opts.length; opts.forEach((o, k) => o.classList.toggle('is-active', k === active)); opts[active].focus({ preventScroll: true }); opts[active].scrollIntoView({ block: 'nearest' }); };
+                // Always drops down from the button, never over the header. Without room for a good part of the
+                // list, the page first scrolls the button up; whatever doesn't fit scrolls inside the list
+                const GAP = 8, EDGE = 16, WANT = 340;
+                const roomBelow = () => innerHeight - btn.getBoundingClientRect().bottom - GAP - EDGE;
+                function place() {
+                  const r = btn.getBoundingClientRect();
+                  menu.style.width = innerWidth <= 520 ? r.width + 'px' : '';   // phones: as wide as the full-width button
+                  const w = menu.offsetWidth;
+                  menu.style.left = Math.max(EDGE, Math.min(r.right - w, innerWidth - w - EDGE)) + 'px';
+                  menu.style.top = (r.bottom + GAP) + 'px';
+                  menu.style.maxHeight = Math.max(160, roomBelow()) + 'px';
+                }
+                function open() {
+                  if (!menu.hidden) return;
+                  const need = Math.min(WANT, innerHeight * .6) - roomBelow();
+                  if (need > 0) scrollBy({ top: need, behavior: 'instant' });
+                  menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); place();
+                  if (!still) menu.animate([{ opacity: 0, transform: 'translateY(-6px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+                  focusOpt(opts.findIndex((o) => o.dataset.code === cur.code));
+                  addEventListener('scroll', place, true); addEventListener('resize', place);
+                }
+                function close(refocus = true) {
+                  if (menu.hidden) return;
+                  menu.hidden = true; btn.setAttribute('aria-expanded', 'false');
+                  removeEventListener('scroll', place, true); removeEventListener('resize', place);
+                  if (refocus) btn.focus({ preventScroll: true });
+                }
+                function choose(code) { close(); if (code !== cur.code) i18n.set(code); }
+                btn.addEventListener('click', () => (menu.hidden ? open() : close()));
+                btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(); } });
+                menu.addEventListener('keydown', (e) => {
+                  if (e.key === 'ArrowDown') { e.preventDefault(); focusOpt(active + 1); }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); focusOpt(active - 1); }
+                  else if (e.key === 'Home') { e.preventDefault(); focusOpt(0); }
+                  else if (e.key === 'End') { e.preventDefault(); focusOpt(opts.length - 1); }
+                  else if (e.key === 'Escape') { e.preventDefault(); close(); }
+                  else if (e.key === 'Tab') close(false);
+                });
+                menu.addEventListener('pointermove', (e) => { const o = e.target.closest('.s-lang-opt'); if (o) { active = opts.indexOf(o); opts.forEach((x) => x.classList.toggle('is-active', x === o)); } });
+                document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) close(false); });
+              })();
+            </script>
           </section>
 
           <section class="s-group" style="--d: .42s" aria-labelledby="g-store" id="storeGroup" hidden>
@@ -1180,7 +1296,18 @@
           if (M.account.get()) {
             M.account.set({ notify: { [k]: on } });
             // Account switches live on the server, so the other pages (and other devices) see the change
-            momentoApi('/api/auth/me', momentoJson('PATCH', { notify: { [k]: on } })).catch((err) => toast('Couldn’t save that', err.message));
+            momentoApi('/api/auth/me', momentoJson('PATCH', { notify: { [k]: on } })).then(({ user } = {}) => {
+              // The server answers with the saved account: if it kept the old value, say so instead of pretending
+              // (a server that doesn't know this switch leaves it out of the answer: that's not saved either)
+              const kept = user?.notify?.[k];
+              if (kept !== on) {
+                if (typeof kept === 'boolean') {
+                  M.account.set({ notify: { [k]: kept } });
+                  document.querySelectorAll(`.s-sw[data-key="${key}"]`).forEach((s) => s.setAttribute('aria-checked', kept));
+                }
+                toast('Couldn’t save that', 'Your account didn’t keep this change. Try again later.');
+              }
+            }).catch((err) => toast('Couldn’t save that', err.message));
           }
         } else S[key] = on;
         persist();
@@ -1200,7 +1327,7 @@
       }));
 
       // Change buttons: each opens the form under its line (one at a time) and Cancel closes it
-      const changes = [...document.querySelectorAll('.s-change[aria-controls]')];
+      const changes = [...document.querySelectorAll('.s-change[aria-controls]:not(.s-lang-btn)')];   // (the language menu runs itself)
       const openPanel = (btn, open) => {
         const panel = document.getElementById(btn.getAttribute('aria-controls'));
         btn.setAttribute('aria-expanded', open);
@@ -1244,6 +1371,9 @@
         passForm.hidden = !verified || pwStep !== 1;
         codeForm.hidden = !verified || pwStep !== 2;
         document.querySelector('#passwordVerify [data-verify-email]').textContent = a?.email || 'your email';
+        // Log out and Delete my account only mean something to someone who is logged in
+        document.querySelector('.s-leave').hidden = !a;
+        if (!a) document.getElementById('deleteConfirm').hidden = true;
       };
       fill();
       M.account.onChange(fill);
@@ -1494,8 +1624,14 @@
       const countTo = (to) => {
         const from = shownTotal, t0 = performance.now(), ms = still ? 0 : 700;
         shownTotal = to;
-        const step = (t) => { const k = ms ? Math.min(1, (t - t0) / ms) : 1, e = 1 - Math.pow(1 - k, 3); storeTotal.textContent = `${size(from + (to - from) * e)} used by Momento`; if (k < 1) requestAnimationFrame(step); };
+        const final = () => { storeTotal.textContent = `${size(to)} used by Momento`; };
+        // No animation (reduced motion, hidden tab): show the number straight away
+        if (!ms || document.hidden) { final(); return; }
+        let done = false;
+        const step = (t) => { if (done) return; const k = Math.min(1, Math.max(0, (t - t0) / ms)), e = 1 - Math.pow(1 - k, 3); storeTotal.textContent = `${size(from + (to - from) * e)} used by Momento`; if (k < 1) requestAnimationFrame(step); else done = true; };
         requestAnimationFrame(step);
+        // If animation frames never run, the number still appears
+        setTimeout(() => { if (!done) { done = true; final(); } }, ms + 150);
       };
       const highlight = (id) => {
         focusId = id;
@@ -1589,6 +1725,31 @@
 
       // Account
       // Account
+      // Download my data: the server builds the file; it is saved as JSON
+      const exportBtn = document.getElementById('exportData');
+      exportBtn.addEventListener('click', async () => {
+        if (!M.account.get()) { location.href = 'index.html?login=1'; return; }
+        if (exportBtn.disabled) return;
+        exportBtn.disabled = true;
+        const idle = exportBtn.textContent;
+        exportBtn.textContent = 'Preparing…';
+        try {
+          const data = await momentoApi('/api/auth/me/export');
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `momento-data-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          toast('Your data is downloading', 'Look for momento-data in your downloads');
+        } catch (err) {
+          toast('Couldn’t download your data', err.message);
+        } finally {
+          exportBtn.disabled = false;
+          exportBtn.textContent = idle;
+        }
+      });
+
       // Account: log out and delete both happen on the server, not just in this browser
       document.getElementById('logOut').addEventListener('click', async () => {
         try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (err) {}
@@ -1680,10 +1841,14 @@
       const next = resolve(p);
       const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
       if (root.dataset.theme === next) root.dataset.themePref = p;
-      else if (animate && document.startViewTransition && !reduced.matches) {
+      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
         root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
         const done = () => root.classList.remove('theming');
-        document.startViewTransition(flip).finished.then(done, done);
+        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
+        const vt = document.startViewTransition(flip);
+        vt.ready.catch(() => {});
+        vt.updateCallbackDone.catch(() => {});
+        vt.finished.then(done, done);
       } else flip();
       themeListeners.forEach((fn) => fn(p, next));
     }

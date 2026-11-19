@@ -15,18 +15,20 @@ const perAccount = (minutes, limit, error) => rateLimit({
 const createLimit = perAccount(60, 30, 'That’s a lot of new albums. Wait a while, then make more.');
 const downloadLimit = perAccount(60, 20, 'That’s a lot of downloads. Wait a while, then try again.');
 
-// Uploads: 120 a hour per account (each can hold 30 photos)
+// Uploads: 600 an hour per account (the page sends big selections as several small uploads side by side)
 const uploadLimit = rateLimit({
-  windowMs: 60 * 60000, limit: 120, keyGenerator: (req) => `user:${req.user.id}`,
+  windowMs: 60 * 60000, limit: 600, keyGenerator: (req) => `user:${req.user.id}`,
   standardHeaders: 'draft-8', legacyHeaders: false,
   message: { error: 'That’s a lot of uploading. Wait a while, then add the rest.' },
 });
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: config.maxUploadBytes, files: 30 },
+  // The ceiling is the RAW one; ordinary photos over MAX_UPLOAD_MB are skipped one by one in addPhotos,
+  // so one oversized file never sinks the rest of the upload
+  limits: { fileSize: Math.max(config.maxUploadBytes, config.maxRawUploadBytes), files: 30 },
   // MIME types and names come from the client and are not proof of image content.
-  // savePhoto fully decodes and re-encodes allowed image formats before any write.
+  // sanitizePhoto fully decodes and re-encodes allowed image formats before any write.
 });
 
 // Codes have ~17 billion combinations, but guessing is capped anyway: 30 tries an hour per account

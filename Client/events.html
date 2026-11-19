@@ -6,6 +6,7 @@
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
+  <script src="assets/i18n.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -58,9 +59,10 @@
   <!-- /@shared:boot -->
   <title>Social | Momento</title>
   <meta name="description" content="Your friend groups and event albums in one place: share albums with the people you see most, join events with an invitation and discover events nearby.">
-  <!-- The map: Leaflet (pinned, checked against its published hashes) with OpenStreetMap data -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+  <!-- The globe: MapLibre GL in globe projection (pinned, checked against its published hashes),
+       Esri satellite imagery and NASA's Earth at night -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous">
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js" integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous" defer></script>
   <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -99,7 +101,7 @@
     /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
     /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
-    .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: transform; }
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
@@ -238,9 +240,13 @@
        inside, and show a few photos so you can tell if it looks fun before joining. */
     /* The scan bar: one glass bar to say where (search), how far (range) and go (scan) */
     /* The bar is the only surface: search, range and scan sit flat inside it, all 3rem tall on one line */
-    .ev-scanbar { display: flex; align-items: center; gap: .35rem; margin: 0 0 1rem; padding: .375rem; box-sizing: border-box; }
+    .ev-scanbar { display: flex; align-items: center; gap: .35rem; margin: 0 0 var(--ev-gap, 1rem); padding: .375rem; box-sizing: border-box; }
     .ev-scanbar-sep { flex: none; width: 1px; height: 1.75rem; margin: 0 .3rem; background: rgba(46, 44, 58, .14); }
     .ev-go { flex: none; height: 3rem; min-height: 3rem; padding: 0 1.6rem; white-space: nowrap; }
+    .ev-go-wrap { position: relative; flex: none; display: inline-flex; }
+    /* Until the first scan, a soft lavender ring breathes out from the scan button (transform + opacity only) */
+    .ev-scanbar.is-fresh .ev-go-wrap::before { content: ""; position: absolute; inset: 0; border-radius: 100px; border: 2px solid rgba(184, 174, 245, .85); box-shadow: 0 0 22px 2px rgba(184, 174, 245, .45); opacity: 0; pointer-events: none; animation: ev-nudge 2.6s cubic-bezier(.2, .7, .3, 1) infinite; }
+    @keyframes ev-nudge { 0% { transform: scale(1); opacity: .9; } 70%, 100% { transform: scale(var(--nx, 1.14), var(--ny, 1.5)); opacity: 0; } }
     /* How far to look: five equal chips, with one glass pill that slides under the chosen one (transform only).
        (Not called .ev-range: assets/event.js styles that name for its slider.) */
     .ev-reach { --i: 1; position: relative; isolation: isolate; flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 3rem; margin: 0; padding: 0; border-radius: 100px; }
@@ -273,77 +279,84 @@
     .ev-status.is-error { color: #9A3D3D; font-weight: 600; }
 
     .ev-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--s3, 1.5rem); align-items: start; margin-bottom: var(--s6, 6rem); }
-    .ev-mapbox { --radius: 32px; position: sticky; top: 6rem; height: min(72vh, 640px); padding: .5rem; box-sizing: border-box; border-radius: var(--radius); }
-    #evMap { width: 100%; height: 100%; border-radius: 26px; overflow: hidden; background: #E9E5F2; z-index: 0; }
-    /* ---------- The map in liquid glass ----------
-       The street map is tinted into the site's lilac, a pane of glass sits over it (a bright rim, a sheen
-       across the top, a soft glow at the foot), and every control on it is a frosted glass pill */
+    .ev-mapbox { position: sticky; top: 6rem; height: min(72vh, 640px); isolation: isolate; --pin-k: .6; --globe-k: 4; }
+    /* ---------- The globe ----------
+       No box: the Earth floats on the page in its own glow, with a soft shadow on the page beneath it.
+       Close in, the satellite view fades out at its edges into the page instead of stopping at a frame.
+       Every control on it is a frosted glass pill */
+    #evMap { position: absolute; inset: 0; z-index: 1; background: transparent; cursor: grab;
+      -webkit-mask-image: radial-gradient(closest-side, #000 82%, rgba(0, 0, 0, .55) 93%, transparent 100%);
+      mask-image: radial-gradient(closest-side, #000 82%, rgba(0, 0, 0, .55) 93%, transparent 100%); }
+    .ev-mapbox.is-close #evMap {
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent), linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+      -webkit-mask-composite: source-in;
+      mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent), linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+      mask-composite: intersect; }
+    #evMap:active { cursor: grabbing; }
+    #evMap .maplibregl-canvas { outline: none; }
+    .ev-mapbox:has(.maplibregl-canvas:focus-visible)::after { content: ""; position: absolute; inset: -.3rem; z-index: 4; border-radius: 36px; box-shadow: 0 0 0 2px var(--focus-ring); pointer-events: none; }
+    /* The glow it floats in and its shadow, both sized to the globe (--globe-k: its width / 100 px) */
+    .ev-halo { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; transition: opacity .8s var(--out); }
+    .ev-halo i, .ev-halo b { position: absolute; left: 50%; top: 50%; width: 100px; height: 100px; margin: -50px 0 0 -50px; border-radius: 50%; }
+    .ev-halo i { transform: scale(var(--globe-k)); background: radial-gradient(circle, rgba(150, 128, 255, .34) 34%, rgba(150, 128, 255, .14) 50%, rgba(150, 128, 255, 0) 72%); }
+    .ev-halo b { height: 16px; margin-top: -8px; transform: translateY(calc(var(--globe-k) * 58px)) scale(calc(var(--globe-k) * .7), calc(var(--globe-k) * .7)); background: radial-gradient(closest-side, rgba(20, 14, 48, .5), rgba(20, 14, 48, 0)); }
+    :root:not([data-theme="dark"]) .ev-halo i { background: radial-gradient(circle, rgba(120, 100, 220, .22) 34%, rgba(150, 128, 255, .1) 50%, rgba(150, 128, 255, 0) 72%); }
+    :root:not([data-theme="dark"]) .ev-halo b { background: radial-gradient(closest-side, rgba(60, 44, 110, .4), rgba(60, 44, 110, 0)); }
+    .ev-mapbox.is-close .ev-halo { opacity: 0; }
     /* When your location can't be used: the free alternatives */
     .ev-alt { margin-top: .6rem !important; font-size: .9rem; color: var(--slate); }
     .ev-scan-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: 1rem; }
-    #evMap { cursor: crosshair; }
-    /* The map in its own true colours (no tint), so water, parks and roads are easy to tell apart.
-       At night the dark map gets a little brighter, and its street names brighter still */
-    :root[data-theme="dark"] .leaflet-tile-pane { filter: brightness(1.25) contrast(1.1); }
-    :root[data-theme="dark"] .leaflet-labels-pane { filter: brightness(1.4) contrast(1.15); }
-    :root[data-theme="dark"] #evMap { background: #1E1C27; }
-    .ev-map-glass {
-      position: absolute; inset: .5rem; z-index: 1; border-radius: 26px; pointer-events: none;
-      background:
-        linear-gradient(168deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, .05) 20%, rgba(255, 255, 255, 0) 34%),
-        radial-gradient(120% 55% at 50% 118%, rgba(203, 194, 240, .28), rgba(203, 194, 240, 0) 60%);
-      box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(255, 255, 255, .45), inset 0 -24px 48px -36px rgba(120, 100, 190, .45), inset 0 0 40px rgba(255, 255, 255, .12);
-    }
-    :root[data-theme="dark"] .ev-map-glass {
-      background:
-        linear-gradient(168deg, rgba(255, 255, 255, .1) 0%, rgba(255, 255, 255, .03) 22%, rgba(255, 255, 255, 0) 38%),
-        radial-gradient(120% 60% at 50% 115%, rgba(120, 100, 190, .28), rgba(120, 100, 190, 0) 60%);
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(200, 192, 240, .18), inset 0 -24px 48px -36px rgba(150, 130, 230, .4);
-    }
-    /* Zoom buttons and the credits: frosted glass */
-    .leaflet-bar { overflow: hidden; border: 1px solid rgba(255, 255, 255, .75) !important; border-radius: 16px !important;
-      background: var(--g-strong); -webkit-backdrop-filter: var(--g-blur-hud); backdrop-filter: var(--g-blur-hud);   /* one control over the map: it may blur */
-      box-shadow: var(--g-sh-pill) !important; }
-    .leaflet-touch .leaflet-bar a, .leaflet-bar a { width: 2.3rem; height: 2.3rem; line-height: 2.3rem; border: none; background: transparent; color: #2E2C3A; font: 500 1.25rem/2.3rem var(--font-main); transition: background-color .2s ease; }
-    .leaflet-bar a + a { border-top: 1px solid rgba(46, 44, 58, .08); }
-    .leaflet-bar a:hover { background: rgba(255, 255, 255, .55); color: #2E2C3A; }
-    .leaflet-bar a:active { background: rgba(255, 255, 255, .8); }
-    .leaflet-bar a:focus-visible { outline: 2px solid #2E2C3A; outline-offset: -2px; }
-    .leaflet-bar a.leaflet-disabled { background: transparent; color: rgba(46, 44, 58, .3); }
-    .leaflet-top.leaflet-left { margin: .4rem 0 0 .4rem; }
-    .leaflet-control-attribution.leaflet-control { margin: 0 .55rem .55rem 0; padding: .15rem .6rem; border-radius: 100px; font-size: 9.5px; color: var(--slate);
-      background: var(--g-strong); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6); }   /* fuller fill: tiny text over busy map tiles */
-    .leaflet-control-attribution a { color: inherit; }
-    :root[data-theme="dark"] .leaflet-bar { border-color: rgba(200, 192, 240, .25) !important; }
-    :root[data-theme="dark"] .leaflet-bar a { color: #F2EFF8; }
-    :root[data-theme="dark"] .leaflet-bar a + a { border-top-color: rgba(255, 255, 255, .08); }
-    :root[data-theme="dark"] .leaflet-bar a:hover { background: rgba(255, 255, 255, .1); color: #fff; }
-    :root[data-theme="dark"] .leaflet-bar a.leaflet-disabled { color: rgba(242, 239, 248, .3); }
-    :root[data-theme="dark"] .leaflet-control-attribution.leaflet-control { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
-    /* Zone rings: a pane of frosted colour with a bright edge */
-    .ev-zone { stroke: rgba(124, 111, 184, .75); fill: rgba(188, 178, 236, .16); }
-    /* The scanned circle (dashed), how exact your position is, and the approximate-area circle */
-    .ev-scan-area { stroke: rgba(37, 84, 196, .95); stroke-width: 2.5px; fill: rgba(37, 84, 196, .07); stroke-dasharray: 8 6; }
-    .ev-scan-area.is-scanning { fill: rgba(76, 123, 224, .1); animation: ev-dash 1s linear infinite; }
-    @keyframes ev-dash { to { stroke-dashoffset: -24; } }
-    .ev-accuracy { stroke: rgba(76, 123, 224, .45); fill: rgba(76, 123, 224, .12); }
-    .ev-approx { stroke: rgba(76, 123, 224, .5); fill: rgba(76, 123, 224, .14); stroke-dasharray: 3 5; }
-    /* The radar: a beam going round the scanned circle, and rings rippling out from you */
-    .ev-sweep { position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); border-radius: 50%; pointer-events: none; }
-    .ev-sweep b { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgba(76, 123, 224, 0) 0deg, rgba(76, 123, 224, 0) 290deg, rgba(76, 123, 224, .45) 360deg); animation: ev-beam 1.4s linear infinite; }
-    .ev-sweep i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(76, 123, 224, .6); opacity: 0; transform: scale(.05); animation: ev-ripple 1.8s cubic-bezier(.2, .7, .3, 1) infinite; }
+    /* Zoom buttons: one frosted glass pill */
+    .ev-zoom { position: absolute; left: 0; top: 0; z-index: 3; display: grid; overflow: hidden; border: 1px solid rgba(255, 255, 255, .75); border-radius: 16px;
+      background: var(--g-strong); -webkit-backdrop-filter: var(--g-blur-hud); backdrop-filter: var(--g-blur-hud); box-shadow: var(--g-sh-pill); }
+    .ev-zoom button { width: 2.4rem; height: 2.4rem; padding: 0; border: 0; background: transparent; color: #2E2C3A; font: 500 1.25rem/1 var(--font-main); cursor: pointer; transition: background-color .2s ease, transform .3s var(--spring); }
+    .ev-zoom button + button { border-top: 1px solid rgba(46, 44, 58, .08); }
+    .ev-zoom button:hover { background: rgba(255, 255, 255, .55); }
+    .ev-zoom button:active { background: rgba(255, 255, 255, .8); transform: scale(.92); }
+    .ev-zoom button:focus-visible { outline: 2px solid #2E2C3A; outline-offset: -3px; }
+    :root[data-theme="dark"] .ev-zoom { border-color: rgba(200, 192, 240, .25); }
+    :root[data-theme="dark"] .ev-zoom button { color: #F2EFF8; }
+    :root[data-theme="dark"] .ev-zoom button + button { border-top-color: rgba(255, 255, 255, .08); }
+    :root[data-theme="dark"] .ev-zoom button:hover { background: rgba(255, 255, 255, .1); }
+    :root[data-theme="dark"] .ev-zoom button:active { background: rgba(255, 255, 255, .16); }
+    :root[data-theme="dark"] .ev-zoom button:focus-visible { outline-color: #F2EFF8; }
+    .ev-zoom button svg { display: block; margin: auto; transition: transform .3s var(--spring); }
+    .ev-zoom [data-back]:hover svg { transform: scale(1.12); }
+    /* Map credits: a small glass pill (the "i" opens them) */
+    /* Imagery credits: small print in the corner, outside the globe's faded edge so it always reads */
+    .ev-credit { position: absolute; right: .4rem; bottom: 0; z-index: 3; max-width: calc(100% - .8rem); margin: 0; color: var(--stone); font: 500 9.5px/1.4 var(--font-main); text-align: right; }
+    .ev-credit a { color: inherit; text-decoration: none; border-radius: 4px; }
+    .ev-credit a:hover { color: var(--dusk); text-decoration: underline; }
+    .ev-credit a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+    .ev-credit a:active { opacity: .7; }
+    :root[data-theme="dark"] .ev-credit { color: rgba(207, 202, 224, .62); }
+    :root[data-theme="dark"] .ev-credit a:hover { color: #F2EFF8; }
+    #evMap .maplibregl-cooperative-gesture-screen { border-radius: 50%; font: 600 .95rem var(--font-main); background: rgba(30, 26, 48, .55); }
+    /* Markers: MapLibre moves a 0×0 anchor; what's drawn hangs from its centre */
+    .ev-mark { width: 0; height: 0; }
+    /* Your position, and the scan's size on its edge */
+    .ev-mark .ev-me { position: absolute; left: -8px; top: -8px; }
+    .ev-range-tag { position: absolute; left: 0; top: 0; translate: -50% -50%; padding: .2rem .6rem; border-radius: 100px; white-space: nowrap; pointer-events: none;
+      font: 700 .74rem/1.3 var(--font-main); color: #1E2A55; background: rgba(214, 226, 255, .92); box-shadow: 0 0 0 1px rgba(255, 255, 255, .7), 0 6px 16px -6px rgba(10, 16, 48, .55); }
+    .ev-mapbox.is-far .ev-range-tag { opacity: 0; }
+    /* The radar: a beam going round the scanned circle, and rings rippling out from you
+       (200 px across, scaled to the circle's size on screen with --k) */
+    .ev-sweep { position: absolute; left: -100px; top: -100px; width: 200px; height: 200px; border-radius: 50%; pointer-events: none; transform: scale(var(--k, 1)); }
+    .ev-sweep b { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgba(157, 184, 255, 0) 0deg, rgba(157, 184, 255, 0) 290deg, rgba(157, 184, 255, .5) 360deg); animation: ev-beam 1.4s linear infinite; }
+    .ev-sweep i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(180, 200, 255, .7); opacity: 0; transform: scale(.05); animation: ev-ripple 1.8s cubic-bezier(.2, .7, .3, 1) infinite; }
     .ev-sweep i:nth-of-type(2) { animation-delay: .6s; }
     .ev-sweep i:nth-of-type(3) { animation-delay: 1.2s; }
     @keyframes ev-beam { to { transform: rotate(360deg); } }
     @keyframes ev-ripple { 0% { opacity: .9; transform: scale(.05); } 100% { opacity: 0; transform: scale(1); } }
-    :root[data-theme="dark"] .ev-scan-area { stroke: rgba(143, 176, 255, .75); fill: rgba(143, 176, 255, .06); }
-    :root[data-theme="dark"] .ev-sweep b { background: conic-gradient(from 0deg, rgba(143, 176, 255, 0) 0deg, rgba(143, 176, 255, 0) 290deg, rgba(143, 176, 255, .45) 360deg); }
-    .leaflet-marker-draggable .ev-me { cursor: grab; }
-    /* Following you: the dot and its accuracy circle glide to each new reading */
-    .leaflet-marker-icon:has(.ev-me), path.ev-accuracy { transition: transform .9s cubic-bezier(.2, .8, .2, 1); }
-    .leaflet-zoom-anim .leaflet-marker-icon:has(.ev-me) { transition: none; }
-    /* "Live" / "Follow me" on the map */
-    .ev-follow { display: inline-flex; align-items: center; gap: .45rem; padding: .5rem .85rem; border-radius: 100px; cursor: pointer;
+    /* The ping where a scan is headed: a bright point with rings rippling out, a fixed size on screen */
+    .ev-ping { position: absolute; left: -60px; top: -60px; width: 120px; height: 120px; pointer-events: none; animation: ev-ping-out 3.6s ease forwards; }
+    .ev-ping b { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(157, 184, 255, .55), 0 0 22px 6px rgba(157, 184, 255, .8); }
+    .ev-ping i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(198, 213, 255, .9); opacity: 0; transform: scale(.1); animation: ev-ripple 1.5s cubic-bezier(.2, .7, .3, 1) infinite; }
+    .ev-ping i:nth-of-type(2) { animation-delay: .5s; }
+    .ev-ping i:nth-of-type(3) { animation-delay: 1s; }
+    @keyframes ev-ping-out { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+    /* "Live" / "Follow me" over the globe */
+    .ev-follow { position: absolute; right: 0; top: 0; z-index: 3; display: inline-flex; align-items: center; gap: .45rem; padding: .5rem .85rem; border-radius: 100px; cursor: pointer;
       font: 650 .82rem var(--font-main); }   /* clear glass, filled thick over the map (assets/glass.css) */
     .ev-follow[hidden] { display: none; }
 
@@ -351,14 +364,21 @@
     .ev-follow.is-live { cursor: default; }
     .ev-follow.is-live i { background: #2BB673; box-shadow: 0 0 0 0 rgba(43, 182, 115, .6); animation: ev-live 1.6s ease-out infinite; }
     @keyframes ev-live { to { box-shadow: 0 0 0 8px rgba(43, 182, 115, 0); } }
-    @media (prefers-reduced-motion: reduce) { .ev-follow.is-live i { animation: none; } .leaflet-marker-icon:has(.ev-me), path.ev-accuracy { transition: none; } }
-    @media (prefers-reduced-motion: reduce) { .ev-sweep b, .ev-sweep i, .ev-scan-area.is-scanning { animation: none; } .ev-sweep i { opacity: .4; transform: none; } }
-    .ev-zone.is-in { stroke: rgba(43, 122, 101, .8); fill: rgba(120, 210, 180, .16); }
-    :root[data-theme="dark"] .ev-zone { stroke: rgba(184, 174, 245, .7); fill: rgba(184, 174, 245, .1); }
-    :root[data-theme="dark"] .ev-zone.is-in { stroke: rgba(147, 226, 201, .75); fill: rgba(147, 226, 201, .1); }
+    @media (prefers-reduced-motion: reduce) { .ev-follow.is-live i { animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .ev-sweep b, .ev-sweep i { animation: none; } .ev-sweep i { opacity: .4; transform: none; } }
     .ev-map-note { position: absolute; left: 50%; bottom: 1.3rem; z-index: 500; width: max-content; max-width: calc(100% - 2.5rem); box-sizing: border-box; margin: 0; padding: .5rem 1rem; translate: -50% 0; border: 1px solid transparent; border-radius: var(--r-group); text-align: center; line-height: 1.4; background: var(--g-strong) padding-box, var(--g-rim-menu) border-box; -webkit-backdrop-filter: var(--g-blur-hud); backdrop-filter: var(--g-blur-hud); color: var(--dusk); font-size: .85rem; font-weight: 600; white-space: normal; box-shadow: var(--g-sh-pop); pointer-events: none; }
     .ev-map-note[hidden] { display: none; }
-    .ev-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: .9rem; min-width: 0; }
+    /* Before the first scan the pill under the globe is a button: same glass, with the lavender ring the bar button has */
+    .ev-map-scan { position: absolute; left: 50%; bottom: 1.5rem; z-index: 500; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; width: max-content; max-width: calc(100% - 2rem); min-height: 2.75rem; box-sizing: border-box; margin: 0; padding: .55rem 1.2rem; translate: -50% 0; border: 1px solid transparent; border-radius: 100px; background: var(--g-strong) padding-box, var(--g-rim-menu) border-box; -webkit-backdrop-filter: var(--g-blur-hud); backdrop-filter: var(--g-blur-hud); color: var(--dusk); font: 650 .9rem/1.3 var(--font-main); text-align: center; cursor: pointer; box-shadow: var(--g-sh-pop); transition: transform .35s var(--spring), box-shadow .25s ease; }
+    .ev-map-scan[hidden] { display: none; }
+    .ev-map-scan svg { flex: none; }
+    .ev-map-scan::before { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid rgba(184, 174, 245, .85); box-shadow: 0 0 22px 2px rgba(184, 174, 245, .4); opacity: 0; pointer-events: none; animation: ev-nudge 2.6s cubic-bezier(.2, .7, .3, 1) infinite; }
+    @media (hover: hover) { .ev-map-scan:hover { transform: translateY(-2px); } }
+    .ev-map-scan:active { transform: scale(.96); }
+    .ev-map-scan:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+    @media (prefers-reduced-motion: reduce) { .ev-map-scan { transition: none; } .ev-map-scan::before { animation: none; opacity: .6; } }
+    .ev-map-note { bottom: 1.5rem; }
+    .ev-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ev-gap, .9rem); min-width: 0; }
     .ev-empty { padding: 2rem 1.6rem; border-radius: 28px; text-align: center; }
     .ev-empty h2 { margin: 0 0 .4rem; font-size: 1.35rem; letter-spacing: -.03em; }
     .ev-empty p { max-width: 24rem; margin: 0 auto; color: var(--slate); line-height: 1.55; }
@@ -388,14 +408,55 @@
     .evc-pics img, .evc-pics span { width: 2.3rem; height: 2.3rem; border-radius: 9px; object-fit: cover; flex: none; }
     .evc-pics span { display: grid; place-items: center; background: rgba(46, 44, 58, .08); color: var(--slate); font-size: .72rem; font-weight: 700; }
 
-    /* Map pins: a round print of the event's favourite photo, with a red dot while it's live */
-    .ev-pin { position: relative; display: block; width: 44px; height: 44px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .95); background: #C9C0E2 center / cover;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, .32), 0 0 18px -2px rgba(188, 178, 236, .7), 0 8px 18px -6px rgba(30, 26, 40, .55); transition: transform .3s var(--spring), box-shadow .3s ease; }
+    /* Album prints on the globe: a round print of the album's cover, or a blank print with a picture mark
+       until it has one. They're sized to the zoom (--pin-k) so they stay in step with the globe, and a red
+       dot shows while it's live. Hover, focus or pick one and its name and distance show under it */
+    .ev-mark:has(.ev-pin) { z-index: 1; }
+    .ev-mark:has(.ev-me) { z-index: 2; }
+    .ev-stack-mark { z-index: 4; }
+    .ev-mark.is-picked, .ev-mark:has(.ev-pin:hover), .ev-mark:has(.ev-pin:focus-visible) { z-index: 3; }
+    .ev-pin-s { position: absolute; left: -28px; top: -28px; width: 56px; height: 56px; transform: scale(var(--pin-k)); transition: opacity .35s ease; }
+    .ev-pin { position: relative; display: grid; place-items: center; width: 56px; height: 56px; padding: 0; box-sizing: border-box; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, .96); background: #C9C0E2 center / cover; color: rgba(46, 44, 58, .58); cursor: pointer;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, .26), 0 0 24px -2px rgba(188, 178, 236, .8), 0 12px 22px -8px rgba(16, 12, 36, .7); transition: transform .35s var(--spring), box-shadow .3s ease; }
+    .ev-pin.is-blank { background: radial-gradient(120% 100% at 28% 18%, #F6E6EC 0%, #E6CDD6 38%, #C9C0E2 100%); }
+    .ev-pin svg { width: 24px; height: 24px; }
     .ev-pin::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(170deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 45%); box-shadow: inset 0 -6px 10px -6px rgba(46, 44, 58, .35); pointer-events: none; }
-    .ev-pin.is-live::after { content: ""; position: absolute; right: -3px; top: -3px; width: 12px; height: 12px; border-radius: 50%; background: #E0476B; border: 2px solid #fff; }
-    .ev-pin.is-picked { transform: scale(1.25); box-shadow: 0 0 0 4px rgba(255, 255, 255, .55), 0 0 26px 2px rgba(188, 178, 236, .9), 0 10px 22px -6px rgba(30, 26, 40, .6); }
-    .ev-me { display: block; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8FB0FF, #4C7BE0 60%); border: 2.5px solid #fff; box-shadow: 0 0 0 7px rgba(120, 150, 240, .22), 0 0 18px 4px rgba(120, 150, 240, .35), 0 2px 6px rgba(0, 0, 0, .3); }
-    .leaflet-container { font-family: var(--font-main); }
+    .ev-pin.is-live::after { content: ""; position: absolute; right: -2px; top: -2px; width: 13px; height: 13px; box-sizing: border-box; border-radius: 50%; background: #E0476B; border: 2.5px solid #fff; }
+    .ev-pin:hover { transform: scale(1.08); }
+    .ev-pin:active { transform: scale(.95); }
+    .ev-pin:focus-visible { outline: 2.5px solid #fff; outline-offset: 4px; }
+    .ev-mark.is-picked .ev-pin { transform: scale(1.22); box-shadow: 0 0 0 4px rgba(255, 255, 255, .55), 0 0 30px 2px rgba(188, 178, 236, .95), 0 12px 24px -6px rgba(16, 12, 36, .7); }
+    /* A fresh scan's prints pop in one after another; one that's just been flown to bounces, with a ring of light */
+    .ev-mark.is-new .ev-pin { animation: ev-pop .6s var(--spring) backwards; animation-delay: calc(var(--i, 0) * 70ms); }
+    @keyframes ev-pop { from { opacity: 0; transform: scale(.3); } }
+    .ev-pin-s::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2.5px rgba(255, 255, 255, .9), 0 0 24px 4px rgba(188, 178, 236, .8); opacity: 0; pointer-events: none; }
+    .ev-mark.is-pulse .ev-pin { animation: ev-bounce .9s var(--spring); }
+    .ev-mark.is-pulse .ev-pin-s::after { animation: ev-halo-out 1s ease-out; }
+    @keyframes ev-bounce { 0% { transform: scale(1); } 35% { transform: scale(1.42); } 100% { transform: scale(1.22); } }
+    @keyframes ev-halo-out { 0% { opacity: .95; transform: scale(1); } 100% { opacity: 0; transform: scale(2.4); } }
+    .ev-pin-tag { position: absolute; left: 0; top: calc(30px * var(--pin-k) + 8px); translate: -50% 0; max-width: 14rem; overflow: hidden; padding: .25rem .65rem; border-radius: 100px; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
+      font: 650 .78rem/1.3 var(--font-main); color: #2E2C3A; background: rgba(255, 255, 255, .92); box-shadow: 0 8px 20px -8px rgba(16, 12, 36, .6);
+      opacity: 0; transform: translateY(-4px); transition: opacity .2s ease, transform .3s var(--spring); }
+    .ev-mark.is-picked .ev-pin-tag, .ev-mark:has(.ev-pin:hover) .ev-pin-tag, .ev-mark:has(.ev-pin:focus-visible) .ev-pin-tag { opacity: 1; transform: none; }
+    /* Far out the albums of a scan gather into one stack; close in they spread back out to their places */
+    .ev-mapbox.is-far .ev-pin-s, .ev-mapbox.is-far .ev-pin-tag { opacity: 0; pointer-events: none; }
+    .ev-mapbox.is-far .ev-pin { visibility: hidden; transition: visibility 0s .35s, transform .35s var(--spring); }
+    .ev-stack { position: absolute; left: 0; top: 0; translate: calc(-50% + var(--sx, 0px)) calc(-50% + var(--sy, 0px)); display: inline-flex; align-items: center; gap: .5rem; padding: .3rem .85rem .3rem .3rem; border: 1px solid rgba(255, 255, 255, .8); border-radius: 100px; cursor: pointer; white-space: nowrap;
+      background: #FAF9FC; color: #2E2C3A; font: 700 .82rem var(--font-main); box-shadow: 0 0 26px -4px rgba(188, 178, 236, .85), 0 12px 24px -10px rgba(16, 12, 36, .7);
+      opacity: 0; visibility: hidden; transform: scale(.85); transition: opacity .3s ease, transform .4s var(--spring), visibility 0s .4s; }
+    .ev-mapbox.is-far .ev-stack { opacity: 1; visibility: visible; transform: none; transition: opacity .3s ease, transform .4s var(--spring), visibility 0s; }
+    .ev-stack:hover { transform: scale(1.05); }
+    .ev-mapbox.is-far .ev-stack:hover { transform: scale(1.05); }
+    .ev-mapbox.is-far .ev-stack:active { transform: scale(.96); }
+    .ev-stack:focus-visible { outline: 2.5px solid #fff; outline-offset: 3px; }
+    .ev-stack-faces { display: flex; }
+    .ev-stack-faces i { display: grid; place-items: center; width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; border: 2px solid #fff; background: #C9C0E2 center / cover; color: rgba(46, 44, 58, .58); }
+    .ev-stack-faces i + i { margin-left: -11px; }
+    .ev-stack-faces i.is-blank { background: radial-gradient(120% 100% at 28% 18%, #F6E6EC 0%, #E6CDD6 38%, #C9C0E2 100%); }
+    .ev-stack-faces svg { width: 15px; height: 15px; }
+    .ev-me { display: block; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8FB0FF, #4C7BE0 60%); border: 2.5px solid #fff; box-shadow: 0 0 0 7px rgba(120, 150, 240, .25), 0 0 18px 4px rgba(120, 150, 240, .4), 0 2px 6px rgba(0, 0, 0, .3); }
+    .maplibregl-map { font-family: var(--font-main); }
+    @media (prefers-reduced-motion: reduce) { .ev-pin, .ev-pin-tag, .ev-stack { transition: none; } .ev-mark.is-new .ev-pin, .ev-mark.is-pulse .ev-pin, .ev-mark.is-pulse .ev-pin-s::after, .ev-ping { animation: none; } }
 
     /* The event sheet: photos first, then what it is and the way in */
     .ev-sheet { padding: 0; border: none; background: none; max-width: none; max-height: none; overflow: visible; }
@@ -650,8 +711,8 @@
     .gd .grc-foot { margin-top: .6rem; }
 
     /* Events near you: what you can do, a place to look, then the map beside the closest few */
-    #events { --ev-h: min(64vh, 560px); }
-    #events .ev-top { align-items: flex-end; margin-bottom: 1.2rem; }
+    #events { --ev-gap: 1rem; --ev-h: min(64vh, 560px); --ev-list-h: var(--ev-h); }
+    #events .ev-top { align-items: flex-end; margin-bottom: var(--ev-gap); }
     #events .ev-top-copy { flex: 1 1 20rem; min-width: 0; }
     #events .so-sec-lede { max-width: 30rem; text-wrap: balance; }
     #events .ev-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .6rem; margin: 0; }
@@ -659,22 +720,23 @@
     #events .ev-actions .roll > span { gap: .4rem; }
     #events .ea-requests { margin: 0 0 1rem; }
     #events .ea-requests h3 { margin: 0 0 .6rem; font-size: .95rem; font-weight: 650; color: var(--slate); }
-    #events .ev-body { align-items: stretch; margin: 0; }
-    /* Map and list are the same height; the list scrolls inside its column instead of stretching the page */
+    #events .ev-body { align-items: stretch; gap: var(--ev-gap); margin: 0; }
+    /* The list column is shorter than the map: its scroll area stays small, and at either end the wheel/touch carries on to the page */
     #events .ev-mapbox { position: relative; top: 0; height: var(--ev-h); }
-    #events .ev-side { height: var(--ev-h); grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
-    #events .ev-list { min-height: 0; margin: -.3rem -.45rem; padding: .3rem .45rem .8rem; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
+    #events .ev-side { height: var(--ev-list-h); align-self: start; grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
+    #events .ev-list { min-height: 0; margin: -.3rem -.45rem; padding: .3rem .45rem .8rem; overflow-y: auto; overscroll-behavior: auto; align-content: start; }
     #events .ev-list:has(> .ev-scan) { grid-template-rows: minmax(0, 1fr); }
     #events .ev-scan { align-content: center; }
-    .ev-side-head { display: grid; gap: .5rem; min-width: 0; }
+    .ev-side-head { display: grid; gap: var(--ev-gap); min-width: 0; }
     .ev-side-head .ev-status { min-height: 0; margin: 0; padding: 0 .4rem; font-size: .88rem; line-height: 1.45; }
     .ev-side-head .ev-status:empty { display: none; }
     .ev-side-head .ev-notify { justify-content: space-between; margin: 0; padding: .35rem .5rem .35rem 1rem; box-sizing: border-box; background: rgba(46, 44, 58, .045); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .06); }
     :root[data-theme="dark"] .ev-side-head .ev-notify { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
-    .ev-side { display: grid; align-content: start; gap: .9rem; min-width: 0; }
+    .ev-side { display: grid; align-content: start; gap: var(--ev-gap, .9rem); min-width: 0; }
     @media (max-width: 900px) { .ev-list:not(.is-all) > .evc:nth-of-type(n + 4) { display: none; } }   /* phones: the closest three until "Show all" (on desktop the list scrolls instead) */
     @media (min-width: 901px) {
       #events .ev-more { display: none; }
+      #events .ev-list:has(> .ev-scan--cta) { padding-bottom: .3rem; -webkit-mask-image: none; mask-image: none; }
       #events .ev-list { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.1rem), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 1.1rem), transparent); }
     }
     .ev-more { --radius: 100px; justify-self: start; min-height: 2.75rem; padding: 0 1.3rem; border: 0; color: var(--dusk); font: 650 .92rem var(--font-main); cursor: pointer; transition: transform .35s var(--spring); }
@@ -710,12 +772,38 @@
     :root[data-theme="dark"] .ev-radar::after { background: #F2EFF8; }
     :root[data-theme="dark"] .ev-radar i { border-color: rgba(184, 174, 245, .55); }
     @media (prefers-reduced-motion: reduce) { .ev-radar i { animation: none; opacity: .5; } .ev-radar i:nth-child(2) { transform: scale(.65); } .ev-radar i:nth-child(1) { transform: scale(.35); } }
+    /* The idle panel is the call to action: a lavender-lit surface, a pin that sends out slow ripples, one big button */
+    .ev-scan--cta { position: relative; padding: 2.4rem 1.8rem 2.2rem; }
+    .ev-scan--cta::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(70% 55% at 50% 22%, rgba(184, 174, 245, .38), rgba(184, 174, 245, 0) 70%), radial-gradient(60% 40% at 50% 100%, rgba(143, 128, 216, .14), rgba(143, 128, 216, 0) 70%); }
+    .ev-scan--cta > * { position: relative; }
+    .ev-scan--cta .ev-radar { width: 8rem; height: 8rem; margin: 0 0 1.2rem; }
+    .ev-scan--cta .ev-radar::after { display: none; }
+    .ev-scan--cta.is-idle .ev-radar i { animation: ev-radar 3.2s cubic-bezier(.2, .7, .3, 1) infinite; border: 2px solid rgba(143, 128, 216, .7); }
+    :root[data-theme="dark"] .ev-scan--cta.is-idle .ev-radar i { border-color: rgba(200, 190, 255, .75); }
+    .ev-scan--cta .ev-radar i:nth-child(2) { animation-delay: 1.07s; }
+    .ev-scan--cta .ev-radar i:nth-child(3) { animation-delay: 2.14s; }
+    .ev-radar-pin { position: absolute; inset: 30%; z-index: 1; display: grid; place-items: center; border-radius: 50%; color: #241F3F;
+      background: radial-gradient(circle at 35% 28%, #E4DEFB, #B3A6F0 62%, #9686E2);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 0 0 5px rgba(184, 174, 245, .26), 0 10px 24px -8px rgba(110, 92, 200, .75); }
+    .ev-scan--cta h2 { margin: 0 0 .5rem; font-size: clamp(1.5rem, 2.2vw, 1.9rem); line-height: 1.1; }
+    .ev-scan--cta p { max-width: 26rem; }
+    .ev-scan-go { gap: .6rem; min-height: 3.4rem; margin-top: 1.5rem; padding: 0 2rem; font-size: 1.02rem; box-shadow: 0 0 0 1px rgba(184, 174, 245, .35), 0 14px 32px -12px rgba(143, 128, 216, .85); }
+    .ev-scan-go svg { flex: none; }
+    .ev-scan--cta.ev-empty .btn { margin-top: 1.5rem; }
+    @media (max-width: 600px) { .ev-scan--cta { padding: 1.8rem 1.2rem 1.6rem; } .ev-scan--cta .ev-radar { width: 5.2rem; height: 5.2rem; } .ev-scan-go { width: 100%; } }
+    @media (prefers-reduced-motion: reduce) {
+      .ev-scanbar.is-fresh .ev-go-wrap::before { animation: none; opacity: .7; }
+      .ev-scan--cta.is-idle .ev-radar i { animation: none; opacity: .5; }
+      .ev-scan--cta .ev-radar i:nth-child(1) { transform: scale(.5); } .ev-scan--cta .ev-radar i:nth-child(2) { transform: scale(.75); } .ev-scan--cta .ev-radar i:nth-child(3) { transform: scale(1); opacity: .25; }
+    }
     /* Phones and small tablets: the events themselves before the map */
     @media (max-width: 900px) {
       #events .ev-side { order: -1; height: auto; grid-template-rows: none; }
       #events .ev-list { overflow: visible; }
+      #events .ev-list:has(> .ev-scan--cta) { padding-bottom: .3rem; }
       #events .ev-list:has(> .ev-scan) { grid-template-rows: none; }
-      #events .ev-mapbox { height: 42vh; }
+      #events .ev-mapbox { height: clamp(18rem, 44vh, 28rem); }
     }
     /* The scan bar on narrower screens: search on its own row, then range and scan */
     @media (max-width: 760px) {
@@ -727,8 +815,10 @@
     @media (max-width: 600px) {
       .ev-reach { flex-basis: 100%; }
       .ev-reach button { min-width: 0; padding: 0 .3rem; }
-      .ev-go { flex: 1 1 100%; }
+      .ev-go-wrap { flex: 1 1 100%; --nx: 1.03; --ny: 1.45; }   /* full-width button: the ring grows taller, barely wider, so the page never scrolls sideways */
+      .ev-go { width: 100%; }
     }
+    @media (pointer: coarse) { .ev-zoom button { width: 2.75rem; height: 2.75rem; } .ev-follow { min-height: 2.75rem; } }
     @media (prefers-reduced-motion: reduce) { .ev-reach-pill, .ev-reach button, .ev-search { transition: none; } }
     :root[data-theme="dark"] .ev-scanbar-sep { background: rgba(255, 255, 255, .14); }
     :root[data-theme="dark"] .ev-search:hover { background: rgba(255, 255, 255, .04); }
@@ -960,7 +1050,7 @@
           </div>
         </div>
         <section class="ea-requests" id="admission-status" aria-live="polite" hidden><h3>Your join requests</h3><ul></ul></section>
-        <div class="ev-scanbar glass" role="group" aria-label="Look for events">
+        <div class="ev-scanbar glass is-fresh" role="group" aria-label="Look for events">
           <label class="ev-search">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
             <input id="evSearch" type="text" autocomplete="off" spellcheck="false" placeholder="Search a town or place" aria-label="Search a town or place" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="evSuggest">
@@ -975,13 +1065,14 @@
             <button type="button" role="radio" aria-checked="false" data-m="5000" tabindex="-1">5 km</button>
             <button type="button" role="radio" aria-checked="false" data-m="10000" tabindex="-1">10 km</button>
           </div>
-          <button class="btn btn-dark ev-go" type="button" id="evLocate">Scan nearby</button>
+          <span class="ev-go-wrap"><button class="btn btn-dark ev-go" type="button" id="evLocate">Scan nearby</button></span>
         </div>
         <div class="ev-body" aria-label="Events on the map and in a list">
-          <div class="ev-mapbox panel">
-            <div id="evMap" role="region" aria-label="Map of events near you"></div>
-            <span class="ev-map-glass" aria-hidden="true"></span>
-            <p class="ev-map-note" id="evMapNote">Scan nearby or search a place to see what’s on</p>
+          <div class="ev-mapbox">
+            <span class="ev-halo" aria-hidden="true"><i></i><b></b></span>
+            <div id="evMap" role="region" aria-label="Globe showing events near you"></div>
+            <button class="ev-map-scan" id="evMapScan" type="button"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Scan to see events near you</button>
+            <p class="ev-map-note" id="evMapNote" hidden></p>
           </div>
           <div class="ev-side">
             <div class="ev-side-head">
@@ -989,9 +1080,11 @@
               <label class="ev-notify" for="evNotify"><span>Alert me about events nearby</span><button class="acct-sw" type="button" role="switch" id="evNotify" aria-checked="false"></button></label>
             </div>
             <div class="ev-list" id="evList">
-              <div class="ev-empty ev-scan is-idle panel">
-                <h3>What’s on around you?</h3>
-                <p>Pick how far to look, then scan to see public events within <b data-range-label>1 km</b>. Momento only uses your location when you ask.</p>
+              <div class="ev-empty ev-scan ev-scan--cta is-idle panel">
+                <span class="ev-radar" aria-hidden="true"><i></i><i></i><i></i><span class="ev-radar-pin"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span></span>
+                <h2>Scan to see the events near you</h2>
+                <p>Pick how far to look, then scan to see public events within <b data-range-label>1 km</b>. Momento asks for your location first, and only uses it when you scan.</p>
+                <button class="btn btn-dark ev-scan-go" type="button" data-rescan><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Scan nearby</button>
               </div>
             </div>
             <button class="ev-more glass" type="button" id="evMore" hidden></button>
@@ -1302,7 +1395,7 @@
       const evCover = (a) => a.cover?.thumbUrl || a.pics?.[0] || null;
       const plural = (n, one, many) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;
       const dist = (m) => (m >= 1000 ? `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km` : `${Math.max(10, Math.round(m / 10) * 10)} m`);
-      const statusEl = $('evStatus'), listEl = $('evList'), note = $('evMapNote'), sheet = $('evSheet'), card = $('evCard');
+      const statusEl = $('evStatus'), listEl = $('evList'), note = $('evMapNote'), mapScan = $('evMapScan'), sheet = $('evSheet'), card = $('evCard');
       const say = (t, bad) => { statusEl.textContent = t; statusEl.classList.toggle('is-error', !!bad); };
       const NOTIFY = 'momento-notify-nearby';
 
@@ -1319,64 +1412,503 @@
         : e.inside ? '<span class="evc-in is-in">You’re inside the zone</span>'
         : `<span class="evc-in is-out">${dist(e.distanceM - e.zone.radiusM)} outside the zone</span>`;
 
-      // ---- The map: Esri's soft grey canvas (light or dark to match the site) with its street names on
-      // top. No key needed, and it loads for pages opened straight from the folder too ----
-      let map = null, tiles = null, labels = null, layer = null, me = null;
-      const markers = new Map();
-      function ensureMap() {
-        if (map) return map;
-        if (!window.L) { note.textContent = 'The map couldn’t load. The list still works.'; note.hidden = false; return null; }
-        map = L.map('evMap', { zoomControl: true, scrollWheelZoom: true, worldCopyJump: true }).setView([30, 0], 2);
-        map.attributionControl.setPrefix(false);   // (the map data credits stay; Leaflet's own credit is optional)
-        // Street names sit above the zone rings but under the pins, and never catch clicks
-        const lp = map.createPane('labels'); lp.style.zIndex = 450; lp.style.pointerEvents = 'none';
-        // Light: Esri's street map (blue water, green parks, clear roads and names). Dark: Esri's dark
-        // map. Both free, no key. detectRetina: twice the detail on sharp screens, so nothing is blurry
-        const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
-        const CREDIT = '&copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-        const setTiles = () => {
-          const dark = document.documentElement.dataset.theme === 'dark';
-          if (tiles) tiles.remove();
-          if (labels) labels.remove();
-          labels = null;
-          const opts = { maxZoom: 18, maxNativeZoom: dark ? 16 : 18, detectRetina: true, attribution: CREDIT };
-          if (dark) {
-            tiles = L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', opts).addTo(map);
-            labels = L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { ...opts, attribution: '', pane: 'labels' }).addTo(map);
-          } else {
-            tiles = L.tileLayer(ESRI + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts).addTo(map);
+      // ---- The globe: the real Earth in 3D (MapLibre GL, globe projection), floating on the page ----
+      // Far out it's a planet lit by the real sun: the night side is dark, with NASA's city lights and a soft
+      // twilight edge that moves through the day. Close in it's satellite imagery with roads and place names,
+      // dimmed when it's night at that place. Scans, zones and your position are drawn to true size on it.
+      // No key needed: Esri's imagery and reference tiles, and NASA's Earth at night (assets/globe)
+      let map = null, mapOk = false, me = null, rangeTag = null, stack = null;
+      const markers = new Map();   // event id → its print on the globe
+      const box = document.querySelector('.ev-mapbox');
+      const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+      const NIGHT_IMG = 'assets/globe/earth-night.jpg';
+      const rad = Math.PI / 180;
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+      // Where the sun is overhead right now (accurate to a fraction of a degree: plenty for a terminator).
+      // In local preview, ?sun=+6 moves the clock six hours on, to check night and day
+      const sunShift = (() => {
+        if (!/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname)) return 0;
+        const h = Number(new URLSearchParams(location.search).get('sun'));
+        return Number.isFinite(h) ? h * 36e5 : 0;
+      })();
+      function sunNow() {
+        const d = (Date.now() + sunShift) / 864e5 - 10957.5;   // days since 1 Jan 2000, 12:00 UTC
+        const g = (357.529 + 0.98560028 * d) * rad, q = 280.459 + 0.98564736 * d;
+        const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rad, e = (23.439 - 0.00000036 * d) * rad;
+        const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)) / rad, dec = Math.asin(Math.sin(e) * Math.sin(L));
+        const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+        const lng = ((ra - gmst * 15) % 360 + 540) % 360 - 180;
+        return { lat: dec / rad, lng, sinDec: Math.sin(dec), cosDec: Math.cos(dec) };
+      }
+      // How high the sun is (degrees) at a place: below 0 it has set, below −12 it's properly dark
+      const sunAlt = (s, lat, lng) => Math.asin(clamp(Math.sin(lat * rad) * s.sinDec + Math.cos(lat * rad) * s.cosDec * Math.cos((lng - s.lng) * rad), -1, 1)) / rad;
+      // How much night shows: none in daylight, all of it once the sun is 10° down, a twilight band between
+      const nightness = (alt) => smooth(4, -10, alt);
+
+      // The night side as map tiles, drawn here in the browser: NASA's city lights over deep navy, see-through
+      // where the sun is up. Remade every five minutes as the terminator moves
+      let nightImg = null;
+      const loadNight = () => (nightImg ||= new Promise((ok, no) => {
+        const im = new Image();
+        im.decoding = 'async';
+        im.onload = () => ok(im);
+        im.onerror = no;
+        im.src = NIGHT_IMG;
+      }));
+      function nightTiles() {
+        if (maplibregl.__momentoNight) return;
+        maplibregl.__momentoNight = true;
+        maplibregl.addProtocol('momento-night', async (params) => {
+          const [z, x, y] = params.url.replace('momento-night://', '').split(/[/?]/).map(Number);
+          const img = await loadNight();
+          const S = 256, n = 2 ** z, IW = img.naturalWidth, IH = img.naturalHeight;
+          const c = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(S, S) : Object.assign(document.createElement('canvas'), { width: S, height: S });
+          const ctx = c.getContext('2d', { willReadFrequently: true });
+          const lng0 = x / n * 360 - 180, lng1 = (x + 1) / n * 360 - 180;
+          const sx = (lng0 + 180) / 360 * IW, sw = (lng1 - lng0) / 360 * IW;
+          const lats = new Float64Array(S);
+          // The picture is plain latitude/longitude; tiles are Mercator, so it's laid in one row at a time
+          for (let py = 0; py < S; py++) {
+            const t = Math.PI * (1 - 2 * (y + (py + 0.5) / S) / n);
+            const lat = lats[py] = Math.atan(Math.sinh(t)) / rad;
+            ctx.drawImage(img, sx, clamp((90 - lat) / 180 * IH, 0, IH - 1), sw, 1, 0, py, S, 1);
           }
-        };
-        setTiles();
-        window.Momento?.theme?.onChange?.(setTiles);
-        layer = L.layerGroup().addTo(map);
-        // On a touch screen the map fills the width, so a one-finger drag would pan it instead of scrolling
-        // the page. It starts still: the first tap lets it pan, and it goes
-        // still again once it scrolls out of view. Pinch and the + and - buttons work throughout.
-        if (matchMedia('(pointer: coarse)').matches) {
-          map.dragging.disable();
-          map.on('click', () => map.dragging.enable());
-          new IntersectionObserver(([en]) => { if (!en.isIntersecting) map.dragging.disable(); }).observe(map.getContainer());
+          // The picture's teal sea is dropped: what's kept is its light (the red channel is near zero everywhere
+          // but the towns), laid warm over a near-black navy, with a trace of the land so coasts still read
+          const px = ctx.getImageData(0, 0, S, S), d = px.data, sun = sunNow();
+          // Kept cheap (it runs for every tile): the sun's height is worked with as its sine (no asin per pixel;
+          // over the twilight band the two are near enough proportional), with each column's cosine worked out once
+          const cosCol = new Float64Array(S);
+          for (let qx = 0; qx < S; qx++) cosCol[qx] = Math.cos((lng0 + (qx + 0.5) / S * (lng1 - lng0) - sun.lng) * rad);
+          const DAY = Math.sin(4 * rad), DARK = Math.sin(-10 * rad);
+          for (let py = 0; py < S; py++) {
+            const sl = Math.sin(lats[py] * rad) * sun.sinDec, cl = Math.cos(lats[py] * rad) * sun.cosDec;
+            for (let qx = 0, i = py * S * 4; qx < S; qx++, i += 4) {
+              const t = clamp((sl + cl * cosCol[qx] - DAY) / (DARK - DAY), 0, 1);
+              const glow = Math.max(0, d[i] - 4), land = Math.max(0, d[i + 1] - 20);
+              d[i] = 5 + glow * 2.2;
+              d[i + 1] = 7 + glow * 1.7 + land * 0.14;
+              d[i + 2] = 17 + glow * 0.75 + land * 0.12;
+              d[i + 3] = 240 * t * t * (3 - 2 * t);
+            }
+          }
+          ctx.putImageData(px, 0, 0);
+          const blob = c.convertToBlob ? await c.convertToBlob({ type: 'image/png' }) : await new Promise((ok) => c.toBlob(ok, 'image/png'));
+          return { data: await blob.arrayBuffer() };
+        });
+      }
+      const nightUrl = () => `momento-night://{z}/{x}/{y}?t=${Math.floor((Date.now() + sunShift) / 3e5)}`;
+
+      // Close in, the whole view is one place, so its own sun decides: bright by day, dimmed and cooler at night
+      function lightUp() {
+        if (!mapOk) return;
+        const c = map.getCenter(), sun = sunNow(), n = nightness(sunAlt(sun, c.lat, c.lng));
+        // The atmosphere's glow is lit from the real sun too (MapLibre lights it from the style's light)
+        const P = [-Math.cos(sun.lat * rad) * Math.sin(sun.lng * rad), -Math.sin(sun.lat * rad), -Math.cos(sun.lat * rad) * Math.cos(sun.lng * rad)];
+        map.setLight({ anchor: 'map', position: [1.5, Math.atan2(P[1], P[0]) / rad - 90, Math.acos(clamp(P[2], -1, 1)) / rad] });
+        const zoomed = (far, near) => ['interpolate', ['linear'], ['zoom'], 5, far, 7.5, near];
+        map.setPaintProperty('sat', 'raster-brightness-max', zoomed(1, 1 - 0.58 * n));
+        map.setPaintProperty('sat', 'raster-saturation', zoomed(0, -0.35 * n));
+        map.setPaintProperty('roads', 'raster-brightness-max', zoomed(1, 1 - 0.25 * n));
+        box.classList.toggle('is-night', n > 0.5 && map.getZoom() > 6);
+      }
+
+      // A true circle on the Earth (not a flat one), as a ring of points
+      const EARTH = 6371008.8;
+      function ring(lat, lng, m, steps = 128) {
+        const d = m / EARTH, p1 = lat * rad, l1 = lng * rad, out = [];
+        for (let i = 0; i <= steps; i++) {
+          const b = i / steps * 2 * Math.PI;
+          const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+          const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+          out.push([l2 / rad, p2 / rad]);
         }
-        setTimeout(() => map.invalidateSize(), 700);
+        return out;
+      }
+      const area = (kind, lat, lng, m) => ({ type: 'Feature', properties: { kind }, geometry: { type: 'Polygon', coordinates: [ring(lat, lng, m)] } });
+      const bounds = (lat, lng, m) => {
+        const dy = m / 111320, dx = m / (111320 * Math.max(0.05, Math.cos(lat * rad)));
+        return [[lng - dx, lat - dy], [lng + dx, lat + dy]];
+      };
+      // Everything drawn on the surface: the scan, each event's zone, how exact your position is
+      const areas = { scan: null, scanning: false, zones: [], acc: null, approx: null };
+      function paintAreas() {
+        const src = mapOk && map.getSource('areas');
+        if (!src) return;
+        const f = [...areas.zones];
+        if (areas.approx) f.push(areas.approx);
+        if (areas.acc) f.push(areas.acc);
+        if (areas.scan) f.push({ ...areas.scan, properties: { kind: areas.scanning ? 'scanning' : 'scan' } });
+        src.setData({ type: 'FeatureCollection', features: f });
+      }
+
+      // Size things to the zoom: album prints grow as you come in; far out, the glow and shadow the globe
+      // floats in follow its size, and fade once the surface fills the view
+      function sizeToZoom() {
+        if (!mapOk) return;
+        const z = map.getZoom();
+        box.style.setProperty('--pin-k', clamp(0.42 + (z - 3) * 0.58 / 12, 0.42, 1).toFixed(3));
+        const globe = 512 * 2 ** z / Math.PI;   // the globe's width on screen, in pixels
+        box.style.setProperty('--globe-k', (globe / 100).toFixed(3));
+        box.classList.toggle('is-close', globe > Math.min(box.clientWidth, box.clientHeight) * 1.15);
+        // The prints gather into the stack once they'd crowd each other on screen
+        let crowded = false;
+        if (markers.size > 1) {
+          const pts = [...markers.values()].map((mk) => map.project(mk.getLngLat()));
+          const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+          crowded = z < 9 || Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) < 64 * clamp(0.42 + (z - 3) * 0.58 / 12, 0.42, 1);
+        }
+        box.classList.toggle('is-far', crowded);
+      }
+
+      // ---- The camera: one move at a time ----
+      // Every flight goes through fly() and resolves once the globe has landed (or a hand took over). The idle
+      // turn is the only move anything else may stop: scrolling the page or a timer never cuts a flight short
+      const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+      const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+      let flightId = 0, flying = 0, onScreen = false, turning = false, idleTimer = 0;
+      function fly(opts, how = 'fly') {
+        if (!mapOk) return Promise.resolve();
+        stopTurning();
+        if (still || !opts.duration) { map.jumpTo(opts); return Promise.resolve(); }
+        const id = ++flightId;
+        flying++;
+        return new Promise((done) => {
+          let timer = 0;
+          const end = (ev) => {
+            if (ev && ev.momento !== id) return;   // the end of an earlier move, not this one
+            map.off('moveend', end); clearTimeout(timer);
+            flying = Math.max(0, flying - 1);
+            done();
+          };
+          map.on('moveend', end);
+          (how === 'ease' ? map.easeTo : map.flyTo).call(map, { essential: true, maxDuration: 6000, ...opts }, { momento: id });
+          timer = setTimeout(end, opts.duration + 900);   // a safety net: it always lands
+        });
+      }
+      // Room for the soft edge, so what's framed sits in the clear middle of the view
+      const pad = () => ({ top: box.clientHeight * 0.14, bottom: box.clientHeight * 0.14, left: box.clientWidth * 0.12, right: box.clientWidth * 0.12 });
+      const onView = (lng, lat) => {
+        const p = map.project([lng, lat]);
+        return p.x > 0 && p.y > 0 && p.x < box.clientWidth && p.y < box.clientHeight;
+      };
+      // Bring the globe on screen before a flight, so it isn't missed (it waits for the scroll, briefly)
+      const whenSeen = () => new Promise((ok) => {
+        const r = box.getBoundingClientRect();
+        if (r.top > -r.height * 0.25 && r.bottom < innerHeight + r.height * 0.25) return ok();
+        box.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+        if (still) return ok();
+        const io = new IntersectionObserver(([en]) => { if (en.intersectionRatio >= 0.6) { io.disconnect(); clearTimeout(t); ok(); } }, { threshold: [0.6] });
+        io.observe(box);
+        const t = setTimeout(() => { io.disconnect(); ok(); }, 900);
+      });
+      // A ping where you're headed: rings rippling out from the spot while the globe turns and dives
+      function pingAt(lat, lng) {
+        if (still) return;
+        const el = document.createElement('div');
+        el.className = 'ev-mark';
+        el.innerHTML = '<span class="ev-ping"><b></b><i></i><i></i><i></i></span>';
+        const mk = new maplibregl.Marker({ element: el, anchor: 'center', opacityWhenCovered: '0' }).setLngLat([lng, lat]).addTo(map);
+        setTimeout(() => mk.remove(), 3600);
+      }
+      // The flight itself. From space: turn the globe to face the place (a ping marks it), then dive in with a
+      // little tilt so the landing feels three-dimensional. Nearby: one smooth move across
+      async function flyTo3D(lat, lng, b, { ping = true, pitch = 38, bearing = -12 } = {}) {
+        if (!mapOk) return;
+        const cam = map.cameraForBounds(b, { padding: pad(), maxZoom: 16.5 });
+        if (!cam) return;
+        const zoom = cam.zoom - (still ? 0 : 0.3);   // a tilted view needs a touch more room
+        const planet = map.getZoom() < 5;
+        if (ping) pingAt(lat, lng);
+        if (planet && !still) {
+          await fly({ center: [lng, lat], pitch: 0, bearing: 0, duration: 1100, easing: easeInOut }, 'ease');
+        }
+        const far = planet || !onView(lng, lat);
+        await fly({ center: cam.center, zoom, pitch: still ? 0 : pitch, bearing: still ? 0 : bearing, duration: far ? 2600 : 1400, curve: far ? 1.6 : 1.3, easing: easeInOut });
+        home = { zoom, at: { lat, lng } };
+        paintTools();
+      }
+      let home = null;   // where the last flight landed, for "Back to you"
+
+      // The globe at rest turns slowly. It stops for a hand on it, a flight, or when it's out of sight,
+      // and starts again 8 s after the last touch, but only when it's a whole planet in view
+      const canTurn = () => !still && mapOk && onScreen && !document.hidden && !flying && !sheet.open && map.getZoom() <= 3.2;
+      function turn() {
+        clearTimeout(idleTimer);
+        if (turning || !canTurn()) return;
+        turning = true;
+        const c = map.getCenter();
+        map.easeTo({ center: [c.lng + 20, c.lat], duration: 20000, easing: (t) => t }, { momentoTurn: true });
+      }
+      function stopTurning() {
+        clearTimeout(idleTimer);
+        if (!turning) return;
+        turning = false;
+        map.stop();
+      }
+      const turnLater = (ms = 8000) => { clearTimeout(idleTimer); if (!still) idleTimer = setTimeout(turn, ms); };
+
+      // Glass controls over the globe: zoom, back to your scan, north-up (both only when they'd do something),
+      // and the live / follow pill (paintFollow)
+      let backBtn = null, northBtn = null;
+      function controls() {
+        const zoom = document.createElement('div');
+        zoom.className = 'ev-zoom';
+        zoom.innerHTML = `<button type="button" aria-label="Zoom in" title="Zoom in">+</button><button type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <button type="button" data-back aria-label="Back to the scan" title="Back to the scan" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg></button>
+          <button type="button" data-north aria-label="Face north, looking straight down" title="Face north" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3.5 15.5 12h-7z" fill="#E0476B"/><path d="M12 20.5 8.5 12h7z" fill="currentColor" opacity=".55"/></svg></button>`;
+        const [zin, zout] = zoom.querySelectorAll('button');
+        backBtn = zoom.querySelector('[data-back]');
+        northBtn = zoom.querySelector('[data-north]');
+        zin.addEventListener('click', () => { stopTurning(); map.zoomIn({ duration: still ? 0 : 450 }); });
+        zout.addEventListener('click', () => { stopTurning(); map.zoomOut({ duration: still ? 0 : 450 }); });
+        backBtn.addEventListener('click', () => flyHome());
+        northBtn.addEventListener('click', () => fly({ bearing: 0, pitch: 0, duration: 700, easing: easeInOut }, 'ease'));
+        const credit = document.createElement('p');
+        credit.className = 'ev-credit';
+        credit.innerHTML = 'Imagery © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics · Earth at night: <a href="https://earthobservatory.nasa.gov" target="_blank" rel="noopener">NASA</a>';
+        box.append(zoom, credit);
+      }
+
+      function ensureMap() {
+        if (map) return mapOk ? map : null;
+        const fail = () => { mapOk = false; note.textContent = 'The globe couldn’t load. The list still works.'; note.hidden = false; mapScan.hidden = true; return null; };
+        if (!window.maplibregl) return fail();
+        nightTiles();
+        loadNight().catch(() => {});
+        const roomy = Math.min(box.clientWidth || 600, box.clientHeight || 560);
+        // Start facing your own side of the world (from your time zone), sized to sit inside the space
+        const startLng = clamp(-new Date().getTimezoneOffset() / 4, -180, 180);
+        const startZoom = Math.log2((roomy * 0.74 * Math.PI) / 512);
+        const fade = (stops) => ['interpolate', ['linear'], ['zoom'], ...stops];
+        try {
+          map = new maplibregl.Map({
+            container: 'evMap',
+            style: {
+              version: 8,
+              projection: { type: 'globe' },
+              sky: { 'atmosphere-blend': fade([0, 0.5, 4, 0.42, 7, 0]) },
+              sources: {
+                sat: { type: 'raster', tiles: [ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 19,
+                  attribution: 'Imagery © <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics' },
+                night: { type: 'raster', tiles: [nightUrl()], tileSize: 256, maxzoom: 6, attribution: 'Earth at night: <a href="https://earthobservatory.nasa.gov">NASA</a>' },
+                places: { type: 'raster', tiles: [ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 19 },
+                roads: { type: 'raster', tiles: [ESRI + 'Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 19 },
+                areas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+              },
+              layers: [
+                { id: 'sat', type: 'raster', source: 'sat', paint: { 'raster-fade-duration': 200 } },
+                { id: 'night', type: 'raster', source: 'night', paint: { 'raster-opacity': fade([5, 1, 7.5, 0]), 'raster-fade-duration': 600 } },
+                { id: 'roads', type: 'raster', source: 'roads', minzoom: 9, paint: { 'raster-opacity': fade([9, 0, 11, 0.7, 15, 0.85]) } },
+                { id: 'places', type: 'raster', source: 'places', paint: { 'raster-opacity': fade([1, 0.4, 4, 0.75, 12, 1]) } },
+                // Zones: a pane of frosted colour (green when you're inside), with a dark under-edge so the
+                // bright line reads on any imagery
+                { id: 'area-fill', type: 'fill', source: 'areas', paint: {
+                  'fill-color': ['match', ['get', 'kind'], 'zone-in', '#7FDCBE', 'scan', '#9DB8FF', 'scanning', '#9DB8FF', 'acc', '#6F98F0', 'approx', '#9DB8FF', '#C8BEF5'],
+                  'fill-opacity': ['match', ['get', 'kind'], 'scan', 0.09, 'scanning', 0.16, 'acc', 0.2, 'approx', 0.14, 0.2] } },
+                { id: 'area-casing', type: 'line', source: 'areas', filter: ['in', ['get', 'kind'], ['literal', ['zone', 'zone-in', 'scan', 'scanning']]],
+                  paint: { 'line-color': 'rgba(14, 12, 32, .5)', 'line-width': 5, 'line-blur': 2 } },
+                { id: 'zone-line', type: 'line', source: 'areas', filter: ['in', ['get', 'kind'], ['literal', ['zone', 'zone-in']]],
+                  paint: { 'line-color': ['match', ['get', 'kind'], 'zone-in', '#93E2C9', '#D6CEFF'], 'line-width': 2 } },
+                { id: 'acc-line', type: 'line', source: 'areas', filter: ['==', ['get', 'kind'], 'acc'], paint: { 'line-color': 'rgba(160, 190, 255, .75)', 'line-width': 1 } },
+                { id: 'approx-line', type: 'line', source: 'areas', filter: ['==', ['get', 'kind'], 'approx'], paint: { 'line-color': '#B9CCFF', 'line-width': 1.6, 'line-dasharray': [1, 2.5] } },
+                { id: 'scan-line', type: 'line', source: 'areas', filter: ['in', ['get', 'kind'], ['literal', ['scan', 'scanning']]],
+                  layout: { 'line-cap': 'round' }, paint: { 'line-color': '#C6D5FF', 'line-width': 2.8, 'line-dasharray': [2.4, 1.8] } },
+              ],
+            },
+            center: [startLng, 16], zoom: startZoom, minZoom: Math.max(0, startZoom - 0.8), maxZoom: 18.5,
+            renderWorldCopies: false,
+            attributionControl: false,   // the credits sit outside the faded edge instead (controls())
+            // Yours to play with: drag spins it (with momentum), the wheel and pinch zoom, right-drag or
+            // two fingers tilt and turn it. On a phone one finger still scrolls the page; two move the globe
+            cooperativeGestures: matchMedia('(pointer: coarse)').matches,
+            maxPitch: 60,
+          });
+        } catch (err) { map = {}; return fail(); }
+        mapOk = true;
+        controls();
+        map.on('load', () => {
+          paintAreas();
+          lightUp();
+          sizeToZoom();
+          turn();
+        });
+        map.on('zoom', sizeToZoom);
+        map.on('move', liftStack);
+        map.on('rotate', paintTools);
+        map.on('pitch', paintTools);
+        map.on('moveend', (ev) => {
+          lightUp();
+          paintTools();
+          if (ev.momentoTurn) { if (turning) { turning = false; turn(); } return; }   // the next stretch of the idle turn
+          if (flying) return;
+          // Zoomed back out to the whole planet: it levels itself, so the globe sits upright in its glow
+          if (map.getZoom() < 4 && (map.getPitch() > 2 || Math.abs(map.getBearing()) > 2) && !ev.momentoLevel) {
+            map.easeTo({ pitch: 0, bearing: 0, duration: still ? 0 : 800, easing: easeInOut }, { momentoLevel: true });
+            return;
+          }
+          turnLater();
+        });
+        // A hand on the globe stops it turning
+        for (const ev of ['mousedown', 'touchstart', 'wheel', 'dragstart']) map.on(ev, stopTurning);
+        map.on('error', () => {});   // a missing imagery tile far out at sea is normal: the rest still draws
+        // The night side moves on: new night tiles every five minutes, and the close-in light with them
+        setInterval(() => { if (document.hidden) return; map.getSource('night')?.setTiles([nightUrl()]); lightUp(); }, 3e5);
+        // Only turns while it's on screen and the page is open (a flight is never stopped by this)
+        new IntersectionObserver(([en]) => { onScreen = en.isIntersecting; if (onScreen) turnLater(1200); else stopTurning(); }).observe(box);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) stopTurning(); else turnLater(1200); });
+        new ResizeObserver(() => { map.resize(); sizeToZoom(); }).observe(box);
         return map;
       }
 
+      // "Back to the scan" shows once you've wandered off it; the north button once the view is turned or tilted
+      function paintTools() {
+        if (!mapOk || !backBtn) return;
+        const c = map.getCenter();
+        const away = !!center && (!home || metres({ lat: c.lat, lng: c.lng }, center) > Math.max(600, scanM * 0.6) || map.getZoom() < home.zoom - 1.5);
+        backBtn.hidden = !away || flying > 0;   // not mid-flight: they'd flicker in and out on the way
+        northBtn.hidden = flying > 0 || Math.abs(map.getBearing()) < 1 && map.getPitch() < 1;
+        northBtn.firstChild.style.transform = `rotate(${-map.getBearing()}deg)`;
+      }
+      const flyHome = () => { if (center) flyTo3D(center.lat, center.lng, scanBounds(events.map((e) => [e.zone.lng, e.zone.lat]))); };
+      // Far out, a stack near the globe's rim is drawn in a little, so it never hangs off the edge
+      function liftStack() {
+        const el = stack?.getElement()?.firstChild;
+        if (!el) return;
+        const z = map.getZoom(), r = 256 * 2 ** z / Math.PI;
+        if (!box.classList.contains('is-far') || r * 2 > Math.max(box.clientWidth, box.clientHeight)) { el.style.removeProperty('--sx'); el.style.removeProperty('--sy'); return; }
+        const p = map.project(stack.getLngLat()), o = map.project(map.getCenter());
+        const dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy), lim = r * 0.62;
+        const k = d > lim ? (d - lim) / d : 0;
+        el.style.setProperty('--sx', `${(-dx * k).toFixed(1)}px`);
+        el.style.setProperty('--sy', `${(-dy * k).toFixed(1)}px`);
+      }
+
+      // A print on the globe for each album: its cover, or a blank print with a picture mark until it has one.
+      // Root is a 0×0 anchor (MapLibre moves it); the print is scaled to the zoom inside it
+      const PIC = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.7"/><path d="m4.5 17 4.6-4.4a1.5 1.5 0 0 1 2 0l2.4 2.2 2-1.8a1.5 1.5 0 0 1 2 0L20 15.4"/></svg>';
+      function printFor(e) {
+        const root = document.createElement('div');
+        root.className = 'ev-mark';
+        const cover = evCover(e);
+        root.innerHTML = `<span class="ev-pin-s"><button type="button" class="ev-pin${e.live ? ' is-live' : ''}${cover ? '' : ' is-blank'}">${cover ? '' : PIC}</button></span><span class="ev-pin-tag"></span>`;
+        const btn = root.querySelector('.ev-pin');
+        if (cover) btn.style.backgroundImage = `url(${JSON.stringify(cover)})`;
+        btn.setAttribute('aria-label', `${e.name}, ${dist(e.distanceM)} away${e.live ? ', live now' : ''}`);
+        root.querySelector('.ev-pin-tag').textContent = `${e.name} · ${dist(e.distanceM)}`;
+        btn.addEventListener('click', (k) => { k.stopPropagation(); pick(e, true); selectEvent(e); });
+        btn.addEventListener('pointerenter', () => pick(e, false));
+        btn.addEventListener('focus', () => pick(e, false));
+        return new maplibregl.Marker({ element: root, anchor: 'center', opacityWhenCovered: '0' }).setLngLat([e.zone.lng, e.zone.lat]).addTo(map);
+      }
+      // Far out, the albums of one scan sit in a single stack: a few covers and how many there are
+      function stackFor(list, at) {
+        const root = document.createElement('div');
+        root.className = 'ev-mark ev-stack-mark';
+        const faces = list.slice(0, 3).map((e) => {
+          const c = evCover(e);
+          return c ? `<i style="background-image:url(${esc(JSON.stringify(c))})"></i>` : `<i class="is-blank">${PIC}</i>`;
+        }).join('');
+        root.innerHTML = `<button type="button" class="ev-stack"><span class="ev-stack-faces">${faces}</span><b></b></button>`;
+        root.querySelector('b').textContent = plural(list.length, 'album', 'albums');
+        const btn = root.querySelector('button');
+        btn.setAttribute('aria-label', `${plural(list.length, 'album', 'albums')} here. Zoom in to see them`);
+        btn.addEventListener('click', () => { if (center) flyTo3D(center.lat, center.lng, scanBounds(list.map((e) => [e.zone.lng, e.zone.lat])), { ping: false }); });
+        return new maplibregl.Marker({ element: root, anchor: 'center', opacityWhenCovered: '0' }).setLngLat([at.lng, at.lat]).addTo(map);
+      }
+      function meAt(at) {
+        if (!me) {
+          const el = document.createElement('div');
+          el.className = 'ev-mark';
+          el.innerHTML = '<span class="ev-me"></span>';
+          me = new maplibregl.Marker({ element: el, anchor: 'center', opacityWhenCovered: '0' });
+        }
+        me.setLngLat([at.lng, at.lat]).addTo(map);
+      }
+      // The scan's size, written on its edge
+      function tagRange(at, m) {
+        if (!rangeTag) {
+          const el = document.createElement('div');
+          el.className = 'ev-mark';
+          el.innerHTML = '<span class="ev-range-tag"></span>';
+          rangeTag = new maplibregl.Marker({ element: el, anchor: 'center', opacityWhenCovered: '0' });
+        }
+        rangeTag.getElement().firstChild.textContent = fmtRange(m);
+        rangeTag.setLngLat([at.lng, at.lat + m / 111320]).addTo(map);
+      }
+      function clearMarks() {
+        markers.forEach((mk) => mk.remove()); markers.clear();
+        stack?.remove(); stack = null;
+        box.classList.remove('is-far');
+      }
+      // The scanned circle, stretched to take in any extra points (events whose zone sits past its edge)
+      function scanBounds(extra = []) {
+        const [[w, s], [e, n]] = bounds(center.lat, center.lng, scanM);
+        let W = w, S = s, E = e, N = n;
+        for (const [lng, lat] of extra) { W = Math.min(W, lng); E = Math.max(E, lng); S = Math.min(S, lat); N = Math.max(N, lat); }
+        return [[W, S], [E, N]];
+      }
+      // Once landed, the range ring grows out from the centre to its true size (0.7 s)
+      function ringIn(at, radius) {
+        if (still) { areas.scan = area('scan', at.lat, at.lng, radius); paintAreas(); return; }
+        const t0 = performance.now();
+        const step = (now) => {
+          const t = Math.min(1, (now - t0) / 700), k = 1 - (1 - t) ** 3;
+          areas.scan = area('scan', at.lat, at.lng, Math.max(1, radius * k));
+          paintAreas();
+          if (t < 1 && center === at) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+      // A print that's just been flown to gives a little bounce and a ring of light
+      function pulse(e) {
+        const el = markers.get(e.id)?.getElement();
+        if (!el || still) return;
+        el.classList.remove('is-pulse');
+        void el.offsetWidth;   // restart the animation if it's already played
+        el.classList.add('is-pulse');
+        setTimeout(() => el.classList.remove('is-pulse'), 1100);
+      }
+      // Choosing an event (in the list, or its print on the globe): the globe flies to it, its print pulses,
+      // then its sheet opens. Already there? The sheet opens straight away
+      let selectReq = 0;
+      async function selectEvent(e) {
+        const req = ++selectReq;
+        pick(e, false);
+        if (!mapOk) { openSheet(e); return; }
+        const z = e.zone, c = map.getCenter();
+        const there = metres({ lat: c.lat, lng: c.lng }, z) < Math.max(60, z.radiusM * 0.25) && map.getZoom() > 11 && onView(z.lng, z.lat);
+        if (!there) {
+          if (matchMedia('(max-width: 900px)').matches) await whenSeen();   // phones: the list sits above the globe
+          // Framed close on the event itself (a big zone's edge can run off the view), so its print stands clear
+          await flyTo3D(z.lat, z.lng, bounds(z.lat, z.lng, clamp(z.radiusM * 1.1, 250, 700)), { ping: false, pitch: 42, bearing: -10 });
+          if (req !== selectReq) return;   // they chose another one on the way
+          pulse(e);
+          await wait(still ? 0 : 450);
+        }
+        if (req === selectReq) openSheet(e);
+      }
+
       // ---- What's around a point ----
-      let center = null, real = null, events = [], picked = null, lookReq = 0, meAcc = null, scanCircle = null, scannedAt = null;
+      let center = null, real = null, events = [], picked = null, lookReq = 0, scannedAt = null;
       // The list's own messages: scanning, or why nothing could be shown (with a way to try again)
       const SHOWN = 3, moreBtn = $('evMore');
+      listEl.querySelector('[data-rescan]')?.addEventListener('click', () => useMyLocation());   // the button in the page's own first markup
+      mapScan.addEventListener('click', () => useMyLocation());   // the scan button under the globe (only there before the first scan)
       moreBtn.addEventListener('click', () => {
         const all = listEl.classList.toggle('is-all');
         moreBtn.textContent = all ? 'Show fewer' : `Show all ${events.length} events`;
       });
-      function listMsg(title, text, { scanning = false, retry = false } = {}) {
+      function listMsg(title, text, { scanning = false, retry = false, cta = false } = {}) {
         moreBtn.hidden = true;
-        listEl.innerHTML = `<div class="ev-empty ev-scan panel${scanning ? '' : ' is-idle'}">${scanning ? '<span class="ev-radar" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}<h2></h2><p></p>${retry ? '<button class="btn btn-dark" type="button" data-rescan></button>' : ''}</div>`;
+        const pin = '<span class="ev-radar-pin"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span>';
+        listEl.innerHTML = `<div class="ev-empty ev-scan panel${cta ? ' ev-scan--cta' : ''}${scanning ? '' : ' is-idle'}">${scanning || cta ? `<span class="ev-radar" aria-hidden="true"><i></i><i></i><i></i>${cta ? pin : ''}</span>` : ''}<h2></h2><p></p>${retry || cta ? `<button class="btn btn-dark${cta ? ' ev-scan-go' : ''}" type="button" data-rescan></button>` : ''}</div>`;
         listEl.querySelector('h2').textContent = title;
         listEl.querySelector('p').textContent = text;
         const again = listEl.querySelector('[data-rescan]');
-        if (again) again.textContent = typeof retry === 'string' ? retry : 'Scan again';
+        if (again) again.textContent = cta ? 'Scan nearby' : typeof retry === 'string' ? retry : 'Scan again';
         if (again) { again.addEventListener('click', () => useMyLocation()); rollButton?.(again); }
       }
       // How far a scan looks: you pick one of these (the chips in the scan bar), and it's remembered.
@@ -1388,38 +1920,59 @@
       let scanM = rangeM;
       const scanLabel = () => fmtRange(scanM);
       let lookLabel = 'you';
-      // The sweep: the map shows the scanned circle, a radar beam goes round it and rings ripple out,
-      // while the search runs (at least 1.6 s, so it reads as a scan)
-      let fxLayer = null;
+      // The scan, in three beats: the page brings the globe into view, the globe turns to face the place (a
+      // ping marks it) and dives in with a slight tilt, then the range ring grows out to its true size and a
+      // radar beam sweeps it until the results arrive. `landed` resolves once the globe has arrived, so the
+      // results never land mid-flight
+      let sweep = null;
       function scanFx(at, radius) {
         const m = ensureMap();
-        if (!m) return () => {};
-        fxLayer ||= L.layerGroup().addTo(m);
-        fxLayer.clearLayers();
+        if (!m) return { stop() {}, landed: Promise.resolve() };
         // A fresh scan: the last results go, and come back when it finishes
-        layer?.clearLayers(); markers.clear();
-        if (!at.approx) L.marker([at.lat, at.lng], { icon: L.divIcon({ className: '', html: '<span class="ev-me"></span>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, keyboard: false }).addTo(fxLayer);
-        const ring = L.circle([at.lat, at.lng], { radius, className: 'ev-scan-area is-scanning', weight: 2, interactive: false }).addTo(fxLayer);
-        m.fitBounds(ring.getBounds(), { padding: [24, 24], animate: !still });
-        let sweep = null, stopped = false;
-        const place = () => {
-          if (stopped) return;
-          const c = m.latLngToLayerPoint([at.lat, at.lng]);
-          const edge = m.latLngToLayerPoint([at.lat + radius / 111320, at.lng]);
-          const px = Math.max(30, Math.round(Math.abs(c.y - edge.y)));
-          sweep?.remove();
-          sweep = L.marker([at.lat, at.lng], {
-            icon: L.divIcon({ className: '', html: `<span class="ev-sweep" style="--r:${px}px"><b></b><i></i><i></i><i></i></span>`, iconSize: [0, 0] }),
-            interactive: false, keyboard: false,
-          }).addTo(fxLayer);
+        clearMarks();
+        rangeTag?.remove();
+        sweep?.remove(); sweep = null;
+        areas.zones = []; areas.acc = null; areas.approx = null; areas.scan = null; areas.scanning = true;
+        paintAreas();
+        if (at.approx) me?.remove(); else meAt(at);
+        let stopped = false, el = null, size = null;
+        const landed = (async () => {
+          await whenSeen();
+          if (stopped || center !== at) return;
+          await flyTo3D(at.lat, at.lng, bounds(at.lat, at.lng, radius));
+          if (stopped || center !== at) return;
+          ringIn(at, radius);
+          // The beam is 200 px across, scaled to the circle's size on screen as you move about
+          el = document.createElement('div');
+          el.className = 'ev-mark';
+          el.innerHTML = '<span class="ev-sweep"><b></b><i></i><i></i><i></i></span>';
+          const beam = el.firstChild;
+          sweep = new maplibregl.Marker({ element: el, anchor: 'center', opacityWhenCovered: '0' }).setLngLat([at.lng, at.lat]).addTo(m);
+          size = () => {
+            const c = m.project([at.lng, at.lat]), edge = m.project([at.lng, at.lat + radius / 111320]);
+            beam.style.setProperty('--k', (Math.max(14, Math.hypot(c.x - edge.x, c.y - edge.y)) / 100).toFixed(3));
+          };
+          size();
+          m.on('move', size);
+          await wait(still ? 0 : 700);   // let the ring finish growing before the results come in
+        })();
+        return {
+          landed,
+          stop() {
+            if (stopped) return;
+            stopped = true;
+            if (size) m.off('move', size);
+            el?.remove();
+            if (sweep?.getElement() === el) sweep = null;
+            areas.scanning = false;
+            paintAreas();
+          },
         };
-        m.once('moveend', place);
-        setTimeout(place, still ? 0 : 400);
-        if (!still) m.getContainer().scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        return () => { stopped = true; m.off('moveend', place); sweep?.remove(); ring.getElement()?.classList.remove('is-scanning'); };
       }
       let scanning = false;
       async function look(at, label, radius = rangeM, { quiet = false } = {}) {
+        document.querySelector('.ev-scanbar')?.classList.remove('is-fresh');   // the first scan has happened: stop nudging
+        mapScan.hidden = true;
         center = at;
         scanM = radius;
         const req = ++lookReq;
@@ -1428,12 +1981,14 @@
           say(`Scanning ${scanLabel()} around ${label}…`);
           listMsg(`Scanning ${scanLabel()} around ${label}…`, 'Looking for public events happening nearby.', { scanning: true });
         }
-        const stopFx = quiet ? () => {} : scanFx(at, radius);
+        const fx = quiet ? null : scanFx(at, radius);
+        const stopFx = () => fx?.stop();
         let r;
         try {
           [r] = await Promise.all([
             momentoApi(`/api/events/nearby?lat=${at.lat.toFixed(5)}&lng=${at.lng.toFixed(5)}&radius=${radius}`),
             new Promise((ok) => setTimeout(ok, quiet ? 0 : still ? 300 : 1600)),
+            fx?.landed,   // the results wait for the globe to arrive
           ]);
         }
         catch (err) { stopFx(); scanning = false; if (req === lookReq && !quiet) { say(''); listMsg('Couldn’t look for events', err.message, { retry: true }); } return; }
@@ -1473,41 +2028,34 @@
         note.hidden = !!events.length || !m;
         if (!events.length && m) { note.textContent = 'No public events around here right now'; note.hidden = false; }
         if (!m) return;
-        layer.clearLayers(); markers.clear();
-        fxLayer?.clearLayers();
-        let scanned = null;
+        clearMarks();
+        sweep?.remove(); sweep = null;
+        // On the surface, all to true size: the scan, each event's zone, and how exact your position is
+        // (or, for an approximate area, a soft circle round the nearest town instead of a precise-looking dot)
+        areas.scanning = false;
+        areas.scan = center ? area('scan', center.lat, center.lng, scanM) : null;
+        areas.approx = center?.approx ? area('approx', center.lat, center.lng, 3000) : null;
+        areas.acc = center && !center.approx ? area('acc', center.lat, center.lng, Math.max(5, center.accuracy || 5)) : null;
+        areas.zones = events.map((e) => area(e.inside ? 'zone-in' : 'zone', e.zone.lat, e.zone.lng, e.zone.radiusM));
+        paintAreas();
         if (center) {
-          scanned = L.circle([center.lat, center.lng], { radius: scanM, className: 'ev-scan-area', weight: 1.5, interactive: false }).addTo(layer);
-          scanCircle = scanned;
-          if (center.approx) {
-            // Only the nearest town: a soft area, not a precise-looking dot
-            L.circle([center.lat, center.lng], { radius: 3000, className: 'ev-approx', weight: 1.5, interactive: false }).addTo(layer);
-          } else {
-            // How exact the position is (it shrinks as the phone gets a better fix)
-            meAcc = L.circle([center.lat, center.lng], { radius: Math.max(5, center.accuracy || 5), className: 'ev-accuracy', weight: 1, interactive: false }).addTo(layer);
-            me = L.marker([center.lat, center.lng], {
-              icon: L.divIcon({ className: '', html: '<span class="ev-me"></span>', iconSize: [16, 16], iconAnchor: [8, 8] }),
-              interactive: false, keyboard: false,
-            }).addTo(layer);
-          }
+          if (center.approx) me?.remove(); else meAt(center);
+          tagRange(center, scanM);
         }
-        const bounds = [];
-        for (const e of events) {
-          L.circle([e.zone.lat, e.zone.lng], { radius: e.zone.radiusM, className: 'ev-zone' + (e.inside ? ' is-in' : ''), weight: 1.5, interactive: false }).addTo(layer);
-          const pin = L.marker([e.zone.lat, e.zone.lng], {
-            icon: L.divIcon({ className: '', html: `<span class="ev-pin${e.live ? ' is-live' : ''}" style="${evCover(e) ? `background-image:url('${esc(evCover(e))}')` : ''}"></span>`, iconSize: [44, 44], iconAnchor: [22, 22] }),
-            title: e.name, alt: e.name, riseOnHover: true,
-          }).addTo(layer);
-          pin.on('click', () => { pick(e, true); openSheet(e); });
-          markers.set(e.id, pin);
-          bounds.push([e.zone.lat, e.zone.lng]);
-        }
-        // Show the whole scanned circle, and every event found
-        const all = scanned ? scanned.getBounds() : null;
-        for (const b of bounds) all ? all.extend(b) : null;
-        if (keepView) return;
-        if (all) map.fitBounds(all, { padding: [30, 30], maxZoom: 16 });
-        else if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+        events.forEach((e, i) => {
+          const mk = printFor(e);
+          markers.set(e.id, mk);
+          // A fresh scan's prints pop in one after another, the closest first
+          if (!keepView && !still) { const el = mk.getElement(); el.classList.add('is-new'); el.style.setProperty('--i', i); setTimeout(() => el.classList.remove('is-new'), 700 + i * 70); }
+        });
+        if (center && events.length > 1) stack = stackFor(events, center);
+        if (picked && markers.has(picked.id)) markers.get(picked.id).getElement().classList.add('is-picked');
+        sizeToZoom();
+        liftStack();
+        paintTools();
+        // The globe has already landed on the scan; it only eases out if an event sits past the view
+        if (keepView || !center) return;
+        if (events.some((e) => !onView(e.zone.lng, e.zone.lat))) flyTo3D(center.lat, center.lng, scanBounds(events.map((e) => [e.zone.lng, e.zone.lat])), { ping: false });
       }
       function cardFor(e) {
         const w = when(e);
@@ -1526,7 +2074,7 @@
             <p class="evc-where"><b>${e.direction === 'here' ? 'Right here' : `${dist(e.distanceM)} ${e.direction ? e.direction : 'away'}`}</b>${whereChip(e)}</p>
             ${pics ? `<div class="evc-pics">${pics}</div>` : ''}
           </div>`;
-        el.addEventListener('click', () => { pick(e, false); openSheet(e); });
+        el.addEventListener('click', () => selectEvent(e));
         el.addEventListener('keydown', (k) => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); el.click(); } });
         el.addEventListener('pointerenter', () => pick(e, false));
         return el;
@@ -1534,7 +2082,7 @@
       function pick(e, scroll) {
         picked = e;
         listEl.querySelectorAll('.evc').forEach((c) => c.classList.toggle('is-picked', c.dataset.id === e.id));
-        markers.forEach((m, id) => m.getElement()?.querySelector('.ev-pin')?.classList.toggle('is-picked', id === e.id));
+        markers.forEach((mk, id) => mk.getElement().classList.toggle('is-picked', id === e.id));
         if (scroll) listEl.querySelector(`.evc[data-id="${CSS.escape(e.id)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
 
@@ -1648,7 +2196,7 @@
         listEl.querySelector('[data-area]').addEventListener('click', () => approximateArea());
         listEl.querySelectorAll('.btn').forEach((b) => rollButton?.(b));
         const m = ensureMap();
-        if (m) { note.textContent = 'Search a place above to see nearby events'; note.hidden = false; }
+        if (m) { note.textContent = 'Search a place above to see nearby events'; note.hidden = false; mapScan.hidden = true; }
       }
 
       // Roughly where you are from your internet connection (a free service, no key, no account).
@@ -1719,9 +2267,14 @@
         real = fix;
         if (!following) return;
         center = real;
-        scanCircle?.setLatLng([fix.lat, fix.lng]);
-        me?.setLatLng([fix.lat, fix.lng]);
-        meAcc?.setLatLng([fix.lat, fix.lng]).setRadius(Math.max(5, fix.accuracy));
+        if (mapOk) {
+          // The dot, its accuracy circle and the scan move with you
+          if (areas.scan) areas.scan = area('scan', fix.lat, fix.lng, scanM);
+          areas.acc = area('acc', fix.lat, fix.lng, Math.max(5, fix.accuracy));
+          paintAreas();
+          meAt(fix);
+          if (rangeTag?.getElement().isConnected) tagRange(fix, scanM);
+        }
         liveSay();
         // Far enough from where the last scan was: scan again, quietly
         const step = Math.min(400, Math.max(50, scanM / 10));   // re-scan after moving about a tenth of the range
@@ -1738,22 +2291,19 @@
       document.addEventListener('visibilitychange', () => { if (document.hidden) unwatch(); else if (following) watch(); });
       addEventListener('pagehide', unwatch);
 
-      // On the map: "Live" while following, or "Follow me" to start again
-      let followCtl = null;
+      // Over the globe: "Live" while following, or "Follow me" to start again
+      let followBtn = null;
       function paintFollow() {
         const m = ensureMap();
         if (!m) return;
-        if (!followCtl) {
-          const Ctl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
-            const b = L.DomUtil.create('button', 'ev-follow');
-            b.type = 'button';
-            L.DomEvent.disableClickPropagation(b);
-            b.addEventListener('click', () => (following ? null : (real && !real.approx ? (startFollowing(), look(real, 'you', scanM)) : useMyLocation())));
-            return b;
-          } });
-          followCtl = new Ctl().addTo(m);
+        if (!followBtn) {
+          followBtn = document.createElement('button');
+          followBtn.type = 'button';
+          followBtn.className = 'ev-follow';
+          followBtn.addEventListener('click', () => (following ? null : (real && !real.approx ? (startFollowing(), look(real, 'you', scanM)) : useMyLocation())));
+          box.append(followBtn);
         }
-        const b = followCtl.getContainer();
+        const b = followBtn;
         b.classList.toggle('is-live', following);
         b.innerHTML = following ? '<i aria-hidden="true"></i>Live' : '<i aria-hidden="true"></i>Follow me';
         b.setAttribute('aria-pressed', String(following));
@@ -1785,8 +2335,9 @@
       const rangeEl = $('evRange'), chips = [...rangeEl.querySelectorAll('[role="radio"]')];
       let rangeTimer = 0;
       const showIdle = () => {
-        listMsg('What’s on around you?', `Pick how far to look, then scan to see public events within ${fmtRange(rangeM)}. Momento asks for your location first, and only uses it when you scan.`);
+        listMsg('Scan to see the events near you', `Pick how far to look, then scan to see public events within ${fmtRange(rangeM)}. Momento asks for your location first, and only uses it when you scan.`, { cta: true });
         listEl.querySelector('.ev-scan')?.setAttribute('data-idle', '');
+        mapScan.hidden = false; note.hidden = true;   // the globe's own scan button, until a scan happens
       };
       function paintRange() {
         rangeEl.style.setProperty('--i', Math.max(0, RANGES.indexOf(rangeM)));
@@ -2398,10 +2949,14 @@
       const next = resolve(p);
       const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
       if (root.dataset.theme === next) root.dataset.themePref = p;
-      else if (animate && document.startViewTransition && !reduced.matches) {
+      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
         root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
         const done = () => root.classList.remove('theming');
-        document.startViewTransition(flip).finished.then(done, done);
+        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
+        const vt = document.startViewTransition(flip);
+        vt.ready.catch(() => {});
+        vt.updateCallbackDone.catch(() => {});
+        vt.finished.then(done, done);
       } else flip();
       themeListeners.forEach((fn) => fn(p, next));
     }

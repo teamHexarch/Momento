@@ -287,7 +287,18 @@
       }
       if (method === 'DELETE') { state.signedIn = false; save(); return { body: { ok: true } }; }
     }
+    // Download my data (Settings): everything the account holds, as one JSON object
+    if (path === '/api/auth/me/export' && method === 'GET') {
+      if (!state.signedIn) return fail(401, 'Log in to continue.');
+      return { body: { exportedAt: new Date().toISOString(), user: state.user, consents: state.consents || [],
+        albums: state.albums.map((a) => ({ id: a.id, name: a.name, role: a.role, photos: photosOf(a).map((p) => ({ id: p.id, url: p.url, by: p.by })) })) } };
+    }
     if (/^\/api\/auth\/(login|signup|google|apple)$/.test(path)) {
+      // Sign-up records which Terms and Privacy Policy the person agreed to
+      if (path === '/api/auth/signup') {
+        if (!body.acceptTerms) return fail(400, 'Agree to the Terms and Privacy Policy to create an account.');
+        (state.consents ||= []).push({ type: 'terms', version: body.termsVersion, at: new Date().toISOString() });
+      }
       state.signedIn = true;
       if (body.name) state.user.name = body.name;
       if (body.email) state.user.email = body.email;
@@ -584,7 +595,7 @@
       // { emoji: '😍' } sets (or switches) your reaction, { emoji: null } takes it back
       if (sm[3] === 'reaction' && method === 'POST') {
         const want = body.emoji == null ? null : String(body.emoji);
-        if (want && !RX.includes(want)) return fail(400, 'Pick one of the reactions.');
+        if (want && !(window.MomentoEmoji ? window.MomentoEmoji.has(want) : RX.includes(want))) return fail(400, 'Pick one of the reactions.');
         if (s.reaction) { s.reactions[s.reaction] = Math.max(0, (s.reactions[s.reaction] || 1) - 1); if (!s.reactions[s.reaction]) delete s.reactions[s.reaction]; }
         if (want) s.reactions[want] = (s.reactions[want] || 0) + 1;
         s.reaction = want; delete s.comments; saveSocial(pid, s);

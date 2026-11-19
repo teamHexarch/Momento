@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en" data-page="home">
 <head>
+  <script src="assets/i18n.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -106,7 +107,7 @@
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
     /* One droplet: a dusk bead with a lavender glow that stretches along the way it moves,
        and swells into a clear glass lens over anything you can click or drag */
-    .cursor { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; opacity: 0; will-change: transform; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: transform; }
     .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
     .cursor span {
       position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
@@ -224,7 +225,7 @@
     .menu-item.active::after { opacity: 1; }
     .menu-hint { padding: .55rem 1rem .4rem; color: var(--stone); font-size: .75rem; }
     .nav-menu.is-dragging .menu-item { cursor: grabbing; }
-    .nav-menu.is-dragging .menu-pill { transition: translate .1s linear, height .3s var(--out); background: rgba(255,255,255,.7); }
+    .nav-menu.is-dragging .menu-pill { transition: translate .1s linear, height .3s var(--out); }
 
     @media (max-width: 900px) {
       .brand-word { display: none; }
@@ -933,38 +934,15 @@
     }
     .divider-line { flex: 1; height: 1.5px; border-radius: 2px; background: linear-gradient(to right, var(--copper), rgba(154,96,61,.1)); transform-origin: left center; transform: scaleX(0); }
     .zone-panel, .quality-panel { display: grid; grid-template-columns: 1fr minmax(0, 1.05fr); align-items: center; gap: clamp(2rem, 5vw, 4.5rem); width: min(1180px, 100%); padding: clamp(1.75rem, 3.4vw, 3rem); box-sizing: border-box; }
-    .zone-ctrl { margin-top: 1.6rem; padding: 1.1rem 1.25rem 1.2rem; border-radius: 22px; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 1px rgba(46,44,58,.06); }
+    .zone-ctrl { margin-top: 1.6rem; padding: 1.1rem 1.25rem 1.2rem; border-radius: 22px; }
     .zone-ctrl-top { display: flex; justify-content: space-between; align-items: baseline; }
     .zone-ctrl label { font-weight: 600; }
     .zone-ctrl output { font-size: 1.5rem; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-    .zone-ctrl input {
-      --fill: 40%; width: 100%; height: 6px; margin: .9rem 0 .8rem; border-radius: 3px; -webkit-appearance: none; appearance: none;
-      background: linear-gradient(to right, var(--copper) var(--fill), rgba(46,44,58,.12) var(--fill)); cursor: pointer;
-    }
-    .zone-ctrl input::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(46,44,58,.2), 0 4px 12px rgba(46,44,58,.2); }
-    .zone-ctrl input::-moz-range-thumb { width: 26px; height: 26px; border: none; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(46,44,58,.2), 0 4px 12px rgba(46,44,58,.2); }
-    .zone-ctrl input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 6px; }
+    .zone-ctrl input { --fill: 40%; width: 100%; margin: .9rem 0 .8rem; }
     .zone-count { margin: 0; color: var(--slate); }
     .zone-count b { color: var(--dusk); font-size: 1.1rem; }
-    /* The slider, made easy to read: a thick track filled in the zone's own colour (copper by day, the map
-       ring's purple at night), a white knob ringed in that colour, and the distance in the accent too */
-    .zone-ctrl { --zone-lo: #C08A66; --zone-hi: #9A603D; --zone-track: rgba(46,44,58,.16); }
-    .zone-ctrl output { color: var(--zone-hi); }
-    .zone-ctrl input {
-      height: 10px; border-radius: 5px;
-      background: linear-gradient(to right, var(--zone-lo), var(--zone-hi) var(--fill), var(--zone-track) var(--fill));
-    }
-    .zone-ctrl input::-webkit-slider-thumb { width: 28px; height: 28px; box-shadow: 0 0 0 4px var(--zone-hi), 0 4px 14px rgba(46,44,58,.3); }
-    .zone-ctrl input::-moz-range-thumb { width: 28px; height: 28px; box-shadow: 0 0 0 4px var(--zone-hi), 0 4px 14px rgba(46,44,58,.3); }
-    .zone-count b { color: var(--zone-hi); }
-    :root[data-theme="dark"] .zone-ctrl {
-      --zone-lo: #8E80F2; --zone-hi: #B9AEFF; --zone-track: rgba(255,255,255,.18);
-      background: rgba(22,20,34,.62) padding-box, var(--g-rim, rgba(255,255,255,.14)) border-box;
-    }
-    :root[data-theme="dark"] .zone-ctrl label { color: #fff; }
-    :root[data-theme="dark"] .zone-ctrl .zone-count { color: rgba(236,234,244,.85); }
-    :root[data-theme="dark"] .zone-ctrl input::-webkit-slider-thumb { box-shadow: 0 0 0 4px #8E80F2, 0 4px 14px rgba(0,0,0,.45); }
-    :root[data-theme="dark"] .zone-ctrl input::-moz-range-thumb { box-shadow: 0 0 0 4px #8E80F2, 0 4px 14px rgba(0,0,0,.45); }
+    /* The slider itself is the shared GlassSlider (assets/glass.css); the distance and the count take its accent */
+    .zone-ctrl output, .zone-count b { color: var(--sl-hi); }
     /* The zone on the map, a touch stronger at night so it matches the slider */
     :root[data-theme="dark"] .zone-map .zone-ring { box-shadow: inset 0 0 0 2.5px #8E80F2; }
     .zone-map {
@@ -1146,6 +1124,12 @@
     .auth-skip:hover { color: var(--dusk); }
 
 
+    /* Agreeing to the Terms and Privacy Policy (sign-up only; the server records it) */
+    .auth-consent { display: flex; align-items: flex-start; gap: .6rem; margin: .3rem 0 .8rem; color: var(--slate); font-size: .85rem; line-height: 1.45; cursor: pointer; }
+    .auth-consent input { flex: none; width: 1.1rem; height: 1.1rem; margin: .1rem 0 0; accent-color: var(--dusk); cursor: pointer; }
+    .auth-consent input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .auth-consent a { color: var(--dusk); text-underline-offset: .2em; }
+    .auth-consent a:hover { text-decoration-thickness: 2px; }
     .auth-note { margin: .9rem 0 0; color: var(--stone); font-size: .75rem; text-align: center; line-height: 1.45; }
     .auth-body[hidden], .auth-done[hidden], .auth-scan[hidden], .auth-skip[hidden] { display: none; }
     .auth-card { max-height: calc(100dvh - 32px); overflow-y: auto; }
@@ -1422,6 +1406,7 @@
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
         <label class="auth-field"><span>Password</span><input name="password" type="password" autocomplete="new-password"></label>
         <a class="auth-forgot" data-only="login" href="#">Forgot your password?</a>
+        <label class="auth-consent" data-only="signup"><input type="checkbox" name="acceptTerms"><span>I agree to Momento’s <a href="privacy.html" target="_blank" rel="noopener">Terms and Privacy Policy</a></span></label>
         <div data-only="signup"><div id="signupCaptcha"></div><p id="captchaStatus" role="status"></p></div>
         <p class="auth-error" id="authError" role="alert"></p>
         <button class="btn btn-dark auth-submit" type="submit" id="authSubmit">Create account</button>
@@ -3092,6 +3077,9 @@
       // Where to go after logging in: back to the page that sent them here (an invite link), or My albums
 
       const field = (n) => form.querySelector(`[name="${n}"]`);
+      // Sent with sign-up so the server keeps a consent record: what was agreed to, and which version
+      const TERMS_VERSION = '2026-11-07';   // the Privacy Policy's "Last updated" date (privacy.html)
+      const consent = () => ({ acceptTerms: field('acceptTerms').checked, termsVersion: TERMS_VERSION });
       const setLabel = (btn, text) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
       // Busy: a turning ring and what's happening ("Logging in…"); null puts the normal label back
       function setBusy(text, idleText) {
@@ -3273,6 +3261,8 @@
       momentoApi('/api/config').then((c) => { googleId = c.googleClientId || null; if (googleId) loadGsi().catch(() => {}); }).catch(() => {});
       googleBtn.addEventListener('click', async () => {
         error.textContent = '';
+        // A new Google account is a sign-up too, so it needs the same agreement
+        if (form.dataset.mode === 'signup' && !field('acceptTerms').checked) { error.textContent = 'Agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
         if (!googleId) { error.textContent = 'Google sign-in isn’t switched on yet. Use your email for now.'; return; }
         try { await loadGsi(); } catch (err) { error.textContent = err.message; return; }
         const idle = () => (form.dataset.mode === 'signup' ? 'Create account' : 'Log in');
@@ -3285,7 +3275,7 @@
             googleBtn.disabled = submit.disabled = true;
             setBusy('Signing in with Google…');
             try {
-              const { user } = await momentoApi('/api/auth/google', momentoJson('POST', { code: resp.code }));
+              const { user } = await momentoApi('/api/auth/google', momentoJson('POST', { code: resp.code, ...(form.dataset.mode === 'signup' ? consent() : {}) }));
               Momento.account.set(user);
               setBusy('Opening your albums…');
               location.href = nextPage();
@@ -3307,6 +3297,7 @@
         if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
         if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
+        if (signup && !field('acceptTerms').checked) { error.textContent = 'Agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
         if (signup && !captchaToken) { error.textContent = 'Complete the security check before signing up.'; return; }
         submit.disabled = true;
         error.textContent = '';
@@ -3314,7 +3305,7 @@
         setBusy(signup ? 'Creating your account…' : 'Logging in…');
         let leaving = false;
         try {
-          const { user } = await momentoApi('/api/auth/' + (signup ? 'signup' : 'login'), momentoJson('POST', { name, email, password: pass, ...(signup ? { captchaToken, joinCode: inviteCode() } : {}) }));
+          const { user } = await momentoApi('/api/auth/' + (signup ? 'signup' : 'login'), momentoJson('POST', { name, email, password: pass, ...(signup ? { captchaToken, joinCode: inviteCode(), ...consent() } : {}) }));
           field('password').value = '';
           Momento.account.set(user);
           // Stays busy until the next page has loaded, so it never looks like nothing happened
@@ -3815,10 +3806,14 @@
       const next = resolve(p);
       const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
       if (root.dataset.theme === next) root.dataset.themePref = p;
-      else if (animate && document.startViewTransition && !reduced.matches) {
+      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
         root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
         const done = () => root.classList.remove('theming');
-        document.startViewTransition(flip).finished.then(done, done);
+        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
+        const vt = document.startViewTransition(flip);
+        vt.ready.catch(() => {});
+        vt.updateCallbackDone.catch(() => {});
+        vt.finished.then(done, done);
       } else flip();
       themeListeners.forEach((fn) => fn(p, next));
     }

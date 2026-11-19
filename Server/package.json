@@ -21,6 +21,8 @@
     "test:nsfw": "node scripts/testNsfw.js",
     "test:security": "node scripts/testSecurity.js",
     "test:attack": "node scripts/testAttack.js",
+    "test:e2e": "playwright test -c tests/e2e",
+    "test:e2e:watch": "playwright test -c tests/e2e --headed",
     "clean:old-data": "node --env-file=.env scripts/cleanOldData.js",
     "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js && node scripts/testAttack.js"
   },
@@ -49,6 +51,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "mongodb-memory-server": "^11.3.0"
   }
 }

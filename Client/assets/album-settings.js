@@ -92,6 +92,7 @@
     .as-cover-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     :root[data-theme="dark"] .as-cover-pic { background: radial-gradient(90% 140% at 0% 0%, rgba(120, 104, 176, .4), transparent 62%), radial-gradient(90% 140% at 100% 100%, rgba(80, 130, 126, .38), transparent 62%), rgba(255, 255, 255, .04); }
     :root[data-theme="dark"] .as-cover-pic > b { color: rgba(255, 255, 255, .4); }
+    :root[data-theme="dark"] .as-cover-tag, :root[data-theme="dark"] .as-cover-pic:not(.has-pic) .as-cover-tag { background: var(--g-hud); color: #fff; box-shadow: var(--g-sh-hud); }
     .as-status { min-height: 1.2rem; margin: .9rem 0 0; color: var(--slate, #5c596b); font-size: .85rem; font-weight: 500; }
     .as-status.is-error { color: #9A3D3D; }
     :root[data-theme="dark"] .as-status.is-error { color: #F0A3A3; }
@@ -171,7 +172,7 @@
         <section class="as-sec" aria-labelledby="asRules">
           <h3 id="asRules">Who gets in</h3>
           ${sw('joiningOpen', a.joiningOpen !== false, 'Accept new guests', 'When off, anyone with the code asks you first')}
-          ${a.group ? '' : sw('locationRequired', !!a.zone && a.locationRequired !== false, 'Check location on entry', a.zone ? `Guests within ${km} of the venue get straight in. Anyone else waits for you` : 'Add a venue to the album to use this', !a.zone)}
+          ${a.group || !a.zone ? '' /* only albums with a venue zone (events) can check location; plain albums have no place to check against */ : sw('locationRequired', a.locationRequired !== false, 'Check location on entry', `Guests within ${km} of the venue get straight in. Anyone else waits for you`)}
           <label class="as-row is-wrap"><span><b>Join deadline</b><small>Leave empty to close joining when the event ends</small></span><input type="datetime-local" id="asDeadline" value="${local}"></label>
         </section>
 

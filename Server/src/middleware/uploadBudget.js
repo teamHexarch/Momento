@@ -2,10 +2,10 @@ import { HttpError } from '../utils/httpError.js';
 
 // Uploads are read into memory (so they can be checked before anything is stored), and one request may
 // carry 30 photos. So there's a ceiling on how much upload data the server holds at once
-// (UPLOAD_MEMORY_MB, 400 unless set; the server has 1 GB), and each account may send 2 uploads at a time.
+// (UPLOAD_MEMORY_MB, 400 unless set; the server has 1 GB), and each account may send 4 uploads at a time (the page sends 3 side by side).
 // Over either, the upload is turned away straight away, before any of it is read; the page can try again.
 const BUDGET = (Number(process.env.UPLOAD_MEMORY_MB) || 400) * 1024 * 1024;
-const PER_USER = 2;
+const PER_USER = 4;
 let inFlight = 0;
 const perUser = new Map();
 

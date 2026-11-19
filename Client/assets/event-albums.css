@@ -16,25 +16,22 @@
     .otp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto repeat(4, minmax(0, 1fr)); align-items: center; gap: .4rem; }
     .otp input {
       width: 100%; min-width: 0; box-sizing: border-box; height: 3.4rem; padding: 0; border: none; border-radius: var(--r-group, 16px);
-      background: rgba(255,255,255,.55); color: var(--dusk); text-align: center; caret-color: transparent;
+      background: var(--g-input); color: var(--dusk); text-align: center; caret-color: transparent;
       font: 700 1.35rem/1 ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; text-transform: uppercase;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.12), 0 1px 2px rgba(46,44,58,.06);
+      box-shadow: var(--g-input-rim);
       transition: transform .35s cubic-bezier(.34,1.56,.64,1);
     }
-    .otp input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
-    .otp input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); transform: translateY(-2px); }
-    .otp input.is-filled { background: rgba(255,255,255,.82); box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1.5px rgba(46,44,58,.38), 0 4px 12px -6px rgba(46,44,58,.3); }
-    .otp input.is-filled:focus { box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
-    .otp input::placeholder { color: rgba(46,44,58,.18); }
+    .otp input:hover { box-shadow: var(--g-input-rim-hover); }
+    .otp input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); transform: translateY(-2px); }
+    .otp input.is-filled { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--dusk) 38%, transparent); }
+    .otp input.is-filled:focus { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+    .otp input::placeholder { color: color-mix(in srgb, var(--dusk) 18%, transparent); }
     .otp-dash { width: .7rem; height: 2px; border-radius: 2px; background: var(--stone, #A9A5B4); }
     .otp.is-error input { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
     .otp.is-shake { animation: otpShake .42s cubic-bezier(.36,.07,.19,.97); }
     @keyframes otpShake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
     @media (prefers-reduced-motion: reduce) { .otp.is-shake { animation: none; } .otp input:focus { transform: none; } }
     @media (max-width: 380px) { .otp { gap: .28rem; } .otp input { height: 3rem; font-size: 1.15rem; border-radius: 11px; } }
-    :root[data-theme="dark"] .otp input { background: rgba(255,255,255,.06); color: var(--dusk); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
-    :root[data-theme="dark"] .otp input.is-filled { background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
-    :root[data-theme="dark"] .otp input::placeholder { color: rgba(255,255,255,.18); }
     :root[data-theme="dark"] .error { color: #F0A3A3; }
     :root[data-theme="dark"] .otp.is-error input { box-shadow: inset 0 0 0 1.5px #F0A3A3; }
 /* The dialog is only a frame; the form inside is the glass sheet (GlassSheet in assets/glass.css), and the dim

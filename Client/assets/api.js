@@ -2,6 +2,19 @@
 // - Live site (hexarch.org): the API is on its own address, api.hexarch.org.
 // - Locally through the Momento server (localhost:4000): same address, so no prefix.
 // - Locally through serve.mjs (localhost:3000): the API is the Momento server on port 4000.
+// Page-to-page transitions (glass.css @view-transition): when one is skipped (a second click, a hidden tab, the
+// page already revealed) the browser rejects its promises, which shows up as an uncaught console error. The page
+// itself is fine, so those rejections are caught here. This file loads in <head>, early enough for pagereveal.
+for (const type of ['pageswap', 'pagereveal']) {
+  addEventListener(type, (e) => {
+    const vt = e.viewTransition;
+    if (!vt) return;
+    vt.ready?.catch(() => {});
+    vt.finished?.catch(() => {});
+    vt.updateCallbackDone?.catch(() => {});
+  });
+}
+
 (() => {
   const self = document.currentScript;
   // A page opened straight from the folder (file://) counts as local too, so double-clicking

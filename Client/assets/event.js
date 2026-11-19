@@ -47,14 +47,7 @@
     .ev-range-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
     .ev-range-val { font-size: 1.05rem; font-weight: 750; letter-spacing: -.02em; color: var(--dusk, #2e2c3a); font-variant-numeric: tabular-nums; }
     .ev-range { --fill: 0%; width: 100%; height: 2rem; margin: 0; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
-    .ev-range::-webkit-slider-runnable-track { height: .45rem; border-radius: 100px; background: linear-gradient(to right, var(--tide, #6f9896) var(--fill), rgba(127, 120, 150, .22) var(--fill)); }
-    .ev-range::-moz-range-track { height: .45rem; border-radius: 100px; background: rgba(127, 120, 150, .22); }
-    .ev-range::-moz-range-progress { height: .45rem; border-radius: 100px; background: var(--tide, #6f9896); }
-    .ev-range::-webkit-slider-thumb { -webkit-appearance: none; width: 1.5rem; height: 1.5rem; margin-top: -.53rem; border: 3px solid var(--surface, #fff); border-radius: 50%; background: var(--dusk, #2e2c3a); box-shadow: 0 2px 8px -2px rgba(46, 44, 58, .5); transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
-    .ev-range::-moz-range-thumb { width: 1.2rem; height: 1.2rem; border: 3px solid var(--surface, #fff); border-radius: 50%; background: var(--dusk, #2e2c3a); box-shadow: 0 2px 8px -2px rgba(46, 44, 58, .5); }
-    .ev-range:hover::-webkit-slider-thumb { transform: scale(1.1); }
-    .ev-range:active::-webkit-slider-thumb { transform: scale(.95); }
-    .ev-range:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 4px; border-radius: 8px; }
+    /* The track, thumb, hover and focus are the shared GlassSlider (assets/glass.css) */
     .ev-range-ends { display: flex; justify-content: space-between; margin-top: -.2rem; font-size: .76rem; color: var(--slate, #5c596b); }
     .ev-venue-search gmp-place-autocomplete, .ev-venue-search input { width: 100%; box-sizing: border-box; }
     .ev-venue-search input { min-height: 2.9rem; padding: 0 .9rem; font: inherit; }
@@ -72,14 +65,10 @@
     dialog .m-kind { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .1rem 0 1rem; }
     dialog .m-kind[hidden] { display: none; }
     dialog .m-kind-title { grid-column: 1 / -1; font-size: .88rem; font-weight: 600; }
-    dialog .m-kind label { position: relative; display: grid; align-content: start; gap: .15rem; padding: .75rem .85rem; border-radius: 16px; cursor: pointer;
-      box-shadow: inset 0 0 0 1.5px rgba(127, 120, 150, .32); transition: box-shadow .2s ease, background-color .2s ease; }
+    dialog .m-kind label { position: relative; display: grid; align-content: start; gap: .15rem; padding: .75rem .85rem; cursor: pointer; }   /* fill, rim, hover, chosen and focus: the shared choice card (assets/glass.css) */
     dialog .m-kind input { position: absolute; opacity: 0; pointer-events: none; }
     dialog .m-kind b { font-size: .95rem; font-weight: 700; color: var(--dusk, #2e2c3a); }
     dialog .m-kind small { font-size: .78rem; line-height: 1.4; color: var(--slate, #5c596b); }
-    dialog .m-kind label:has(input:checked) { background: rgba(127, 120, 150, .12); box-shadow: inset 0 0 0 2px var(--copper, #9A603D); }
-    dialog .m-kind label:has(input:focus-visible) { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
-    @media (hover: hover) { dialog .m-kind label:hover { background: rgba(127, 120, 150, .08); } }
     dialog .m-kind label:active { transform: scale(.985); }
     /* Venue suggestions: a list that opens under the search box as you type */
     /* (Scoped to the dialog: the Social page has its own search list with the same class.) The pane is the
@@ -253,6 +242,7 @@
     @keyframes ev-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
     .ev-ask h2 { margin: 0; font-size: 1.4rem; letter-spacing: -.03em; line-height: 1.2; }
     .ev-ask p { margin: .5rem 0 0; color: var(--slate, #5c596b); line-height: 1.55; font-size: .93rem; }
+    .ev-ask p.ev-limit { font-size: .8rem; margin-top: .35rem; opacity: .85; }
     .ev-ask .ev-thumbs { display: flex; gap: .4rem; margin: 1rem 0 .2rem; overflow: hidden; }
     .ev-ask .ev-thumbs img { width: 3.6rem; height: 3.6rem; flex: none; border-radius: 12px; object-fit: cover; }
     .ev-ask .ev-thumbs span { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; flex: none; border-radius: 12px; background: rgba(127, 120, 150, .14); font-weight: 700; }
@@ -836,11 +826,14 @@
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
       d.setAttribute('aria-labelledby', 'evAskTitle');
-      const urls = files.slice(0, 5).map((f) => URL.createObjectURL(f));
+      // (camera RAW files can't be shown by the browser, so the little previews skip them)
+      const urls = files.filter((f) => !Momento.isRawFile?.(f)).slice(0, 5).map((f) => URL.createObjectURL(f));
+      const limits = Momento.uploadLimits?.() || { maxPhotoMB: 50 };
       d.innerHTML = `
         <h2 id="evAskTitle">Upload ${n === 1 ? '1 photo' : `${n} photos`}?</h2>
         <p>Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.</p>
-        <div class="ev-thumbs">${urls.map((u) => `<img src="${u}" alt="">`).join('')}${n > 5 ? `<span>+${n - 5}</span>` : ''}</div>
+        <p class="ev-limit">Up to ${Number(limits.maxPhotoMB) || 50} MB a photo. Camera RAW files (CR3, NEF, ARW, RAF, DNG and more) can be bigger.</p>
+        <div class="ev-thumbs">${urls.map((u) => `<img src="${u}" alt="">`).join('')}${n > urls.length ? `<span>+${n - urls.length}</span>` : ''}</div>
         <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
       document.body.append(d);
       const yes = d.querySelector('[data-yes]');

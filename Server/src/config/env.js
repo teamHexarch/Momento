@@ -51,7 +51,10 @@ export const config = {
   secureCookies: publicUrl.startsWith('https://'),
   clientDir: path.resolve(serverRoot, env.CLIENT_DIR || '../Client'),
   uploadDir: path.resolve(serverRoot, env.UPLOAD_DIR || 'uploads'),
-  maxUploadBytes: (Number(env.MAX_UPLOAD_MB) || 25) * 1024 * 1024,
+  // Each photo may be up to MAX_UPLOAD_MB (50). Camera RAW files (CR2, CR3, NEF, ARW, RAF, DNG...) are
+  // much bigger by nature, so they skip that limit; MAX_RAW_UPLOAD_MB (300) is only a safety ceiling
+  maxUploadBytes: (Number(env.MAX_UPLOAD_MB) || 50) * 1024 * 1024,
+  maxRawUploadBytes: (Number(env.MAX_RAW_UPLOAD_MB) || 300) * 1024 * 1024,
   // Amazon Web Services: photos in the S3 bucket S3_BUCKET (otherwise UPLOAD_DIR on this machine) and
   // email through Amazon SES. Access comes from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (an IAM user
   // that may only use the photo bucket and send email), which the AWS SDK reads by itself.

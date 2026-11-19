@@ -16,7 +16,8 @@ import { sendEmail } from '../services/emailService.js';
 import { reminderHtml } from '../services/emailTemplates.js';
 import { HttpError } from '../utils/httpError.js';
 import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
-import { savePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
+import { storePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
+import { sanitizePhoto, isRawName } from '../services/imageService.js';
 import { reactionCounts, myReaction } from './photoController.js';
 import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
 import { notifyPhotos } from '../services/notifyService.js';
@@ -575,25 +576,39 @@ export async function addPhotos(req, res) {
   const hashes = files.map((f) => crypto.createHash('sha256').update(f.buffer).digest('hex'));
   const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
   let skipped = 0, blocked = 0, banned = 0;
-  const decisions = [];
-  for (const [i, f] of files.entries()) {
-    const hash = hashes[i];
-    if (there.has(hash)) { skipped++; continue; }
+  const decisions = [], tooBig = [], failed = [];
+  let failMessage = '';
+  // One photo, start to finish. Anything wrong with it skips just that photo; the rest still go in.
+  async function one(f, i) {
+    const hash = hashes[i], name = f.originalname.slice(0, 200);
+    if (there.has(hash)) { skipped++; return; }
+    there.add(hash);   // (claimed now, so the same file twice in this upload is only added once)
+    // Up to MAX_UPLOAD_MB a photo; camera RAW files only have the much higher safety ceiling
+    const limit = isRawName(name) ? config.maxRawUploadBytes : config.maxUploadBytes;
+    if (f.size > limit) { tooBig.push(name); there.delete(hash); return; }
     // Files taken down after a complaint can't come back
-    if (await isBanned(hash)) { banned++; continue; }
+    if (await isBanned(hash)) { banned++; return; }
+    let clean;
+    try { clean = await sanitizePhoto(f.buffer, { name, inPlace: true }); } catch (err) {
+      failed.push(name); failMessage ||= err.message; there.delete(hash); return;
+    }
     // Nudity isn't allowed: that photo is refused (the others in the upload still go in). The decision
-    // is recorded, and the person can ask a human to review it (decisionIds)
-    const verdict = await judge(f.buffer, { user: req.user._id, album: album._id, kind: 'photo' });
-    if (verdict.blocked) { blocked++; decisions.push(verdict.decisionId); continue; }
-    there.add(hash);
-    const stored = await savePhoto(album.id, f.buffer);
+    // is recorded, and the person can ask a human to review it (decisionIds). Checked on the thumbnail.
+    const verdict = await judge(clean.thumbnail, { user: req.user._id, album: album._id, kind: 'photo', hash });
+    if (verdict.blocked) { blocked++; decisions.push(verdict.decisionId); return; }
+    const stored = await storePhoto(album.id, clean);
+    f.buffer = null; clean.buffer = null;   // the original is in storage now: let its memory go
     let p;
-    try { p = await Photo.create({
-      album: album._id, uploader: req.user._id, ...stored, hash,
-      originalName: f.originalname.slice(0, 200),
-    }); } catch (err) { await deletePhotos([stored.storageKey]); throw err; }
-    saved.push({ id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), by: 'You', mine: true, at: p.createdAt });
+    try { p = await Photo.create({ album: album._id, uploader: req.user._id, ...stored, hash, originalName: name }); }
+    catch (err) { await deletePhotos([stored.storageKey]); throw err; }
+    saved.push({ i, photo: { id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), by: 'You', mine: true, at: p.createdAt } });
   }
+  // Two photos at a time: resizing one while the other is being stored keeps a big upload quick,
+  // without holding many big files in the server's memory at once
+  let next = 0;
+  await Promise.all([0, 1].map(async () => { while (next < files.length) { const i = next++; await one(files[i], i); } }));
+  saved.sort((a, b) => a.i - b.i);
+  saved.splice(0, saved.length, ...saved.map((s) => s.photo));
   // Everyone else in the album hears (one notification per person, adding up while unread)
   if (saved.length) {
     const [rows, group] = await Promise.all([
@@ -601,6 +616,11 @@ export async function addPhotos(req, res) {
       album.group ? GroupMember.find({ group: album.group }, 'user') : [],
     ]);
     notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length, photoIds: saved.map((p) => p.id) });
+  }
+  // Nothing could be added, only because of size or an unreadable file: say why
+  if (!saved.length && !skipped && !blocked && !banned) {
+    if (tooBig.length && !failed.length) throw new HttpError(413, `Photos can be up to ${Math.round(config.maxUploadBytes / 1048576)} MB each (camera RAW files can be bigger).`, 'too-big', { tooBig });
+    if (failed.length) throw new HttpError(400, failMessage, 'unreadable', { failed, tooBig });
   }
   if (banned && !blocked && !saved.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
   if (blocked && !saved.length && !skipped) {
@@ -611,7 +631,8 @@ export async function addPhotos(req, res) {
   // skipped: photos that were already in the album (or twice in this upload)
   // blocked: photos refused because they look like they contain nudity
   // banned: files removed from Momento before; decisionIds: the refused ones, for "ask for a review"
-  res.status(201).json({ photos: saved, skipped, blocked, banned, decisionIds: decisions });
+  // tooBig / failed: the names of photos left out for being over the size limit, or unreadable
+  res.status(201).json({ photos: saved, skipped, blocked, banned, decisionIds: decisions, tooBig, failed });
 }
 
 export async function download(req, res) {

@@ -5,6 +5,7 @@ import { installLogRedaction } from './utils/logRedaction.js';
 import { requestId, securityHeaders, inputGuard } from './middleware/security.js';
 import { adminRoutes } from './routes/adminRoutes.js';
 import mongoose from 'mongoose';
+import { RAW_TYPES } from './services/imageService.js';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env.js';
 import { loadUser } from './middleware/authMiddleware.js';
@@ -55,6 +56,8 @@ app.get('/api/config', (req, res) => {
     captcha: config.captcha.siteKey && config.captcha.secretKey ? { provider: 'recaptcha', siteKey: config.captcha.siteKey } : null,
     googleClientId: config.google.clientId && config.google.clientSecret ? config.google.clientId : null,
     mapsApiKey: config.mapsApiKey || null,
+    // Upload limits, so the page can say them and skip a too-big file before sending it
+    uploads: { maxPhotoMB: Math.round(config.maxUploadBytes / 1048576), maxRawMB: Math.round(config.maxRawUploadBytes / 1048576), rawTypes: Object.keys(RAW_TYPES) },
   });
 });
 // For uptime alerts: 200 only when the server can really reach the database, otherwise 503

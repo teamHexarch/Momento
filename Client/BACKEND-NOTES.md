@@ -41,3 +41,21 @@ delete their own photo.
 - `groups.html` is now only a redirect to `events.html#groups` (groups live on the Social page).
 - Intro animation now plays on the home page only.
 - The home hero Polaroids reuse the signed-in user's album photos (remembered per browser tab, cleared on sign-out).
+
+## Fixes from the November 2026 review (server side still needed)
+
+The front end for these is done; each needs a matching change in `Server/`.
+
+- **Consent on sign-up.** `POST /api/auth/signup` now sends `acceptTerms: true` and `termsVersion` (currently
+  `"2026-11-07"`, the Privacy Policy's "Last updated" date; it's `TERMS_VERSION` in `index.html`). `POST /api/auth/google`
+  sends the same two fields when the person is on the Sign up tab. Please reject sign-up without `acceptTerms`
+  (400) and write a consent record (user, type, version, time) for each.
+- **"Activity on my public albums" switch.** `PATCH /api/auth/me { "notify": { "activity": false } }` returns 200
+  but the value is dropped: `updateMe` in `authController.js` only accepts `photos`, `closing` and `recap`. Please
+  add `activity` to that list and return it in `user.notify`. Settings now checks the reply and tells the person
+  if the server didn't keep the change.
+- **Download my data.** Settings → Your details calls `GET /api/auth/me/export` and saves the JSON it returns as
+  `momento-data-YYYY-MM-DD.json`. If the export route has a different path, change it in `settings.html`
+  (search `me/export`) and in `assets/devpreview.js`.
+- **My albums before the email is confirmed.** The page no longer asks for `GET /api/albums` until the email is
+  confirmed, so those 403s stop. No server change needed.

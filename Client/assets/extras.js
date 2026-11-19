@@ -29,6 +29,7 @@
 
     .perm-ic { display: grid; place-items: center; width: 3.2rem; height: 3.2rem; margin-bottom: .8rem; border-radius: 1rem; background: linear-gradient(135deg, #D9D0EE, #EDD6DF 55%, #CFE3E0); color: #2E2C3A; }
     .perm-ic svg { width: 1.6rem; height: 1.6rem; }
+    :root[data-theme="dark"] .perm-ic { background: rgba(255, 255, 255, .09); color: var(--dusk); }
     .perm-list { margin: .2rem 0 1rem; padding: 0; list-style: none; display: grid; gap: .45rem; }
     .perm-list li { display: flex; gap: .55rem; align-items: flex-start; font-size: .92rem; line-height: 1.45; color: var(--slate, #5C596B); }
     .perm-list li::before { content: ""; flex: none; width: .45rem; height: .45rem; margin-top: .45rem; border-radius: 50%; background: var(--copper, #9A603D); }
@@ -295,7 +296,8 @@
     const q = new URLSearchParams(location.search);
     if (!q.has('create')) return;
     const user = await M.sessionReady?.catch?.(() => null);
-    if (!user) return;
+    // Unconfirmed accounts can't create albums yet (the confirm-your-email popup is showing); keep ?create for later
+    if (!user || !user.emailVerified) return;
     q.delete('create');
     history.replaceState(null, '', location.pathname + (q.size ? '?' + q : '') + location.hash);
     // (straight to the form: the account was just confirmed above)

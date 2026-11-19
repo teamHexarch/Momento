@@ -16,15 +16,21 @@ const driver = config.aws.s3Bucket ? await import('./storage/s3Storage.js') : di
 export const storageName = driver.name;
 export const initStorage = () => driver.init();
 
-export async function savePhoto(albumId, inputBuffer) {
-  const { buffer, mimeType, size, thumbnail, preview, previewMimeType } = await sanitizePhoto(inputBuffer);
-  const key = `${albumId}/${crypto.randomUUID()}${EXT[mimeType] || ''}`;
+export async function savePhoto(albumId, inputBuffer, opts) {
+  return storePhoto(albumId, await sanitizePhoto(inputBuffer, opts));
+}
+
+// Stores a photo sanitizePhoto has already checked: the original, its thumbnail and its preview, all at once
+export async function storePhoto(albumId, { buffer, mimeType, size, thumbnail, preview, previewMimeType, ext }) {
+  const key = `${albumId}/${crypto.randomUUID()}${ext || EXT[mimeType] || ''}`;
   const thumbnailKey = `${key}.thumb.webp`;
   const previewKey = `${key}.preview${EXT[previewMimeType]}`;
   try {
-    await driver.save(key, buffer, mimeType, { tier: true });
-    await driver.save(thumbnailKey, thumbnail, 'image/webp');
-    await driver.save(previewKey, preview, previewMimeType);
+    await Promise.all([
+      driver.save(key, buffer, mimeType, { tier: true }),
+      driver.save(thumbnailKey, thumbnail, 'image/webp'),
+      driver.save(previewKey, preview, previewMimeType),
+    ]);
   } catch (err) {
     await Promise.allSettled([driver.remove(key), driver.remove(thumbnailKey), driver.remove(previewKey)]);
     throw err;

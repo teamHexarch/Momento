@@ -121,8 +121,10 @@ CORS_ORIGINS=
 CLIENT_DIR=../Client
 # Where uploaded photos are written when S3_BUCKET is empty (relative to this Server folder)
 UPLOAD_DIR=uploads
-# Largest single photo, in megabytes
-MAX_UPLOAD_MB=25
+# Largest single photo, in megabytes (a bigger one is left out; the rest of the upload still goes in)
+MAX_UPLOAD_MB=50
+# Camera RAW files (CR2, CR3, NEF, ARW, RAF, DNG, ORF, RW2...) skip that limit; this is only their safety ceiling
+MAX_RAW_UPLOAD_MB=300
 
 # Google sign-in (Google Cloud Console > APIs & Services > Credentials > OAuth client ID, type "Web application")
 GOOGLE_CLIENT_ID=
@@ -360,9 +362,9 @@ changing the password, "sign everyone out" and deleting the account end logins o
 is refused (no MongoDB operator injection); every route reads only the fields it expects. Uploads are
 fully decoded before anything is stored (the file's real format, not its name or claimed type).
 Rate limits: per IP and per account on login (10 per 15 min per address, plus a 15-minute lock after
-5 wrong passwords), signup, resets (3 an hour per address), codes, uploads (120 an hour), joins,
+5 wrong passwords), signup, resets (3 an hour per address), codes, uploads (600 an hour; the page sends big selections as small uploads, 3 at a time), joins,
 exports, new albums (30 an hour), album zips (20 an hour), and an overall ceiling. Uploads held in
-memory are capped server-wide (`UPLOAD_MEMORY_MB`, 400) and to 2 at a time per account. Profile photos
+memory are capped server-wide (`UPLOAD_MEMORY_MB`, 400) and to 4 at a time per account. Profile photos
 are only shown to people who share an album or group with that person (or are in their inbox). Headers: HSTS, CSP `default-src 'none'`, X-Frame-Options, nosniff,
 `Cache-Control: no-store` on API answers. Errors: unexpected ones answer a plain sentence and a
 `requestId` (also in the `X-Request-Id` header); details only go to the log. Logs never contain
@@ -612,7 +614,7 @@ Render settings, except where shown). Save with **Ctrl+O**, **Enter**, then exit
 | `GOOGLE_MAPS_API_KEY` | when you have it |
 | `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | from "Signup CAPTCHA" above |
 | `CAPTCHA_HOSTNAMES` | `hexarch.org,www.hexarch.org` |
-| `MAX_UPLOAD_MB` | same as now (or leave out for 25) |
+| `MAX_UPLOAD_MB` | leave out for 50 (camera RAW files skip it; `MAX_RAW_UPLOAD_MB`, 300, is their ceiling) |
 
 Leave out `PORT`, `NODE_ENV` and `TRUST_PROXY`: the server sets them.
 

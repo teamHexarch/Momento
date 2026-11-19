@@ -73,6 +73,8 @@ async function signedIn(res, user, status = 200) {
 export async function signup(req, res) {
   // The age first: someone too young is turned away before anything else is looked at or kept
   const age = checkAge(req.body);
+  // Agreeing to the Terms and Privacy Policy is required; a consent record is written below
+  if (req.body?.acceptTerms !== true) throw new HttpError(400, 'Agree to the Terms and Privacy Policy to create an account.', 'terms-required');
   await verifySignupCaptcha(req.body?.captchaToken, config.captcha);
   const { name, email, password } = readCredentials(req.body, { needName: true });
   const existing = await User.findOne({ email }).select('+passwordHash');
@@ -92,8 +94,8 @@ export async function signup(req, res) {
     if (err.code === 11000) throw new HttpError(409, 'An account with this email already exists. Log in instead.');
     throw err;
   }
-  // The Terms and Privacy Policy, when the form says they were accepted (acceptTerms: true)
-  if (req.body?.acceptTerms === true) await recordConsent(user, req, 'signup');
+  // The consent record (who, which Terms/Privacy versions, when)
+  await recordConsent(user, req, 'signup');
   await audit('account.created', { req, actor: user._id, target: user._id, meta: { via: 'email' } });
   // The confirm email goes out after the response, so a slow or failing mail server
   // never holds up or breaks signing up; the person can ask for another from My albums
@@ -148,10 +150,10 @@ export async function updateMe(req, res) {
     if (!n || n.length > 80) throw new HttpError(400, 'Enter a name up to 80 characters.');
     req.user.name = n;
   }
-  // Email choices: only the three known switches, only true/false
+  // Notification choices: only the known switches, only true/false
   const notify = req.body?.notify;
   if (notify && typeof notify === 'object') {
-    for (const key of ['photos', 'closing', 'recap']) {
+    for (const key of ['photos', 'closing', 'recap', 'activity']) {
       if (typeof notify[key] === 'boolean') req.user.set(`notify.${key}`, notify[key]);
     }
   }

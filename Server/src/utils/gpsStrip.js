@@ -12,14 +12,17 @@ const TYPE_SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8,
 
 // Empties the GPS directory of the TIFF/EXIF block that starts at `t` (ending before `end`).
 // Returns true when there was location to remove. Anything that doesn't look like real EXIF is left alone.
-function emptyGps(buf, t, end) {
+// loose: camera RAW variants of TIFF (Olympus ORF, Panasonic RW2) use another number than 42 in the header.
+// gpsAtRoot: the first directory IS the GPS directory (Canon CR3's CMT4 box).
+function emptyGps(buf, t, end, { loose = false, gpsAtRoot = false } = {}) {
   if (t < 0 || t + 8 > end) return false;
   const order = buf.toString('latin1', t, t + 2);
   const le = order === 'II';
   if (!le && order !== 'MM') return false;
   const u16 = (o) => (le ? buf.readUInt16LE(o) : buf.readUInt16BE(o));
   const u32 = (o) => (le ? buf.readUInt32LE(o) : buf.readUInt32BE(o));
-  if (u16(t + 2) !== 42) return false;
+  if (!loose && u16(t + 2) !== 42) return false;
+  if (gpsAtRoot) return clearGpsDir(buf, t, t + u32(t + 4), end, u16, u32);
   const ifd0 = t + u32(t + 4);
   if (ifd0 + 2 > end) return false;
   const n = u16(ifd0);
@@ -28,23 +31,26 @@ function emptyGps(buf, t, end) {
   for (let i = 0; i < n; i++) {
     const e = ifd0 + 2 + i * 12;
     if (u16(e) !== 0x8825) continue;   // GPSInfo
-    const g = t + u32(e + 8);
-    if (g + 2 > end) return false;
-    const gn = u16(g);
-    if (gn > 500 || g + 2 + gn * 12 + 4 > end) return false;
-    // Each value stored outside its entry is zeroed, then the entries, leaving an empty directory
-    for (let j = 0; j < gn; j++) {
-      const ge = g + 2 + j * 12;
-      const size = (TYPE_SIZE[u16(ge + 2)] || 1) * u32(ge + 4);
-      if (size > 4) {
-        const off = t + u32(ge + 8);
-        if (off >= t && off + size <= end) buf.fill(0, off, off + size);
-      }
-    }
-    buf.fill(0, g, g + 2 + gn * 12 + 4);   // count 0, no entries, no next directory
-    removed = removed || gn > 0;
+    removed = clearGpsDir(buf, t, t + u32(e + 8), end, u16, u32) || removed;
   }
   return removed;
+}
+// Empties the GPS directory at g (offsets inside it count from the TIFF start t)
+function clearGpsDir(buf, t, g, end, u16, u32) {
+  if (g + 2 > end) return false;
+  const gn = u16(g);
+  if (gn > 500 || g + 2 + gn * 12 + 4 > end) return false;
+  // Each value stored outside its entry is zeroed, then the entries, leaving an empty directory
+  for (let j = 0; j < gn; j++) {
+    const ge = g + 2 + j * 12;
+    const size = (TYPE_SIZE[u16(ge + 2)] || 1) * u32(ge + 4);
+    if (size > 4) {
+      const off = t + u32(ge + 8);
+      if (off >= t && off + size <= end) buf.fill(0, off, off + size);
+    }
+  }
+  buf.fill(0, g, g + 2 + gn * 12 + 4);   // count 0, no entries, no next directory
+  return gn > 0;
 }
 
 // Blanks XMP location tags (exif:GPS…) between start and end, keeping the length
@@ -117,6 +123,11 @@ function webp(buf) {
 // by its <x:xmpmeta> wrapper. Only blocks that parse as real EXIF are touched.
 function scan(buf) {
   let removed = false;
+  // Camera RAW files built on TIFF (CR2, NEF, ARW, DNG, ORF, RW2, PEF...): the GPS sits in the file's own first directory
+  if ((buf[0] === 0x49 && buf[1] === 0x49) || (buf[0] === 0x4d && buf[1] === 0x4d)) removed = emptyGps(buf, 0, buf.length, { loose: true }) || removed;
+  // Canon CR3: GPS is the CMT4 box (a TIFF block whose first directory is the GPS one)
+  const cmt4 = buf.indexOf('CMT4', 0, 'latin1');
+  if (cmt4 > 0 && cmt4 < 1048576) removed = emptyGps(buf, cmt4 + 4, buf.length, { loose: true, gpsAtRoot: true }) || removed;
   for (let i = buf.indexOf(EXIF_HEADER); i !== -1; i = buf.indexOf(EXIF_HEADER, i + 6)) {
     if (isTiffAt(buf, i + 6)) removed = emptyGps(buf, i + 6, buf.length) || removed;
   }
@@ -131,8 +142,9 @@ function scan(buf) {
 /**
  * A copy of the photo with its location removed. { buffer, removed } (removed: there was location).
  */
-export function stripLocation(input) {
-  const buf = Buffer.from(input);
+export function stripLocation(input, { inPlace = false } = {}) {
+  // inPlace: change the given buffer (an upload that's ours anyway) instead of a copy, so a big RAW file isn't held twice
+  const buf = inPlace && Buffer.isBuffer(input) ? input : Buffer.from(input);
   let removed;
   if (buf[0] === 0xff && buf[1] === 0xd8) removed = jpeg(buf);
   else if (buf.toString('latin1', 1, 4) === 'PNG') removed = png(buf);
