@@ -8,3 +8,9 @@ temporary screenshots/
 Screenshot*.png
 .DS_Store
 Thumbs.db
+
+# Tests and dev-only tools stay on the developer's PC, not on GitHub
+Server/scripts/test*.js
+Server/scripts/sendTestEmail.js
+Server/scripts/devMemory.js
+Client/screenshot.mjs

@@ -1,6 +1,6 @@
 # Publishes the Client folder to https://hexarch.org (GitHub Pages) on every push that
 # changes it. Only the files the site needs are published; design-time files in Client/
-# (CLAUDE.md, serve.mjs, screenshot.mjs, screenshots) stay in the repo but aren't served.
+# (CLAUDE.md, serve.mjs) stay in the repo but aren't served.
 # assets/devpreview.js (local dev mode) is removed from the published files.
 #
 # Needs Settings > Pages > Build and deployment > Source set to "GitHub Actions".
