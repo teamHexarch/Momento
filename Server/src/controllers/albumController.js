@@ -50,7 +50,8 @@ export function lifecycle(date) {
 // Albums with event times: photos can be added from uploadLeadMin before the start until the end,
 // then the album is kept (still there to look at and download).
 export function albumLifecycle(album, now = Date.now()) {
-  if (album.group && !album.eventUploadWindow) return { status: 'live', open: true, anytimeUploads: true };
+  // Plain albums (and friend-group albums without an event window) take photos any time
+  if (album.kind === 'album' || (album.group && !album.eventUploadWindow)) return { status: 'live', open: true, anytimeUploads: true };
   if (!album.startsAt || !album.endsAt) return lifecycle(album.date);
   const opensAt = album.startsAt.getTime() - (album.uploadLeadMin || 0) * 60000;
   const endsAt = album.endsAt.getTime();
@@ -181,6 +182,8 @@ function summary(album, role, stats = {}) {
     code: role === 'host' ? album.displayCode : undefined,
     zone: album.zone?.radiusM ? album.zone : undefined,
     visibility: album.visibility || 'invite',
+    // 'album' (just photos) or 'event' (times, venue, sharing zone); older albums go by whether they have times
+    kind: album.kind || (album.startsAt ? 'event' : 'album'),
     cover: coverOf(album, stats),
     hasHostCover: !!album.cover?.key,
     keepHostCover: !!album.keepHostCover,
@@ -312,12 +315,18 @@ export async function list(req, res) {
   });
 }
 
+// A new album. With event times (startsAt/endsAt, or kind: 'event') it's an event: times, a venue and a
+// sharing zone, and it can be public. Without them it's a plain album: a name and a date, photos any time,
+// joined with its code or link, never public.
 export async function create(req, res) {
-  const fields = { ...readAlbumFields(req.body), ...readEventFields(req.body), visibility: req.body?.visibility === 'public' ? 'public' : 'invite' };
-  const group = req.body?.groupId ? await groupFor(req.user._id, req.body.groupId) : null;
+  const b = req.body || {};
+  const isEvent = b.kind === 'event' || b.startsAt != null || b.endsAt != null;
+  const fields = { ...readAlbumFields(b), ...(isEvent ? readEventFields(b) : { zone: undefined }), kind: isEvent ? 'event' : 'album' };
+  fields.visibility = isEvent && b.visibility === 'public' ? 'public' : 'invite';
+  const group = b.groupId ? await groupFor(req.user._id, b.groupId) : null;
   // Group albums are for the group (and anyone given the code), never listed publicly on Events
-  if (group) Object.assign(fields, { group: group._id, visibility: 'invite', eventUploadWindow: req.body.eventUploadWindow === true });
-  else fields.eventUploadWindow = true;
+  if (group) Object.assign(fields, { group: group._id, visibility: 'invite', eventUploadWindow: isEvent && b.eventUploadWindow === true });
+  else fields.eventUploadWindow = isEvent;
 
   let album;
   // Codes are random; on the rare clash with an existing one, draw again

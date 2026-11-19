@@ -2858,6 +2858,11 @@
             <div data-create-step="details">
               <label class="acct-field m-first"><span>Album name</span><input name="name" maxlength="60" placeholder="Maya’s 30th" autocomplete="off"></label>
               <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
+              <div class="m-kind" role="radiogroup" aria-labelledby="mKindTitle">
+                <span class="m-kind-title" id="mKindTitle">What is it?</span>
+                <label><input type="radio" name="kind" value="album" checked><b>Album</b><small>Photos together, any time. Join with the code or link</small></label>
+                <label><input type="radio" name="kind" value="event"><b>Event</b><small>A time and a place, with a sharing zone</small></label>
+              </div>
               <input name="place" type="hidden">
               <label class="acct-field m-group m-share" hidden><span>Share with</span><select name="group"></select></label>
             </div>
@@ -2882,6 +2887,9 @@
       const submit = form.querySelector('[type="submit"]'), back = form.querySelector('[data-create-back]');
       const title = d.querySelector('#mCreateTitle'), progress = d.querySelector('[data-create-progress]');
       const steps = [...d.querySelectorAll('[data-create-step]')];
+      const kindField = d.querySelector('.m-kind');
+      // Only an event asks for times and a venue; an album (and a friend-group album) is just its name and date
+      const isEvent = () => !form.group?.value && form.kind?.value === 'event';
       let step = 'details', made = null;
       const say = (msg, field) => {
         form.querySelectorAll('.m-field-error').forEach((el) => el.remove());
@@ -2902,13 +2910,16 @@
         }
       };
       const showStep = (next, focus = false) => {
-        const grouped = !!form.group?.value;
-        step = grouped ? 'details' : next;
+        const grouped = !!form.group?.value, event = isEvent();
+        step = event ? next : 'details';
         steps.forEach((panel) => { panel.hidden = panel.dataset.createStep !== step; });
+        if (kindField) kindField.hidden = grouped;
         title.textContent = step === 'event' ? 'Event details' : 'Create an album';
-        progress.hidden = grouped;
+        progress.hidden = !event;
         progress.textContent = step === 'event' ? 'Step 2 of 2' : 'Step 1 of 2';
-        submit.textContent = grouped || step === 'event' ? 'Create album' : 'Next';
+        submit.textContent = event ? (step === 'event' ? 'Create event' : 'Next') : 'Create album';
+        const first = form.group?.options?.[0];
+        if (first && !first.value) first.textContent = event ? 'Guests at the event' : 'Anyone with the code or link';
         back.textContent = step === 'event' ? 'Back' : 'Cancel';
         if (step === 'event') Momento.event?.activate(form);
         d.scrollTop = 0;
@@ -2919,18 +2930,23 @@
         if (step === 'event') { say(''); showStep('details', true); } else d.dismiss();
       });
       form.addEventListener('input', (e) => { if (e.target.getAttribute('aria-invalid') === 'true') say(''); });
+      form.addEventListener('change', (e) => { if (e.target.name === 'kind') { say(''); showStep('details'); } });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (form.dataset.busy || made) return;
-        const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
+        const name = form.name.value.trim(), date = form.date.value;
+        let place = form.place.value.trim();
         if (!name) { showStep('details'); say('Enter an album name.', form.name); return; }
         if (!date) { showStep('details'); say('Choose a date.', form.date); return; }
         // Group albums finish here. Event albums collect times and a venue on the next screen.
         const groupId = shareList.value || '', groupName = groupId ? shareList.selectedOptions[0]?.textContent || '' : '';
-        if (!Momento.event) { say('Event details couldn’t load. Refresh the page and try again.'); return; }
-        if (!groupId && step === 'details') { say(''); showStep('event', true); return; }
-        const ev = Momento.event.read(form);
+        const event = isEvent();
+        if ((event || groupId) && !Momento.event) { say('Event details couldn’t load. Refresh the page and try again.'); return; }
+        if (event && step === 'details') { say(''); showStep('event', true); return; }
+        // An event: its times and venue. A group album: what the group needs. An album: nothing more
+        const ev = event || groupId ? Momento.event.read(form) : { fields: { place: '' } };
         if (ev.error) { say(ev.error, ev.focus); return; }
+        if (ev.fields.place !== undefined) place = ev.fields.place;
         say('');
         form.dataset.busy = 'true';
         submit.disabled = back.disabled = true;

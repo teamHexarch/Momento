@@ -171,14 +171,17 @@
       else if (e.data.state === 'failed') giveUp(e.data.message);
       else closeViewer();
     });
-    function openAlbumHere(id, upload = false) {
-      if (!id) return;
+    // focus: { photos: 'id,id', by } opens the album showing just those photos (from a notification)
+    function openAlbumHere(id, upload = false, focus = {}) {
+      if (!id || !/^[\w-]{1,64}$/.test(id)) return;
       document.querySelectorAll('dialog[open]').forEach((d) => { if (d !== viewer) d.close(); });
       frame?.remove();
       frame = document.createElement('iframe');
       frame.title = 'Album';
       frame.allow = 'camera; geolocation; clipboard-write; web-share';
-      frame.src = 'albums.html?album=' + encodeURIComponent(id) + '&embed=1' + (upload ? '&upload=1' : '') + (/[?&]dev\b/.test(location.search) ? '&dev' : '');
+      frame.src = 'albums.html?album=' + encodeURIComponent(id) + '&embed=1' + (upload ? '&upload=1' : '')
+        + (focus.photos ? '&photos=' + encodeURIComponent(focus.photos) + (focus.by ? '&by=' + encodeURIComponent(focus.by) : '') : '')
+        + (/[?&]dev\b/.test(location.search) ? '&dev' : '');
       viewer.classList.remove('is-ready');
       viewer.append(frame);
       if (!viewer.open) viewer.showModal();
@@ -192,10 +195,13 @@
       if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const url = new URL(a.href, location.href);
       if (url.origin !== location.origin || !/\/albums\.html$/.test(url.pathname)) return;
-      const id = url.searchParams.get('album') || (url.hash.match(/^#album=(.+)$/) || [])[1];
+      // The album's id is only the album= part: a link from a notification about new photos carries more
+      // after it (#album=<id>&photos=<id,id>&by=<who>), which used to end up in the id, so nothing opened
+      const hash = new URLSearchParams(url.hash.slice(1));
+      const id = url.searchParams.get('album') || hash.get('album');
       if (!id) return;
       e.preventDefault(); e.stopPropagation();
-      openAlbumHere(decodeURIComponent(id));
+      openAlbumHere(id, false, { photos: hash.get('photos') || url.searchParams.get('photos') || '', by: hash.get('by') || url.searchParams.get('by') || '' });
     }, true);
 
     // ---- Events you host: a row each, and a sheet to manage who gets in ----

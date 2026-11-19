@@ -68,6 +68,19 @@
 
     .ev-venue-acts { display: flex; flex-wrap: wrap; gap: .5rem; }
 
+    /* Create form: Album or Event (two cards; the chosen one is outlined in the accent) */
+    dialog .m-kind { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .1rem 0 1rem; }
+    dialog .m-kind[hidden] { display: none; }
+    dialog .m-kind-title { grid-column: 1 / -1; font-size: .88rem; font-weight: 600; }
+    dialog .m-kind label { position: relative; display: grid; align-content: start; gap: .15rem; padding: .75rem .85rem; border-radius: 16px; cursor: pointer;
+      box-shadow: inset 0 0 0 1.5px rgba(127, 120, 150, .32); transition: box-shadow .2s ease, background-color .2s ease; }
+    dialog .m-kind input { position: absolute; opacity: 0; pointer-events: none; }
+    dialog .m-kind b { font-size: .95rem; font-weight: 700; color: var(--dusk, #2e2c3a); }
+    dialog .m-kind small { font-size: .78rem; line-height: 1.4; color: var(--slate, #5c596b); }
+    dialog .m-kind label:has(input:checked) { background: rgba(127, 120, 150, .12); box-shadow: inset 0 0 0 2px var(--copper, #9A603D); }
+    dialog .m-kind label:has(input:focus-visible) { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    @media (hover: hover) { dialog .m-kind label:hover { background: rgba(127, 120, 150, .08); } }
+    dialog .m-kind label:active { transform: scale(.985); }
     /* Venue suggestions: a list that opens under the search box as you type */
     /* (Scoped to the dialog: the Social page has its own search list with the same class.) The pane is the
        GlassPopover in assets/glass.css */
@@ -252,17 +265,24 @@
   document.head.append(css);
 
   // ---- Where the device is (asks the browser, which asks the person the first time) ----
+  // Precise (GPS) first, for up to 10 seconds. iPads without mobile data have no GPS, and phones indoors
+  // often can't get a fix in time, so if that fails (anything but "not allowed") the phone's normal
+  // Wi-Fi/mobile location is used instead, which works indoors.
+  const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   function locate() {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) return reject(new Error('This browser can’t share your location.'));
-      navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp }),
-        (err) => reject(new Error(err.code === 1
-          ? 'Location access is off for Momento. Allow it in your browser’s site settings, then try again.'
-          : err.code === 3 ? 'Finding your location took too long. Try again, ideally near a window or outside.'
-          : 'Your location couldn’t be found. Try again.')),
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
-    });
+    if (!navigator.geolocation) return Promise.reject(new Error('This browser can’t share your location.'));
+    const once = (opts) => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp }), reject, opts));
+    return once({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 })
+      .catch((err) => { if (err.code === 1) throw err; return once({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 }); })
+      .catch((err) => {
+        throw new Error(err.code === 1
+          ? (apple
+            ? 'Location is off for Momento. On iPhone or iPad: Settings → Privacy & Security → Location Services: turn it on, open Safari Websites and choose While Using the App. Then in Safari tap “aA” → Website Settings → Location → Allow, and try again.'
+            : 'Location access is off for Momento. Allow it in your browser’s site settings, then try again.')
+          : err.code === 3 ? 'Finding your location took too long. Try again, or type the venue instead.'
+          : 'Your location couldn’t be found. Check Location Services is on, then try again, or type the venue instead.');
+      });
   }
 
   // ---- Google Maps (only when the server has a key) ----
@@ -593,8 +613,13 @@
       });
       // pointerdown, not click, so the pick lands before the input loses focus and the list closes
       list.addEventListener('pointerdown', (e) => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); choose(results[+li.dataset.i]); } });
-      input.addEventListener('blur', () => setTimeout(() => open(false), 120));
+      // The list stays open while there's text and nothing picked yet, also when the box loses focus: on
+      // iPhone and iPad closing the keyboard does that, and the places must still be there to tap.
+      // It closes when a place is picked, the text is cleared, Escape, or a tap outside the venue search.
       input.addEventListener('focus', () => { if (results.length && !state.venue) paint(); });
+      const outside = (e) => { if (!list.hidden && !search.contains(e.target)) open(false); };
+      document.addEventListener('pointerdown', outside, true);
+      form.closest('dialog')?.addEventListener('close', () => open(false));
       mapEl.hidden = true;
       if (why) box.querySelector('.ev-venue-line').insertAdjacentHTML('afterend', `<p class="ev-hint">${esc(why)}</p>`);
     };

@@ -18,6 +18,9 @@ const albumSchema = new mongoose.Schema({
   uploadLeadMin: { type: Number, min: 0, max: 1440, default: 0 },
   // Set when the Events form creates an event and shares it with a friend group.
   eventUploadWindow: Boolean,
+  // 'album': just photos (no time or place; photos can be added any time; joined with the code or link).
+  // 'event': times, a venue and a sharing zone. Albums made before this field existed have neither.
+  kind: { type: String, enum: ['album', 'event'] },
   // Join code, stored without the dash: K7Q48DM is shown as K7Q-48DM
   code: { type: String, required: true, unique: true },
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },

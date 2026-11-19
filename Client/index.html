@@ -946,6 +946,27 @@
     .zone-ctrl input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 6px; }
     .zone-count { margin: 0; color: var(--slate); }
     .zone-count b { color: var(--dusk); font-size: 1.1rem; }
+    /* The slider, made easy to read: a thick track filled in the zone's own colour (copper by day, the map
+       ring's purple at night), a white knob ringed in that colour, and the distance in the accent too */
+    .zone-ctrl { --zone-lo: #C08A66; --zone-hi: #9A603D; --zone-track: rgba(46,44,58,.16); }
+    .zone-ctrl output { color: var(--zone-hi); }
+    .zone-ctrl input {
+      height: 10px; border-radius: 5px;
+      background: linear-gradient(to right, var(--zone-lo), var(--zone-hi) var(--fill), var(--zone-track) var(--fill));
+    }
+    .zone-ctrl input::-webkit-slider-thumb { width: 28px; height: 28px; box-shadow: 0 0 0 4px var(--zone-hi), 0 4px 14px rgba(46,44,58,.3); }
+    .zone-ctrl input::-moz-range-thumb { width: 28px; height: 28px; box-shadow: 0 0 0 4px var(--zone-hi), 0 4px 14px rgba(46,44,58,.3); }
+    .zone-count b { color: var(--zone-hi); }
+    :root[data-theme="dark"] .zone-ctrl {
+      --zone-lo: #8E80F2; --zone-hi: #B9AEFF; --zone-track: rgba(255,255,255,.18);
+      background: rgba(22,20,34,.62) padding-box, var(--g-rim, rgba(255,255,255,.14)) border-box;
+    }
+    :root[data-theme="dark"] .zone-ctrl label { color: #fff; }
+    :root[data-theme="dark"] .zone-ctrl .zone-count { color: rgba(236,234,244,.85); }
+    :root[data-theme="dark"] .zone-ctrl input::-webkit-slider-thumb { box-shadow: 0 0 0 4px #8E80F2, 0 4px 14px rgba(0,0,0,.45); }
+    :root[data-theme="dark"] .zone-ctrl input::-moz-range-thumb { box-shadow: 0 0 0 4px #8E80F2, 0 4px 14px rgba(0,0,0,.45); }
+    /* The zone on the map, a touch stronger at night so it matches the slider */
+    :root[data-theme="dark"] .zone-map .zone-ring { box-shadow: inset 0 0 0 2.5px #8E80F2; }
     .zone-map {
       --r: 74px; position: relative; aspect-ratio: 1; width: 100%; max-width: 400px; justify-self: center; overflow: hidden; border-radius: 32px;
       background: var(--fog); box-shadow: inset 0 0 0 1px rgba(46,44,58,.06), 0 20px 40px -20px rgba(46,44,58,.35);

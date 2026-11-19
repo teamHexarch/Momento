@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { config } from '../config/env.js';
 import { Album } from '../models/Album.js';
@@ -5,8 +6,6 @@ import { Group } from '../models/Group.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { GroupInvite } from '../models/GroupInvite.js';
 import { User } from '../models/User.js';
-import { sendEmail } from '../services/emailService.js';
-import { groupInviteHtml } from '../services/emailTemplates.js';
 import { dropGroupRows } from '../services/groupAccess.js';
 import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { HttpError } from '../utils/httpError.js';
@@ -21,6 +20,24 @@ import { albumSummaries } from './albumController.js';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITE_DAYS = 30;
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
+
+// ---- Invite links and QR codes ----
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const newCode = () => Array.from({ length: 10 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+const cleanCode = (c) => String(c ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+// Gives a group its code (once), retrying on the rare clash
+async function ensureCode(group) {
+  for (let tries = 0; !group.inviteCode; tries++) {
+    const code = newCode();
+    try {
+      const r = await Group.updateOne({ _id: group._id, inviteCode: { $exists: false } }, { $set: { inviteCode: code } });
+      group.inviteCode = r.modifiedCount ? code : (await Group.findById(group._id, 'inviteCode'))?.inviteCode;
+    } catch (err) {
+      if (err.code !== 11000 || tries >= 5) throw err;
+    }
+  }
+  return group.inviteCode;
+}
 const notFound = () => new HttpError(404, 'Group not found.');
 
 function readName(body) {
@@ -56,6 +73,8 @@ async function view(group, userId) {
     id: group.id,
     name: group.name,
     role: me?.role || 'member',
+    // The invite link's code, for members to share as a link or QR code
+    inviteCode: me ? await ensureCode(group) : undefined,
     members: members.filter((m) => m.user).map((m) => ({
       id: m.user.id,
       name: m.user._id.equals(userId) ? 'You' : (m.user.name || '').trim() || 'Someone',
@@ -145,9 +164,55 @@ export async function list(req, res) {
 export async function create(req, res) {
   const name = readName(req.body);
   if (await GroupMember.countDocuments({ user: req.user._id }) >= 50) throw new HttpError(400, 'You’re in 50 groups already. Leave one to make another.');
-  const group = await Group.create({ name, owner: req.user._id });
+  const group = await Group.create({ name, owner: req.user._id, inviteCode: newCode() });
   await GroupMember.create({ group: group._id, user: req.user._id, role: 'owner' });
   res.status(201).json({ group: await view(group, req.user._id) });
+}
+
+// GET /api/groups/preview/:code  What a group link is for, before joining (no login needed)
+export async function preview(req, res) {
+  const group = await Group.findOne({ inviteCode: cleanCode(req.params.code) });
+  if (!group || cleanCode(req.params.code).length < 8) throw new HttpError(404, 'This group link no longer works. Ask for a new one.');
+  const [members, albums, owner, me] = await Promise.all([
+    GroupMember.countDocuments({ group: group._id }),
+    Album.countDocuments({ group: group._id }),
+    User.findById(group.owner, 'name'),
+    req.user ? GroupMember.exists({ group: group._id, user: req.user._id }) : null,
+  ]);
+  res.json({ group: { id: group.id, name: group.name, by: firstName(owner?.name), members, albums }, signedIn: !!req.user, member: !!me });
+}
+
+// POST /api/groups/join  { code }  Joins with the link or QR code (already in it: nothing changes)
+export async function joinByCode(req, res) {
+  const code = cleanCode(req.body?.code);
+  const group = code.length >= 8 && await Group.findOne({ inviteCode: code });
+  if (!group) throw new HttpError(404, 'This group link no longer works. Ask for a new one.');
+  let already = !!(await GroupMember.exists({ group: group._id, user: req.user._id }));
+  if (!already) {
+    if (await GroupMember.countDocuments({ user: req.user._id }) >= 50) throw new HttpError(400, 'You’re in 50 groups already. Leave one to join another.');
+    try {
+      const r = await GroupMember.updateOne({ group: group._id, user: req.user._id }, { $setOnInsert: { role: 'member' } }, { upsert: true });
+      already = !r.upsertedCount;
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+      already = true;
+    }
+    // An invite to them for this group is answered now
+    await GroupInvite.deleteMany({ group: group._id, email: req.user.email });
+    await unnotify({ user: req.user._id, type: 'invite', group: group._id });
+  }
+  res.status(already ? 200 : 201).json({ already, group: await view(group, req.user._id) });
+}
+
+// POST /api/groups/:id/invite-link  The owner makes a new link: the old link and QR code stop working
+export async function resetLink(req, res) {
+  const { group } = await ownerOf(req);
+  for (let tries = 0; ; tries++) {
+    try { group.inviteCode = newCode(); await group.save(); break; } catch (err) { if (err.code !== 11000 || tries >= 5) throw err; }
+  }
+  const { audit } = await import('../services/auditService.js');
+  await audit('group.link-reset', { req, target: group._id });
+  res.json({ group: await view(group, req.user._id) });
 }
 
 export async function show(req, res) {
@@ -194,16 +259,8 @@ export async function invite(req, res) {
   // Someone with a confirmed account at that address also gets it in their inbox ("Needs you")
   const invitee = existing && await User.findOne({ _id: existing._id, emailVerified: true }, '_id');
   if (invitee) await notify({ user: invitee._id, type: 'invite', actor: req.user._id, group: group._id });
-  try {
-    await sendEmail({
-      to: email,
-      subject: `${firstName(req.user.name)} invited you to ${group.name} on Momento`,
-      html: groupInviteHtml(group.name, req.user.name, `${config.frontendUrl}/groups.html`),
-    });
-  } catch (err) {
-    // The invite still waits on their Groups page
-    console.error(`Group invite email failed: ${err.message}`);
-  }
+  // No email is sent: people join with the group's link or QR code. An invite to someone who already has
+  // an account just waits in their inbox ("Needs you")
   res.status(201).json({ group: await view(group, req.user._id) });
 }
 
