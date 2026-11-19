@@ -721,7 +721,10 @@
         img.src = u;
       }).catch(() => null);
       if (!data) return json(400, { error: 'That file isn’t a photo Momento can read.' });
-      a.coverData = data; save();
+      // Same as the server: a cover chosen once the event has started is kept (it would be hidden otherwise)
+      a.coverData = data;
+      if (albumLifecycle(a).status !== 'upcoming') a.keepHostCover = true;
+      save();
       return json(200, { album: summary(a) });
     }
     let body = {};

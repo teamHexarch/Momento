@@ -57,6 +57,7 @@ try {
   let a = (await json(await call(`/api/albums/${soon.id}/cover`, 200, h, 'PUT', await coverForm(await png(3000, 2000, 'orange'))))).album;
   assert.equal(a.cover.source, 'host');
   assert.equal(a.hasHostCover, true);
+  assert.equal(a.keepHostCover, false, 'before the event, the photos still take over later');
   // The picture itself: no login needed, re-encoded small, only with the right token
   const big = await call(a.cover.url, 200);
   const meta = await sharp(Buffer.from(await big.arrayBuffer())).metadata();
@@ -89,17 +90,25 @@ try {
   a = (await json(await call(`/api/albums/${now.id}`, 200, h))).album;
   assert.equal(a.cover.source, 'newest');
   assert.equal(a.cover.id, p2.id);
-  // The host's picture shows until a photo gets its first like or reaction
-  a = (await json(await call(`/api/albums/${now.id}/cover`, 200, h, 'PUT', await coverForm(await png(500, 500, 'purple'))))).album;
-  assert.equal(a.cover.source, 'host');
-  // A like and a reaction on the older photo: it's the most loved, so it takes over
+  // A like and a reaction on the older photo: it's the most loved, so it's the cover
   await call(`/api/photos/${p1.id}/like`, 200, h, 'POST', { liked: true });
   await call(`/api/photos/${p1.id}/reaction`, 200, h, 'POST', { emoji: '🔥' });
   a = (await json(await call(`/api/albums/${now.id}`, 200, h))).album;
   assert.equal(a.cover.source, 'top');
   assert.equal(a.cover.id, p1.id);
   assert.equal(a.cover.score, 2);
-  // Unless the host keeps theirs
+  // The host picks a picture while the event is live: it shows straight away (and is kept)
+  a = (await json(await call(`/api/albums/${now.id}/cover`, 200, h, 'PUT', await coverForm(await png(500, 500, 'purple'))))).album;
+  assert.equal(a.cover.source, 'host', 'a picture chosen during the event shows right away');
+  assert.equal(a.keepHostCover, true);
+  // Changing it again: the new picture shows
+  const firstUrl = a.cover.url;
+  a = (await json(await call(`/api/albums/${now.id}/cover`, 200, h, 'PUT', await coverForm(await png(500, 500, 'teal'))))).album;
+  assert.equal(a.cover.source, 'host');
+  assert.notEqual(a.cover.url, firstUrl);
+  // "Keep my cover" off: the most loved photo takes over again; on: the host's picture is back
+  a = (await json(await call(`/api/albums/${now.id}`, 200, h, 'PATCH', { keepHostCover: false }))).album;
+  assert.equal(a.cover.source, 'top');
   a = (await json(await call(`/api/albums/${now.id}`, 200, h, 'PATCH', { keepHostCover: true }))).album;
   assert.equal(a.keepHostCover, true);
   assert.equal(a.cover.source, 'host');

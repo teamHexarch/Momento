@@ -393,6 +393,9 @@ export async function putCover(req, res) {
   const m = await membershipOf(req, req.params.id);
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the cover.');
   if (!req.file) throw new HttpError(400, 'Choose a photo for the cover.');
+  // Once the event has started, the most loved photo is normally the cover. A host who picks a picture
+  // now wants to see it, so it's kept (they can switch "Keep my cover" off to hand back to the photos).
+  if (albumLifecycle(m.album).status !== 'upcoming') m.album.keepHostCover = true;
   await saveCover(m.album, req.file.buffer);
   const stats = await statsFor([m.album._id], req.user._id, m.hidden || []);
   res.json({ album: summary(m.album, 'host', stats.get(String(m.album._id))) });
