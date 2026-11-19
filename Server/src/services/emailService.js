@@ -18,7 +18,8 @@ export const emailFrom = config.email.from;
  * Replies go to EMAIL_REPLY_TO unless replyTo says otherwise.
  * Throws EmailError with a readable reason when SES refuses.
  */
-export async function sendEmail({ to, subject, html, replyTo = config.email.replyTo }) {
+// unsubscribe: the one-click unsubscribe link (added as List-Unsubscribe headers, so mail apps show it)
+export async function sendEmail({ to, subject, html, replyTo = config.email.replyTo, unsubscribe }) {
   if (!driver) {
     // Locally, with no AWS settings, emails are printed instead so every feature can still be tried
     if (!config.isProduction) {
@@ -29,5 +30,5 @@ export async function sendEmail({ to, subject, html, replyTo = config.email.repl
   }
   const recipients = [].concat(to).filter(Boolean);
   if (!recipients.length) throw new EmailError('No recipient given.');
-  await driver.send({ to: recipients, subject, html, replyTo });
+  await driver.send({ to: recipients, subject, html, replyTo, unsubscribe });
 }

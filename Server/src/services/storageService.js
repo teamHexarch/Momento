@@ -35,6 +35,9 @@ export async function savePhoto(albumId, inputBuffer) {
 // Any other file (profile photos): saved and removed by key
 export const saveFile = (key, buffer, mimeType) => driver.save(key, buffer, mimeType);
 export const removeFile = (key) => driver.remove(key);
+// Folders under a prefix, and removing a whole folder (old backups)
+export const listFolders = (prefix) => driver.folders(prefix);
+export const removePrefix = (prefix) => driver.removePrefix(prefix);
 
 // Answers a request for the photo; false when the file is gone
 export const sendPhoto = (res, key, mimeType, opts) => driver.send(res, key, mimeType, opts);

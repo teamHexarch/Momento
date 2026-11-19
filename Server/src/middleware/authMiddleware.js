@@ -1,18 +1,53 @@
 import { User } from '../models/User.js';
-import { readSession } from '../utils/session.js';
+import { readSession, rotateSession, ROTATE_MS, GRACE_MS } from '../utils/session.js';
 import { HttpError } from '../utils/httpError.js';
+import { switches } from '../services/switches.js';
+import { config } from '../config/env.js';
 
-// Puts the signed-in user on req.user (or null) for every request. A login from before the
-// last password reset no longer counts, which is how a reset logs out every other device.
+// Puts the signed-in user on req.user (or null) for every request. Who someone is comes only from
+// their signed login cookie and its record on the account, never from anything else in the request.
+// A login doesn't count when:
+// - it was made before the last password change (that's how a reset logs out every other device),
+// - it was made before staff pressed "sign everyone out",
+// - the account is being deleted,
+// - it's an old token replaced more than 2 minutes ago (a copied token: that login is ended).
 export async function loadUser(req, res, next) {
+  req.user = null;
   const session = readSession(req);
+  if (!session) return next();
+  const now = new Date();
   // With the password hash, so routes can tell password accounts apart (it never leaves the server)
-  const user = session ? await User.findOne({
+  const user = await User.findOne({
     _id: session.sub,
-    sessions: { $elemMatch: { id: session.jti, expiresAt: { $gt: new Date() } } },
-  }).select('+passwordHash') : null;
-  const changed = user?.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
-  req.user = user && session.iat >= changed ? user : null;
+    sessions: { $elemMatch: { $or: [{ id: session.jti }, { prev: session.jti }], expiresAt: { $gt: now } } },
+  }).select('+passwordHash +sessions +role +accepted +deletingAt');
+  if (!user || user.deletingAt) return next();
+  const changed = user.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
+  if (session.iat < changed) return next();
+  const validAfter = (await switches()).sessionsValidAfter;
+  // (in whole seconds, like the token's own time, so a login made the same second as "sign everyone
+  // out" still works; every login record was deleted at that moment anyway)
+  if (validAfter && session.iat < Math.floor(new Date(validAfter).getTime() / 1000)) return next();
+  const record = user.sessions.find((s) => s.id === session.jti) || user.sessions.find((s) => s.prev === session.jti);
+  if (record.id !== session.jti) {
+    // The token before the latest swap: fine for a moment (requests already on their way), then it's a copy
+    if (!record.rotatedAt || now - record.rotatedAt > GRACE_MS) {
+      await User.updateOne({ _id: user._id }, { $pull: { sessions: { id: record.id } } });
+      const { audit } = await import('../services/auditService.js');
+      await audit('session.reuse', { req, actor: user._id, target: user._id, meta: { device: record.deviceName } });
+      return next();
+    }
+  } else if (session.legacy || now - session.iat * 1000 > ROTATE_MS) {
+    await rotateSession(res, user._id, session.jti);
+  }
+  req.user = user;
+  next();
+}
+
+// Staff only (moderation, takedowns, the emergency switches). Everyone else gets a plain 404, as if
+// the address didn't exist. Staff are made only on the server itself (scripts/setRole.js), never through the API.
+export function requireStaff(req, res, next) {
+  if (!req.user || req.user.role !== 'staff' || !req.user.emailVerified) return next(new HttpError(404, 'Not found.'));
   next();
 }
 
@@ -47,5 +82,17 @@ export function requireVerified(req, res, next) {
   if (!req.user.emailVerified) {
     return next(new HttpError(403, `Confirm your email to start using Momento. We sent a link to ${req.user.email}.`, 'unverified'));
   }
+  // Suspended accounts (3 copyright strikes, or staff) can still log in to download or delete their data
+  if (req.user.suspendedAt) {
+    return next(new HttpError(403, 'This account is suspended. You can still download your data or delete your account in Settings. Reply to any Momento email if you think this is a mistake.', 'suspended'));
+  }
+  // When REQUIRE_CONSENT is on: the current Terms and Privacy Policy must be accepted first
+  // (POST /api/auth/consent). Off by default, so the site keeps working until it asks for consent.
+  if (config.policies.enforce && !hasAccepted(req.user)) {
+    return next(new HttpError(403, 'Please read and accept the updated Terms and Privacy Policy to keep using Momento.', 'consent-required', { policies: currentPolicies() }));
+  }
   next();
 }
+
+export const currentPolicies = () => ({ tos: config.policies.tos, privacy: config.policies.privacy });
+export const hasAccepted = (user) => user.accepted?.tos === config.policies.tos && user.accepted?.privacy === config.policies.privacy;

@@ -11,6 +11,30 @@ import { sendVerificationEmail, confirmEmail } from '../services/verificationSer
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, peekEmailApproval, approveEmailChange, cancelEmailChange, finishEmailChange, dropEmailChange, deleteAccount } from '../services/accountService.js';
 import { normaliseCode } from '../utils/albumCodes.js';
+import { audit } from '../services/auditService.js';
+import { switches } from '../services/switches.js';
+import { recordConsent } from './privacyController.js';
+import { currentPolicies, hasAccepted } from '../middleware/authMiddleware.js';
+
+// ---- Age check (before anything about the person is stored) ----
+// birthDate 'YYYY-MM-DD'. Under 13: refused, and nothing is kept (not the email, not the IP). 13 to 17:
+// the account is marked as a minor. Only that and the time of the check are stored, never the date.
+// The date is required when REQUIRE_AGE is on; otherwise it's checked when the form sends one.
+function checkAge(body) {
+  const raw = body?.birthDate;
+  if (raw == null || raw === '') {
+    if (config.age.required) throw new HttpError(400, 'Enter your date of birth.', 'age-required');
+    return null;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw));
+  const born = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (!born || born.getUTCMonth() !== +m[2] - 1 || born > new Date() || +m[1] < 1900) throw new HttpError(400, 'Enter a real date of birth.', 'age-invalid');
+  const now = new Date();
+  let age = now.getUTCFullYear() - born.getUTCFullYear();
+  if (now.getUTCMonth() < born.getUTCMonth() || (now.getUTCMonth() === born.getUTCMonth() && now.getUTCDate() < born.getUTCDate())) age--;
+  if (age < config.age.minimum) throw new HttpError(403, `You need to be at least ${config.age.minimum} to use Momento.`, 'too-young');
+  return { isMinor: age < config.age.adult, ageConfirmedAt: now };
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Compared against when the email is unknown, so a miss takes as long as a wrong password
@@ -47,6 +71,8 @@ async function signedIn(res, user, status = 200) {
 // ---- Email and password ----
 
 export async function signup(req, res) {
+  // The age first: someone too young is turned away before anything else is looked at or kept
+  const age = checkAge(req.body);
   await verifySignupCaptcha(req.body?.captchaToken, config.captcha);
   const { name, email, password } = readCredentials(req.body, { needName: true });
   const existing = await User.findOne({ email }).select('+passwordHash');
@@ -56,7 +82,7 @@ export async function signup(req, res) {
     }
     throw new HttpError(409, 'An account with this email already exists. Log in instead.');
   }
-  const user = new User({ name, email, passwordHash: await bcrypt.hash(password, 12) });
+  const user = new User({ name, email, passwordHash: await bcrypt.hash(password, 12), ...age });
   // Signed up through an invite link: they're added to that album once their email is confirmed
   const joinCode = normaliseCode(req.body?.joinCode);
   if (joinCode.length === 7) user.pendingJoin = joinCode;
@@ -66,6 +92,9 @@ export async function signup(req, res) {
     if (err.code === 11000) throw new HttpError(409, 'An account with this email already exists. Log in instead.');
     throw err;
   }
+  // The Terms and Privacy Policy, when the form says they were accepted (acceptTerms: true)
+  if (req.body?.acceptTerms === true) await recordConsent(user, req, 'signup');
+  await audit('account.created', { req, actor: user._id, target: user._id, meta: { via: 'email' } });
   // The confirm email goes out after the response, so a slow or failing mail server
   // never holds up or breaks signing up; the person can ask for another from My albums
   sendVerificationEmail(user).catch((err) => console.error(`Confirm email to ${user.email} failed: ${err.message}`));
@@ -91,6 +120,7 @@ export async function login(req, res) {
     const now = await User.findOneAndUpdate({ _id: user._id }, { $inc: { loginFails: 1 } }, { returnDocument: 'after', projection: { loginFails: 1 } });
     if (now.loginFails >= MAX_FAILS) {
       await User.updateOne({ _id: user._id }, { $set: { loginFails: 0, lockedUntil: new Date(Date.now() + LOCK_MS) } });
+      await audit('login.locked', { req, actor: null, target: user._id });
       throw new HttpError(429, 'Too many wrong passwords. Try again in 15 minutes, or reset your password.', 'locked');
     }
   }
@@ -105,7 +135,10 @@ export async function logout(req, res) {
 }
 
 export function me(req, res) {
-  res.json({ user: req.user ? req.user.toPublic() : null });
+  const u = req.user;
+  res.json({ user: u ? { ...u.toPublic(), ...(u.suspendedAt && { suspended: true }) } : null,
+    // Which Terms and Privacy Policy are current, and whether this person has accepted them
+    ...(u && { policies: { current: currentPolicies(), upToDate: hasAccepted(u), required: config.policies.enforce } }) });
 }
 
 export async function updateMe(req, res) {
@@ -229,6 +262,7 @@ export async function changePassword(req, res) {
   user.passwordChangedAt = new Date();
   user.sessions = [];
   await user.save();
+  await audit('password.changed', { req });
   await User.updateOne({ _id: user._id }, { $unset: { passwordChange: 1 } });
   // A pending email change can't outlive a password change
   await dropEmailChange(user);
@@ -251,6 +285,7 @@ export async function requestEmailChange(req, res) {
   await checkPassword(req.user, req.body?.password);
   if (await User.exists({ email })) throw new HttpError(409, 'Another account already uses that email.');
   await startEmailChange(req.user, email);
+  await audit('email.change-requested', { req });
   res.json({ ok: true, pendingEmail: email, approveFrom: req.user.email });
 }
 
@@ -298,6 +333,7 @@ export async function deleteAvatar(req, res) {
 
 export async function deleteMe(req, res) {
   await checkPassword(req.user, req.body?.password);
+  await audit('account.deleted', { req, target: req.user._id });
   await deleteAccount(req.user);
   await endSession(req, res);
   res.json({ ok: true });
@@ -305,12 +341,19 @@ export async function deleteMe(req, res) {
 
 // ---- Confirming the email address ----
 
-// The link in the email lands here, then goes on to the home page, which says how it went
+// The link in the email lands here, then goes on to the home page, which says how it went.
+// It confirms the address for 24 hours, but it only logs the browser in when it's opened within
+// 15 minutes of being sent (a login link must be short-lived); later, they log in as usual.
+const LOGIN_LINK_MS = 15 * 60000;
 export async function verifyEmail(req, res) {
-  const user = await confirmEmail(req.query.token);
-  if (!user) return res.redirect(303, `${config.frontendUrl}/?verified=invalid`);
+  const confirmed = await confirmEmail(req.query.token);
+  if (!confirmed) return res.redirect(303, `${config.frontendUrl}/?verified=invalid`);
+  const { user, issuedAt } = confirmed;
+  await audit('email.verified', { req, actor: user._id, target: user._id });
+  const sameUser = String(req.user?._id) === String(user._id);
+  if (!sameUser && Date.now() - issuedAt > LOGIN_LINK_MS) return res.redirect(303, `${config.frontendUrl}/?login=1&verified=1`);
   try {
-    if (String(req.user?._id) !== String(user._id)) await startSession(res, user);
+    if (!sameUser) await startSession(res, user);
   } catch (error) {
     if (error.code !== 'session_limit') throw error;
     return res.redirect(303, `${config.frontendUrl}/?login=1&verified=session_limit`);
@@ -372,6 +415,7 @@ export async function resetPassword(req, res) {
   if (!user) throw new HttpError(400, 'This reset link has expired or was already used. Ask for a new one.');
   // Taking the account back with a reset also stops any email change someone else started
   await dropEmailChange(user);
+  await audit('password.reset', { req, actor: user._id, target: user._id });
   // Logged in here; every older login, on any device, has just stopped working
   await signedIn(res, user);
 }
@@ -380,7 +424,7 @@ export async function resetPassword(req, res) {
 
 // One account per email: a verified Google email signs into (and links to) an
 // existing account with that address instead of creating a second one.
-async function socialSignIn(res, { provider, providerId, email, emailVerified, name, avatarUrl }) {
+async function socialSignIn(res, { provider, providerId, email, emailVerified, name, avatarUrl, req }) {
   const idField = { google: 'googleId' }[provider];
   let user = await User.findOne({ [idField]: providerId });
 
@@ -399,12 +443,17 @@ async function socialSignIn(res, { provider, providerId, email, emailVerified, n
       user[idField] = providerId;
       user.emailVerified = true;
     } else {
-      user = new User({ email, emailVerified: true, [idField]: providerId });
+      // A brand-new account: the same rules as signing up with email
+      if ((await switches()).signupsPaused) throw new HttpError(503, 'New sign-ups are paused for a little while. Please try again later.', 'paused');
+      user = new User({ email, emailVerified: true, [idField]: providerId, ...checkAge(req.body) });
     }
   }
   if (!user.name && name) user.name = name;
   if (!user.avatarUrl && avatarUrl) user.avatarUrl = avatarUrl;
-  await signedIn(res, user, user.isNew ? 201 : 200);
+  const isNew = user.isNew;
+  await signedIn(res, user, isNew ? 201 : 200);
+  if (isNew && req.body?.acceptTerms === true) await recordConsent(user, req, 'google');
+  if (isNew) await audit('account.created', { req, actor: user._id, target: user._id, meta: { via: provider } });
 }
 
 // The browser opens Google's popup with a custom button and gets back a one-time code;
@@ -432,5 +481,6 @@ export async function google(req, res) {
     emailVerified: payload.email_verified === true,
     name: payload.name,
     avatarUrl: payload.picture,
+    req,
   });
 }

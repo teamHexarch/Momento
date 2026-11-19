@@ -48,6 +48,14 @@ try {
   ok(mails.every((m) => m.subject === 'Last chance to add your photos to Picnic'));
   ok(!mails.some((m) => m.to === 'gus@example.invalid'));
   eq(await jobs.closingSoon(), 0, 'never twice');
+  // Everyone in the album also gets it in their inbox, even Gus (who turned the email off), once each
+  const { Notification } = await import('../src/models/Notification.js');
+  eq(await Notification.countDocuments({ type: 'closing', album: album._id }), 4);
+  const { describe } = await import('../src/services/notifyService.js');
+  const [closing] = await describe(await Notification.find({ type: 'closing', user: guest._id }));
+  eq(closing.title, 'Picnic stops taking photos in 6 hours');
+  eq(closing.albumId, album.id);
+  ok(closing.body);
 
   // ---- Weekly recap: only to people who asked, only when there's something new, once a week ----
   mails.length = 0;

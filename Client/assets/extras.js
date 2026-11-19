@@ -209,7 +209,7 @@
     join: ['Log in to join this album', 'It only takes a moment, and then the photos are yours to see and add to.'],
     create: ['Log in to create your album', 'It’s free. Your guests join with a code or QR code, no app needed.'],
     upload: ['Log in to add your photos', 'Your photos go straight into the album, in full quality.'],
-    react: ['Log in to like and react', 'Show some love for the best photos.'],
+    react: ['Log in to react and bookmark', 'Show some love for the best photos, and keep your favourites.'],
     groups: ['Log in to see your groups', 'Share albums with the people you see most, in one place.'],
     joinGroup: ['Log in to join this group', 'It only takes a moment, and then you’ll see every album shared with the group.'],
     view: ['Log in to see the photos', 'Join the album to see everything everyone added.'],

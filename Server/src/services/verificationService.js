@@ -1,6 +1,6 @@
 import { config } from '../config/env.js';
 import { sendEmail, isEmailConfigured } from './emailService.js';
-import { issueToken, redeemToken } from './emailTokenService.js';
+import { issueToken, redeemTokenRow } from './emailTokenService.js';
 import { verificationHtml } from './emailTemplates.js';
 
 const LINK_HOURS = 24;
@@ -21,11 +21,12 @@ export async function sendVerificationEmail(user) {
   return { sent: true };
 }
 
-// Marks the account verified if the token is real and unexpired; returns the user or null
+// Marks the account verified if the token is real and unexpired: { user, issuedAt } or null
 export async function confirmEmail(token) {
-  const user = await redeemToken(token, 'verify');
-  if (!user) return null;
+  const found = await redeemTokenRow(token, 'verify');
+  if (!found) return null;
+  const { user, row } = found;
   user.emailVerified = true;
   await user.save();
-  return user;
+  return { user, issuedAt: row.createdAt?.getTime() ?? (row.expiresAt.getTime() - LINK_HOURS * 3600000) };
 }

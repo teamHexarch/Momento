@@ -96,13 +96,19 @@ try {
   a = (await json(await call(`/api/albums/${now.id}`, 200, h))).album;
   assert.equal(a.cover.source, 'newest');
   assert.equal(a.cover.id, p2.id);
-  // A like and a reaction on the older photo: it's the most loved, so it's the cover
-  await call(`/api/photos/${p1.id}/like`, 200, h, 'POST', { liked: true });
+  // A bookmark is private: it doesn't make a photo the cover
+  await call(`/api/photos/${p1.id}/bookmark`, 200, h, 'POST', { bookmarked: true });
+  a = (await json(await call(`/api/albums/${now.id}`, 200, h))).album;
+  assert.equal(a.cover.source, 'newest');
+  // Reactions on the older photo: it's the most loved, so it's the cover
+  const gc = await login('guest@example.invalid');
+  await call('/api/albums/join', 201, gc, 'POST', { code: now.code, location: { ...venue, accuracy: 10, timestamp: Date.now() } });
   await call(`/api/photos/${p1.id}/reaction`, 200, h, 'POST', { emoji: '🔥' });
+  await call(`/api/photos/${p1.id}/reaction`, 200, gc, 'POST', { emoji: '😍' });
   a = (await json(await call(`/api/albums/${now.id}`, 200, h))).album;
   assert.equal(a.cover.source, 'top');
   assert.equal(a.cover.id, p1.id);
-  assert.equal(a.cover.score, 2);
+  assert.equal(a.cover.score, 2, 'two reactions (the bookmark doesn’t count)');
   // The host picks a picture while the event is live: it shows straight away (and is kept)
   a = (await json(await call(`/api/albums/${now.id}/cover`, 200, h, 'PUT', await coverForm(await png(500, 500, 'purple'))))).album;
   assert.equal(a.cover.source, 'host', 'a picture chosen during the event shows right away');

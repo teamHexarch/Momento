@@ -18,8 +18,10 @@ const trimSlash = (u) => u.replace(/\/+$/, '');
 const publicUrl = trimSlash(env.PUBLIC_URL || `http://localhost:${env.PORT || 4000}`);
 // Where people open the site (e.g. https://hexarch.org). Locally the API serves the pages itself.
 const frontendUrl = trimSlash(env.FRONTEND_URL || publicUrl);
-// Sites allowed to call the API from the browser with the login cookie
-const corsOrigins = (env.CORS_ORIGINS || [frontendUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'].join(','))
+// Sites allowed to call the API from the browser with the login cookie: the site itself, plus the
+// local preview (localhost:3000) only when not in production. CORS_ORIGINS replaces the list.
+const isProduction = env.NODE_ENV === 'production';
+const corsOrigins = (env.CORS_ORIGINS || [frontendUrl, ...(isProduction ? [] : ['http://localhost:3000', 'http://127.0.0.1:3000'])].join(','))
   .split(',').map((o) => trimSlash(o.trim())).filter(Boolean);
 
 export const config = {
@@ -35,7 +37,8 @@ export const config = {
   trustProxy: Number.isInteger(Number(env.TRUST_PROXY)) && env.TRUST_PROXY !== '' && env.TRUST_PROXY != null ? Number(env.TRUST_PROXY) : 1,
   mongoUri: required('MONGODB_URI'),
   jwtSecret,
-  sessionDays: Number(env.SESSION_DAYS) || 30,
+  // How long a login lasts without being used (its token is renewed every 12 hours of use)
+  tokenDays: Number(env.TOKEN_DAYS) || 7,
   publicUrl,
   verificationBaseUrl: trimSlash(env.EMAIL_VERIFICATION_BASE_URL || publicUrl),
   frontendUrl,
@@ -78,5 +81,17 @@ export const config = {
     privateKey: env.VAPID_PRIVATE_KEY || '',
     subject: env.VAPID_SUBJECT || 'mailto:team@hexarch.org',
   },
-  isProduction: env.NODE_ENV === 'production',
+  isProduction,
+  // The Terms and Privacy Policy versions people must have accepted. REQUIRE_CONSENT=on makes accepting
+  // the current versions a condition for using the site (off until the site asks for it).
+  policies: {
+    tos: env.TOS_VERSION || '2026-11-19',
+    privacy: env.PRIVACY_VERSION || '2026-11-19',
+    enforce: env.REQUIRE_CONSENT === 'on',
+  },
+  // The age check at sign-up: under 13s are refused. REQUIRE_AGE=on makes the birth date required
+  // (otherwise it's checked when the sign-up form sends one).
+  age: { required: env.REQUIRE_AGE === 'on', minimum: 13, adult: 18 },
+  // Where security alerts go (both optional; they're always in the server log too)
+  security: { alertEmail: env.SECURITY_ALERT_EMAIL || '', alertWebhook: env.SECURITY_ALERT_WEBHOOK || '' },
 };

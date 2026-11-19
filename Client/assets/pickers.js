@@ -17,6 +17,12 @@
     /* The field keeps its look; the browser's own picker button gives way to a small icon */
     input.mp-on { cursor: pointer; caret-color: transparent; padding-right: 2.6rem !important; background-repeat: no-repeat !important; background-position: right .95rem center !important; background-size: 17px !important; }
     input.mp-on::-webkit-calendar-picker-indicator { display: none; }
+    /* iPhone and iPad (Safari) draw date and time fields their own way: a minimum width that ignores the form
+       (so the field ran past the card's edge, taking the icon with it), the value centred, and their own grey
+       box instead of the glass well. Plain fields instead: as wide as their column, the value on the left */
+    input.mp-on { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
+    input.mp-on::-webkit-date-and-time-value { min-height: 1.4em; margin: 0; text-align: left; }
+    input.mp-on::-webkit-datetime-edit { padding: 0; }
     input.mp-on[type="date"], input.mp-on[type="datetime-local"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
     input.mp-on[type="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
     :root[data-theme="dark"] input.mp-on[type="date"], :root[data-theme="dark"] input.mp-on[type="datetime-local"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
@@ -311,4 +317,169 @@
   document.addEventListener('scroll', (e) => { if (cur && !cur.el.contains(e.target)) place(); }, true);
   // The dialog it belongs to closing takes it too
   document.addEventListener('close', (e) => { if (cur && e.target.contains?.(cur.input)) close(false); }, true);
+})();
+
+// Album select menus: native values/events, with Momento's glass menu in every browser.
+// The original select remains the source of truth for sharing, validation and form resets.
+(() => {
+  const selector = '#mCreate .m-share select, #mCreate select[name="evLead"]';
+  const controls = new WeakMap();
+  let current = null, sequence = 0, typed = '', typedAt = 0;
+  const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+
+  function close(focus = false) {
+    if (!current) return;
+    const { button, menu } = current;
+    current = null;
+    button.setAttribute('aria-expanded', 'false');
+    button.removeAttribute('aria-activedescendant');
+    try { menu.hidePopover?.(); } catch (e) {}
+    menu.remove();
+    if (focus && button.isConnected) button.focus({ preventScroll: true });
+  }
+
+  function place() {
+    if (!current) return;
+    const { button, menu } = current;
+    if (!button.getClientRects().length) { close(); return; }
+    const rect = button.getBoundingClientRect(), edge = 8, gap = 6;
+    const viewport = window.visualViewport;
+    const top = viewport?.offsetTop || 0, bottom = top + (viewport?.height || innerHeight);
+    const left = viewport?.offsetLeft || 0, right = left + (viewport?.width || innerWidth);
+    menu.style.width = Math.min(rect.width, right - left - edge * 2) + 'px';
+    const below = bottom - rect.bottom - gap - edge, above = rect.top - top - gap - edge;
+    const down = below >= Math.min(menu.scrollHeight + 2, 288) || below >= above;
+    menu.style.maxHeight = Math.max(0, Math.min(288, down ? below : above)) + 'px';
+    menu.style.left = Math.max(left + edge, Math.min(rect.left, right - menu.offsetWidth - edge)) + 'px';
+    menu.style.top = Math.max(top + edge, down ? rect.bottom + gap : rect.top - gap - menu.offsetHeight) + 'px';
+  }
+
+  function highlight(index) {
+    if (!current) return;
+    const { select, menu, button } = current;
+    const option = select.options[index];
+    if (!option || option.disabled || option.hidden) return;
+    current.active = index;
+    for (const row of menu.children) row.classList.toggle('is-active', +row.dataset.index === index);
+    const row = menu.querySelector(`[data-index="${index}"]`);
+    if (!row) return;
+    button.setAttribute('aria-activedescendant', row.id);
+    if (row.offsetTop < menu.scrollTop) menu.scrollTop = row.offsetTop;
+    else if (row.offsetTop + row.offsetHeight > menu.scrollTop + menu.clientHeight) menu.scrollTop = row.offsetTop + row.offsetHeight - menu.clientHeight;
+  }
+
+  function choose(index) {
+    if (!current) return;
+    const { select, sync } = current;
+    if (!select.options[index] || select.options[index].disabled || select.options[index].hidden) return;
+    const changed = select.selectedIndex !== index;
+    select.selectedIndex = index;
+    close(true); sync();
+    if (changed) {
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  function render() {
+    const { select, menu, button } = current;
+    menu.replaceChildren();
+    [...select.options].forEach((option, index) => {
+      if (option.hidden) return;
+      const row = document.createElement('div');
+      row.className = 'ms-option'; row.id = `${menu.id}-${index}`; row.dataset.index = index;
+      row.setAttribute('role', 'option'); row.setAttribute('aria-selected', index === select.selectedIndex);
+      if (option.disabled) row.setAttribute('aria-disabled', 'true');
+      const label = document.createElement('span'); label.textContent = option.label;
+      row.append(label); row.insertAdjacentHTML('beforeend', icon('m5 12 4 4L19 6'));
+      menu.append(row);
+    });
+    place();
+    const enabled = [...select.options].findIndex((option) => !option.disabled && !option.hidden);
+    const active = current.active;
+    highlight(active >= 0 && select.options[active] && !select.options[active].disabled ? active : enabled);
+    button.setAttribute('aria-expanded', 'true');
+  }
+
+  function open(control) {
+    if (control.select.disabled) return;
+    close(); typed = '';
+    const menu = document.createElement('div');
+    menu.className = 'ms-menu'; menu.id = control.button.getAttribute('aria-controls');
+    menu.setAttribute('role', 'listbox'); menu.setAttribute('aria-labelledby', control.labelId);
+    (control.select.closest('dialog[open]') || document.body).append(menu);
+    if (menu.showPopover) { menu.setAttribute('popover', 'manual'); menu.showPopover(); }
+    current = { ...control, menu, active: control.select.selectedIndex };
+    render();
+    control.button.focus({ preventScroll: true });
+    menu.addEventListener('pointerdown', (e) => { if (e.target.closest('.ms-option')) e.preventDefault(); });
+    menu.addEventListener('click', (e) => { const row = e.target.closest('.ms-option'); if (row) choose(+row.dataset.index); });
+  }
+
+  function enhance(select) {
+    if (controls.has(select)) return;
+    const id = `ms-${++sequence}`, button = document.createElement('button');
+    const value = document.createElement('span'); value.className = 'ms-value'; value.id = id + '-value';
+    let label = select.closest('label')?.querySelector(':scope > span') || document.querySelector(`label[for="${select.id}"]`);
+    if (label && !label.id) label.id = id + '-label';
+    const labelId = label?.id || value.id;
+    button.type = 'button'; button.className = 'ms-select';
+    button.setAttribute('role', 'combobox'); button.setAttribute('aria-haspopup', 'listbox');
+    button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-controls', id + '-list');
+    button.setAttribute('aria-labelledby', [...new Set([labelId, value.id])].join(' '));
+    button.append(value); button.insertAdjacentHTML('beforeend', icon('m6 9 6 6 6-6'));
+    select.hidden = true; select.after(button);
+    const sync = () => {
+      value.textContent = select.selectedOptions[0]?.label || '';
+      button.disabled = select.disabled;
+      if (current?.select === select) { if (select.disabled) close(); else render(); }
+    };
+    const control = { select, button, sync, labelId };
+    controls.set(select, control);
+    button.addEventListener('click', () => { if (current?.select === select) close(); else open(control); });
+    button.addEventListener('keydown', (e) => {
+      const isOpen = current?.select === select;
+      if (e.key === 'Tab') { if (isOpen) close(); return; }
+      if (e.key === 'Escape') { if (isOpen) { e.preventDefault(); e.stopPropagation(); close(true); } return; }
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (isOpen) choose(current.active); else open(control);
+        return;
+      }
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+        if (!isOpen) open(control);
+        const enabled = [...select.options].map((option, index) => !option.disabled && !option.hidden ? index : -1).filter(index => index >= 0);
+        const at = enabled.indexOf(current.active);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? enabled.length - 1 : Math.max(0, Math.min(enabled.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)));
+        highlight(enabled[next]); return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        if (!isOpen) open(control);
+        const now = Date.now(); typed = now - typedAt > 700 ? e.key : typed + e.key; typedAt = now;
+        const match = [...select.options].findIndex(option => !option.disabled && !option.hidden && option.label.toLocaleLowerCase().startsWith(typed.toLocaleLowerCase()));
+        if (match >= 0) highlight(match);
+      }
+    });
+    select.addEventListener('change', sync); select.addEventListener('input', sync);
+    select.form?.addEventListener('reset', () => { if (current?.select === select) close(); setTimeout(sync); });
+    new MutationObserver(sync).observe(select, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['disabled', 'selected', 'label', 'value'] });
+    sync();
+  }
+
+  const scan = (root) => {
+    if (root.matches?.(selector)) enhance(root);
+    root.querySelectorAll?.(selector).forEach(enhance);
+  };
+  scan(document);
+  new MutationObserver((list) => { for (const m of list) m.addedNodes.forEach(node => { if (node.nodeType === 1) scan(node); }); })
+    .observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('pointerdown', (e) => { if (current && !current.button.contains(e.target) && !current.menu.contains(e.target)) close(); }, true);
+  document.addEventListener('close', (e) => { if (current && e.target.contains?.(current.select)) close(); }, true);
+  document.addEventListener('submit', (e) => { if (current && e.target.contains(current.select)) close(); }, true);
+  document.addEventListener('scroll', (e) => { if (current && !current.menu.contains(e.target)) place(); }, true);
+  window.addEventListener('resize', place);
+  window.visualViewport?.addEventListener('resize', place);
+  window.visualViewport?.addEventListener('scroll', place);
 })();

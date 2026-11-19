@@ -56,30 +56,56 @@ export async function remove(req, res) {
 
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 // Like or unlike a photo. Body: { liked: true|false }. Counts change only when the state really does.
-export async function like(req, res) {
+// ---- POST /api/photos/:id/report  { reason, note } ----
+// The reporter stops seeing the photo at once. When REPORTS_TO_HIDE (3) different people report it, it's
+// hidden from everyone (into the host's bin, where the host can't restore it) until staff decide.
+const REPORTS_TO_HIDE = Number(process.env.REPORTS_TO_HIDE) || 3;
+export async function report(req, res) {
   const { photo } = await photoFor(req, { react: true });
-  const uid = req.user._id;
-  const who = { user: photo.uploader, actor: uid, album: photo.album, photo: photo._id };
-  if (req.body?.liked === false) {
-    const r = await Photo.updateOne({ _id: photo._id, likes: uid }, { $pull: { likes: uid, likeLog: { user: uid } }, $inc: { likeCount: -1 } });
-    if (r.modifiedCount) await unnotify({ ...who, type: 'like' });
-  } else {
-    const r = await Photo.updateOne({ _id: photo._id, likes: { $ne: uid } }, { $push: { likes: uid, likeLog: { user: uid, at: new Date() } }, $inc: { likeCount: 1 } });
-    // The person who added the photo hears about it
-    if (r.modifiedCount) await notify({ ...who, type: 'like' });
+  const reason = ['nudity', 'abuse', 'privacy', 'copyright', 'other'].includes(req.body?.reason) ? req.body.reason : null;
+  if (!reason) throw new HttpError(400, 'Choose why you’re reporting this photo.');
+  const note = String(req.body?.note ?? '').trim().slice(0, 1000);
+  const { Report } = await import('../models/Report.js');
+  await Report.updateOne({ photo: photo._id, reporter: req.user._id }, { $set: { reason, note, status: 'open', album: photo.album } }, { upsert: true });
+  // Out of the reporter's own view straight away
+  await Membership.updateOne({ album: photo.album, user: req.user._id }, { $addToSet: { hidden: photo._id }, $setOnInsert: { role: 'guest', via: 'group' } }, { upsert: true });
+  const reports = await Report.countDocuments({ photo: photo._id, status: 'open' });
+  let hiddenForEveryone = false;
+  if (reports >= REPORTS_TO_HIDE) {
+    const r = await Photo.updateOne({ _id: photo._id, flaggedAt: null }, { $set: { flaggedAt: new Date(), deletedAt: new Date() } });
+    hiddenForEveryone = r.modifiedCount === 1;
   }
-  const now = await Photo.findById(photo._id, 'likes likeCount');
-  res.json({ likes: Math.max(0, now.likeCount || 0), liked: now.likes.some((id) => id.equals(uid)) });
+  const { audit } = await import('../services/auditService.js');
+  await audit('photo.reported', { req, target: photo._id, meta: { reason, reports, hiddenForEveryone } });
+  res.status(201).json({ reported: true, hidden: true, message: 'Thanks for telling us. You won’t see this photo any more, and we’ll take a look.' });
 }
 
+// ---- Bookmarks: private, just for you (they replaced likes; reactions show love in public now) ----
+// They're kept where likes were, so photos liked before count as bookmarked. Nobody else is told or
+// sees a count, and they don't make a photo the album's cover.
+async function setBookmark(req, on) {
+  const { photo } = await photoFor(req, { react: true });
+  const uid = req.user._id;
+  if (on) await Photo.updateOne({ _id: photo._id, likes: { $ne: uid } }, { $push: { likes: uid, likeLog: { user: uid, at: new Date() } }, $inc: { likeCount: 1 } });
+  else await Photo.updateOne({ _id: photo._id, likes: uid }, { $pull: { likes: uid, likeLog: { user: uid } }, $inc: { likeCount: -1 } });
+  // A "liked your photo" from before bookmarks goes too
+  if (!on) await unnotify({ user: photo.uploader, type: 'like', actor: uid, photo: photo._id });
+  const now = await Photo.findById(photo._id, 'likes');
+  return now.likes.some((id) => id.equals(uid));
+}
+// POST /api/photos/:id/bookmark  { bookmarked: true|false }
+export async function bookmark(req, res) {
+  res.json({ bookmarked: await setBookmark(req, req.body?.bookmarked !== false) });
+}
+// The old address for the same thing ({ liked }), for pages from before bookmarks
+export async function like(req, res) {
+  res.json({ liked: await setBookmark(req, req.body?.liked !== false), likes: 0 });
+}
+// Who bookmarked it: private, so only ever you
 export async function likes(req, res) {
   const { photo } = await photoFor(req, { react: true });
-  await photo.populate({ path: 'likes', model: 'User', select: AVATAR_FIELDS });
-  const people = photo.likes.map((user) => {
-    const mine = user._id.equals(req.user._id);
-    return { by: mine ? 'You' : firstName(user.name), mine, avatarUrl: avatarOf(user) };
-  }).sort((a, b) => b.mine - a.mine);
-  res.json({ people });
+  if (!photo.likes.some((id) => id.equals(req.user._id))) return res.json({ people: [] });
+  res.json({ people: [{ by: 'You', mine: true, avatarUrl: avatarOf(req.user) }] });
 }
 
 export const REACTIONS = ['😍', '😂', '🔥', '👏', '🥹', '😮', '🎉', '🥳', '❤️', '🙌', '✨', '🤩'];
@@ -115,7 +141,8 @@ export async function reactions(req, res) {
   res.json({ people });
 }
 
-// ---- GET /api/photos/liked  The photos you liked (Liked tab), newest like first ----
+// ---- GET /api/photos/bookmarked  The photos you bookmarked (Bookmarked tab), newest first ----
+// (GET /api/photos/liked is the old address: the same list, with likedAt)
 // Only photos still in albums you can open, and not in the bin
 export async function liked(req, res) {
   const { albumIdsOf } = await import('./albumController.js');
@@ -127,7 +154,7 @@ export async function liked(req, res) {
     id: p.id, albumId: p.album.id, albumName: p.album.name,
     url: url(p.id), thumbnailUrl: `${url(p.id)}?size=thumb`,
     by: p.uploader?._id.equals(req.user._id) ? 'You' : firstName(p.uploader?.name),
-    likedAt: p.likeLog.find((l) => l.user?.equals(req.user._id))?.at,
-  })).sort((a, b) => (b.likedAt || 0) - (a.likedAt || 0));
-  res.json({ photos: out });
+    bookmarkedAt: p.likeLog.find((l) => l.user?.equals(req.user._id))?.at,
+  })).sort((a, b) => (b.bookmarkedAt || 0) - (a.bookmarkedAt || 0));
+  res.json({ photos: req.path.endsWith('/liked') ? out.map(({ bookmarkedAt, ...p }) => ({ ...p, likedAt: bookmarkedAt })) : out });
 }

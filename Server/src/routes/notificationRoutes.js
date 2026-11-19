@@ -16,32 +16,45 @@ notificationRoutes.get('/push/key', (req, res) => res.json({ key: isPushConfigur
 
 notificationRoutes.use(requireVerified);
 
+// Old "liked your photo" notifications aren't shown: likes are private bookmarks now
+const SHOWN = { type: { $ne: 'like' } };
+const unreadOf = (userId) => Notification.countDocuments({ user: userId, read: false, ...SHOWN });
+
 // GET /api/notifications[?before=<ISO time>]  The newest 30 (or the 30 before), and how many are unread
 notificationRoutes.get('/', async (req, res) => {
   const before = req.query.before ? new Date(String(req.query.before)) : null;
-  const filter = { user: req.user._id, ...(before && !Number.isNaN(before.getTime()) && { at: { $lt: before } }) };
+  const filter = { user: req.user._id, ...SHOWN, ...(before && !Number.isNaN(before.getTime()) && { at: { $lt: before } }) };
   const [list, unread] = await Promise.all([
     Notification.find(filter).sort({ at: -1 }).limit(30),
-    Notification.countDocuments({ user: req.user._id, read: false }),
+    unreadOf(req.user._id),
   ]);
   res.set('Cache-Control', 'no-store').json({ notifications: await describe(list), unread, more: list.length === 30 });
 });
 
 // GET /api/notifications/unread  Just the count, for a badge (cheap enough to check often)
 notificationRoutes.get('/unread', async (req, res) => {
-  res.set('Cache-Control', 'no-store').json({ unread: await Notification.countDocuments({ user: req.user._id, read: false }) });
+  res.set('Cache-Control', 'no-store').json({ unread: await unreadOf(req.user._id) });
 });
 
-// POST /api/notifications/read  { ids: [...] } or { all: true }
+// POST /api/notifications/read  { ids: [...] } marks those; {} (or { all: true }) marks every one
 notificationRoutes.post('/read', async (req, res) => {
   const filter = { user: req.user._id, read: false };
-  if (req.body?.all !== true) {
-    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter((id) => mongoose.isValidObjectId(id)).slice(0, 200);
-    if (!ids.length) throw new HttpError(400, 'Say which notifications to mark as read.');
+  if (req.body?.all !== true && Array.isArray(req.body?.ids)) {
+    const ids = req.body.ids.filter((id) => mongoose.isValidObjectId(id)).slice(0, 200);
+    if (!ids.length) return res.json({ marked: 0, unread: await unreadOf(req.user._id) });
     filter._id = { $in: ids };
   }
   const r = await Notification.updateMany(filter, { read: true });
-  res.json({ marked: r.modifiedCount, unread: await Notification.countDocuments({ user: req.user._id, read: false }) });
+  res.json({ marked: r.modifiedCount, unread: await unreadOf(req.user._id) });
+});
+
+// POST /api/notifications/clear  { before: <ISO time> }  "Clear all": deletes your notifications up to that
+// time (the newest one the inbox showed), so one that arrived meanwhile stays. Without before: all of them.
+notificationRoutes.post('/clear', async (req, res) => {
+  const before = req.body?.before ? new Date(String(req.body.before)) : null;
+  if (before && Number.isNaN(before.getTime())) throw new HttpError(400, 'That time isn’t valid.');
+  const r = await Notification.deleteMany({ user: req.user._id, ...(before && { at: { $lte: before } }) });
+  res.json({ cleared: r.deletedCount, unread: await unreadOf(req.user._id) });
 });
 
 // Push: a browser hands over its subscription (from PushManager.subscribe), or takes it back

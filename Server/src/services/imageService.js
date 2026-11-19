@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { HttpError } from '../utils/httpError.js';
+import { stripLocation } from '../utils/gpsStrip.js';
 
 const TYPES = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
 
@@ -8,7 +9,9 @@ const TYPES = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: '
 // The decoder detects the format from bytes, never the filename or client MIME.
 // Reading metadata alone is insufficient: toBuffer must decode the pixel data
 // successfully before the caller is allowed to persist anything.
-export async function sanitizePhoto(buffer) {
+export async function sanitizePhoto(input) {
+  // The original is kept as uploaded, minus where it was taken (GPS); see utils/gpsStrip.js
+  const { buffer } = stripLocation(input);
   try {
     const image = sharp(buffer, { animated: true, limitInputPixels: 100_000_000, failOn: 'warning' });
     const metadata = await image.metadata();

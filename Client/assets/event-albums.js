@@ -241,7 +241,7 @@
       el.dataset.id = a.id;
       const pic = a.cover?.thumbUrl || (a.pics || [])[0];   // the host's cover while upcoming, then the most loved photo
       const waiting = waitingOf(a).length;
-      const place = a.venue?.address || a.place;
+      const place = a.venue?.address || (window.Momento?.event?.isPlaceholder?.(a.place) ? '' : a.place);
       const s = statusOf(a);
       el.innerHTML = `
         <span class="eh-pic" aria-hidden="true">${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async">` : esc((a.name.trim()[0] || '·').toUpperCase())}</span>

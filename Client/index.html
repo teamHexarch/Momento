@@ -3,6 +3,7 @@
 <head>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
+  <script src="assets/inbox.js" defer></script>
   <script src="assets/pickers.js" defer></script>
   <script src="assets/nearby.js" defer></script>
   <script src="assets/guard.js"></script>
@@ -12,6 +13,7 @@
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
   <script>
@@ -369,7 +371,7 @@
     }
     .qr-strip { padding: .85rem .2rem 1.15rem; }
     .qr-event { font-size: .72rem; font-weight: 600; letter-spacing: .02em; color: var(--stone); }
-    /* Handwritten on the strip, like the captions on the floating prints */
+    /* Handwritten on the strip, like a label on a print */
     .qr-title {
       margin: 0; font: 600 1.75rem/1.05 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
       letter-spacing: .01em; color: #4F4A61;
@@ -433,11 +435,6 @@
     @keyframes floater-bob { from { translate: 0 -10px; rotate: -4deg; } to { translate: 0 10px; rotate: 4deg; } }
     @media (prefers-reduced-motion: reduce) { .floater { animation: none; } }
     .floater img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 1px; background: linear-gradient(160deg, #E9E3F4, #F3E6EC 55%, #E2EEEC); filter: saturate(.9); }
-    /* A handwritten caption on the print's white strip */
-    .floater .cap {
-      position: absolute; left: 4px; right: 4px; bottom: 1px; overflow: hidden; color: #4F4A61; text-align: center; white-space: nowrap; text-overflow: ellipsis;
-      font: 600 calc(var(--size) * .135)/21px 'Caveat', 'Segoe Print', 'Bradley Hand', cursive; letter-spacing: .01em;
-    }
 
     /* The QR card's live pill: the demo event is on, and photos keep arriving */
     .qr-live {
@@ -1054,7 +1051,11 @@
     .auth .btn { min-height: 2.75rem; padding: 0 1.2rem; font-size: .88rem; }
     @media (max-width: 900px) {
       .auth-login { display: none; }
-      .auth .btn { min-height: 2.5rem; padding: 0 .9rem; font-size: .8rem; }
+      .auth .btn { min-height: 2.6rem; padding: 0 1.2rem; font-size: .9rem; line-height: 1; }   /* the label sits comfortably inside, not pressed to the edges */
+    }
+    @media (max-width: 360px) {
+      .auth .btn { min-height: 2.5rem; padding: 0 .85rem; font-size: .85rem; }
+      .hero-left .hero-cta .btn { padding-left: .55rem; padding-right: .55rem; font-size: .84rem; white-space: nowrap; }   /* both labels whole on the narrowest phones */
     }
 
     .auth-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
@@ -1211,7 +1212,7 @@
     .m-toast.is-danger .m-toast-ic { background: #9A3D3D; color: #fff; }
     .m-toast-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
     .m-toast-text b { font-weight: 650; }
-    .m-toast-text small { overflow: hidden; color: var(--slate); font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+    .m-toast-text small { color: var(--slate); font-size: .82rem; line-height: 1.35; overflow-wrap: break-word; }   /* wraps: a cut-off message can't be read */
     .m-toast-text small:empty { display: none; }
     .m-toast-act { flex: none; margin-left: .35rem; padding: .6rem 1.05rem; border-radius: 100px;
       color: var(--dusk); font: 650 .86rem var(--font-main); cursor: pointer; transition: transform .3s var(--spring); }
@@ -1352,10 +1353,10 @@
     <div class="nav-wrap" id="navWrap">
       <nav class="nav glass" aria-label="Main">
         <span class="nav-split active">
-          <a href="#home" class="nav-item nav-home" aria-current="page">Home</a>
+          <a href="#home" class="nav-item nav-home" aria-label="Home" aria-current="page"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.4 12 4l8 6.4V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.2H9v5.2H5.5A1.5 1.5 0 0 1 4 19Z"/></svg><span class="nav-label">Home</span></a>
           <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of this page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </span>
-        <a href="albums.html" class="nav-item">My albums</a>
+        <a href="albums.html" class="nav-item nav-albums" aria-label="My albums"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="13.5" height="13" rx="2.2"/><path d="M7.5 3.8h10.3a2.7 2.7 0 0 1 2.7 2.7V16"/><path d="m3.8 17 3.7-3.7 3 3 1.8-1.8 4.4 4.4"/></svg><span class="nav-label">My albums</span></a>
         <a href="events.html" class="nav-item nav-social" aria-label="Social"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Social</span></a>
         <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
       </nav>
@@ -1597,9 +1598,9 @@
           <p>Scan the map for public events happening around you, or search any town. Turn on alerts and Momento tells you when one starts nearby.</p>
         </div>
         <div class="feat-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19.5s-7.5-4.4-7.5-10A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/></svg>
           <h3>Keep the ones you love</h3>
-          <p>Heart your favourite photos and save albums you want to come back to. They all wait on the Liked tab in My albums.</p>
+          <p>Bookmark your favourite photos and save albums you want to come back to. They all wait on the Bookmarked tab in My albums.</p>
         </div>
       </div>
 
@@ -2129,14 +2130,13 @@
     } catch (e) {}
     const FLOAT_COUNT = vw > 900 ? 10 : 6;
     const PAIR_SIZES = [112, 98, 118, 92, 106], ROTS = [-7, 6, -4, 8, -9];
-    const CAPTIONS = ['first dance', 'golden hour', 'the toast', 'cake!', 'sparklers', 'the vows', 'best table', 'late night', 'the crew', 'confetti'];
     const floaters = Array.from({ length: FLOAT_COUNT }, (_, i) => {
       const pair = i >> 1, right = i % 2 === 0;
       // The two in a pair are close in size and tilt the opposite way, so the sides balance without looking stamped
       const size = PAIR_SIZES[pair % PAIR_SIZES.length] + (right ? 0 : (pair % 2 ? 6 : -6));
       const rot = right ? ROTS[pair % ROTS.length] : -ROTS[pair % ROTS.length] * .8;
       const f = { p: i % PICSUM.length, x: 50, y: 50, size, depth: .5 + (i % 4) * .23, rot, front: (pair + (right ? 0 : 1)) % 2 === 0, right };
-      const d = el('floater', `<img src="${HERO_MINE.length ? HERO_MINE[i % HERO_MINE.length] : photo(f.p, 240)}" alt=""><span class="cap">${CAPTIONS[i % CAPTIONS.length]}</span>`);
+      const d = el('floater', `<img src="${HERO_MINE.length ? HERO_MINE[i % HERO_MINE.length] : photo(f.p, 240)}" alt="">`);
       d.style.setProperty('--size', f.size + 'px');
       // Each photo bobs at its own pace (the same rhythm the script used to draw every frame)
       d.style.setProperty('--bob-time', ((5 + f.depth * 3) / 2).toFixed(2) + 's');
@@ -4215,16 +4215,17 @@
         <form class="acct-card" novalidate>
           <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
           <div class="m-view" data-view="form">
-            <h2 id="mCreateTitle">Create an album</h2>
-            <p class="acct-sub">Name it after the event. You’ll get a code to share with guests next.</p>
-            <label class="acct-field"><span>Album name</span><input name="name" maxlength="60" placeholder="For example Maya’s 30th" autocomplete="off"></label>
-            <div class="m-row2">
+            <h2 id="mCreateTitle" tabindex="-1">Create an album</h2>
+            <p class="m-progress" data-create-progress>Step 1 of 2</p>
+            <div data-create-step="details">
+              <label class="acct-field m-first"><span>Album name</span><input name="name" maxlength="60" placeholder="Maya’s 30th" autocomplete="off"></label>
               <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
-              <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" placeholder="Where it’s on" autocomplete="off"></label>
+              <input name="place" type="hidden">
+              <label class="acct-field m-group m-share" hidden><span>Share with</span><select name="group"></select></label>
             </div>
-            <fieldset class="m-group m-share" hidden><legend class="ev-label">Who do you want to share this album with?</legend><div class="ev-who" role="radiogroup"></div></fieldset>
+            <div data-create-step="event" hidden></div>
             <p class="acct-status" role="status"></p>
-            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Create album</button></div>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-create-back>Cancel</button><button class="acct-primary" type="submit">Next</button></div>
           </div>
           <div class="m-view m-done" data-view="done" hidden>
             <i class="m-done-ic" aria-hidden="true">${MARK.bigCheck}</i>
@@ -4240,27 +4241,66 @@
       const form = d.querySelector('form'), status = d.querySelector('.acct-status');
       const views = [...d.querySelectorAll('.m-view')];
       const showView = (v) => views.forEach((x) => { x.hidden = x.dataset.view !== v; });
-      const say = (msg) => { status.textContent = msg; status.classList.toggle('is-error', !!msg); };
-      let made = null;
+      const submit = form.querySelector('[type="submit"]'), back = form.querySelector('[data-create-back]');
+      const title = d.querySelector('#mCreateTitle'), progress = d.querySelector('[data-create-progress]');
+      const steps = [...d.querySelectorAll('[data-create-step]')];
+      let step = 'details', made = null;
+      const say = (msg, field) => {
+        form.querySelectorAll('.m-field-error').forEach((el) => el.remove());
+        form.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
+          el.removeAttribute('aria-invalid');
+          const ids = (el.getAttribute('aria-describedby') || '').split(' ').filter((id) => id && id !== 'mCreateError');
+          if (ids.length) el.setAttribute('aria-describedby', ids.join(' ')); else el.removeAttribute('aria-describedby');
+        });
+        status.textContent = field ? '' : msg;
+        status.classList.toggle('is-error', !!msg && !field);
+        if (msg && field) {
+          const error = document.createElement('small');
+          error.className = 'm-field-error'; error.id = 'mCreateError'; error.setAttribute('role', 'alert'); error.textContent = msg;
+          (field.closest('.acct-field, .ev-sec') || field.parentElement).append(error);
+          field.setAttribute('aria-invalid', 'true');
+          field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
+          field.focus();
+        }
+      };
+      const showStep = (next, focus = false) => {
+        const grouped = !!form.group?.value;
+        step = grouped ? 'details' : next;
+        steps.forEach((panel) => { panel.hidden = panel.dataset.createStep !== step; });
+        title.textContent = step === 'event' ? 'Event details' : 'Create an album';
+        progress.hidden = grouped;
+        progress.textContent = step === 'event' ? 'Step 2 of 2' : 'Step 1 of 2';
+        submit.textContent = grouped || step === 'event' ? 'Create album' : 'Next';
+        back.textContent = step === 'event' ? 'Back' : 'Cancel';
+        if (step === 'event') Momento.event?.activate(form);
+        d.scrollTop = 0;
+        if (focus) title.focus({ preventScroll: true });
+      };
+      back.addEventListener('click', () => {
+        if (form.dataset.busy) return;
+        if (step === 'event') { say(''); showStep('details', true); } else d.dismiss();
+      });
+      form.addEventListener('input', (e) => { if (e.target.getAttribute('aria-invalid') === 'true') say(''); });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (form.dataset.busy) return;
+        if (form.dataset.busy || made) return;
         const name = form.name.value.trim(), date = form.date.value, place = form.place.value.trim();
-        if (!name) { say('Give the album a name, like the event it’s for.'); form.name.focus(); return; }
-        if (!date) { say('Pick the date of the event.'); form.date.focus(); return; }
-        // Times, venue and zone (assets/event.js)
-        const ev = Momento.event ? Momento.event.read(form) : { fields: {} };
-        // A friend group: everyone in it gets the album too
-        const picked = groupField.querySelector('input[name="group"]:checked'), groupId = picked?.value || '', groupName = groupId ? picked.dataset.name : '';
-        if (ev.error) { say(ev.error); ev.focus?.focus?.(); return; }
+        if (!name) { showStep('details'); say('Enter an album name.', form.name); return; }
+        if (!date) { showStep('details'); say('Choose a date.', form.date); return; }
+        // Group albums finish here. Event albums collect times and a venue on the next screen.
+        const groupId = shareList.value || '', groupName = groupId ? shareList.selectedOptions[0]?.textContent || '' : '';
+        if (!Momento.event) { say('Event details couldn’t load. Refresh the page and try again.'); return; }
+        if (!groupId && step === 'details') { say(''); showStep('event', true); return; }
+        const ev = Momento.event.read(form);
+        if (ev.error) { say(ev.error, ev.focus); return; }
         say('');
         form.dataset.busy = 'true';
-        const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+        submit.disabled = back.disabled = true;
         try {
           ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields, ...(groupId && { groupId }) })));
           document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
         } catch (err) { say(err.message); return; }
-        finally { delete form.dataset.busy; submit.disabled = false; }
+        finally { delete form.dataset.busy; submit.disabled = back.disabled = false; }
         const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
         d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
         d.querySelector('.m-code b').textContent = made.code;
@@ -4287,32 +4327,26 @@
       const launch = d.launch;
       // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
       const groupField = d.querySelector('.m-group');
-      // "Who do you want to share this album with?": one of their friend groups (the album joins that
-      // group, and everyone in it sees it), or just the people at this event
-      const shareList = groupField.querySelector('.ev-who');
-      const shareOption = (value, title, note) => {
-        const l = document.createElement('label'), r = document.createElement('input'), b = document.createElement('b'), s = document.createElement('small');
-        r.type = 'radio'; r.name = 'group'; r.value = value; r.dataset.name = title;
-        b.textContent = title; s.textContent = note;
-        l.append(r, b, s);
-        return l;
-      };
+      // "Share with": an event's guests (they join with the code), or one of your friend groups (everyone in
+      // it sees the album). A dropdown, shown only when you have groups
+      const shareList = groupField.querySelector('select');
+      const shareOption = (value, title) => { const o = document.createElement('option'); o.value = value; o.textContent = title; return o; };
+      shareList.addEventListener('change', () => { say(''); showStep('details'); });
+      let groupsAsked = 0;
       async function loadGroups(groupId, groupName) {
+        const ask = ++groupsAsked;
         if (groupId) {
-          const option = shareOption(groupId, groupName || 'This group', 'Everyone in this group can see the album.');
-          shareList.replaceChildren(option);
-          option.querySelector('input').checked = true;
+          shareList.replaceChildren(shareOption(groupId, groupName || 'This group'));
+          shareList.value = groupId;
           groupField.hidden = false;
           return;
         }
-        const eventOnly = shareOption('', 'Just the people at this event', 'Guests join with the code, link or QR code.');
-        shareList.replaceChildren(eventOnly);
-        eventOnly.querySelector('input').checked = true;
+        shareList.replaceChildren(shareOption('', 'Guests at the event'));
         groupField.hidden = true;
         let groups;
         try { ({ groups } = await momentoApi('/api/groups')); } catch { return; }
-        if (eventOnly.parentNode !== shareList) return;
-        for (const g of groups) shareList.insertBefore(shareOption(g.id, g.name, `Everyone in ${g.name} sees it, including people who join the group later.`), eventOnly);
+        if (ask !== groupsAsked) return;
+        for (const g of groups) shareList.append(shareOption(g.id, g.name));
         groupField.hidden = !groups.length;
       }
       d.launch = (opts = {}) => {
@@ -4320,6 +4354,7 @@
         loadGroups(opts.groupId, opts.groupName);
         form.date.value = isoToday();
         Momento.event?.mount(form, { fromGroup: Boolean(opts.groupId) });
+        showStep('details');
         showView('form');
         launch();
         form.name.focus();

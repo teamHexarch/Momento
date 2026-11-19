@@ -1,6 +1,7 @@
 // Events: when and where an album's event is, and adding photos at it. Shared by every page.
 // - Momento.event.mount(form)   adds start/end times, "uploads open before", the venue (Google Maps)
 //                               and the 1 km / 2 km zone to the Create album form
+// - Momento.event.activate(form) starts venue search when the event step becomes visible
 // - Momento.event.read(form)    { error, focus } or { fields } to send with the new album
 //                               mount() also adds an optional cover photo; it's uploaded once the album exists
 //                               (PUT /api/albums/:id/cover, see COVER-API-NOTES.md)
@@ -37,6 +38,7 @@
   css.textContent = `
     .ev { display: grid; gap: .9rem; margin: .2rem 0 .4rem; }
     .ev .m-row2 { margin: 0; }
+    .ev > [hidden] { display: none !important; }
     .ev-sec { display: grid; gap: .45rem; }
     .ev-label { font-size: .82rem; font-weight: 650; color: var(--slate, #5c596b); }
     .ev-hint { margin: 0; font-size: .82rem; line-height: 1.5; color: var(--slate, #5c596b); }
@@ -104,14 +106,64 @@
     :root[data-theme="dark"] .ev-who input { accent-color: #F2EFF8; }
     @media (max-width: 480px) { .ev-who { grid-template-columns: 1fr; } }
     /* Create album: "Who do you want to share this album with?" (friend groups, then just this event) */
-    .m-share { border: 0; padding: 0; margin: 0 0 1rem; min-width: 0; }
+    /* ---- Create album, kept simple: name, date, who it's for; times and venue for an event; the rest under More options ---- */
+    .m-first { margin-top: 1.3rem; }
     .m-share[hidden] { display: none; }
-    .m-share legend { padding: 0; margin-bottom: .5rem; }
-    .m-share .ev-who { grid-template-columns: 1fr; }
+    .m-share select {
+      display: block; width: 100%; height: 2.9rem; box-sizing: border-box; padding: 0 2.6rem 0 1rem; font: 500 1rem var(--font-main, inherit);
+      -webkit-appearance: none; appearance: none; cursor: pointer; text-overflow: ellipsis;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 1rem center; background-size: 16px;
+    }
+    :root[data-theme="dark"] .m-share select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+    .ev-venue-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem .75rem; }
+    .ev-venue-line .ev-picked { flex: 1 1 12rem; min-width: 0; }
+    .ev-venue-line .ev-link { margin-left: auto; }
+    .ev-picked[hidden] { display: none; }
+    .ev-picked.is-error { color: #9A3D3D; }
+    :root[data-theme="dark"] .ev-picked.is-error { color: #F0A3A3; }
+    .ev-check { display: flex; align-items: flex-start; gap: .7rem; cursor: pointer; }
+    .ev-check[hidden] { display: none; }
+    .ev-check input { flex: none; width: 1.15rem; height: 1.15rem; margin: .15rem 0 0; accent-color: var(--dusk, #2e2c3a); cursor: pointer; }
+    .ev-check input:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    .ev-check b { display: block; font-size: .92rem; font-weight: 650; color: var(--dusk, #2e2c3a); }
+    .ev-check small { display: block; margin-top: .1rem; font-size: .8rem; line-height: 1.4; color: var(--slate, #5c596b); }
+    :root[data-theme="dark"] .ev-check input { accent-color: #F2EFF8; }
+    .ev-more-body .ev-cover { margin: 0; }
+    .ev-more-body .ev-cover-box:not(.has-pic) .ev-cover-pick { aspect-ratio: auto; min-height: 4.2rem; }
+    .ev-more-body .ev-cover-empty { grid-auto-flow: column; align-items: center; gap: .55rem; padding: .8rem 1rem; }
+    .ev-more-body .ev-cover-empty svg { margin: 0; }
+    .ev-cover .ev-hint:empty { display: none; }
+    details.ev-more { margin-bottom: .2rem; }
+    /* No empty line saved for a message that isn't there */
+    #mCreate .acct-status:empty { min-height: 0; margin: 0; }
     .ev-sec[hidden] { display: none; }
     details.ev-more > summary, details.ev-more > summary small { white-space: nowrap; }
     @media (max-width: 480px) { details.ev-more > summary small { display: none; } }
     @media (prefers-reduced-motion: reduce) { details.ev-more > summary svg, .ev-range::-webkit-slider-thumb { transition: none; } .ev-range:is(:hover, :active)::-webkit-slider-thumb { transform: none; } }
+
+
+    /* A short first screen, then event details. Group albums use only the first screen. */
+    #mCreate .m-progress { margin: .45rem 0 0; color: var(--slate); font-size: .82rem; line-height: 1.4; }
+    #mCreate [data-create-step] { margin-top: 1.15rem; }
+    #mCreate .m-first { margin-top: 0; }
+    #mCreate [data-create-step="details"] > .acct-field { margin-bottom: 1rem; }
+    #mCreate [data-create-step] > .ev { margin: 0; }
+    #mCreate .ev-when { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #mCreate .ev-when .acct-field { margin-bottom: 0; }
+    #mCreate .ev-lead select { width: 100%; min-width: 0; font-size: 1rem; }
+    #mCreate [data-view="form"] > .acct-actions { margin-top: 1.25rem; }
+    #mCreate .m-field-error { display: block; margin: .35rem 0 0; color: #9A3D3D; font-size: .8rem; line-height: 1.4; }
+    #mCreate [aria-invalid="true"] { outline: 2px solid #9A3D3D; outline-offset: 2px; }
+    #mCreateTitle:focus { outline: none; }
+    :root[data-theme="dark"] #mCreate .m-field-error { color: #F0A3A3; }
+    :root[data-theme="dark"] #mCreate [aria-invalid="true"] { outline-color: #F0A3A3; }
+    @media (max-width: 360px) {
+      #mCreate .ev-when input.mp-on { padding-inline: .6rem !important; background-image: none !important; }
+      #mCreate [data-view="form"] > .acct-actions button { padding-inline: .65rem; white-space: nowrap; }
+      #mCreate [data-view="form"] > .acct-actions .acct-primary { flex: 1.25; }
+      #mCreate [data-view="form"] > .acct-actions [data-create-back] { flex: .75; }
+    }
 
     /* Create album: the optional cover photo (shown while the event is upcoming) */
     .ev-cover { display: grid; gap: .45rem; margin: 0 0 1rem; }
@@ -252,8 +304,7 @@
   }
 
   // ---- The Create album form ----
-  const LEADS_H = Array.from({ length: 25 }, (_, h) => h);
-  const LEADS_M = [0, 15, 30, 45];
+  const LEADS = [0, 15, 30, 60, 120, 180, 360, 720, 1440];
   function mount(form, { fromGroup = false } = {}) {
     const view = form.querySelector('[data-view="form"]') || form;
     let box = view.querySelector('.ev');
@@ -263,52 +314,45 @@
       box = document.createElement('div');
       box.className = 'ev';
       box.innerHTML = `
-        <div class="m-row2">
-          <label class="acct-field"><span>Starts</span><input name="evStart" type="time" required></label>
-          <label class="acct-field"><span>Ends</span><input name="evEnd" type="time" required></label>
+        <div class="m-row2 ev-when">
+          <label class="acct-field"><span>Start time</span><input name="evStart" type="time" required></label>
+          <label class="acct-field"><span>End time</span><input name="evEnd" type="time" required></label>
         </div>
-        <div class="ev-sec">
+        <div class="ev-sec ev-venue">
           <span class="ev-label" id="evVenueLabel">Venue</span>
           <div class="ev-venue-search"></div>
           <div class="ev-map" hidden></div>
-          <p class="ev-picked is-empty" data-picked>${ICON.pin}<span>No venue chosen yet</span></p>
-          <div class="ev-venue-acts">
-            <a class="ev-link" data-gmaps href="https://www.google.com/maps" target="_blank" rel="noopener">${ICON.out}Search in Google Maps</a>
-            <button class="ev-link" type="button" data-here>${ICON.locate}Use where I am</button>
+          <div class="ev-venue-line">
+            <p class="ev-picked" data-picked hidden>${ICON.pin}<span></span></p>
+            <button class="ev-link" type="button" data-here>${ICON.locate}Use my location</button>
           </div>
         </div>
-        <div class="ev-sec">
-          <span class="ev-label" id="evWhoLabel">Who can join?</span>
-          <div class="ev-who" role="radiogroup" aria-labelledby="evWhoLabel">
-            <label><input type="radio" name="evVisibility" value="invite" checked><b>Invite only</b><small>People with the QR code, link or code</small></label>
-            <label><input type="radio" name="evVisibility" value="public"><b>Public</b><small>Shown on the Events map. Anyone inside the zone can join</small></label>
-          </div>
-        </div>
+        <!-- Everything optional, folded away: the cover (mountCover puts it first), public or not, and when and
+             how far away guests can add photos -->
         <details class="ev-more">
-          <summary>Additional settings<small data-more-sum></small>${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</summary>
+          <summary>More options${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</summary>
           <div class="ev-more-body">
-            <div class="ev-sec">
-              <span class="ev-label" id="evLeadLabel">Guests can add photos from</span>
-              <div class="ev-lead" role="group" aria-labelledby="evLeadLabel">
-                <select name="evLeadH" aria-label="Hours before the start">${LEADS_H.map((h) => `<option value="${h}">${h} h</option>`).join('')}</select>
-                <select name="evLeadM" aria-label="Minutes before the start">${LEADS_M.map((m) => `<option value="${m}">${m} min</option>`).join('')}</select>
-                <span>before it starts</span>
+            <label class="ev-check ev-public"><input type="checkbox" name="evPublic"><span><b>Public event</b><small>Show it on the Events map so anyone there can join</small></span></label>
+            <div class="ev-sec ev-lead-sec">
+              <label class="ev-label" for="evLead">Uploads open</label>
+              <div class="ev-lead">
+                <select name="evLead" id="evLead">${LEADS.map((m) => `<option value="${m}">${m === 0 ? 'At the start' : m < 60 ? `${m} minutes before` : `${m / 60} hour${m === 60 ? '' : 's'} before`}</option>`).join('')}</select>
               </div>
-              <p class="ev-hint" data-lead-hint></p>
             </div>
-            <div class="ev-sec">
-              <div class="ev-range-head"><label class="ev-label" for="evRadius">Guests can add photos within</label><output class="ev-range-val" for="evRadius" data-radius-out>1 km</output></div>
+            <div class="ev-sec ev-radius-sec">
+              <div class="ev-range-head"><label class="ev-label" for="evRadius">Guests must be within</label><output class="ev-range-val" for="evRadius" data-radius-out>1 km</output></div>
               <input class="ev-range" id="evRadius" name="evRadius" type="range" min="1" max="10" step="0.5" value="1" aria-valuetext="1 kilometre">
-              <div class="ev-range-ends" aria-hidden="true"><span>1 km</span><span>10 km</span></div>
-              <p class="ev-hint">of the venue. Momento checks a guest’s location when they join.</p>
             </div>
           </div>
         </details>`;
-      view.querySelector('.acct-status')?.before(box);
+      const eventStep = view.querySelector('[data-create-step="event"]');
+      if (eventStep) eventStep.append(box); else view.querySelector('.acct-status')?.before(box);
       wire(form, box);
     }
     box._reset();
-    box.querySelector('details.ev-more').hidden = fromGroup;
+    // (a form opened from a group has that group ticked already; the choices may only arrive a moment later)
+    box._syncWho();
+    setTimeout(() => box._syncWho());
     mountCover(form, view);
   }
 
@@ -334,26 +378,27 @@
     if (!blob) throw new Error('That photo couldn’t be prepared. Try another one.');
     return blob;
   }
-  const COVER_HINT = 'Guests see it while the event is upcoming. Once it’s live, the most loved photo takes over.';
+  const COVER_HINT = '';   // (no standing explanation: the line under the cover only says what's happening, or what went wrong)
   function mountCover(form, view) {
     let wrap = view.querySelector('.ev-cover');
     if (!wrap) {
       wrap = document.createElement('div');
       wrap.className = 'ev-cover';
       wrap.innerHTML = `
-        <span class="ev-label ev-cover-label" id="evCoverLabel">Cover photo <i>(optional)</i></span>
+        <span class="ev-label ev-cover-label" id="evCoverLabel">Cover photo</span>
         <div class="ev-cover-box">
           <button class="ev-cover-pick" type="button" aria-describedby="evCoverHint" aria-label="Add a cover photo">
             <img class="ev-cover-img" alt="" hidden>
             <span class="ev-cover-shade" hidden></span>
-            <span class="ev-cover-empty">${svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>', 24)}<b>Add a cover photo</b><small>A poster, the venue, or the guest of honour</small></span>
+            <span class="ev-cover-empty">${svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>', 24)}<b>Add a cover photo</b></span>
           </button>
           <div class="ev-cover-acts" hidden><span>Cover photo</span><button class="ev-cover-btn" type="button" data-cover-change>Change</button><button class="ev-cover-btn is-quiet" type="button" data-cover-remove>Remove</button></div>
         </div>
         <input class="ev-cover-file" type="file" accept="image/*" tabindex="-1" aria-hidden="true">
         <p class="ev-hint" id="evCoverHint">${COVER_HINT}</p>`;
-      const row = view.querySelector(':scope > .m-row2');   // under the date and place
-      if (row) row.after(wrap); else view.querySelector('.acct-status')?.before(wrap);
+      // First thing under More options (or, without it, just above the message line)
+      const more = view.querySelector('.ev-more-body');
+      if (more) more.prepend(wrap); else view.querySelector('.acct-status')?.before(wrap);
       const box = wrap.querySelector('.ev-cover-box'), pick = wrap.querySelector('.ev-cover-pick'), file = wrap.querySelector('.ev-cover-file');
       const img = wrap.querySelector('.ev-cover-img'), shade = wrap.querySelector('.ev-cover-shade'), acts = wrap.querySelector('.ev-cover-acts'), hint = wrap.querySelector('.ev-hint');
       const show = (cover) => {
@@ -418,11 +463,12 @@
     const state = { venue: null, radiusM: 1000, map: null, marker: null, circle: null };
     box._state = state;
     const picked = box.querySelector('[data-picked]'), mapEl = box.querySelector('.ev-map'), search = box.querySelector('.ev-venue-search');
-    const leadHint = box.querySelector('[data-lead-hint]');
 
+    // The chosen venue, under the search box (nothing there until one is chosen)
     const showPicked = () => {
-      picked.classList.toggle('is-empty', !state.venue);
-      picked.lastChild.textContent = state.venue ? [state.venue.name, state.venue.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') : 'No venue chosen yet';
+      picked.classList.remove('is-error');
+      picked.hidden = !state.venue;
+      picked.lastChild.textContent = state.venue ? [isPlaceholder(state.venue.name) ? 'Your location' : state.venue.name, state.venue.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') : '';
     };
     const drawZone = () => {
       if (!state.map || !state.venue) return;
@@ -432,25 +478,14 @@
     };
     const setVenue = (v) => {
       state.venue = v;
-      if (form.place) form.place.value = (v?.name || v?.address || '').slice(0, 60);
+      if (form.place) form.place.value = ((isPlaceholder(v?.name) ? '' : v?.name) || v?.address || '').slice(0, 60);
       showPicked(); drawZone();
       state.onVenue?.(v);
     };
 
-    // Uploads-open hint, e.g. "Uploads open at 6:30 pm, close at 11:00 pm"
-    const moreSum = box.querySelector('[data-more-sum]');
-    const syncSum = () => {
-      const m = Number(form.evLeadH.value) * 60 + Number(form.evLeadM.value);
-      const lead = m ? `${Math.floor(m / 60) ? `${Math.floor(m / 60)} h ` : ''}${m % 60 ? `${m % 60} min` : ''}`.trim() + ' early' : 'At the start';
-      moreSum.textContent = `${lead}, ${Number(form.evRadius.value)} km`;
-    };
-    const syncLead = () => {
-      syncSum();
-      const t = times(form);
-      leadHint.textContent = t ? `Uploads open ${fmtWhen(new Date(t.startsAt.getTime() - t.leadMin * 60000))} and close ${fmtTime(t.endsAt)}${t.endsAt.getDate() !== t.startsAt.getDate() ? ' the next day' : ''}.` : '';
-    };
-    ['evStart', 'evEnd', 'evLeadH', 'evLeadM', 'date'].forEach((n) => form[n]?.addEventListener('input', syncLead));
-    ['evLeadH', 'evLeadM'].forEach((n) => form[n].addEventListener('change', syncLead));
+    // (the form keeps to the essentials: no running summaries of the folded-away options)
+    const syncSum = () => {};
+    const syncLead = () => {};
 
     // The zone: 1 to 10 km in half-kilometre steps; the circle on the map follows the slider
     const range = form.evRadius, rangeOut = box.querySelector('[data-radius-out]');
@@ -466,16 +501,24 @@
     range.addEventListener('input', syncRadius);
     box._syncRadius = syncRadius;
 
-    const who = box.querySelector('.ev-who')?.closest('.ev-sec');
+    // An album for a friend group is shared with the group, not held at a place and time: no start and
+    // end, no venue, no "Who can join?" and no upload window
+    // (More options stays: the cover is there)
+    const eventOnly = ['.ev-public', '.ev-when', '.ev-venue', '.ev-lead-sec', '.ev-radius-sec'].map((s) => box.querySelector(s));
     const syncWho = () => {
-      const picked = form.querySelector('input[name="group"]:checked');
-      const grouped = !!picked?.value;
-      if (who) who.hidden = grouped;
-      if (grouped) { const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true; }
+      const grouped = !!form.group?.value;
+      box.dataset.grouped = grouped ? 'true' : '';
+      // Keep the optional cover on the group's single screen; event settings live on step two.
+      const panel = form.querySelector(`[data-create-step="${grouped ? 'details' : 'event'}"]`);
+      if (panel && box.parentElement !== panel) panel.append(box);
+      eventOnly.forEach((el) => { if (el) el.hidden = grouped; });
+      if (grouped && form.evPublic) form.evPublic.checked = false;
+      if (form.place) form.place.value = grouped ? '' : ((isPlaceholder(state.venue?.name) ? '' : state.venue?.name) || state.venue?.address || '').slice(0, 60);
     };
     form.addEventListener('change', (e) => { if (e.target.name === 'group') syncWho(); });
     form.addEventListener('reset', () => setTimeout(syncWho));
     syncWho();
+    box._syncWho = syncWho;
     const here = box.querySelector('[data-here]');
     here.addEventListener('click', async () => {
       // Says why first, the first time
@@ -487,13 +530,14 @@
         const typed = search.querySelector('input')?.value.trim();
         setVenue({ lat: p.lat, lng: p.lng, name: typed || 'Where you are now', address: '', placeId: '' });
         if (state.map) state.map.setCenter(p);
-      } catch (err) { picked.classList.add('is-empty'); picked.lastChild.textContent = err.message; }
+      } catch (err) { picked.hidden = false; picked.classList.add('is-error'); picked.lastChild.textContent = err.message; }
       finally { here.lastChild.textContent = label; }
     });
 
     // "Search in Google Maps" opens Google Maps on whatever venue has been typed or picked
-    const gmaps = box.querySelector('[data-gmaps]');
+    const gmaps = box.querySelector('[data-gmaps]');   // (no longer shown: the form keeps to search and "Use my location")
     const syncGmaps = (typed) => {
+      if (!gmaps) return;
       const q = (typed ?? '').trim() || (state.venue ? [state.venue.name, state.venue.address].filter(Boolean).join(', ') : '');
       gmaps.href = state.venue && !typed
         ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || `${state.venue.lat},${state.venue.lng}`)}`
@@ -504,7 +548,7 @@
     // Without a Maps key: type the venue and pick it from the suggestions that open underneath
     const plain = (why) => {
       search.innerHTML = `
-        <input type="text" maxlength="60" placeholder="Search for the venue, e.g. The Grand Hall" autocomplete="off" spellcheck="false"
+        <input type="text" maxlength="60" placeholder="Search venues" autocomplete="off" spellcheck="false"
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="evSuggest" aria-labelledby="evVenueLabel">
         <ul class="ev-suggest" id="evSuggest" role="listbox" aria-label="Places" hidden></ul>`;
       const input = search.querySelector('input'), list = search.querySelector('ul');
@@ -552,14 +596,14 @@
       input.addEventListener('blur', () => setTimeout(() => open(false), 120));
       input.addEventListener('focus', () => { if (results.length && !state.venue) paint(); });
       mapEl.hidden = true;
-      if (why) box.querySelector('.ev-venue-acts').insertAdjacentHTML('afterend', `<p class="ev-hint">${esc(why)}</p>`);
+      if (why) box.querySelector('.ev-venue-line').insertAdjacentHTML('afterend', `<p class="ev-hint">${esc(why)}</p>`);
     };
 
     box._reset = () => {
       form.evStart.value = '19:00'; form.evEnd.value = '23:00';
-      form.evLeadH.value = '0'; form.evLeadM.value = '30';
+      form.evLead.value = '30';
       form.evRadius.value = '1';
-      const inv = form.querySelector('input[name="evVisibility"][value="invite"]'); if (inv) inv.checked = true;
+      if (form.evPublic) form.evPublic.checked = false;
       box._syncRadius();
       setVenue(null);
       const input = search.querySelector('input'); if (input) input.value = '';
@@ -569,45 +613,59 @@
       syncLead();
     };
 
-    // Google Maps: search for the venue, then fine-tune by dragging the pin or tapping the map
-    getConfig().then(async ({ mapsApiKey }) => {
-      // No Maps key: the venue comes from the suggestions list (see plain)
-      if (!mapsApiKey) return plain('');
-      try {
-        await loadMaps(mapsApiKey);
-        const [{ Map, Circle }, { PlaceAutocompleteElement }, { AdvancedMarkerElement }] = await Promise.all(
-          ['maps', 'places', 'marker'].map((l) => google.maps.importLibrary(l)));
-        const ac = new PlaceAutocompleteElement({});
-        ac.setAttribute('placeholder', 'Search for the venue');
-        search.append(ac);
-        const usePlace = async (place) => {
-          if (!place) return;
-          await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'id'] });
-          if (!place.location) return;
-          setVenue({ lat: place.location.lat(), lng: place.location.lng(), name: place.displayName || '', address: place.formattedAddress || '', placeId: place.id || '' });
-        };
-        ac.addEventListener('gmp-select', (e) => usePlace(e.placePrediction?.toPlace()));
-        ac.addEventListener('gmp-placeselect', (e) => usePlace(e.place));   // older versions of the element
-        mapEl.hidden = false;
-        const start = state.venue || { lat: -33.8688, lng: 151.2093 };
-        state.map = new Map(mapEl, { center: start, zoom: 13, mapId: 'DEMO_MAP_ID', disableDefaultUI: true, zoomControl: true, gestureHandling: 'cooperative', clickableIcons: false });
-        state.marker = new AdvancedMarkerElement({ map: state.map, position: start, gmpDraggable: true, title: 'Venue' });
-        state.circle = new Circle({ map: state.map, center: start, radius: state.radiusM, strokeColor: '#6F9896', strokeOpacity: .9, strokeWeight: 2, fillColor: '#6F9896', fillOpacity: .14, clickable: false });
-        const moved = (ll) => setVenue({ ...(state.venue || {}), lat: ll.lat, lng: ll.lng, name: state.venue?.name || 'Pinned on the map', address: state.venue?.address || '', placeId: '' });
-        state.marker.addListener('dragend', () => { const p = state.marker.position; moved({ lat: typeof p.lat === 'function' ? p.lat() : p.lat, lng: typeof p.lng === 'function' ? p.lng() : p.lng }); });
-        state.map.addListener('click', (e) => moved({ lat: e.latLng.lat(), lng: e.latLng.lng() }));
-        if (!state.venue && navigator.permissions) {
-          // Centre the map on the host if they've already allowed location (no new prompt here)
-          navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') locate().then((l) => { if (!state.venue) state.map.setCenter(l); }, () => {}); }, () => {});
+    // Start venue search only once the event step is visible, so Maps gets a usable size.
+    let venueReady = false;
+    box._activate = () => {
+      if (venueReady) return;
+      venueReady = true;
+      getConfig().then(async ({ mapsApiKey }) => {
+        // No Maps key: the venue comes from the suggestions list (see plain)
+        if (!mapsApiKey) return plain('');
+        try {
+          await loadMaps(mapsApiKey);
+          const [{ Map, Circle }, { PlaceAutocompleteElement }, { AdvancedMarkerElement }] = await Promise.all(
+            ['maps', 'places', 'marker'].map((l) => google.maps.importLibrary(l)));
+          const ac = new PlaceAutocompleteElement({});
+          ac.setAttribute('placeholder', 'Search venues');
+          search.append(ac);
+          const usePlace = async (place) => {
+            if (!place) return;
+            await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'id'] });
+            if (!place.location) return;
+            setVenue({ lat: place.location.lat(), lng: place.location.lng(), name: place.displayName || '', address: place.formattedAddress || '', placeId: place.id || '' });
+          };
+          ac.addEventListener('gmp-select', (e) => usePlace(e.placePrediction?.toPlace()));
+          ac.addEventListener('gmp-placeselect', (e) => usePlace(e.place));   // older versions of the element
+          mapEl.hidden = false;
+          const start = state.venue || { lat: -33.8688, lng: 151.2093 };
+          state.map = new Map(mapEl, { center: start, zoom: 13, mapId: 'DEMO_MAP_ID', disableDefaultUI: true, zoomControl: true, gestureHandling: 'cooperative', clickableIcons: false });
+          state.marker = new AdvancedMarkerElement({ map: state.map, position: start, gmpDraggable: true, title: 'Venue' });
+          state.circle = new Circle({ map: state.map, center: start, radius: state.radiusM, strokeColor: '#6F9896', strokeOpacity: .9, strokeWeight: 2, fillColor: '#6F9896', fillOpacity: .14, clickable: false });
+          const moved = (ll) => setVenue({ ...(state.venue || {}), lat: ll.lat, lng: ll.lng, name: state.venue?.name || 'Pinned on the map', address: state.venue?.address || '', placeId: '' });
+          state.marker.addListener('dragend', () => { const p = state.marker.position; moved({ lat: typeof p.lat === 'function' ? p.lat() : p.lat, lng: typeof p.lng === 'function' ? p.lng() : p.lng }); });
+          state.map.addListener('click', (e) => moved({ lat: e.latLng.lat(), lng: e.latLng.lng() }));
+          if (!state.venue && navigator.permissions) {
+            // Centre the map on the host if they've already allowed location (no new prompt here)
+            navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') locate().then((l) => { if (!state.venue) state.map.setCenter(l); }, () => {}); }, () => {});
+          }
+          drawZone();
+          document.addEventListener('momento:maps-failed', () => { search.innerHTML = ''; plain('Google Maps couldn’t be used (check the API key). Type the venue’s name or tap “Use my location”.'); }, { once: true });
+        } catch (err) {
+          search.innerHTML = '';
+          plain('Google Maps couldn’t load, so type the venue’s name or tap “Use my location”.');
         }
-        drawZone();
-        document.addEventListener('momento:maps-failed', () => { search.innerHTML = ''; plain('Google Maps couldn’t be used (check the API key). Type the venue’s name and use “Use where I am” instead.'); }, { once: true });
-      } catch (err) {
-        search.innerHTML = '';
-        plain('Google Maps couldn’t load, so type the venue’s name and use “Use where I am” instead.');
-      }
-    });
+      });
+    };
+    // Older callers without steps can still show their venue search immediately.
+    if (!form.querySelector('[data-create-step]')) box._activate();
   }
+
+  function activate(form) {
+    form.querySelector('.ev')?._activate?.();
+  }
+
+  const PLACEHOLDER_NAMES = ['where you are now', 'pinned on the map'];
+  const isPlaceholder = (s) => PLACEHOLDER_NAMES.includes(String(s || '').trim().toLowerCase());
 
   // The event's times from the form, or null
   function times(form) {
@@ -616,7 +674,7 @@
     const startsAt = new Date(`${date}T${s}`);
     let endsAt = new Date(`${date}T${e}`);
     if (endsAt <= startsAt) endsAt = new Date(endsAt.getTime() + 86400000);   // runs past midnight
-    const leadMin = Number(form.evLeadH?.value || 0) * 60 + Number(form.evLeadM?.value || 0);
+    const leadMin = Number(form.evLead?.value || 0);
     return { startsAt, endsAt, leadMin };
   }
 
@@ -624,23 +682,27 @@
     const box = form.querySelector('.ev');
     if (!box) return { fields: {} };
     const st = box._state, t = times(form);
+    // A friend group album: just its name and date (see syncWho)
+    if (box.dataset.grouped) { if (form.place) form.place.value = ''; return { fields: { place: '', eventUploadWindow: false, visibility: 'invite' } }; }
     if (!form.evStart.value) return { error: 'Pick the time the event starts.', focus: form.evStart };
     if (!form.evEnd.value) return { error: 'Pick the time the event ends.', focus: form.evEnd };
     if (!t) return { error: 'Pick the date of the event.', focus: form.date };
     if (t.endsAt < new Date()) return { error: 'That event has already finished. Check the date and times.', focus: form.evEnd };
-    if (t.leadMin > 1440) { form.evLeadH.closest('details')?.setAttribute('open', ''); return { error: 'Uploads can open up to 24 hours before the event.', focus: form.evLeadH }; }
-    if (!st.venue) return { error: 'Choose the venue: start typing its name and pick it from the list, or use where you are.', focus: box.querySelector('gmp-place-autocomplete, .ev-venue-search input, [data-here]') };
-    const name = (box.querySelector('.ev-venue-search input')?.value || st.venue.name || '').trim();
+    if (!Number.isFinite(t.leadMin) || t.leadMin < 0 || t.leadMin > 1440) { form.evLead.closest('details')?.setAttribute('open', ''); return { error: 'Choose when uploads open, up to 24 hours before the event.', focus: form.evLead }; }
+    if (!st.venue) return { error: 'Select a venue or use your location.', focus: box.querySelector('gmp-place-autocomplete, .ev-venue-search input, [data-here]') };
+    // "Where you are now" and "Pinned on the map" only label the pin while choosing: they aren't the venue's name
+    const typed = (box.querySelector('.ev-venue-search input')?.value || '').trim();
+    const name = typed || (isPlaceholder(st.venue.name) ? '' : (st.venue.name || '').trim());
     return {
       fields: {
         place: name.slice(0, 60),
         startsAt: t.startsAt.toISOString(),
         endsAt: t.endsAt.toISOString(),
         uploadLeadMin: t.leadMin,
-        eventUploadWindow: !box.querySelector('details.ev-more').hidden,
+        eventUploadWindow: true,
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
-        visibility: !form.group?.value && form.evVisibility?.value === 'public' ? 'public' : 'invite',
+        visibility: !form.group?.value && form.evPublic?.checked ? 'public' : 'invite',
       },
     };
   }
@@ -765,5 +827,5 @@
     return `Event ${when}. This album has closed to new photos.`;
   }
 
-  Momento.event = { mount, read, camera, confirmUpload, locate, windowText, distanceM, prepareCover };
+  Momento.event = { mount, activate, read, camera, confirmUpload, locate, windowText, distanceM, prepareCover, isPlaceholder };
 })();

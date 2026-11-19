@@ -46,6 +46,16 @@ export async function open(key) {
   return fs.createReadStream(fullPath(key));
 }
 
+export async function folders(prefix) {
+  const dir = fullPath(prefix.replace(/\/$/, '') + '/x').slice(0, -2);
+  const names = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+  return names.filter((d) => d.isDirectory()).map((d) => `${prefix}${d.name}/`);
+}
+
+export async function removePrefix(prefix) {
+  await fsp.rm(fullPath(prefix.replace(/\/$/, '') + '/x').slice(0, -2), { recursive: true, force: true });
+}
+
 export async function remove(key) {
   const file = fullPath(key);
   await fsp.rm(file, { force: true });

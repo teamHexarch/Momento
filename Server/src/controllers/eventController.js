@@ -48,7 +48,7 @@ export async function nearby(req, res) {
     endsAt: { $gt: new Date() },
     'zone.lat': { $gte: at.lat - dLat, $lte: at.lat + dLat },
     'zone.lng': { $gte: at.lng - dLng, $lte: at.lng + dLng },
-  }).limit(300).populate('host', 'name');
+  }).limit(300).populate('host', 'name isMinor');
   const found = albums
     .map((a) => ({ a, distanceM: Math.round(distanceM(at, a.zone)) }))
     .filter((x) => x.distanceM <= radiusM || x.distanceM <= (x.a.zone.radiusM || 0));
@@ -56,7 +56,9 @@ export async function nearby(req, res) {
   const [stats, members, mine] = await Promise.all([
     Photo.aggregate([
       { $match: { album: { $in: ids }, deletedAt: null } },
-      { $group: { _id: '$album', photos: { $sum: 1 }, pics: { $topN: { n: PREVIEWS, sortBy: { likeCount: -1, createdAt: -1 }, output: '$_id' } } } },
+      // Most reacted-to first (bookmarks are private, so they don't count)
+      { $addFields: { score: { $size: { $ifNull: ['$reactions', []] } } } },
+      { $group: { _id: '$album', photos: { $sum: 1 }, pics: { $topN: { n: PREVIEWS, sortBy: { score: -1, createdAt: -1 }, output: '$_id' } } } },
     ]),
     Membership.aggregate([{ $match: { album: { $in: ids } } }, { $group: { _id: '$album', n: { $sum: 1 } } }]),
     req.user ? Membership.find({ album: { $in: ids }, user: req.user._id }, 'album') : [],
@@ -73,7 +75,7 @@ export async function nearby(req, res) {
       distanceM: d, inside: d <= a.zone.radiusM, inScan: d <= radiusM,
       bearing: Math.round(bearing(at, a.zone)), direction: d < 30 ? 'here' : COMPASS[Math.round(bearing(at, a.zone) / 45) % 8],
       photos: s?.photos || 0, pics: joined.has(String(a.id)) ? (s?.pics || []).map(thumbnailUrl) : [], guests: countOf.get(String(a.id)) || 0,
-      hostName: firstName(a.host?.name), joined: joined.has(String(a.id)),
+      hostName: a.host?.isMinor ? undefined : firstName(a.host?.name), joined: joined.has(String(a.id)),
       cover: hostCover(a),
     };
   }).sort((x, y) => (y.live - x.live) || (x.distanceM - y.distanceM));

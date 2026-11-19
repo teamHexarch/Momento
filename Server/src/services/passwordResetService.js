@@ -4,7 +4,8 @@ import { sendEmail, isEmailConfigured } from './emailService.js';
 import { issueToken, redeemToken } from './emailTokenService.js';
 import { resetHtml, passwordChangedHtml } from './emailTemplates.js';
 
-const LINK_MINUTES = 60;
+// Reset links are single-use (redeemed atomically), random (256 bits) and short-lived
+const LINK_MINUTES = 15;
 
 // Emails a reset link (older ones stop working). Outside production without email settings,
 // the link is printed to the server log instead.

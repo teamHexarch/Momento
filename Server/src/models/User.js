@@ -12,8 +12,24 @@ const userSchema = new mongoose.Schema({
   avatarKey: String,
   // Google vouches for the address; email/password signups start unverified
   emailVerified: { type: Boolean, default: false },
-  // Every new account starts as admin (set 2026-11-10; was 'free')
+  // Every new account starts as admin (set 2026-11-10; was 'free'). The plan only changes limits
+  // (admin: no 3-device limit); it gives no extra powers. Powers come from role, below.
   plan: { type: String, enum: ['free', 'plus', 'admin'], default: 'admin' },
+  // Staff can moderate (reports, takedowns) and use the emergency switches. Only ever set on the server
+  // (scripts/setRole.js), never through the API, and never sent to the browser.
+  role: { type: String, enum: ['user', 'staff'], default: 'user', select: false },
+  // Copyright strikes from takedowns; at 3 the account is suspended (suspendedAt)
+  strikes: { type: Number, default: 0 },
+  suspendedAt: Date,
+  suspendedReason: String,
+  // Ages 13 to 17 (from the age check at sign-up): kept out of public places such as the Events map
+  isMinor: { type: Boolean, default: false },
+  // When they confirmed their age at sign-up (the birth date itself is never stored)
+  ageConfirmedAt: Date,
+  // The latest Terms and Privacy Policy versions they accepted (the proof is in the Consent collection)
+  accepted: { type: new mongoose.Schema({ tos: String, privacy: String }, { _id: false }), select: false },
+  // Set while the account is being deleted: no login works, and a job finishes it if it stops halfway
+  deletingAt: { type: Date, select: false },
   googleId: { type: String, unique: true, sparse: true },
   lastLoginAt: Date,
   verificationResendAt: Date,
@@ -33,7 +49,8 @@ const userSchema = new mongoose.Schema({
     select: false,
   },
   sessions: {
-    type: [{ _id: false, id: { type: String, required: true }, deviceName: String, loggedInAt: Date, expiresAt: { type: Date, required: true } }],
+    // prev/rotatedAt: the token this login had before its latest swap (see utils/session.js)
+    type: [{ _id: false, id: { type: String, required: true }, prev: String, rotatedAt: Date, deviceName: String, loggedInAt: Date, expiresAt: { type: Date, required: true } }],
     default: [],
     select: false,
   },
@@ -52,7 +69,8 @@ const userSchema = new mongoose.Schema({
     }, { _id: false }),
     select: false,
   },
-  // Which emails they want (only the choice is stored; sending them comes later)
+  // Which emails they want. None is marketing; the weekly recap is off unless they turn it on, and
+  // every email that isn't about their account has a one-click unsubscribe link
   notify: {
     photos: { type: Boolean, default: true },    // someone adds photos to an album I'm in
     closing: { type: Boolean, default: true },   // an album is about to close

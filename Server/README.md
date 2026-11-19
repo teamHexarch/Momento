@@ -103,7 +103,8 @@ PORT=4000
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 JWT_SECRET=change-me
 # How long a login lasts, in days
-SESSION_DAYS=30
+# How long a login lasts without being used, in days (its token is renewed every 12 hours of use)
+TOKEN_DAYS=7
 # The address this API is reached at (live: https://api.hexarch.org). Used in photo links and cookies.
 PUBLIC_URL=http://localhost:4000
 # Optional public API for verification emails when local testing shares its database.
@@ -149,7 +150,7 @@ EMAIL_FROM=Momento <team@hexarch.org>
 # Where replies go
 EMAIL_REPLY_TO=team@hexarch.org
 
-# ---- Push notifications (likes, reactions, joins) ----
+# ---- Push notifications (reactions, new photos, joins, requests, group invites, closing soon) ----
 # Make the pair once with "npx web-push generate-vapid-keys". Without them, notifications only show
 # in the inbox. Changing the pair switches push off on every device until they allow it again.
 VAPID_PUBLIC_KEY=
@@ -166,6 +167,20 @@ CLOUDFRONT_PRIVATE_KEY=
 # NSFW_CHECK=off
 # How sure the model must be before a photo is refused (0 to 1)
 # NSFW_THRESHOLD=0.6
+
+# ---- Security and privacy (see "Security and privacy") ----
+# Where security alerts go: an email address and/or a Slack/Discord incoming webhook (both optional)
+# SECURITY_ALERT_EMAIL=
+# SECURITY_ALERT_WEBHOOK=
+# The current Terms and Privacy Policy versions. Change one when the policy changes.
+# TOS_VERSION=2026-11-19
+# PRIVACY_VERSION=2026-11-19
+# on: people must accept the current versions before using the site (only once the site asks them to)
+# REQUIRE_CONSENT=on
+# on: sign-up needs a date of birth (under 13s are refused either way when the form sends one)
+# REQUIRE_AGE=on
+# How many different people reporting a photo hide it for everyone until staff decide
+# REPORTS_TO_HIDE=3
 ```
 
 ## 1. MongoDB Atlas
@@ -245,7 +260,11 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/auth/logout` | Ends the session |
 | GET | `/api/auth/me` | `{ user }`, or `{ user: null }` when logged out |
 | PATCH | `/api/auth/me` | `{ name?, notify?: { photos, closing, recap } }` |
-| DELETE | `/api/auth/me` | `{ password }` (password accounts): deletes the account, the albums it hosts with all their photos, and its photos in other albums |
+| DELETE | `/api/auth/me` | `{ password }` (password accounts): deletes the account and everything about it (see "Security and privacy") |
+| GET | `/api/auth/me/export` | Everything stored about you, as a JSON file (3 an hour) |
+| GET / POST | `/api/auth/consent` | The current Terms/Privacy versions and whether you accepted them; POST `{ tos, privacy }` (the versions shown) or `{ accept: true }` records acceptance |
+| GET / POST | `/api/auth/unsubscribe?u=&k=&s=` | **No login.** The signed one-click unsubscribe link in emails (`k`: closing, recap, photos) |
+| POST | `/api/auth/moderation/:id/review` | Ask a person to look at an upload the nudity check refused (`decisionId` from the 422) |
 | POST | `/api/auth/email` | `{ email, password }`: emails a confirm link to the new address and a notice to the old one |
 | GET | `/api/auth/email/confirm?token=` | The link in that email: switches the address, then goes to `settings.html?email=changed` (or `taken` / `invalid`) |
 | GET | `/api/auth/verify-email?token=` | The link in the email: confirms the address, then goes to `/?verified=1` (or `=invalid`) |
@@ -259,8 +278,8 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/albums/:id/remind` | Host only: emails guests who haven't added photos (once a day per album, at most 25 people) |
 | GET | `/api/events/nearby` | **No login needed.** `?lat&lng&radius` (1000 or 5000 metres: 1 km by default, 5 km for anything bigger) Public events that haven't finished, nearest first, with `distanceM`, `bearing`, `direction`, `inside`, `inScan`. See GUEST-AND-NEARBY-API.md |
 | POST | `/api/events/:id/join` | `{ location }` joins a public event as a guest (inside its zone, or the host approves) |
-| GET | `/api/albums/:id` | One album with its photos (each with `likes`, `liked`, `reactions`, `reaction`), minus any you've hidden or the host has deleted; `album.hiddenCount`, `album.saved`, and for the host `album.trashCount`. `?hidden=1` includes your hidden ones, marked `hidden: true` |
-| POST | `/api/albums/:id/save` | `{ saved }` the bookmark (saved albums show under Liked) |
+| GET | `/api/albums/:id` | One album with its photos (each with `bookmarked` (yours, private; `liked` is its old name), `reactions`, `reaction`), minus any you've hidden or the host has deleted; `album.hiddenCount`, `album.saved`, and for the host `album.trashCount`. `?hidden=1` includes your hidden ones, marked `hidden: true` |
+| POST | `/api/albums/:id/save` | `{ saved }` the bookmark (saved albums show under Bookmarked) |
 | PUT | `/api/albums/:id/cover` | Host only: multipart field `cover` (one image, up to 15 MB) sets the album's cover picture, re-encoded as WebP |
 | DELETE | `/api/albums/:id/cover` | Host only: takes the cover picture off |
 | GET | `/api/albums/:id/cover/:token` | **No login needed.** The cover picture (`?size=thumb` for the small one). The address comes with the album as `cover.url` |
@@ -271,16 +290,19 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF). Returns `{ photos, skipped, blocked }`: `skipped` were duplicates, `blocked` looked like nudity and were refused. If every photo is refused: 422 with `code: "nsfw"` |
 | GET | `/api/albums/:id/download` | Every photo as a .zip. Albums over 300 photos or 1 GB are zipped in the background instead: the page is told (`?zip=preparing`) and an email brings the link |
 | GET | `/api/albums/:id/zip/:token` | The emailed link to a background zip (members only; 3 days) |
-| GET | `/api/notifications` | Your inbox, newest first (`?before=` for more): likes, reactions, photos added, joins, requests to join, being let in. Each has `text`, `by`, `avatarUrl`, `albumId`, and for photos `photoId` and `thumbUrl`; plus `unread` |
+| GET | `/api/notifications` | Your inbox, newest first (`?before=` for more): reactions, photos added, joins, requests to join, being let in, group invites, albums closing soon. Each has `id`, `type`, `title`, `body?`, `actor: { id, name, avatarUrl }`, `albumId`, `photoIds` (the photos it's about), `at`, `read`; plus `unread` |
 | GET | `/api/notifications/unread` | Just the unread count, for a badge |
-| POST | `/api/notifications/read` | `{ ids }` or `{ all: true }` marks them read |
+| POST | `/api/notifications/read` | `{ ids }` marks those read; `{}` (or `{ all: true }`) marks every one |
+| POST | `/api/notifications/clear` | `{ before }` (ISO time) deletes yours up to then ("Clear all"); without it, all of them |
 | GET | `/api/notifications/push/key` | **No login needed.** The public key a browser needs to subscribe to push |
 | POST / DELETE | `/api/notifications/push` | `{ subscription }` (from PushManager.subscribe) turns push on for that device; `{ endpoint }` turns it off |
 | GET | `/api/photos/:id` | The image file, for album members only |
 | DELETE | `/api/photos/:id` | Host only: deletes for good at once (the pages use the bin below instead) |
-| POST | `/api/photos/:id/like` | `{ liked }` likes or unlikes it; returns `{ likes, liked }`. An album's most-liked photo is its cover |
-| GET | `/api/photos/liked` | The photos you liked, newest like first (the Liked tab) |
+| POST | `/api/photos/:id/bookmark` | `{ bookmarked }` bookmarks it or takes it off; returns `{ bookmarked }`. Private: nobody is told, no counts. (`POST /:id/like` with `{ liked }` is the old address for the same thing.) An album's cover is its photo with the most reactions |
+| GET | `/api/photos/bookmarked` | The photos you bookmarked, newest first (the Bookmarked tab), each with `bookmarkedAt`. Photos liked before bookmarks count. (`/api/photos/liked` is the old address) |
 | POST | `/api/photos/:id/reaction` | `{ emoji }` one of 😍 😂 🔥 👏 🥹 😮 (one per person; `null` removes yours); returns `{ reactions, reaction }` |
+| POST | `/api/photos/:id/report` | `{ reason: nudity\|abuse\|privacy\|copyright\|other, note? }`: hidden for you at once; at 3 reports, for everyone until staff decide |
+| (staff) | `/api/admin/...` | Staff only (404 for everyone else): `GET reports`, `POST reports/:id/dismiss`, `POST photos/:id/takedown { reason, notice }`, `POST users/:id/unsuspend`, `GET moderation`, `POST moderation/:id { allow }`, `GET/PATCH switches`, `POST sessions/revoke-all` |
 | GET | `/api/photos/:id/reactions` | Who reacted with what: `{ people: [{ by, emoji, mine, avatarUrl }] }` |
 | POST | `/api/trash` | Host only: `{ photoIds }` moves photos to the Recently deleted bin; returns `{ moved, skipped }` |
 | GET | `/api/trash` | `?album=` Photos in your bin (albums you host), with `deletedAt` and `purgeAt` (30 days later, when they go for good) |
@@ -318,6 +340,82 @@ Other things to know:
 - `/api/health` answers 200 only when the database is reachable, so an uptime check catches real outages.
 - `npm test` runs every test (no settings or real data needed). `npm run clean:old-data` shows what's left
   of the old chat, comments and email invites in the database; add `-- --apply` to remove it.
+
+## Security and privacy
+
+**Who someone is** comes only from their signed login cookie (httpOnly, Secure on HTTPS, SameSite=Lax)
+and its record on the account, checked on every request. Album and photo routes check membership on
+every read and write. Logins are JWTs (HS256 only, issuer and audience checked) that are swapped for a
+new one every 12 hours of use and expire after `TOKEN_DAYS` (7) unused. An old token presented more than
+2 minutes after its swap means it was copied: that login ends and staff are alerted. Logging out,
+changing the password, "sign everyone out" and deleting the account end logins on the server at once.
+
+**Staff** (moderation and emergency tools under `/api/admin`) are made only on the server:
+`sudo docker compose exec api node scripts/setRole.js someone@example.com staff` (in
+`/opt/momento/Server/deploy`). The `plan` field gives no powers. Everyone else gets 404 from `/api/admin`.
+
+**Requests**: JSON up to 100 KB; any key starting with `$` or named `__proto__`/`constructor`/`prototype`
+is refused (no MongoDB operator injection); every route reads only the fields it expects. Uploads are
+fully decoded before anything is stored (the file's real format, not its name or claimed type).
+Rate limits: per IP and per account on login (10 per 15 min per address, plus a 15-minute lock after
+5 wrong passwords), signup, resets (3 an hour per address), codes, uploads (120 an hour), joins,
+exports, and an overall ceiling. Headers: HSTS, CSP `default-src 'none'`, X-Frame-Options, nosniff,
+`Cache-Control: no-store` on API answers. Errors: unexpected ones answer a plain sentence and a
+`requestId` (also in the `X-Request-Id` header); details only go to the log. Logs never contain
+passwords, tokens, keys or email addresses (they're masked automatically).
+
+**Emergency switches** (staff): pause sign-ups, uploads or joining, and sign everyone out.
+**Alerts** (to `SECURITY_ALERT_EMAIL` / `SECURITY_ALERT_WEBHOOK`, and the log): spikes of 401/403/429,
+copied login tokens, staff role changes and switches, suspensions, many data exports.
+
+**Photos**: originals are kept as uploaded **minus where they were taken** (GPS in EXIF and XMP is
+emptied in place, so nothing else changes); previews and thumbnails carry no metadata at all. Storage is a
+private bucket served through links that expire in an hour. Uploads are checked for nudity by a model on
+the server; every refusal is recorded (model, threshold, scores, time) and the person can ask a human
+to review it. Reports hide a photo for the reporter at once and for everyone at 3 reports. Staff
+takedowns delete it for good, record the notice, ban the file's fingerprint (the same file can't be
+uploaded again anywhere) and, for copyright, give the uploader a strike: 3 strikes suspend the account
+(they can still log in to download or delete their data).
+
+**Personal data map**
+
+| Where | What | Removed |
+|---|---|---|
+| MongoDB `users` | name, email, password hash (bcrypt 12), Google id, avatar, logins (device name, times), email choices, age check result, strikes | account deletion |
+| `albums`, `memberships`, `groups`, `groupmembers`, `groupinvites` | albums hosted, places and venue coordinates, join requests, group memberships, invites by email | account deletion |
+| `photos` (+ S3 `<albumId>/…`) | photos added (no location), reactions, bookmarks | account deletion; bin after 30 days |
+| `notifications`, `pushsubscriptions` | inbox items, push endpoints | account deletion; 90 days |
+| `consents` | policy versions accepted, time, hashed IP | account deletion |
+| `reports`, `moderationdecisions` | reports made, automatic refusals (scores, file hash) | account deletion; 1 year |
+| `emailtokens` | one-time link hashes | when used; on expiry |
+| `zipfiles` (+ S3 `zips/`) | album downloads | 3 days; account deletion |
+| `auditlogs` | security events: account id, hashed IP, request id (no names or emails) | 2 years |
+| `takedowns` | file fingerprint, notice text, uploader id | kept (legal record) |
+| S3 `backups/` | copies of all of the above | daily: 7 days; monthly: 12 months |
+| Amazon SES, Google (sign-in, reCAPTCHA), web push services | email addresses as emails are sent; Google sign-in data | their own policies |
+
+**Your rights**: `GET /api/auth/me/export` downloads everything; `DELETE /api/auth/me` deletes it. Deletion
+marks the account first (no login works from then), and the hourly job finishes any deletion that stops
+halfway. **Consent**: acceptances are recorded with the policy version (`POST /api/auth/consent`, or
+`acceptTerms: true` on sign-up); with `REQUIRE_CONSENT=on`, using the site needs the current versions.
+**Emails**: none are marketing; the weekly recap is off by default; non-account emails carry a one-click
+unsubscribe link and header. **Age**: a date of birth sent at sign-up is checked first (under 13: refused,
+nothing stored); 13-17 accounts are marked minors and aren't named on the public Events map. Only the
+result is kept, never the date.
+
+**Doesn't apply to Momento** (nothing to secure): payments, credits, subscriptions, invoices and tax
+records, idempotency keys, incoming webhooks, AI/LLM spending or vector search, and BaaS row-level
+security (Momento uses its own server with MongoDB Atlas).
+
+**To do outside the code** (AWS / Atlas consoles):
+- Back-ups the server can't delete: turn on S3 **Object Lock** (or versioning plus a lifecycle rule) on a
+  separate backup bucket, and give the server's IAM user `s3:PutObject` only there. Today the same key
+  that writes backups could delete them.
+- Atlas: limit network access to the Lightsail IP (13.55.151.140) instead of 0.0.0.0/0, and turn on
+  Atlas's own backups when the plan allows.
+- Known dependency issue: `npm audit` reports a moderate denial-of-service in `minimatch` (inside
+  `archiver`'s folder globbing). Momento never globs folders (zips are built from photo streams), so it
+  can't be reached; npm's only "fix" downgrades `archiver`. Re-check when archiver updates.
 
 ## Not built yet
 
@@ -495,7 +593,7 @@ Render settings, except where shown). Save with **Ctrl+O**, **Enter**, then exit
 |---|---|
 | `MONGODB_URI` | same as now (Atlas) |
 | `JWT_SECRET` | **same as now**, or everyone gets logged out |
-| `SESSION_DAYS` | same as now |
+| `TOKEN_DAYS` | 7 (or leave it out) |
 | `PUBLIC_URL` | `https://api.hexarch.org` |
 | `FRONTEND_URL` | `https://hexarch.org` |
 | `CORS_ORIGINS` | `https://hexarch.org,https://www.hexarch.org` |

@@ -10,6 +10,8 @@ import { groupInviteHtml } from '../services/emailTemplates.js';
 import { dropGroupRows } from '../services/groupAccess.js';
 import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { HttpError } from '../utils/httpError.js';
+import { notify, unnotify } from '../services/notifyService.js';
+import { Notification } from '../models/Notification.js';
 import { albumSummaries } from './albumController.js';
 
 // Friend groups. Every request starts from the logged-in user (requireVerified on the routes),
@@ -95,6 +97,7 @@ async function deleteGroup(group) {
     dropGroupRows({ album: { $in: shared.map((a) => a._id) } }),
     GroupMember.deleteMany({ group: group._id }),
     GroupInvite.deleteMany({ group: group._id }),
+    Notification.deleteMany({ group: group._id }),
   ]);
   await group.deleteOne();
 }
@@ -183,6 +186,9 @@ export async function invite(req, res) {
     { invitedBy: req.user._id, expiresAt: new Date(Date.now() + INVITE_DAYS * 86400000) },
     { upsert: true, setDefaultsOnInsert: true },
   );
+  // Someone with a confirmed account at that address also gets it in their inbox ("Needs you")
+  const invitee = existing && await User.findOne({ _id: existing._id, emailVerified: true }, '_id');
+  if (invitee) await notify({ user: invitee._id, type: 'invite', actor: req.user._id, group: group._id });
   try {
     await sendEmail({
       to: email,
@@ -204,6 +210,8 @@ export async function cancelInvite(req, res) {
   if (!inv) throw new HttpError(404, 'Invite not found.');
   if (me.role !== 'owner' && !inv.invitedBy.equals(req.user._id)) throw new HttpError(403, 'Only the person who sent it or the group’s owner can take it back.');
   await inv.deleteOne();
+  const invitee = await User.findOne({ email: inv.email }, '_id');
+  if (invitee) await unnotify({ user: invitee._id, type: 'invite', group: group._id });
   res.json({ group: await view(group, req.user._id) });
 }
 
@@ -227,12 +235,14 @@ export async function accept(req, res) {
     if (err.code !== 11000) throw err;
   }
   await inv.deleteOne();
+  await unnotify({ user: req.user._id, type: 'invite', group: group._id });
   res.json({ group: await view(group, req.user._id) });
 }
 
 export async function decline(req, res) {
   const { inv } = await inviteFor(req);
   await inv.deleteOne();
+  await unnotify({ user: req.user._id, type: 'invite', group: inv.group });
   res.json({ ok: true });
 }
 

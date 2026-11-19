@@ -67,7 +67,8 @@ export async function listTrash(req, res) {
 // POST /api/trash/restore  { photoIds } | { all: true[, album] }  → { restored }
 export async function restore(req, res) {
   const photos = await picked(req);
-  const r = await Photo.updateMany({ _id: { $in: photos.map((p) => p._id) } }, { $unset: { deletedAt: 1, deletedBy: 1 } });
+  // Photos hidden by reports stay hidden until staff decide
+  const r = await Photo.updateMany({ _id: { $in: photos.map((p) => p._id) }, flaggedAt: null }, { $unset: { deletedAt: 1, deletedBy: 1 } });
   res.json({ restored: r.modifiedCount });
 }
 

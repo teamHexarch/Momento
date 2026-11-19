@@ -8,7 +8,7 @@ const firstName = (user) => (user?.name || '').trim().split(/\s+/)[0];
  * heading and paragraphs are plain text (escaped here). With a button, the link is
  * also printed underneath for mail apps that block buttons.
  */
-function layout({ heading, paragraphs, button, footer, code }) {
+function layout({ heading, paragraphs, button, footer, code, unsubscribe }) {
   const para = (t) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#5C596B">${esc(t)}</p>`;
   return `<!doctype html>
 <html><body style="margin:0;padding:32px 16px;background:#F8F7FA;font-family:-apple-system,'Segoe UI',Inter,Arial,sans-serif;color:#2E2C3A">
@@ -22,6 +22,7 @@ function layout({ heading, paragraphs, button, footer, code }) {
         ${button ? `<a href="${esc(button.href)}" style="display:inline-block;margin-top:12px;padding:14px 28px;border-radius:100px;background:#2E2C3A;color:#F8F7FA;font-size:15px;font-weight:600;text-decoration:none">${esc(button.label)}</a>` : ''}
         ${footer ? `<p style="margin:28px 0 0;font-size:13px;line-height:1.6;color:#8A8697">${esc(footer)}</p>` : ''}
         ${button ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#8A8697;word-break:break-all">Button not working? Paste this into your browser:<br>${esc(button.href)}</p>` : ''}
+        ${unsubscribe ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#8A8697"><a href="${esc(unsubscribe)}" style="color:#8A8697">Unsubscribe from these emails</a></p>` : ''}
       </td></tr>
     </table>
   </td></tr></table>
@@ -119,17 +120,18 @@ export function zipReadyHtml(user, albumName, count, link) {
   });
 }
 
-export function closingHtml(user, album, hoursLeft, link) {
+export function closingHtml(user, album, hoursLeft, link, unsubscribe) {
   const first = firstName(user);
   return layout({
     heading: `Last chance to add your photos to ${album.name}`,
     paragraphs: [`${first ? `Hi ${first}, ` : ''}${album.name} takes new photos for about ${hoursLeft} more hour${hoursLeft === 1 ? '' : 's'}. After that you can still see and download everything, but nobody can add more.`],
     button: { href: link, label: 'Add my photos' },
     footer: 'You can turn these emails off in Momento: Account settings, "An album is about to close".',
+    unsubscribe,
   });
 }
 
-export function recapHtml(user, total, albums, link) {
+export function recapHtml(user, total, albums, link, unsubscribe) {
   const first = firstName(user);
   return layout({
     heading: `${total} new photo${total === 1 ? '' : 's'} this week`,
@@ -139,6 +141,7 @@ export function recapHtml(user, total, albums, link) {
     ],
     button: { href: link, label: 'See my albums' },
     footer: 'You asked for a weekly recap. Turn it off any time in Momento: Account settings, "Weekly recap".',
+    unsubscribe,
   });
 }
 

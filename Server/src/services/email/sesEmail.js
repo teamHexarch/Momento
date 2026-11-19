@@ -30,7 +30,7 @@ function explain(err) {
   return `Amazon SES error: ${msg}`;
 }
 
-export async function send({ to, subject, html, replyTo }) {
+export async function send({ to, subject, html, replyTo, unsubscribe }) {
   client ||= new SESv2Client({ region: config.aws.region });
   try {
     await client.send(new SendEmailCommand({
@@ -41,6 +41,10 @@ export async function send({ to, subject, html, replyTo }) {
         Simple: {
           Subject: { Data: subject, Charset: 'UTF-8' },
           Body: { Html: { Data: html, Charset: 'UTF-8' } },
+          ...(unsubscribe && { Headers: [
+            { Name: 'List-Unsubscribe', Value: `<${unsubscribe}>` },
+            { Name: 'List-Unsubscribe-Post', Value: 'List-Unsubscribe=One-Click' },
+          ] }),
         },
       },
     }));

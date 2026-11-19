@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { HttpError } from '../utils/httpError.js';
+import { sha256 } from './contentSafety.js';
 
 // Nudity check for everything people upload: album photos, cover pictures and profile pictures.
 // A free, open-source model (NSFW.js, MobileNetV2) runs right here on the server, in plain JavaScript:
@@ -62,10 +63,34 @@ export function isExplicit(scores) {
   return !!scores && ((scores.Porn || 0) + (scores.Hentai || 0)) >= THRESHOLD;
 }
 
-// Throws a friendly 422 when the photo is explicit
-export async function assertAllowed(buffer, what = 'This photo') {
-  if (isExplicit(await scan(buffer))) {
-    throw new HttpError(422, `${what} can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.`, 'nsfw');
+// ---- Automatic decisions are recorded (models/ModerationDecision.js) ----
+// Which model and threshold refused what, with its scores; the person can ask a human to review it,
+// and a file staff allowed passes next time.
+export const MODEL_NAME = 'nsfwjs 4.4.0 / MobileNetV2';
+export const threshold = () => THRESHOLD;
+export async function isAllowedFile(hash) {
+  const { ModerationDecision } = await import('../models/ModerationDecision.js');
+  return Boolean(await ModerationDecision.exists({ hash, status: 'allowed' }));
+}
+/**
+ * Checks one upload: { blocked: false } or { blocked: true, decisionId } (the refusal is recorded).
+ * ctx: { user, album?, kind: 'photo' | 'cover' | 'avatar' }
+ */
+export async function judge(buffer, ctx) {
+  const scores = await scan(buffer);
+  if (!isExplicit(scores)) return { blocked: false };
+  const hash = sha256(buffer);
+  if (await isAllowedFile(hash)) return { blocked: false };
+  const { ModerationDecision } = await import('../models/ModerationDecision.js');
+  const d = await ModerationDecision.create({ user: ctx.user, album: ctx.album, kind: ctx.kind, hash, model: MODEL_NAME, threshold: THRESHOLD, scores });
+  return { blocked: true, decisionId: d.id };
+}
+
+// Throws a friendly 422 when the photo is explicit (with the decision's id, to ask for a review)
+export async function assertAllowed(buffer, what = 'This photo', ctx = {}) {
+  const r = ctx.user ? await judge(buffer, ctx) : { blocked: isExplicit(await scan(buffer)) };
+  if (r.blocked) {
+    throw new HttpError(422, `${what} can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.`, 'nsfw', r.decisionId ? { decisionId: r.decisionId, review: `/api/auth/moderation/${r.decisionId}/review` } : {});
   }
 }
 

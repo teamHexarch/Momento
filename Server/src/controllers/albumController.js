@@ -21,7 +21,8 @@ import { reactionCounts, myReaction } from './photoController.js';
 import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
 import { notifyPhotos } from '../services/notifyService.js';
 import { isBig, requestZip, ZipFile } from '../services/zipService.js';
-import { scan, isExplicit } from '../services/nsfwService.js';
+import { judge } from '../services/nsfwService.js';
+import { isBanned, BANNED_MESSAGE } from '../services/contentSafety.js';
 import { sendPhoto } from '../services/storageService.js';
 
 const PREVIEW_PICS = 12;
@@ -99,8 +100,8 @@ async function statsFor(albumIds, userId, hidden = []) {
   const [photoStats, memberStats, hosts, grouped] = await Promise.all([
     Photo.aggregate([
       { $match: { album: { $in: albumIds }, _id: { $nin: hidden }, deletedAt: null } },
-      // How loved each photo is: its likes plus its emoji reactions
-      { $addFields: { score: { $add: [{ $ifNull: ['$likeCount', 0] }, { $size: { $ifNull: ['$reactions', []] } }] } } },
+      // How loved each photo is: its emoji reactions (bookmarks are private, so they don't count)
+      { $addFields: { score: { $size: { $ifNull: ['$reactions', []] } } } },
       { $group: {
         _id: '$album',
         photos: { $sum: 1 },
@@ -464,7 +465,8 @@ export async function show(req, res) {
       const mine = p.uploader?._id.equals(req.user._id);
       return {
         id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
-        likes: p.likeCount || 0, liked: (p.likes || []).some((id) => id.equals(req.user._id)),
+        // Bookmarked: private, just yours (liked is its old name)
+        bookmarked: (p.likes || []).some((id) => id.equals(req.user._id)), liked: (p.likes || []).some((id) => id.equals(req.user._id)),
         reactions: reactionCounts(p), reaction: myReaction(p, req.user._id),
         ...(withHidden && hiddenSet.has(p.id) && { hidden: true }),
       };
@@ -563,12 +565,17 @@ export async function addPhotos(req, res) {
   // The same file twice (in this upload, or already in the album and not deleted): skipped
   const hashes = files.map((f) => crypto.createHash('sha256').update(f.buffer).digest('hex'));
   const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
-  let skipped = 0, blocked = 0;
+  let skipped = 0, blocked = 0, banned = 0;
+  const decisions = [];
   for (const [i, f] of files.entries()) {
     const hash = hashes[i];
     if (there.has(hash)) { skipped++; continue; }
-    // Nudity isn't allowed: that photo is refused (the others in the upload still go in)
-    if (isExplicit(await scan(f.buffer))) { blocked++; continue; }
+    // Files taken down after a complaint can't come back
+    if (await isBanned(hash)) { banned++; continue; }
+    // Nudity isn't allowed: that photo is refused (the others in the upload still go in). The decision
+    // is recorded, and the person can ask a human to review it (decisionIds)
+    const verdict = await judge(f.buffer, { user: req.user._id, album: album._id, kind: 'photo' });
+    if (verdict.blocked) { blocked++; decisions.push(verdict.decisionId); continue; }
     there.add(hash);
     const stored = await savePhoto(album.id, f.buffer);
     let p;
@@ -584,16 +591,18 @@ export async function addPhotos(req, res) {
       Membership.find({ album: album._id, via: { $ne: 'group' } }, 'user'),
       album.group ? GroupMember.find({ group: album.group }, 'user') : [],
     ]);
-    notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length });
+    notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length, photoIds: saved.map((p) => p.id) });
   }
+  if (banned && !blocked && !saved.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
   if (blocked && !saved.length && !skipped) {
     throw new HttpError(422, blocked === 1
       ? 'This photo can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.'
-      : 'These photos can’t be added: they look like they contain nudity, which isn’t allowed on Momento.', 'nsfw');
+      : 'These photos can’t be added: they look like they contain nudity, which isn’t allowed on Momento.', 'nsfw', { decisionIds: decisions });
   }
   // skipped: photos that were already in the album (or twice in this upload)
   // blocked: photos refused because they look like they contain nudity
-  res.status(201).json({ photos: saved, skipped, blocked });
+  // banned: files removed from Momento before; decisionIds: the refused ones, for "ask for a review"
+  res.status(201).json({ photos: saved, skipped, blocked, banned, decisionIds: decisions });
 }
 
 export async function download(req, res) {

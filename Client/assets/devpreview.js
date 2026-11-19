@@ -108,6 +108,22 @@
     for (const a of state.albums) { if (a.id === 'a1' || a.id === 'a4') a.groupId = 'g1'; if (a.id === 'a5') a.groupId = 'g2'; }
   };
   if (!state.seededGroups) { state.seededGroups = 1; seedGroups(); save(); }
+  // Notifications inbox (added after the rest, so browsers already using the preview get them once).
+  // Each is { id, type: 'photos'|'request'|'joined'|'invite'|'closing'|..., title, body?, url? or albumId?/groupId?,
+  // photoIds? (photos: the ones that were added), at, read, actor? }. Here a photos one names its uploader as the sample
+  // photos do ('Sam'); its photoIds and title are filled in from those photos when it's listed.
+  if (state.seededInbox !== 4) {
+    state.seededInbox = 4;
+    state.notifications = [
+      { id: 'n1', type: 'photos', uploader: 'Sam', albumId: 'a8', at: minsAgo(4), read: false, actor: whoIs('u-sam', 'Sam Reid') },
+      { id: 'n2', type: 'request', title: 'Leila Haddad asked to join Imaad’s 18th', body: 'She couldn’t check in at the venue. Approve or decline her.', albumId: 'a7', at: minsAgo(18), read: false, actor: whoIs('u-dev-1', 'Leila Haddad') },
+      { id: 'n6', type: 'request', title: 'Tom Okafor asked to join Imaad’s 18th', albumId: 'a7', at: minsAgo(25), read: true, actor: whoIs('u-dev-2', 'Tom Okafor') },
+      { id: 'n3', type: 'invite', title: 'Hannah invited you to Thursday book club', body: '6 members · 2 albums', url: 'events.html#needs', at: minsAgo(95), read: false, actor: whoIs('u-hannah', 'Hannah Lee') },
+      { id: 'n4', type: 'closing', title: 'Team offsite stops taking photos in 3 days', body: 'Add any last photos before it’s kept for good.', albumId: 'a4', at: minsAgo(60 * 26), read: true },
+      { id: 'n5', type: 'photos', uploader: 'Ruby', albumId: 'a5', at: minsAgo(60 * 24 * 3), read: true, actor: whoIs('u-ruby', 'Ruby Shah') },
+    ];
+    save();
+  }
 
   // ---- Photos and album shapes ----
   const picsum = (n, w, h) => `https://picsum.photos/id/${10 + (n * 7) % 50}/${w}/${h}`;
@@ -142,7 +158,7 @@
       const mine = i < mineUpTo, n = salt(a) + i, so = socialOf(a, i, mine);
       out.push({ id: `${a.id}-p${i}`, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), downloadUrl: picsum(n, 1200, 750),
         by: mine ? 'You' : NAMES[(i + 1) % NAMES.length], mine, at: new Date(Date.now() - i * 37 * 60000).toISOString(),
-        likes: so.likes, liked: so.liked, reactions: so.reactions, reaction: so.reaction });
+        likes: so.likes, liked: so.liked, bookmarked: so.bookmarked ?? !!so.liked, reactions: so.reactions, reaction: so.reaction });
     }
     return out;
   };
@@ -328,6 +344,33 @@
       return { status: 401, body: { error: 'Log in or sign up to continue.', code: 'login-required', action } };
     }
 
+    // ---- Notifications inbox (assets/inbox.js) ----
+    if (path === '/api/notifications' && method === 'GET') {
+      // Photos ones point at the sample photos their uploader actually has in the album
+      const fill = (n) => {
+        const a = n.type === 'photos' && n.uploader && state.albums.find((x) => x.id === n.albumId);
+        if (!a) return n;
+        const ids = visibleOf(a).filter((p) => p.by === n.uploader).map((p) => p.id), k = ids.length;
+        return { ...n, photoIds: ids, title: `${n.actor?.name || n.uploader} added ${k} ${k === 1 ? 'photo' : 'photos'} to ${a.name}` };
+      };
+      const list = (state.notifications || []).map(fill).sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
+      return { body: { notifications: list, unread: list.filter((n) => !n.read).length } };
+    }
+    // Clear all: deletes every notification up to `before` (ISO time; all of them without it)
+    if (path === '/api/notifications/clear' && method === 'POST') {
+      const before = Date.parse(body.before || '') || Infinity, keep = (state.notifications || []).filter((n) => Date.parse(n.at) > before);
+      const cleared = (state.notifications || []).length - keep.length;
+      state.notifications = keep;
+      save();
+      return { body: { cleared, unread: keep.filter((n) => !n.read).length } };
+    }
+    if (path === '/api/notifications/read' && method === 'POST') {
+      const ids = Array.isArray(body.ids) ? body.ids : null;
+      (state.notifications || []).forEach((n) => { if (!ids || ids.includes(n.id)) n.read = true; });
+      save();
+      return { body: { unread: (state.notifications || []).filter((n) => !n.read).length } };
+    }
+
     // ---- Groups ----
     const describeGroup = (g) => ({ ...g, inviteCode: g.inviteCode || ((g.inviteCode = newGroupCode()), save(), g.inviteCode), members: g.members.map((m) => (m.you ? { ...m, avatarUrl: state.user.avatarUrl || '' } : m)), albums: state.albums.filter((a) => a.groupId === g.id).map(summary) });
     const groupOut = () => ({ groups: (state.groups || []).map(describeGroup), invites: state.groupInvites || [] });
@@ -477,6 +520,20 @@
       a.saved = body.saved !== false; save();
       return { body: { saved: a.saved } };
     }
+    // Photo bookmarks: private to you (they replaced likes). Photos liked before bookmarks existed count as bookmarked
+    if (path === '/api/photos/bookmarked' && method === 'GET') {
+      const photos = [];
+      for (const [pid, s] of Object.entries(state.social || {})) {
+        if (!(s.bookmarked ?? s.liked)) continue;
+        const m = /^(.+)-p(\d+)$/.exec(pid);
+        const a = m && state.albums.find((x) => x.id === m[1]);
+        if (!a || goneOf(a).has(Number(m[2]))) continue;
+        const p = photosOf(a).find((x) => x.id === pid);
+        if (p) photos.push({ id: p.id, albumId: a.id, albumName: a.name, url: p.url, thumbnailUrl: p.thumbnailUrl, by: p.by, bookmarkedAt: s.bookmarkedAt || s.likedAt || '' });
+      }
+      photos.sort((x, y) => String(y.bookmarkedAt).localeCompare(String(x.bookmarkedAt)));
+      return { body: { photos } };
+    }
     if (path === '/api/photos/liked' && method === 'GET') {
       const photos = [];
       for (const [pid, s] of Object.entries(state.social || {})) {
@@ -491,7 +548,7 @@
       return { body: { photos } };
     }
     // Deleting a photo: the host can take down any photo in their album, a guest only their own
-    const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|likes|reaction|reactions)$/.exec(path);
+    const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|likes|reaction|reactions|bookmark)$/.exec(path);
     if (sm) {
       const a = state.albums.find((x) => x.id === sm[1]), i = Number(sm[2]), pid = `${sm[1]}-p${sm[2]}`;
       if (!a || goneOf(a).has(i)) return fail(404, 'Photo not found.');
@@ -502,6 +559,12 @@
           return { mine, by: mine ? 'You' : REACTORS[(i + n) % REACTORS.length] };
         });
         return { body: { people } };
+      }
+      if (sm[3] === 'bookmark' && method === 'POST') {
+        s.bookmarked = body.bookmarked !== false;
+        if (s.bookmarked) s.bookmarkedAt = new Date().toISOString();
+        saveSocial(pid, s);
+        return { body: { bookmarked: s.bookmarked } };
       }
       if (sm[3] === 'like' && method === 'POST') {
         const want = body.liked !== false;
@@ -729,7 +792,9 @@
     }
     let body = {};
     try { body = opts.body ? JSON.parse(opts.body) : {}; } catch (e) {}
-    await sleep(120 + Math.random() * 160);   // a little delay, so loading states show
+    // A little delay, so loading states show. Not for keepalive requests (like marking a notification read
+    // as you tap it to go to another page): the browser sends those even as the page goes away, so here too
+    if (!opts.keepalive) await sleep(120 + Math.random() * 160);
     const { status = 200, body: out } = route((opts.method || 'GET').toUpperCase(), url.pathname, body, url.searchParams);
     return new Response(JSON.stringify(out), { status, headers: { 'Content-Type': 'application/json' } });
   };
@@ -782,6 +847,15 @@
     return `${name} ${type}`;
   };
   window.momentoDev = {
+    // A new notification arrives: momentoDev.notify() is Maya's photos in Maya's 30th; momentoDev.notify('Some text', 'closing')
+    // is any other kind. The bell picks it up on its next check
+    notify: (title, type = 'photos') => {
+      state.notifications ||= [];
+      state.notifications.push({ id: 'n' + Date.now(), type, ...(type === 'photos' && !title ? { uploader: 'Maya' } : { title: title || 'Something happened in Maya’s 30th' }),
+        albumId: 'a1', at: new Date().toISOString(), read: false, actor: whoIs('u-maya', 'Maya Okafor') });
+      save();
+      return 'Added. Switch tabs and back (or wait a minute) to see it.';
+    },
     guestJoins: (albumId) => playGuest('joined', 1, albumId),
     guestLeaves: (albumId) => playGuest('left', 1, albumId),
     guestAddsPhotos: (n = 5, albumId) => playGuest('photos', n, albumId),

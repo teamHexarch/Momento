@@ -4,6 +4,7 @@ import { config } from '../config/env.js';
 import { saveFile, removeFile } from './storageService.js';
 import { HttpError } from '../utils/httpError.js';
 import { assertAllowed } from './nsfwService.js';
+import { assertNotBanned } from './contentSafety.js';
 
 // An album's cover picture, chosen by its host. The upload is decoded and re-encoded (so only the
 // picture is kept: no location or camera details), as a large WebP and a small one for cards.
@@ -11,7 +12,8 @@ import { assertAllowed } from './nsfwService.js';
 // the albums list without logging in, but can't be found by guessing album ids.
 
 export async function saveCover(album, buffer) {
-  await assertAllowed(buffer, 'This cover');
+  await assertNotBanned(buffer);
+  await assertAllowed(buffer, 'This cover', { user: album.host, album: album._id, kind: 'cover' });
   let big, small;
   try {
     const img = sharp(buffer, { limitInputPixels: 100_000_000 }).autoOrient();

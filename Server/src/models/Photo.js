@@ -23,6 +23,8 @@ const photoSchema = new mongoose.Schema({
   // In the "Recently deleted" bin since then (by the host); removed for good after 30 days
   deletedAt: { type: Date, default: null },
   deletedBy: mongoose.Schema.Types.ObjectId,
+  // Hidden from everyone because several people reported it, until staff decide (the host can't bring it back)
+  flaggedAt: Date,
 }, { timestamps: true });
 
 photoSchema.index({ album: 1, createdAt: -1 });
@@ -30,5 +32,6 @@ photoSchema.index({ album: 1, likeCount: -1, createdAt: -1 });
 photoSchema.index({ deletedAt: 1 }, { partialFilterExpression: { deletedAt: { $type: 'date' } } });
 photoSchema.index({ 'likeLog.user': 1 });
 photoSchema.index({ album: 1, hash: 1 }, { partialFilterExpression: { hash: { $type: 'string' } } });
+photoSchema.index({ hash: 1 }, { partialFilterExpression: { hash: { $type: 'string' } } });
 
 export const Photo = mongoose.model('Photo', photoSchema);

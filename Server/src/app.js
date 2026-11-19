@@ -1,5 +1,9 @@
 import fs from 'node:fs';
 import express from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { installLogRedaction } from './utils/logRedaction.js';
+import { requestId, securityHeaders, inputGuard } from './middleware/security.js';
+import { adminRoutes } from './routes/adminRoutes.js';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env.js';
@@ -16,21 +20,33 @@ import { userRoutes } from './routes/userRoutes.js';
 import { trashRoutes } from './routes/trashRoutes.js';
 import { notificationRoutes } from './routes/notificationRoutes.js';
 
+// Passwords, tokens, keys and email addresses are taken out of every log line
+installLogRedaction();
+
 export const app = express();
 app.disable('x-powered-by');
 // How many proxies sit in front of the server, so rate limits see the visitor's real IP.
 // 1 on the AWS Lightsail server (Caddy); add 1 for each extra proxy in front of it.
 app.set('trust proxy', config.trustProxy);
 
-app.use((req, res, next) => {
-  res.set('X-Content-Type-Options', 'nosniff');
-  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  next();
-});
+app.use(requestId);
+app.use(securityHeaders);
 app.use('/api', cors, sameOriginWrites);
+// JSON bodies up to 100 KB (photos come as uploads, with their own limits)
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser(config.jwtSecret));
+// No "$operator", "__proto__" or absurdly deep data in any request
+app.use(inputGuard);
 app.use(loadUser);
+// A ceiling for everything: 3000 requests per 10 minutes per account (an album page loads one per
+// thumbnail), 600 per IP address for visitors. Many guests at one venue share an IP, hence per account.
+app.use('/api', rateLimit({
+  windowMs: 10 * 60000,
+  limit: (req) => (req.user ? 3000 : 600),
+  keyGenerator: (req) => (req.user ? `user:${req.user.id}` : `ip:${ipKeyGenerator(req.ip)}`),
+  standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: 'Too many requests. Wait a few minutes, then try again.' },
+}));
 
 // What the browser needs for Google sign-in, the sign-up check and maps (all public values)
 app.get('/api/config', (req, res) => {
@@ -61,6 +77,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', trashRoutes);   // /api/trash and /api/hidden
 app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 

@@ -92,9 +92,18 @@ export async function finishEmailChange(token) {
   return 'changed';
 }
 
-// Everything the person owns goes: albums they host (with every photo in them), photos they
-// added to other albums, their memberships, then the account itself.
+// "Right to be forgotten": everything about the person goes, files included: albums they host (with
+// every photo in them), photos they added to other albums, their reactions and bookmarks, memberships,
+// groups they made, invites, notifications, push devices, consents, reports they made, automatic
+// decisions about them, zips, their profile photo, then the account itself.
+// Kept, without anything that identifies them: audit-log rows (an account id and a hashed IP, for
+// security; they expire after 2 years) and takedown records (the legal record of a complaint).
+// Backups: the daily ones roll over within a week, monthly ones within 12 months.
+//
+// It's resumable: the account is marked first (no login works from then on), every step can run again
+// safely, and the hourly job finishes any deletion that stopped halfway.
 export async function deleteAccount(user) {
+  await User.updateOne({ _id: user._id }, { $set: { deletingAt: new Date(), sessions: [] } });
   // Groups they made are deleted (albums stay with their hosts); they leave every other group
   await deleteGroupsOf(user);
   const { forgetUser } = await import('./notifyService.js');
@@ -108,12 +117,26 @@ export async function deleteAccount(user) {
   // Their likes and reactions come off other people's photos
   await Photo.updateMany({ likes: user._id }, { $pull: { likes: user._id, likeLog: { user: user._id } }, $inc: { likeCount: -1 } });
   await Photo.updateMany({ 'reactions.user': user._id }, { $pull: { reactions: { user: user._id } } });
+  // Zips they asked for, and zips of the albums they host
+  const { ZipFile } = await import('./zipService.js');
+  const zips = await ZipFile.find({ $or: [{ user: user._id }, { album: { $in: hostedIds } }] }, 'key');
+  await Promise.all(zips.map((z) => z.key && removeFile(z.key).catch(() => {})));
+  const [{ Consent }, { Report }, { ModerationDecision }] = await Promise.all([
+    import('../models/Consent.js'), import('../models/Report.js'), import('../models/ModerationDecision.js'),
+  ]);
   await Promise.all([
     Photo.deleteMany({ _id: { $in: photos.map((p) => p._id) } }),
     Membership.deleteMany({ $or: [{ album: { $in: hostedIds } }, { user: user._id }] }),
     EmailToken.deleteMany({ user: user._id }),
     Album.deleteMany({ _id: { $in: hostedIds } }),
+    ZipFile.deleteMany({ _id: { $in: zips.map((z) => z._id) } }),
+    Consent.deleteMany({ user: user._id }),
+    Report.deleteMany({ $or: [{ reporter: user._id }, { album: { $in: hostedIds } }] }),
+    ModerationDecision.deleteMany({ user: user._id }),
+    // Join requests they left in other people's albums
+    Album.updateMany({ 'requests.user': user._id }, { $pull: { requests: { user: user._id } } }),
   ]);
-  if (user.avatarKey) await removeFile(user.avatarKey).catch(() => {});
-  await user.deleteOne();
+  const avatarKey = user.avatarKey || (await User.findById(user._id, 'avatarKey'))?.avatarKey;
+  if (avatarKey) await removeFile(avatarKey).catch(() => {});
+  await User.deleteOne({ _id: user._id });
 }

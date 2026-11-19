@@ -17,17 +17,17 @@
   const api = (id) => '/api/events/' + encodeURIComponent(id);
   const waitingOf = (a) => (a.requests || []).filter((r) => r.status === 'pending' || r.status === 'approving');
   // What the cover is right now, and what happens to it next, in words
-  const coverTag = (c) => !c ? 'No cover yet' : c.source === 'host' ? 'Your cover' : c.source === 'top' ? `Most loved photo${c.score ? ` · ${c.score} ${c.score === 1 ? 'like or reaction' : 'likes and reactions'}` : ''}` : 'Newest photo';
+  const coverTag = (c) => !c ? 'No cover yet' : c.source === 'host' ? 'Your cover' : c.source === 'top' ? `Most loved photo${c.score ? ` · ${c.score} ${c.score === 1 ? 'reaction' : 'reactions'}` : ''}` : 'Newest photo';
   function coverNote(a) {
     const upcoming = a.status === 'upcoming' || a.status === 'new', c = a.cover;
     if (upcoming) {
       if (!a.hasHostCover) return 'Add a photo so the album has a face before the event: guests see it on the invite, the Events map and their albums list.';
-      return a.keepHostCover ? 'Guests see this before the event and after it starts.' : 'Guests see this until the event starts. Then the photo with the most likes and reactions takes over, unless you keep yours.';
+      return a.keepHostCover ? 'Guests see this before the event and after it starts.' : 'Guests see this until the event starts. Then the photo with the most reactions takes over, unless you keep yours.';
     }
     if (a.hasHostCover && a.keepHostCover) return 'Your cover stays, whichever photo guests love most.';
-    if (c?.source === 'top') return 'The photo with the most likes and reactions is the cover now. It moves if another photo overtakes it.';
-    if (a.hasHostCover) return 'Your cover shows until a photo gets its first like or reaction.';
-    return 'The photo with the most likes and reactions becomes the cover.';
+    if (c?.source === 'top') return 'The photo with the most reactions is the cover now. It moves if another photo overtakes it.';
+    if (a.hasHostCover) return 'Your cover shows until a photo gets its first reaction.';
+    return 'The photo with the most reactions becomes the cover.';
   }
 
   // The link for a friend group (the same way an album's link is made)
@@ -61,6 +61,9 @@
     .as-reqs { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
     .as-reqs li { display: flex; align-items: center; gap: .7rem; padding: .55rem .55rem .55rem .6rem; border-radius: var(--r-group, 16px); background: rgba(255, 255, 255, .5); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .07); }
     :root[data-theme="dark"] .as-reqs li { background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+    /* The person a notification was about (when more than one is waiting) */
+    .as-reqs li.is-asked { box-shadow: inset 0 0 0 2px var(--copper, #9A603D); }
+    :root[data-theme="dark"] .as-reqs li.is-asked { box-shadow: inset 0 0 0 2px #B8AEF5; }
     .as-av { display: grid; place-items: center; flex: none; width: 2.2rem; height: 2.2rem; border-radius: 50%; background: linear-gradient(135deg, #D6CDEC, #EBD3DC 55%, #C6DEDA); color: #2E2C3A; font-style: normal; font-weight: 700; font-size: .9rem; }
     .as-reqs li > span { display: grid; flex: 1; min-width: 0; }
     .as-reqs li b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -95,12 +98,19 @@
     /* The button added to the "Album created" screen */
     .m-done .as-open { width: 100%; margin: 0 0 .6rem; }
     @media (max-width: 460px) { .as-pair { grid-template-columns: 1fr; } .as-pop .as-card { padding: 1.3rem 1.2rem 1.1rem; } }
+    /* Phones: a waiting guest's name gets the row, Approve and Decline share the line under it */
+    @media (max-width: 460px) {
+      .as-reqs li { flex-wrap: wrap; row-gap: .55rem; }
+      .as-reqs li > span { flex: 1 1 calc(100% - 3rem); }
+      .as-reqs li .as-mini { flex: 1 1 0; min-height: 2.5rem; }
+    }
     @media (prefers-reduced-motion: reduce) { .as-save, .as-ghost, .as-mini { transition: none; scale: none !important; } }`;
   document.head.append(css);
 
   let current = null;   // the sheet that's open: { d, id, from }
 
-  async function open(id, from) {
+  // opts.focus === 'requests': opens scrolled to "Waiting for you", on the first Approve (from a notification)
+  async function open(id, from, opts = {}) {
     if (!id || current) return;
     let album;
     try { ({ album } = await momentoApi('/api/albums/' + encodeURIComponent(id))); }
@@ -134,14 +144,14 @@
         <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
         <p class="as-kick">Album settings</p>
         <h2 id="asTitle">${esc(a.name)}</h2>
-        <p class="as-sub">${esc([day(a.date), a.venue?.address || a.place].filter(Boolean).join(' · '))}</p>
+        <p class="as-sub">${esc([day(a.date), a.venue?.address || (window.Momento?.event?.isPlaceholder?.(a.place) ? '' : a.place)].filter(Boolean).join(' · '))}</p>
 
         <form class="as-sec as-details" aria-labelledby="asDetails" novalidate>
           <h3 id="asDetails">Details</h3>
           <label class="acct-field"><span>Album name</span><input name="name" maxlength="60" autocomplete="off" value="${esc(a.name)}"></label>
           <div class="as-pair">
             <label class="acct-field"><span>Date</span><input name="date" type="date" value="${esc(String(a.date || '').slice(0, 10))}"></label>
-            <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" autocomplete="off" value="${esc(a.place || '')}" placeholder="Where it’s on"></label>
+            <label class="acct-field"><span>Place <i>(optional)</i></span><input name="place" maxlength="60" autocomplete="off" value="${esc((window.Momento?.event?.isPlaceholder?.(a.place) ? '' : a.place) || '')}" placeholder="Where it’s on"></label>
           </div>
           <button class="as-save" type="submit">Save details</button>
         </form>
@@ -155,7 +165,7 @@
             ${a.hasHostCover ? '<button class="as-ghost" type="button" data-cover-remove>Remove</button>' : ''}
           </div>
           <input class="as-cover-file" type="file" accept="image/*" tabindex="-1" aria-hidden="true">
-          ${a.hasHostCover ? sw('keepHostCover', !!a.keepHostCover, 'Keep my cover', 'When off, the photo with the most likes and reactions takes over once the event is live') : ''}
+          ${a.hasHostCover ? sw('keepHostCover', !!a.keepHostCover, 'Keep my cover', 'When off, the photo with the most reactions takes over once the event is live') : ''}
         </section>
 
         <section class="as-sec" aria-labelledby="asRules">
@@ -294,10 +304,32 @@
       try { d.animate({ opacity: [0, 1] }, { duration: 300, pseudoElement: '::backdrop' }); } catch (e) {}
     }
     card.querySelector('.as-details input')?.blur();
-    card.querySelector('[data-close]')?.focus();
+    if (opts.focus === 'requests') {
+      const sec = card.querySelector('#asReqs')?.closest('.as-sec');
+      // The card's own scroll, so the page behind stays put
+      if (sec) card.scrollTop = Math.max(0, sec.offsetTop - 16);
+      // The person the notification was about, when they're still waiting; otherwise the first person waiting
+      const row = opts.guest && [...card.querySelectorAll('.as-reqs li')].find((li) => li.dataset.guest === opts.guest);
+      if (row && card.querySelectorAll('.as-reqs li').length > 1) { row.classList.add('is-asked'); row.scrollIntoView({ block: 'nearest' }); }
+      ((row || card).querySelector('[data-approve="1"]') || card.querySelector('[data-close]'))?.focus({ preventScroll: true });
+      if (!card.querySelector('[data-approve]')) say('No one is waiting any more: they were let in or declined already.');
+    } else card.querySelector('[data-close]')?.focus();
   }
 
   Momento.albumSettings = { open };
+
+  // Links like albums.html#requests=<albumId>&guest=<userId> (from a notification) open the album's settings at
+  // "Waiting for you", on that person's Approve
+  async function requestsFromHash() {
+    if (!/^#requests=/.test(location.hash)) return;
+    const q = new URLSearchParams(location.hash.slice(1)), id = q.get('requests');
+    history.replaceState(null, '', location.pathname + location.search);
+    const user = await Momento.sessionReady?.catch?.(() => null);
+    if (!id || !user || !user.emailVerified) return;
+    open(id, null, { focus: 'requests', guest: q.get('guest') || '' });
+  }
+  addEventListener('hashchange', requestsFromHash);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', requestsFromHash); else requestsFromHash();
 
   // A newly created album: "Album settings" goes on the "Album created" screen, above the QR code button
   document.addEventListener('momento:albums', (e) => {

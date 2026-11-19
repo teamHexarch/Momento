@@ -3,6 +3,7 @@ import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { requireVerified } from '../middleware/authMiddleware.js';
 import * as events from '../controllers/eventController.js';
+import { whenOpen } from '../services/switches.js';
 
 // Looking around is cheap but not free: 120 searches per 10 minutes (per account, or per IP address
 // for visitors who haven't logged in) and 30 join attempts per account
@@ -24,4 +25,4 @@ eventRoutes.use(requireVerified);
 eventRoutes.get('/requests', events.requests);
 eventRoutes.patch('/:id/policy', eventPolicy);
 eventRoutes.post('/:id/requests/:guest', reviewRequest);
-eventRoutes.post('/:id/join', joinLimit, events.join);
+eventRoutes.post('/:id/join', joinLimit, whenOpen('joins'), events.join);

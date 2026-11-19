@@ -1,4 +1,4 @@
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getSignedUrl as cloudFrontUrl } from '@aws-sdk/cloudfront-signer';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -63,6 +63,21 @@ export function objectStorage({ name, label, client, bucket, keyHint, cdn }) {
     },
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    },
+    // The folder names right under a prefix (e.g. "backups/" → ["backups/day-Mon/", ...])
+    async folders(prefix) {
+      const out = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, Delimiter: '/' }));
+      return (out.CommonPrefixes || []).map((p) => p.Prefix);
+    },
+    // Deletes every file under a prefix
+    async removePrefix(prefix) {
+      let token;
+      do {
+        const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+        const keys = (page.Contents || []).map((o) => ({ Key: o.Key }));
+        if (keys.length) await client.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys, Quiet: true } }));
+        token = page.IsTruncated ? page.NextContinuationToken : undefined;
+      } while (token);
     },
   };
 }

@@ -4,6 +4,14 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
+import { whenOpen } from '../services/switches.js';
+
+// Uploads: 120 a hour per account (each can hold 30 photos)
+const uploadLimit = rateLimit({
+  windowMs: 60 * 60000, limit: 120, keyGenerator: (req) => `user:${req.user.id}`,
+  standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: 'That’s a lot of uploading. Wait a while, then add the rest.' },
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -43,14 +51,14 @@ albumRoutes.use(requireVerified);
 
 albumRoutes.get('/', albums.list);
 albumRoutes.post('/', albums.create);
-albumRoutes.post('/join', joinLimit, albums.join);
+albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
 albumRoutes.patch('/:id', albums.update);
 albumRoutes.delete('/:id', albums.remove);
 albumRoutes.delete('/:id/membership', albums.leave);
 
-albumRoutes.post('/:id/photos', albums.checkMember, upload.array('photos', 30), albums.addPhotos);
+albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', albums.download);
 // The emailed link to a big album's zip (made in the background)
 albumRoutes.get('/:id/zip/:token', albums.zipFile);
@@ -60,7 +68,7 @@ albumRoutes.post('/:id/hidden', albums.setHidden);
 albumRoutes.post('/:id/save', albums.save);
 // The host's cover picture: one image up to 15 MB, re-encoded small on the server
 const coverUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
-albumRoutes.put('/:id/cover', coverUpload.single('cover'), albums.putCover);
+albumRoutes.put('/:id/cover', uploadLimit, whenOpen('uploads'), coverUpload.single('cover'), albums.putCover);
 albumRoutes.delete('/:id/cover', albums.deleteCover);
 
 albumRoutes.post('/:id/remind', albums.remind);

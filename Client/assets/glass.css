@@ -236,6 +236,11 @@
   --glass: rgba(26, 25, 34, .78);
 }
 html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(120, 100, 200, .16), transparent 55%), linear-gradient(160deg, #121119, #08070C) fixed; }
+/* A solid base under those gradients, matched to the backdrop canvas's fog colour. iOS paints the root's
+   background colour into the rubber-band area past the footer (the fixed canvas moves with the bounce),
+   and with none set it showed flat black there. Doubled :root outranks each page's own `html { background }`. */
+:root:root { background-color: #E7EAF4; }
+:root:root[data-theme="dark"] { background-color: #0C0B12; }
 :root[data-theme="dark"] .grain { opacity: .14; }
 
 /* The soft veil behind the fixed header (each page decides when it shows; this is only its colour).
@@ -293,13 +298,26 @@ html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(
   :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
 }
 
-/* ---------- Social and Settings in the main nav: their names on wide screens, small icons on phones ---------- */
-:is(.nav-social, .nav-settings) { display: inline-flex; align-items: center; justify-content: center; }
-:is(.nav-social, .nav-settings) svg { display: none; }
-@media (max-width: 520px) {
-  :is(.nav-social, .nav-settings) .nav-label { display: none; }
-  :is(.nav-social, .nav-settings) svg { display: block; }
-  :is(.nav-social, .nav-settings) { padding-left: .5rem; padding-right: .5rem; }
+/* ---------- Main nav: names on wide screens. On phones every tab is an icon, and only the page you're on
+   shows its name beside its icon ---------- */
+:is(.nav-home, .nav-albums, .nav-social, .nav-settings) { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+:is(.nav-home, .nav-albums, .nav-social, .nav-settings) svg { display: none; flex: none; }
+@media (max-width: 600px) {
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings) svg { display: block; }
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) .nav-label { display: none; }
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) { padding-left: .6rem !important; padding-right: .6rem !important; }
+  .nav-home[aria-current="page"], .nav > .nav-item[aria-current="page"] { padding-left: .8rem !important; padding-right: .9rem !important; }
+  .nav-split:has(> .nav-home[aria-current="page"]) > .nav-home { padding-right: .25rem !important; }
+  /* The sections arrow belongs to Home: only shown while you're on the home page */
+  .nav-split:not(:has(> .nav-home[aria-current="page"])) > .nav-caret { display: none; }
+  .nav { gap: .15rem !important; }
+}
+@media (max-width: 360px) {
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) { padding-left: .5rem !important; padding-right: .5rem !important; }
+  .nav-home[aria-current="page"], .nav > .nav-item[aria-current="page"] { padding-left: .6rem !important; padding-right: .7rem !important; gap: .3rem; }
+  .nav { gap: 0 !important; }
+  .nav-split > .nav-caret { display: none; }   /* no room for Home's sections arrow; the page scrolls to them */
+  .nav-split:has(> .nav-home[aria-current="page"]) > .nav-home { padding-right: .7rem !important; }
 }
 /* Every top-level nav pill is the same box whether or not it is the current page (the current one gets a
    1px border from the active-segment rule, which used to make it 2px taller than its neighbours), and each
@@ -662,7 +680,22 @@ html.intro-on #intro { display: block; }
 .acct-seg .scr-dot { opacity: 0; scale: .4; }
 .acct-seg [aria-checked="true"] .scr-dot { opacity: 1; scale: 1; }
 
+/* ---------- Text stays inside its box ----------
+   Names people type ("123123123123…", a long email) can be one unbroken word. Everywhere: such a word
+   breaks rather than running out of its card; headings may break anywhere so they can shrink with their
+   box. (Pills and one-line labels cut off with "…" instead, where they're styled.) */
+body { overflow-wrap: break-word; }
+:is(h1, h2, h3, h4, h5, h6) { overflow-wrap: anywhere; }
+
 .acct-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
+/* Create album is long: the whole screen scrolls it, not just the card. A scroll or swipe anywhere (over
+   the dim too) moves the form, and the glass card (with its blur) isn't itself a scroller, which iOS
+   Safari won't scroll reliably. The card stays centred while it fits and starts at the top when it doesn't. */
+#mCreate[open] {
+  position: fixed; inset: 0; display: flex; flex-direction: column; width: 100%; height: 100%; max-height: none; margin: 0;
+  padding: 16px 0; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
+#mCreate > .acct-card { flex: none; margin: auto; max-height: none; overflow: visible; }
 .acct-card {
   position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: 0;
   padding: 2rem 1.9rem 1.5rem; border-radius: var(--r-card); color: var(--dusk); font-family: var(--font-main);
@@ -673,7 +706,10 @@ html.intro-on #intro { display: block; }
   position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border: none; border-radius: 50%;
   cursor: pointer;
 }
-.acct-field { display: block; margin-bottom: .75rem; }
+.acct-field { display: block; min-width: 0; margin-bottom: .75rem; }   /* min-width: a date field can't widen its column */
+/* A pair of fields side by side: when one of them is hidden (Create album's Place, set by the venue instead),
+   the other takes the whole row rather than half of it */
+.m-row2:has(> .acct-field[hidden]) { grid-template-columns: minmax(0, 1fr); }
 .acct-field span { display: block; margin-bottom: .3rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
 .acct-field input, .acct-field textarea {
   width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem;
@@ -818,14 +854,14 @@ html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) 
    They open inside the header (which isolates its backdrop for page transitions) or on top of a sheet,
    so a blur would either do nothing or stack on the sheet's. A fuller fill and a floating shadow keep
    them distinct from the layer underneath. */
-.nav-menu, .acct-menu, .ab-menu, .ab-pulse, .mp, .ev-suggest, .rx-picker:not(.vw-picker), .rx-who:not(.viewer *) {
+.nav-menu, .acct-menu, .ab-menu, .ab-pulse, .inbox-pop, .mp, .ms-menu, .ev-suggest, .rx-picker:not(.vw-picker), .rx-who:not(.viewer *) {
   --radius: var(--r-pop);
   border: 1px solid transparent; border-radius: var(--r-pop);
   background: var(--g-menu) padding-box, var(--g-rim-menu) border-box;
   box-shadow: var(--g-sh-pop);
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
-:root[data-theme="dark"] :is(.nav-menu, .acct-menu, .ab-menu, .ab-pulse, .mp, .ev-suggest, .rx-picker:not(.vw-picker), .rx-who:not(.viewer *)) {
+:root[data-theme="dark"] :is(.nav-menu, .acct-menu, .ab-menu, .ab-pulse, .inbox-pop, .mp, .ms-menu, .ev-suggest, .rx-picker:not(.vw-picker), .rx-who:not(.viewer *)) {
   background: var(--g-menu) padding-box, var(--g-rim-menu) border-box;
   box-shadow: var(--g-sh-pop);
 }
@@ -1038,6 +1074,38 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
   background-color: var(--g-disabled); box-shadow: inset 0 0 0 1px var(--g-disabled-edge); color: var(--g-disabled-ink); cursor: not-allowed;
 }
 :root[data-theme="dark"] :is(.acct-field select, .ev-lead select) { color-scheme: dark; }
+
+/* Album dropdowns use the same recessed fields and floating glass as the date/time pickers. */
+#mCreate .ms-select {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  width: 100%; min-width: 0; min-height: 2.9rem; box-sizing: border-box; padding: .65rem 1rem;
+  border: none; border-radius: var(--r-group); background: var(--g-input); box-shadow: var(--g-input-rim);
+  color: var(--dusk); font: 500 1rem var(--font-main); text-align: left; cursor: pointer;
+}
+#mCreate .ms-select .ms-value { display: block; min-width: 0; margin: 0; overflow: hidden; color: inherit; font: inherit; white-space: nowrap; text-overflow: ellipsis; }
+#mCreate .ms-select > svg { flex: none; width: 16px; height: 16px; color: var(--slate); transition: transform var(--t-med) var(--out); }
+#mCreate .ms-select[aria-expanded="true"] > svg { transform: rotate(180deg); }
+@media (hover: hover) { #mCreate .ms-select:hover:not(:disabled) { box-shadow: var(--g-input-rim-hover); } }
+#mCreate .ms-select:active:not(:disabled) { background-color: var(--g-wash-press); }
+#mCreate .ms-select:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+#mCreate .ms-select:disabled { color: var(--g-disabled-ink); background: var(--g-disabled); cursor: not-allowed; }
+.ms-menu {
+  position: fixed; inset: auto; z-index: 2147483000; margin: 0; padding: .35rem;
+  box-sizing: border-box; max-width: calc(100vw - 16px); overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior: contain; color: var(--dusk); font: 500 .95rem var(--font-main); scrollbar-width: thin;
+}
+.ms-option { display: flex; align-items: center; gap: .75rem; min-height: 44px; box-sizing: border-box; padding: .65rem .8rem; border-radius: var(--r-group); cursor: pointer; }
+.ms-option > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ms-option > svg { flex: none; width: 17px; height: 17px; visibility: hidden; }
+.ms-option[aria-selected="true"] { background: var(--g-wash); font-weight: 650; }
+.ms-option[aria-selected="true"] > svg { visibility: visible; }
+.ms-option.is-active { outline: 1px solid var(--focus-ring); outline-offset: -1px; background-color: var(--g-wash); }
+@media (hover: hover) { .ms-option:hover:not([aria-disabled="true"]) { background-color: var(--g-wash); } }
+.ms-option:active:not([aria-disabled="true"]) { background-color: var(--g-wash-press); }
+.ms-option[aria-disabled="true"] { color: var(--g-disabled-ink); cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { #mCreate .ms-select > svg { transition: none; } }
+@media (forced-colors: active) { #mCreate .ms-select, .ms-menu { border: 1px solid CanvasText; } .ms-option[aria-selected="true"] { outline: 1px solid Highlight; outline-offset: -2px; } }
+
 /* Choice cards (one of several, like who can join or which device to sign out) */
 :is(.ev-who label, .device-choice) {
   border-radius: var(--r-group); background-color: var(--g-input); box-shadow: var(--g-input-rim); transition: none;
@@ -1096,7 +1164,7 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
 
 /* ---------- Forced colours (Windows high contrast): keep every pane and control outlined ---------- */
 @media (forced-colors: active) {
-  :is(.glass, .panel, .zone-ctrl, .qc-files, .site-foot, .auth-card, .modal-card, .acct-card, .vgate-card, .nav-menu, .acct-menu, .ab-menu, .ab-pulse, .mp, .ev-suggest, .m-toast) { border: 1px solid CanvasText; }
+  :is(.glass, .panel, .zone-ctrl, .qc-files, .site-foot, .auth-card, .modal-card, .acct-card, .vgate-card, .nav-menu, .acct-menu, .ab-menu, .ab-pulse, .inbox-pop, .mp, .ev-suggest, .m-toast) { border: 1px solid CanvasText; }
   :is(.btn, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .acct-x, .acct-actions button, .album-code button, .s-change,
       .as-save, .as-ghost, .as-mini, .ab-btn, .ab-icon, .ab-act, .gd-x, .ea-chip, .ev-link, .vw-btn, .vw-nav, .mq-btn, .mq-x,
       .auth-tab-pill, .acct-seg-pill, .tab-pill, .ev-reach-pill, .menu-pill, .sw, .s-sw, .acct-sw) { border: 1px solid ButtonText; }

@@ -97,19 +97,28 @@ try {
   assert.deepEqual(r, { reactions: { '🔥': 1 }, reaction: null });
   await call(`/api/photos/${hostPic.id}/comments`, 404, g);
 
-  // ---- Liked tab: likes keep their time, newest first ----
-  await call(`/api/photos/${third.id}/like`, 200, g, 'POST', { liked: true });
-  assert.deepEqual((await json(await call(`/api/photos/${third.id}/likes`, 200, h))).people.map(p => p.by), ['guest']);
-  await new Promise((res) => setTimeout(res, 20));
-  await call(`/api/photos/${hostPic.id}/like`, 200, g, 'POST', { liked: true });
-  let liked = (await json(await call('/api/photos/liked', 200, g))).photos;
-  assert.deepEqual(liked.map((p) => p.id), [hostPic.id, third.id]);
-  assert.equal(liked[0].albumName, 'Picnic');
-  assert.ok(liked[0].likedAt);
-  await call(`/api/photos/${third.id}/like`, 200, g, 'POST', { liked: false });
+  // ---- Bookmarks: private, newest first (they replaced likes) ----
+  assert.deepEqual(await json(await call(`/api/photos/${third.id}/bookmark`, 200, g, 'POST', { bookmarked: true })), { bookmarked: true });
+  // Nobody else can see who bookmarked it, or how many
   assert.deepEqual((await json(await call(`/api/photos/${third.id}/likes`, 200, h))).people, []);
-  liked = (await json(await call('/api/photos/liked', 200, g))).photos;
-  assert.deepEqual(liked.map((p) => p.id), [hostPic.id]);
+  assert.deepEqual((await json(await call(`/api/photos/${third.id}/likes`, 200, g))).people.map((p) => p.by), ['You']);
+  let view = await json(await call(`/api/albums/${album.id}`, 200, h));
+  assert.equal(view.photos.find((p) => p.id === third.id).bookmarked, false, 'not the host’s bookmark');
+  assert.equal(view.photos.find((p) => p.id === third.id).likes, undefined, 'no count');
+  view = await json(await call(`/api/albums/${album.id}`, 200, g));
+  assert.equal(view.photos.find((p) => p.id === third.id).bookmarked, true);
+  await new Promise((res) => setTimeout(res, 20));
+  // The old address does the same thing (a photo liked before bookmarks counts as bookmarked)
+  await call(`/api/photos/${hostPic.id}/like`, 200, g, 'POST', { liked: true });
+  let marked = (await json(await call('/api/photos/bookmarked', 200, g))).photos;
+  assert.deepEqual(marked.map((p) => p.id), [hostPic.id, third.id]);
+  assert.equal(marked[0].albumName, 'Picnic');
+  assert.ok(marked[0].bookmarkedAt);
+  assert.ok((await json(await call('/api/photos/liked', 200, g))).photos[0].likedAt, 'the old list still works');
+  await call(`/api/photos/${third.id}/bookmark`, 200, g, 'POST', { bookmarked: false });
+  marked = (await json(await call('/api/photos/bookmarked', 200, g))).photos;
+  assert.deepEqual(marked.map((p) => p.id), [hostPic.id]);
+  assert.deepEqual((await json(await call('/api/photos/bookmarked', 200, h))).photos, [], 'only your own');
 
   // ---- Save (bookmark) ----
   assert.equal((await json(await call('/api/albums', 200, g))).albums[0].saved, false);

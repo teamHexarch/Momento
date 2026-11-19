@@ -9,7 +9,9 @@ import { Photo } from '../models/Photo.js';
 import { User } from '../models/User.js';
 import { sendEmail } from './emailService.js';
 import { closingHtml, recapHtml } from './emailTemplates.js';
-import { saveFile } from './storageService.js';
+import { saveFile, listFolders, removePrefix } from './storageService.js';
+import { unsubscribeUrl } from '../controllers/privacyController.js';
+import { notify } from './notifyService.js';
 
 // Jobs the server runs by itself, once an hour (see server.js). Each one claims its work in the
 // database before doing it, so nothing is sent twice even if the server restarts mid-way.
@@ -44,10 +46,15 @@ export async function closingSoon(now = new Date()) {
     const claimed = await Album.findOneAndUpdate({ _id: a._id, closingNoticeAt: null }, { closingNoticeAt: now });
     if (!claimed) continue;
     const ids = await peopleIn(a);
+    // Everyone in it gets it in their inbox too (the email only goes to those who didn't turn it off)
+    for (const u of ids) await notify({ user: u, type: 'closing', album: a._id });
     const people = await User.find({ _id: { $in: ids }, emailVerified: true, 'notify.closing': { $ne: false } }, 'name email').limit(300);
     const hours = Math.max(1, Math.round((a.endsAt - now) / HOUR));
     const link = `${config.frontendUrl}/albums.html?album=${a.id}`;
-    sent += await mail(people.map((p) => ({ to: p.email, subject: `Last chance to add your photos to ${a.name}`, html: closingHtml(p, a, hours, link) })));
+    sent += await mail(people.map((p) => {
+      const unsubscribe = unsubscribeUrl(p, 'closing');
+      return { to: p.email, subject: `Last chance to add your photos to ${a.name}`, html: closingHtml(p, a, hours, link, unsubscribe), unsubscribe };
+    }));
   }
   return sent;
 }
@@ -71,7 +78,8 @@ export async function weeklyRecap(now = new Date()) {
     if (!total) continue;   // nothing new: no email
     const names = new Map((await Album.find({ _id: { $in: rows.slice(0, 5).map((r) => r._id) } }, 'name')).map((a) => [String(a._id), a.name]));
     const top = rows.slice(0, 5).map((r) => ({ name: names.get(String(r._id)) || 'An album', n: r.n }));
-    sent += await mail([{ to: u.email, subject: `${total} new photo${total === 1 ? '' : 's'} in your Momento albums this week`, html: recapHtml(u, total, top, `${config.frontendUrl}/albums.html`) }]);
+    const unsubscribe = unsubscribeUrl(u, 'recap');
+    sent += await mail([{ to: u.email, subject: `${total} new photo${total === 1 ? '' : 's'} in your Momento albums this week`, html: recapHtml(u, total, top, `${config.frontendUrl}/albums.html`, unsubscribe), unsubscribe }]);
   }
   return sent;
 }
@@ -93,7 +101,18 @@ export async function tidy(now = new Date()) {
   // Background zips older than 3 days
   const { removeExpiredZips } = await import('./zipService.js');
   const zips = await removeExpiredZips(now);
-  return { accounts, requests: r.modifiedCount, zips };
+  // Expired logins come off every account
+  const sessions = await User.updateMany({ 'sessions.expiresAt': { $lte: now } }, { $pull: { sessions: { expiresAt: { $lte: now } } } });
+  // Account deletions that stopped halfway (the server restarted, storage was down) are finished
+  let resumed = 0;
+  for (const u of await User.find({ deletingAt: { $lt: new Date(now - 10 * 60000) } }).select('+deletingAt').limit(20)) {
+    await deleteAccount(u);
+    resumed++;
+  }
+  // Resolved reports older than a year go
+  const { Report } = await import('../models/Report.js');
+  const reports = await Report.deleteMany({ status: { $ne: 'open' }, updatedAt: { $lt: new Date(now - 365 * DAY) } });
+  return { accounts, requests: r.modifiedCount, zips, sessions: sessions.modifiedCount, resumed, reports: reports.deletedCount };
 }
 
 // ---- Daily backup: every collection, as compressed JSON lines, into the photo storage ----
@@ -122,7 +141,14 @@ export async function backup(now = new Date()) {
     await saveFile(`backups/month-${month}/${name}.jsonl.gz`, file, 'application/gzip');
   }
   await saveFile(`backups/day-${weekday}/_info.json`, Buffer.from(JSON.stringify({ at: now, collections: names, documents: docs }, null, 2)), 'application/json');
-  return { collections: names.length, documents: docs };
+  // Monthly backups are kept 12 months, so a deleted account is gone from every backup within a year
+  const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1)).toISOString().slice(0, 7);
+  let expired = 0;
+  for (const folder of await listFolders('backups/')) {
+    const m = /backups\/month-(\d{4}-\d{2})\/$/.exec(folder);
+    if (m && m[1] < oldest) { await removePrefix(folder); expired++; }
+  }
+  return { collections: names.length, documents: docs, expiredMonths: expired };
 }
 
 // Runs every job once (each catches its own errors)

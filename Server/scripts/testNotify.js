@@ -57,37 +57,45 @@ try {
   assert.equal(hi.unread, 1);
   assert.equal(hi.notifications[0].type, 'joined');
   assert.equal(hi.notifications[0].text, 'Gus joined Picnic');
+  // The inbox's shape: a title, and who it's about
+  assert.equal(hi.notifications[0].title, 'Gus joined Picnic');
+  assert.equal(hi.notifications[0].actor.name, 'Gus Guest');
+  assert.ok(hi.notifications[0].actor.id);
 
-  // The guest's photo is liked and reacted to by the host: the guest hears, once each
+  // The guest's photo is reacted to and bookmarked by the host: the guest hears about the reaction (once),
+  // never about the bookmark (bookmarks are private)
   const fd = new FormData();
   fd.append('photos', new Blob([await sharp({ create: { width: 200, height: 150, channels: 3, background: 'red' } }).jpeg().toBuffer()], { type: 'image/jpeg' }), 'p.jpg');
   const [photo] = (await json(await call(`/api/albums/${album.id}/photos`, 201, g, 'POST', fd))).photos;
-  await call(`/api/photos/${photo.id}/like`, 200, h, 'POST', { liked: true });
-  await call(`/api/photos/${photo.id}/like`, 200, h, 'POST', { liked: true });   // twice: still one
+  await call(`/api/photos/${photo.id}/bookmark`, 200, h, 'POST', { bookmarked: true });
+  await call(`/api/photos/${photo.id}/like`, 200, h, 'POST', { liked: true });   // the old address: the same private bookmark
   await call(`/api/photos/${photo.id}/reaction`, 200, h, 'POST', { emoji: '🔥' });
   await call(`/api/photos/${photo.id}/reaction`, 200, h, 'POST', { emoji: '😍' });   // changed: updated, not a second
   let gi = await inbox(g);
-  assert.equal(gi.unread, 2);
-  const types = gi.notifications.map((n) => n.type).sort();
-  assert.deepEqual(types, ['like', 'reaction']);
+  assert.equal(gi.unread, 1);
+  assert.deepEqual(gi.notifications.map((n) => n.type), ['reaction'], 'no notification for a bookmark');
   const rx = gi.notifications.find((n) => n.type === 'reaction');
   assert.equal(rx.emoji, '😍');
   assert.equal(rx.text, 'Hana reacted 😍 to your photo in Picnic');
+  assert.equal(rx.title, rx.text);
   assert.equal(rx.photoId, photo.id);
+  assert.deepEqual(rx.photoIds, [photo.id], 'tapping it opens that photo');
   assert.match(rx.thumbUrl, /size=thumb/);
-  // Liking your own photo: nothing
-  await call(`/api/photos/${photo.id}/like`, 200, g, 'POST', { liked: true });
-  assert.equal((await inbox(g)).unread, 2);
-  // Undoing takes it back
-  await call(`/api/photos/${photo.id}/like`, 200, h, 'POST', { liked: false });
+  // An old "liked your photo" (from before bookmarks) isn't shown
+  const { Notification } = await import('../src/models/Notification.js');
+  await Notification.create({ user: (await User.findOne({ email: 'gus@example.invalid' }))._id, type: 'like', actor: (await User.findOne({ email: 'hana@example.invalid' }))._id, album: album.id, photo: photo.id });
+  gi = await inbox(g);
+  assert.ok(!gi.notifications.some((n) => n.type === 'like'));
+  assert.equal(gi.unread, 1);
+  // Undoing takes the reaction back
   await call(`/api/photos/${photo.id}/reaction`, 200, h, 'POST', { emoji: null });
   assert.equal((await inbox(g)).notifications.length, 0);
-  await call(`/api/photos/${photo.id}/like`, 200, h, 'POST', { liked: true });
+  await call(`/api/photos/${photo.id}/reaction`, 200, h, 'POST', { emoji: '🔥' });
 
   // Marking read; the cheap count for a badge
   gi = await inbox(g);
   assert.equal((await json(await call('/api/notifications/unread', 200, g))).unread, 1);
-  await call('/api/notifications/read', 400, g, 'POST', {});
+  assert.deepEqual(await json(await call('/api/notifications/read', 200, g, 'POST', { ids: [] })), { marked: 0, unread: 1 }, 'nothing listed: nothing marked');
   assert.deepEqual(await json(await call('/api/notifications/read', 200, g, 'POST', { ids: [gi.notifications[0].id] })), { marked: 1, unread: 0 });
   assert.equal((await inbox(g)).notifications[0].read, true);
   // Only your own
@@ -102,6 +110,8 @@ try {
   const added = hi.notifications.find((n) => n.type === 'photos');
   assert.equal(added.count, 3, 'the first photo plus these two, while unread');
   assert.equal(added.text, 'Gus added 3 photos to Picnic');
+  assert.equal(added.photoIds.length, 3, 'which photos: tapping it shows just those');
+  assert.ok(added.photoIds.includes(photo.id));
   assert.equal(hi.notifications.filter((n) => n.type === 'photos').length, 1, 'one per album and uploader');
   assert.ok(!(await inbox(g)).notifications.some((n) => n.type === 'photos'), 'not for your own photos');
   // Once read, the next upload starts a fresh count
@@ -112,6 +122,7 @@ try {
   assert.equal(again.count, 1);
   assert.equal(again.read, false);
   assert.equal(again.text, 'Gus added a photo to Picnic');
+  assert.equal(again.photoIds.length, 1, 'a fresh list once read');
 
   // Asking to join a closed album, then being let in
   await call(`/api/events/${album.id}/policy`, 200, h, 'PATCH', { joiningOpen: false });
@@ -119,14 +130,50 @@ try {
   assert.equal((await json(asked)).pending, true);
   hi = await inbox(h);
   assert.equal(hi.notifications[0].type, 'request');
-  assert.equal(hi.notifications[0].text, 'Lee is asking to join Picnic');
+  assert.equal(hi.notifications[0].text, 'Lee asked to join Picnic');
   const leeId = (await User.findOne({ email: 'lee@example.invalid' })).id;
+  assert.equal(hi.notifications[0].actor.id, leeId, 'so the inbox can approve right there');
+  assert.equal(hi.notifications[0].albumId, album.id);
   await call(`/api/events/${album.id}/requests/${leeId}`, 200, h, 'POST', { approve: true });
   const li = await inbox(l);
   assert.equal(li.notifications[0].type, 'approved');
   assert.match(li.notifications[0].text, /You’re in! Picnic/);
   await call('/api/notifications/read', 200, h, 'POST', { all: true });
   assert.equal((await json(await call('/api/notifications/unread', 200, h))).unread, 0);
+  // {} marks every one read too (what the inbox sends)
+  await call(`/api/photos/${photo.id}/reaction`, 200, h, 'POST', { emoji: '🎉' });
+  assert.equal((await inbox(g)).unread, 1);
+  assert.equal((await json(await call('/api/notifications/read', 200, g, 'POST', {}))).unread, 0);
+
+  // ---- Group invites: in the invitee's inbox, gone once answered or taken back ----
+  const grp = (await json(await call('/api/groups', 201, h, 'POST', { name: 'Book club' }))).group;
+  await call(`/api/groups/${grp.id}/invites`, 201, h, 'POST', { email: 'lee@example.invalid' });
+  let inv = (await inbox(l)).notifications.find((n) => n.type === 'invite');
+  assert.equal(inv.title, 'Hana invited you to Book club');
+  assert.equal(inv.groupId, undefined, 'goes to "Needs you" (not a member yet)');
+  const lInvites = (await json(await call('/api/groups', 200, l))).invites;
+  await call(`/api/groups/invites/${lInvites[0].id}/decline`, 200, l, 'POST');
+  assert.ok(!(await inbox(l)).notifications.some((n) => n.type === 'invite'), 'declined: gone');
+  await call(`/api/groups/${grp.id}/invites`, 201, h, 'POST', { email: 'lee@example.invalid' });
+  assert.ok((await inbox(l)).notifications.some((n) => n.type === 'invite'));
+  await call(`/api/groups/${grp.id}`, 200, h, 'DELETE');
+  assert.ok(!(await inbox(l)).notifications.some((n) => n.type === 'invite'), 'group deleted: gone');
+
+  // ---- Clear all: up to the newest one the inbox showed; anything newer stays ----
+  const shownH = await inbox(h);
+  assert.ok(shownH.notifications.length > 1);
+  const cutAt = shownH.notifications[0].at;
+  await new Promise((r) => setTimeout(r, 20));
+  await call(`/api/albums/${album.id}/photos`, 201, g, 'POST', await photoFd(1));   // arrives after: stays
+  await new Promise((r) => setTimeout(r, 300));
+  const cleared = await json(await call('/api/notifications/clear', 200, h, 'POST', { before: cutAt }));
+  assert.ok(cleared.cleared >= shownH.notifications.length - 1);
+  const leftH = (await inbox(h)).notifications;
+  assert.equal(leftH.length, 1);
+  assert.equal(leftH[0].type, 'photos');
+  await call('/api/notifications/clear', 400, h, 'POST', { before: 'not a time' });
+  await call('/api/notifications/clear', 200, h, 'POST', {});
+  assert.equal((await inbox(h)).notifications.length, 0, 'without a time: all of them');
 
   // Push: the key is public; a device subscribes, and bad subscriptions are refused
   assert.equal((await json(await call('/api/notifications/push/key', 200))).key, vapid.publicKey);
