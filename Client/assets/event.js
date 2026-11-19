@@ -275,13 +275,25 @@
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp }), reject, opts));
     return once({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 })
       .catch((err) => { if (err.code === 1) throw err; return once({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 }); })
-      .catch((err) => {
-        throw new Error(err.code === 1
-          ? (apple
-            ? 'Location is off for Momento. On iPhone or iPad: Settings → Privacy & Security → Location Services: turn it on, open Safari Websites and choose While Using the App. Then in Safari tap “aA” → Website Settings → Location → Allow, and try again.'
-            : 'Location access is off for Momento. Allow it in your browser’s site settings, then try again.')
-          : err.code === 3 ? 'Finding your location took too long. Try again, or type the venue instead.'
-          : 'Your location couldn’t be found. Check Location Services is on, then try again, or type the venue instead.');
+      .catch(async (err) => {
+        if (err.code !== 1) {
+          throw new Error(err.code === 3 ? 'Finding your location took too long. Try again, or type the venue instead.'
+            : 'Your location couldn’t be found. Check your device’s location setting is on, then try again, or type the venue instead.');
+        }
+        if (apple) {
+          throw new Error('Location is off for Momento. On iPhone or iPad: Settings → Privacy & Security → Location Services: turn it on, open Safari Websites and choose While Using the App. Then in Safari tap “aA” → Website Settings → Location → Allow, and try again.');
+        }
+        // "Not allowed", but the browser says this site IS allowed: the computer's own location setting is
+        // blocking every site (Windows and Mac report it the same way)
+        let site = 'prompt';
+        try { site = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch (e) { /* older browsers */ }
+        const mac = /Mac/.test(navigator.platform || navigator.userAgent);
+        const computer = mac
+          ? 'On a Mac: System Settings → Privacy & Security → Location Services: turn it on, and switch on your browser in the list.'
+          : 'On Windows: Settings → Privacy & security → Location: turn on Location services and “Let desktop apps access your location”.';
+        throw new Error(site === 'granted'
+          ? `Your browser allows Momento, but your computer’s location is turned off. ${computer} Then close and reopen the browser and try again, or type the venue instead.`
+          : `Location is blocked for Momento. Click the icon left of the address bar, set Location to Allow and reload. If it still doesn’t work: ${computer} Or type the venue instead.`);
       });
   }
 
