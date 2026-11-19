@@ -2287,9 +2287,24 @@
       function unwatch() { if (watchId !== null) navigator.geolocation.clearWatch(watchId); watchId = null; }
       // Scanning only happens while the Events section is on screen (or when Scan is pressed). Scroll away and
       // following stops; come back and it picks up again with a fresh look around
-      let inView = false, pausedFollow = false, autoScan = false;
+      // It also waits while a window is open over the page (joining with a code, an album, the QR scanner, a
+      // location question), so the two never fight over the screen, the location or the focus; it carries on
+      // once the window closes
+      let inView = false, pausedFollow = false, autoScan = false, covered = false;
+      const resume = () => {
+        if (!inView || covered) return;
+        if (autoScan) { autoScan = false; useMyLocation(); }
+        else if (pausedFollow && real && !real.approx) { startFollowing(); look(real, 'you', scanM, { quiet: true }); }
+      };
+      new MutationObserver(() => {
+        const now = !!document.querySelector('dialog[open]');
+        if (now === covered) return;
+        covered = now;
+        if (covered) { if (following) { stopFollowing(); pausedFollow = true; } }
+        else resume();
+      }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['open'] });
       function startFollowing() {
-        if (!inView) { following = false; pausedFollow = true; paintFollow(); return; }
+        if (!inView || covered) { following = false; pausedFollow = true; paintFollow(); return; }
         pausedFollow = false; following = true; watch(); paintFollow(); liveSay();
       }
       function stopFollowing() { following = false; pausedFollow = false; unwatch(); paintFollow(); }
@@ -2298,11 +2313,7 @@
       new IntersectionObserver(([en]) => {
         clearTimeout(dwell);
         if (en.intersectionRatio >= 0.15) {
-          dwell = setTimeout(() => {
-            inView = true;
-            if (autoScan) { autoScan = false; useMyLocation(); }
-            else if (pausedFollow && real && !real.approx) { startFollowing(); look(real, 'you', scanM, { quiet: true }); }
-          }, 500);
+          dwell = setTimeout(() => { inView = true; resume(); }, 500);
         } else {
           inView = false;
           if (following) { stopFollowing(); pausedFollow = true; say(''); }
@@ -2458,7 +2469,7 @@
         let allowed = false;
         try { allowed = (await navigator.permissions?.query({ name: 'geolocation' }))?.state === 'granted'; } catch (err) {}
         // Already allowed: it scans once the Events section is on screen (straight away if it already is)
-        if (allowed) { showIdle(); if (inView) useMyLocation(); else autoScan = true; }
+        if (allowed) { showIdle(); autoScan = true; resume(); }
         else showIdle();
       });
     })();

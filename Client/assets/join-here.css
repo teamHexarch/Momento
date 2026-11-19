@@ -46,3 +46,9 @@
 #joinForm .otp input { padding: 0; }
 #joinForm .otp-dash { margin: 0; }
 
+
+/* My albums gives every window card its own size and heading (640px wide, a bigger title): these put the
+   join window back exactly as it is on the Social page, so it looks the same everywhere */
+#joinModal #joinForm { width: auto; max-height: none; overflow: visible; font-family: inherit; }
+#joinModal #joinForm h2 { font-size: 1.5rem; line-height: normal; letter-spacing: normal; }
+#joinModal #joinForm .modal-sub { margin: 1rem 0; line-height: normal; }
