@@ -2285,10 +2285,31 @@
         watchId = navigator.geolocation.watchPosition(onFix, (e) => { if (e.code === 1) stopFollowing(); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
       }
       function unwatch() { if (watchId !== null) navigator.geolocation.clearWatch(watchId); watchId = null; }
-      function startFollowing() { following = true; watch(); paintFollow(); liveSay(); }
-      function stopFollowing() { following = false; unwatch(); paintFollow(); }
+      // Scanning only happens while the Events section is on screen (or when Scan is pressed). Scroll away and
+      // following stops; come back and it picks up again with a fresh look around
+      let inView = false, pausedFollow = false, autoScan = false;
+      function startFollowing() {
+        if (!inView) { following = false; pausedFollow = true; paintFollow(); return; }
+        pausedFollow = false; following = true; watch(); paintFollow(); liveSay();
+      }
+      function stopFollowing() { following = false; pausedFollow = false; unwatch(); paintFollow(); }
+      // (on screen means a good part of it, for half a second: a glimpse while the page loads or scrolls past doesn't count)
+      let dwell = 0;
+      new IntersectionObserver(([en]) => {
+        clearTimeout(dwell);
+        if (en.intersectionRatio >= 0.15) {
+          dwell = setTimeout(() => {
+            inView = true;
+            if (autoScan) { autoScan = false; useMyLocation(); }
+            else if (pausedFollow && real && !real.approx) { startFollowing(); look(real, 'you', scanM, { quiet: true }); }
+          }, 500);
+        } else {
+          inView = false;
+          if (following) { stopFollowing(); pausedFollow = true; say(''); }
+        }
+      }, { threshold: [0, 0.15] }).observe(document.getElementById('events'));
       // Nothing is tracked while the page is in the background
-      document.addEventListener('visibilitychange', () => { if (document.hidden) unwatch(); else if (following) watch(); });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) unwatch(); else if (following && inView) watch(); });
       addEventListener('pagehide', unwatch);
 
       // Over the globe: "Live" while following, or "Follow me" to start again
@@ -2432,11 +2453,12 @@
         catch (err) { say('Couldn’t reach Momento. Check your connection, then reload the page.', true); return; }
         // Visitors (not logged in) can scan and look at events too; joining one asks them to log in
         // Events is one part of a longer page, so it never asks for your location unprompted: if you've
-        // already allowed it, it scans straight away; otherwise it waits for a tap on "Scan nearby"
+        // already allowed it, it scans when you reach the Events section; otherwise it waits for a tap on "Scan nearby"
         ensureMap();
         let allowed = false;
         try { allowed = (await navigator.permissions?.query({ name: 'geolocation' }))?.state === 'granted'; } catch (err) {}
-        if (allowed) useMyLocation();
+        // Already allowed: it scans once the Events section is on screen (straight away if it already is)
+        if (allowed) { showIdle(); if (inView) useMyLocation(); else autoScan = true; }
         else showIdle();
       });
     })();

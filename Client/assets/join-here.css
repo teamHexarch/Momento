@@ -1,0 +1,48 @@
+/* The "Join an album" window on My albums: the same one as on the Social page (assets/event-albums.css),
+   with every rule kept inside it so nothing else on My albums changes */
+    #joinModal .join-scan { display: block; margin: .9rem auto 0; padding: .45rem .8rem; border-radius: 100px; color: var(--slate); font: 600 .9rem var(--font-main); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+    #joinModal .join-scan:hover { color: var(--dusk); }   /* a ghost GlassButton (assets/glass.css) */
+    #joinModal .note { min-height: 1.2rem; margin: .9rem 0 0; color: var(--slate); font-size: .85rem; }
+    #joinModal .field span { display: block; margin-bottom: .3rem; font-size: .82rem; font-weight: 600; color: var(--slate); }
+    #joinModal .field input {
+      width: 100%; box-sizing: border-box; height: 3rem; padding: 0 1rem; border: none; border-radius: 14px;
+      background: rgba(255,255,255,.55); color: var(--dusk); font: 600 1.05rem var(--font-main); letter-spacing: .06em; text-transform: uppercase;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.12); transition: box-shadow .2s ease;
+    }
+    #joinModal .field input::placeholder { letter-spacing: .02em; text-transform: none; font-weight: 500; color: var(--stone); }
+    #joinModal .field input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
+    #joinModal .field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
+    #joinModal .error { color: #9A3D3D; }
+
+    /* Join code: one box per character, like a verification code (K7Q-48DM) */
+    #joinModal .otp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto repeat(4, minmax(0, 1fr)); align-items: center; gap: .4rem; }
+    #joinModal .otp input {
+      width: 100%; min-width: 0; box-sizing: border-box; height: 3.4rem; padding: 0; border: none; border-radius: var(--r-group, 16px);
+      background: var(--g-input); color: var(--dusk); text-align: center; caret-color: transparent;
+      font: 700 1.35rem/1 ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; text-transform: uppercase;
+      box-shadow: var(--g-input-rim);
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+    }
+    #joinModal .otp input:hover { box-shadow: var(--g-input-rim-hover); }
+    #joinModal .otp input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); transform: translateY(-2px); }
+    #joinModal .otp input.is-filled { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--dusk) 38%, transparent); }
+    #joinModal .otp input.is-filled:focus { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+    #joinModal .otp input::placeholder { color: color-mix(in srgb, var(--dusk) 18%, transparent); }
+    #joinModal .otp-dash { width: .7rem; height: 2px; border-radius: 2px; background: var(--stone, #A9A5B4); }
+    #joinModal .otp.is-error input { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
+    #joinModal .otp.is-shake { animation: otpShake .42s cubic-bezier(.36,.07,.19,.97); }
+    @keyframes otpShake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    @media (prefers-reduced-motion: reduce) { #joinModal .otp.is-shake { animation: none; } #joinModal .otp input:focus { transform: none; } }
+    @media (max-width: 380px) { #joinModal .otp { gap: .28rem; } #joinModal .otp input { height: 3rem; font-size: 1.15rem; border-radius: 11px; } }
+    :root[data-theme="dark"] #joinModal .error { color: #F0A3A3; }
+    :root[data-theme="dark"] #joinModal .otp.is-error input { box-shadow: inset 0 0 0 1.5px #F0A3A3; }
+/* The dialog is only a frame; the form inside is the glass sheet (GlassSheet in assets/glass.css), and the dim
+   behind it is the shared one */
+#joinModal { padding: 0; border: 0; width: min(420px,calc(100vw - 32px)); max-width: none; background: none; overflow: visible; color: var(--dusk); }
+#joinForm { position: relative; padding: 1.6rem; border-radius: var(--r-card, 28px); }
+#joinForm h2 { margin: 0; }
+#joinForm .close { position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; cursor: pointer; }
+#joinForm .modal-sub { color: var(--slate); }
+#joinForm .otp input { padding: 0; }
+#joinForm .otp-dash { margin: 0; }
+

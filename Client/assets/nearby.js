@@ -5,7 +5,7 @@
 // "Find albums near me" setting (Settings > Location) switches it off.
 // (This works while Momento is open in a tab. Alerts when it's closed need push notifications.)
 (() => {
-  if (document.documentElement.dataset.page === 'events') return;   // the Events page shows them itself
+  if (['events', 'social'].includes(document.documentElement.dataset.page)) return;   // the Social page (once called Events) scans only while you're in its Events section
   const SEEN = 'momento-nearby-seen', NOTIFY = 'momento-notify-nearby', SETTINGS = 'momento-settings';
   const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fallback; } catch (e) { return fallback; } };
   let busy = false;

@@ -36,9 +36,16 @@ notificationRoutes.get('/unread', async (req, res) => {
   res.set('Cache-Control', 'no-store').json({ unread: await unreadOf(req.user._id) });
 });
 
-// POST /api/notifications/read  { ids: [...] } marks those; {} (or { all: true }) marks every one
+// POST /api/notifications/read  { ids: [...] } marks those; { album } those about that album; {} (or { all: true }) every one
 notificationRoutes.post('/read', async (req, res) => {
   const filter = { user: req.user._id, read: false };
+  // { album } : the person opened that album, so what's about it has been seen (not join requests, which
+  // still wait for an answer)
+  if (req.body?.album !== undefined) {
+    if (!mongoose.isValidObjectId(req.body.album)) throw new HttpError(400, 'That album isn’t valid.');
+    const r = await Notification.updateMany({ ...filter, album: req.body.album, type: { $ne: 'request' } }, { read: true });
+    return res.json({ marked: r.modifiedCount, unread: await unreadOf(req.user._id) });
+  }
   if (req.body?.all !== true && Array.isArray(req.body?.ids)) {
     const ids = req.body.ids.filter((id) => mongoose.isValidObjectId(id)).slice(0, 200);
     if (!ids.length) return res.json({ marked: 0, unread: await unreadOf(req.user._id) });

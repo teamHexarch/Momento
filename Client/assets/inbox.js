@@ -493,6 +493,9 @@
         if (Number.isFinite(r.unread) && !cut) setBadge(r.unread);
       } catch (e) { /* the next check puts the true state back */ }
     }
+    // Before leaving the page for a notification: the "read" is saved first (at most a short wait), so it can't
+    // be lost with the page on phones that drop requests from a page that's closing
+    const savedFirst = (p) => Promise.race([p, new Promise((res) => setTimeout(res, 900))]);
 
     // Phones: the panel is pinned just below the bell (or the profile picture, when the bell is in its menu),
     // as tall as the screen allows, growing out of that button
@@ -538,9 +541,9 @@
         if (!n) return;
         if (act.dataset.act === 'open') {
           const href = linkOf(n);
-          if (!n.read) markRead([n.id]);
+          const saving = n.read ? null : markRead([n.id]);
           setOpen(false);
-          if (href) go(href);
+          if (href) (saving ? savedFirst(saving) : Promise.resolve()).then(() => go(href));
         } else answer(n, act.dataset.act === 'approve', act);
         return;
       }
@@ -554,10 +557,10 @@
       // Marked read before going (the request is sent with keepalive, so it survives the page changing).
       // The list is redrawn by this, which is why the link is followed by hand below: Chrome drops the
       // navigation of a link that's taken out of the page while it's being clicked
-      if (n && !n.read) markRead([n.id]);
+      const saving = n && !n.read ? markRead([n.id]) : null;
       if (!href || newTab) return;
       setOpen(false);
-      go(href);
+      (saving ? savedFirst(saving) : Promise.resolve()).then(() => go(href));
     });
     function go(href) {
       const to = new URL(href), here = new URL(location.href);
@@ -584,6 +587,8 @@
     timer = setInterval(tick, POLL_MS);
     const onVisible = () => { if (!document.hidden) refresh(); };
     document.addEventListener('visibilitychange', onVisible);
+    // A page marked some read itself (opening an album marks its notifications read): the bell catches up now
+    document.addEventListener('momento:notifications', () => refresh());
     function stop() {
       gone = true;
       clearInterval(timer);
