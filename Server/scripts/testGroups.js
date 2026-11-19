@@ -190,7 +190,9 @@ try {
     const me = (await json(await call('/api/auth/avatar', 200, o, 'POST', fd))).user;
     assert.match(me.avatarUrl, /\/api\/users\/[0-9a-f]{24}\/avatar\?v=/);
     assert.equal(me.hasAvatar, true);
-    const pic = await call(new URL(me.avatarUrl).pathname + new URL(me.avatarUrl).search, 200, s);
+    // Seen by people who share an album or group with them (Other is in their album), not by strangers
+    const pic = await call(new URL(me.avatarUrl).pathname + new URL(me.avatarUrl).search, 200, x);
+    await call(new URL(me.avatarUrl).pathname, 404, s);
     assert.equal((await sharp(Buffer.from(await pic.arrayBuffer())).metadata()).width, 256);
     await call(new URL(me.avatarUrl).pathname, 401, '');   // only for people who are logged in
     const bad = new FormData();

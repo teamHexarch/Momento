@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { whenOpen } from '../services/switches.js';
+import { uploadBudget } from '../middleware/uploadBudget.js';
 import * as privacy from '../controllers/privacyController.js';
 import multer from 'multer';
 import { requireUser } from '../middleware/authMiddleware.js';
@@ -63,7 +64,7 @@ authRoutes.post('/google', signInLimit, auth.google);
 // Profile photo: one image up to 10 MB, re-encoded small on the server. 30 changes an hour at most
 const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 const avatarLimit = rateLimit({ windowMs: 60 * 60000, limit: 30, keyGenerator: (req) => 'user:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false, message: tooMany(60) });
-authRoutes.post('/avatar', requireUser, avatarLimit, whenOpen('uploads'), avatarUpload.single('avatar'), auth.uploadAvatar);
+authRoutes.post('/avatar', requireUser, avatarLimit, whenOpen('uploads'), uploadBudget, avatarUpload.single('avatar'), auth.uploadAvatar);
 
 // Your data: download all of it; the Terms and Privacy Policy you accepted
 authRoutes.get('/me/export', requireUser, exportLimit, privacy.exportData);

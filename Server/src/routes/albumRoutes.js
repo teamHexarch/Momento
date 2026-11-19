@@ -5,6 +5,15 @@ import { config } from '../config/env.js';
 import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
 import { whenOpen } from '../services/switches.js';
+import { uploadBudget } from '../middleware/uploadBudget.js';
+
+// Making albums: 30 an hour per account. Whole-album zips (heavy to build): 20 an hour per account
+const perAccount = (minutes, limit, error) => rateLimit({
+  windowMs: minutes * 60000, limit, keyGenerator: (req) => `user:${req.user.id}`,
+  standardHeaders: 'draft-8', legacyHeaders: false, message: { error },
+});
+const createLimit = perAccount(60, 30, 'That’s a lot of new albums. Wait a while, then make more.');
+const downloadLimit = perAccount(60, 20, 'That’s a lot of downloads. Wait a while, then try again.');
 
 // Uploads: 120 a hour per account (each can hold 30 photos)
 const uploadLimit = rateLimit({
@@ -50,7 +59,7 @@ albumRoutes.get('/:id/cover/:token', albums.coverFile);
 albumRoutes.use(requireVerified);
 
 albumRoutes.get('/', albums.list);
-albumRoutes.post('/', albums.create);
+albumRoutes.post('/', createLimit, albums.create);
 albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
@@ -58,8 +67,8 @@ albumRoutes.patch('/:id', albums.update);
 albumRoutes.delete('/:id', albums.remove);
 albumRoutes.delete('/:id/membership', albums.leave);
 
-albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), albums.checkMember, upload.array('photos', 30), albums.addPhotos);
-albumRoutes.get('/:id/download', albums.download);
+albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
+albumRoutes.get('/:id/download', downloadLimit, albums.download);
 // The emailed link to a big album's zip (made in the background)
 albumRoutes.get('/:id/zip/:token', albums.zipFile);
 // Hide photos from your own view (everyone else still sees them)
@@ -68,7 +77,7 @@ albumRoutes.post('/:id/hidden', albums.setHidden);
 albumRoutes.post('/:id/save', albums.save);
 // The host's cover picture: one image up to 15 MB, re-encoded small on the server
 const coverUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
-albumRoutes.put('/:id/cover', uploadLimit, whenOpen('uploads'), coverUpload.single('cover'), albums.putCover);
+albumRoutes.put('/:id/cover', uploadLimit, whenOpen('uploads'), uploadBudget, coverUpload.single('cover'), albums.putCover);
 albumRoutes.delete('/:id/cover', albums.deleteCover);
 
 albumRoutes.post('/:id/remind', albums.remind);

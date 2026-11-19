@@ -181,11 +181,16 @@ export async function invite(req, res) {
     throw new HttpError(400, existing._id.equals(req.user._id) ? 'You’re in this group already.' : 'They’re in this group already.');
   }
   if (await GroupInvite.countDocuments({ group: group._id }) >= 100) throw new HttpError(400, 'This group has a lot of invites waiting. Take some back first.');
-  await GroupInvite.findOneAndUpdate(
+  const made = await GroupInvite.findOneAndUpdate(
     { group: group._id, email },
     { invitedBy: req.user._id, expiresAt: new Date(Date.now() + INVITE_DAYS * 86400000) },
-    { upsert: true, setDefaultsOnInsert: true },
+    { upsert: true, setDefaultsOnInsert: true, returnDocument: 'after', includeResultMetadata: true },
   );
+  // Checked again after adding it: if invites sent at the same moment went past 100, this one is taken back
+  if (!made.lastErrorObject?.updatedExisting && await GroupInvite.countDocuments({ group: group._id }) > 100) {
+    await GroupInvite.deleteOne({ _id: made.value._id });
+    throw new HttpError(400, 'This group has a lot of invites waiting. Take some back first.');
+  }
   // Someone with a confirmed account at that address also gets it in their inbox ("Needs you")
   const invitee = existing && await User.findOne({ _id: existing._id, emailVerified: true }, '_id');
   if (invitee) await notify({ user: invitee._id, type: 'invite', actor: req.user._id, group: group._id });

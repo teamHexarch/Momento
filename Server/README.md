@@ -181,6 +181,8 @@ CLOUDFRONT_PRIVATE_KEY=
 # REQUIRE_AGE=on
 # How many different people reporting a photo hide it for everyone until staff decide
 # REPORTS_TO_HIDE=3
+# How much upload data the server holds in memory at once (MB; the server has 1 GB)
+# UPLOAD_MEMORY_MB=400
 ```
 
 ## 1. MongoDB Atlas
@@ -359,7 +361,9 @@ is refused (no MongoDB operator injection); every route reads only the fields it
 fully decoded before anything is stored (the file's real format, not its name or claimed type).
 Rate limits: per IP and per account on login (10 per 15 min per address, plus a 15-minute lock after
 5 wrong passwords), signup, resets (3 an hour per address), codes, uploads (120 an hour), joins,
-exports, and an overall ceiling. Headers: HSTS, CSP `default-src 'none'`, X-Frame-Options, nosniff,
+exports, new albums (30 an hour), album zips (20 an hour), and an overall ceiling. Uploads held in
+memory are capped server-wide (`UPLOAD_MEMORY_MB`, 400) and to 2 at a time per account. Profile photos
+are only shown to people who share an album or group with that person (or are in their inbox). Headers: HSTS, CSP `default-src 'none'`, X-Frame-Options, nosniff,
 `Cache-Control: no-store` on API answers. Errors: unexpected ones answer a plain sentence and a
 `requestId` (also in the `X-Request-Id` header); details only go to the log. Logs never contain
 passwords, tokens, keys or email addresses (they're masked automatically).

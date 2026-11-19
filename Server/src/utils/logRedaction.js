@@ -9,7 +9,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 const RULES = [
   // JSON or query-style secrets: "password":"…", password=…, token=…, secret, apiKey, authorization
-  [/("?(?:password|newPassword|newPasswordAgain|currentPassword|passwordHash|token|ticket|code|secret|apiKey|api_key|authorization|cookie|captchaToken)"?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,&;}]+)/gi, '$1[redacted]'],
+  [/((?:^|[\s{,?&"'])"?(?:password|newPassword|newPasswordAgain|currentPassword|passwordHash|token|ticket|code|secret|apiKey|api_key|authorization|cookie|captchaToken)"?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,&;}:][^\s,&;}]*)/gi, '$1[redacted]'],
   // Signed login tokens (JWT)
   [/\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}/g, '[jwt]'],
   // AWS access keys

@@ -20,8 +20,9 @@
     "test:privacy": "node scripts/testPhotoPrivacy.js",
     "test:nsfw": "node scripts/testNsfw.js",
     "test:security": "node scripts/testSecurity.js",
+    "test:attack": "node scripts/testAttack.js",
     "clean:old-data": "node --env-file=.env scripts/cleanOldData.js",
-    "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js"
+    "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js && node scripts/testAttack.js"
   },
   "engines": {
     "node": ">=22"
