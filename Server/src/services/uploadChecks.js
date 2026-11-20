@@ -46,7 +46,8 @@ const calibration = (() => {
 //    NSFW_STARTER_THRESHOLD (0.98 unless set; "off" sends everything to staff) publishes.
 // Everything else waits for staff. Nothing is ever declined automatically in stage-one mode.
 let learned = null;
-export function setLearnedTable(table, version = SCORE_VERSION) {
+// The version must be given and match exactly: a table with no version is never trusted
+export function setLearnedTable(table, version) {
   learned = version === SCORE_VERSION && table && typeof table === 'object' && !Array.isArray(table) ? table : null;
 }
 const binsOf = (table, stage) => table?.[stage]?.allow?.length || 0;

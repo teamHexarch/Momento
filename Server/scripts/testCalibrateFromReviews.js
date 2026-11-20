@@ -105,6 +105,11 @@ try {
   await ModerationCalibration.updateOne({ _id: 'stage-one' }, { $set: { scoreVersion: 1 } });
   await loadLearned();
   assert.equal(activeTable().source, 'starter');
+  await ModerationCalibration.updateOne({ _id: 'stage-one' }, { $unset: { scoreVersion: 1 } });
+  await loadLearned();
+  assert.equal(activeTable().source, 'starter', 'a table with no version is not trusted');
+  setLearnedTable(table);
+  assert.equal(activeTable().source, 'starter', 'nor when set without one');
   await relearn();
   assert.equal(activeTable().source, 'learned');
   assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 2);
