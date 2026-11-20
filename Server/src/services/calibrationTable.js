@@ -2,9 +2,12 @@
 // Used by scripts/calibrateModeration.js (labelled photo files) and scripts/calibrateFromReviews.js (staff decisions).
 import { routeScore } from './uploadChecks.js';
 
-// Momento's content levels: 0-25 may publish, 50-75 need review, 100 can be rejected
+// Momento's content levels (0/15/25/50/75/100). With one model (stage one) 0-50 may publish, 75 needs staff and
+// 100 can be rejected; the three-stage cascade keeps its stricter 0-25.
 export const LEVELS = [0, 15, 25, 50, 75, 100];
-export const truthOf = severity => severity <= 25 ? 'allow' : severity === 100 ? 'reject' : 'review';
+export const STAGE_ONE_PUBLISH_MAX = 50;
+export const CASCADE_PUBLISH_MAX = 25;
+export const truthOf = (severity, publishMax = CASCADE_PUBLISH_MAX) => severity <= publishMax ? 'allow' : severity === 100 ? 'reject' : 'review';
 
 // One-sided 95% Wilson lower bound; sparse or empty bins cannot imply high confidence.
 export function lowerBound(correct, n) {
@@ -20,7 +23,8 @@ export function buildTable(fit, holdout, stages, log = console.log) {
   for (const stage of stages) {
     table[stage] = {};
     for (const action of stage === 3 ? ['allow', 'reject'] : ['allow']) {
-      const threshold = stage === 1 ? .90 : .85;
+      // A range is trusted at 85% (one-sided 95% lower bound, in both halves)
+      const threshold = .85;
       const bins = [];
       for (let i = 0; i < 10; i++) {
         const min = i / 10, max = (i + 1) / 10;

@@ -1,11 +1,12 @@
 // Builds the stage-one calibration table from staff decisions on uploads: every reviewed upload is a labelled
 // example (its MobileNetV2 score and the staff's level on Momento's 0-100 scale, or approve/decline without one).
-// Photos of one album stay in the same half (fit or holdout). A score range is enabled only when both halves show
-// at least 90% (one-sided 95% lower bound) publishable photos, so roughly 25+ per range in each half are needed.
+// Publishable means level 0-50. Photos of one album stay in the same half (fit or holdout). A score range is enabled
+// only when both halves show at least 85% (one-sided 95% lower bound) publishable photos, so roughly 16+ per range
+// in each half are needed.
 import { createHash } from 'node:crypto';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { STAGE_MODELS, stageOneScores } from './uploadChecks.js';
-import { LEVELS, truthOf, buildTable } from './calibrationTable.js';
+import { LEVELS, truthOf, buildTable, STAGE_ONE_PUBLISH_MAX } from './calibrationTable.js';
 
 // Staff decisions on stage-one uploads, one per file, as { group, truth, scores }. The score is recomputed from the
 // model's raw classes with the same function the live check uses, so learning and checking always agree; older
@@ -20,7 +21,7 @@ export async function reviewedRows() {
     const { allow } = stageOneScores(d.scores.classes);
     if (!(allow >= 0 && allow <= 1) || seen.has(d.hash)) continue;
     seen.add(d.hash);
-    const truth = LEVELS.includes(d.severity) ? truthOf(d.severity) : d.status === 'allowed' ? 'allow' : 'reject';
+    const truth = LEVELS.includes(d.severity) ? truthOf(d.severity, STAGE_ONE_PUBLISH_MAX) : d.status === 'allowed' ? 'allow' : 'reject';
     rows.push({ group: d.album ? String(d.album) : 'no-album-' + d._id, truth, scores: [, { allow }] });
   }
   return rows;

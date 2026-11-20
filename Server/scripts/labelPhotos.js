@@ -43,7 +43,7 @@ export async function scanPhotos(root) {
 }
 
 // Whole events go to one split. Events are visited in a fixed (hashed) order and each goes to the split with fewer
-// publishable (0-25) photos so far, so both splits get a similar number of the photos calibration needs most.
+// publishable (0-50, the one-model standard) photos so far, so both splits get a similar number of the photos calibration needs most.
 export function splitByEvent(photos, labels) {
   const events = new Map();
   for (const photo of photos) {
@@ -52,7 +52,7 @@ export function splitByEvent(photos, labels) {
     events.get(photo.event).push({ image: photo.rel, severity: labels[photo.rel] });
   }
   const split = { fit: [], holdout: [] };
-  const safe = rows => rows.filter(row => row.severity <= 25).length;
+  const safe = rows => rows.filter(row => row.severity <= 50).length;
   for (const name of [...events.keys()].sort((a, b) => sha256(a).localeCompare(sha256(b)))) {
     const rows = events.get(name);
     const key = safe(split.fit) !== safe(split.holdout) ? (safe(split.fit) < safe(split.holdout) ? 'fit' : 'holdout')
@@ -80,7 +80,7 @@ export async function exportSplits(root, photos, labels) {
   for (const name of ['fit', 'holdout']) {
     await writeAtomic(path.join(root, name + '.jsonl'), split[name].map(row => JSON.stringify(row)).join('\n') + '\n');
   }
-  const count = rows => ({ total: rows.length, safe: rows.filter(row => row.severity <= 25).length });
+  const count = rows => ({ total: rows.length, safe: rows.filter(row => row.severity <= 50).length });
   return { fit: count(split.fit), holdout: count(split.holdout) };
 }
 
@@ -213,7 +213,7 @@ const PAGE = `<!doctype html>
   <aside>
     <section>
       <h2>點樣評分</h2>
-      <div class="muted">只睇相片本身，唔好估模型會點判。<br>0–25：可以即刻公開　50–75：要管理員睇　100：一定唔可以公開</div>
+      <div class="muted">只睇相片本身，唔好估模型會點判。<br>0–50：可以即刻公開　75：要管理員睇　100：一定唔可以公開</div>
     </section>
     <section>
       <h2>已標記</h2>
@@ -221,7 +221,7 @@ const PAGE = `<!doctype html>
     </section>
     <section>
       <h2>匯出</h2>
-      <p class="muted">每份資料最少要 25 張安全相（0–25）先有機會開到一個分數段；建議每份 100 張以上，越貼近真實相簿越好。同一活動嘅相會放埋同一份。</p>
+      <p class="muted">每份資料最少要 16 張可以公開嘅相（0–50）先有機會開到一個分數段；建議每份 100 張以上，越貼近真實相簿越好。同一活動嘅相會放埋同一份。</p>
       <button id="export" class="primary">匯出 fit.jsonl 同 holdout.jsonl</button>
       <div id="result"></div>
     </section>
@@ -234,7 +234,7 @@ const PAGE = `<!doctype html>
 <script>
 const LEVELS = [
   [0, '完全正常', 'safe'], [15, '輕微：泳衣、運動服', 'safe'], [25, '有啲暴露但可公開', 'safe'],
-  [50, '性感／半裸，要人睇', 'review'], [75, '好可能唔適合', 'review'], [100, '明顯色情，要拒絕', 'reject'],
+  [50, '明顯性暗示，有遮蓋', 'safe'], [75, '明確裸露，要人睇', 'review'], [100, '明顯色情，要拒絕', 'reject'],
 ];
 let photos = [], index = 0, folder = '';
 const $ = id => document.getElementById(id);

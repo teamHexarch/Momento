@@ -148,12 +148,12 @@
         <button class="btn" type="button" id="next">Next →</button>
       </div>
       <p class="status" id="status" role="status" aria-live="polite"></p>
-      <p class="hint muted">Keys: <kbd>1</kbd>–<kbd>6</kbd> choose a level, <kbd>A</kbd> / <kbd>D</kbd> approve or decline, <kbd>←</kbd> <kbd>→</kbd> move between photos. 0–25 publishes the photo at once and 100 declines it; decisions can’t be undone here.</p>
+      <p class="hint muted">Keys: <kbd>1</kbd>–<kbd>6</kbd> choose a level, <kbd>A</kbd> / <kbd>D</kbd> approve or decline, <kbd>←</kbd> <kbd>→</kbd> move between photos. 0–50 publishes the photo at once, 75 asks you, and 100 declines it; decisions can’t be undone here.</p>
     </div>
     <aside>
       <section class="card">
         <h2>How to rate</h2>
-        <p>Judge the photo itself, by Momento’s standard. 0–25 publish · 50–75 your call, in context · 100 decline.</p>
+        <p>Judge the photo itself, by Momento’s standard. 0–50 publish · 75 your call, in context · 100 decline.</p>
         <table class="guide" id="guide"></table>
       </section>
       <section class="card">
@@ -184,7 +184,7 @@
       [0, 'Everyday', 'Ordinary life, nothing suggestive', 'Meals, group photos, hugs or kisses', 'safe'],
       [15, 'Everyday exposure', 'Dressed for the setting; the photo is about the people or the activity', 'Pool group photos, beach swimwear, shirtless sport', 'safe'],
       [25, 'Mild suggestion', 'Suggestive pose or framing, private parts covered, no simulated sexual acts', 'Sexy stage outfits, flirty fashion shots', 'safe'],
-      [50, 'Clear suggestion', 'Deliberately focuses on covered private parts, or simulates a sexual pose', 'Swimwear framed on the lower body with a clear sexual hint', 'hold'],
+      [50, 'Clear suggestion', 'Deliberately focuses on covered private parts, or simulates a sexual pose', 'Swimwear framed on the lower body with a clear sexual hint', 'safe'],
       [75, 'Explicit nudity', 'Private parts clearly visible, no sexual act', 'Adult full-frontal nude art photography', 'hold'],
       [100, 'Explicit sexual content', 'Sexual acts shown, or private parts displayed sexually', 'Explicit pornographic images', 'stop'],
     ];
@@ -233,8 +233,8 @@
       const range = s.ranges.length ? s.ranges.map((r) => `${r.min.toFixed(2)}–${r.max.toFixed(2)}`).join(', ') : '';
       const learned = s.learned?.builtAt ? ` Last relearned ${new Date(s.learned.builtAt).toLocaleString()} from ${s.learned.reviewed} reviews.` : '';
       const why = s.learned?.lastError && s.source !== 'learned' ? ` ${s.learned.lastError}` : '';
-      const rule = s.source === 'learned' ? `Learned from your ratings: photos the model scores ${range} as everyday publish at once.`
-        : s.source === 'starter' ? `Starter rule: photos the model scores ${s.starterThreshold}+ as everyday publish at once. It switches to what it learns from your ratings once there are enough.`
+      const rule = s.source === 'learned' ? `Learned from your ratings: photos the model scores ${range} as level 0–50 publish at once.`
+        : s.source === 'starter' ? `Starter rule: photos the model is ${pct(s.starterThreshold)}+ sure are level 0–50 publish at once. It switches to what it learns from your ratings once there are enough.`
           : s.source === 'file' ? `A fixed calibration file decides (${range || 'nothing'} publishes at once).`
             : 'Every photo waits for staff.';
       $('learnText').textContent = `${rule} ${pct(s.spotCheck)} of those still come here as spot checks. ${s.rated} of ${s.reviewed} reviews have a level.${learned}${why} Relearns every ${s.relearnHours} h.`;
@@ -267,9 +267,9 @@
     function choose(severity) {
       const it = items[index];
       if (!it || it.done || busy) return;
-      if (severity <= 25) return decide(true, severity);
+      if (severity <= 50) return decide(true, severity);   // the one-model standard: 0-50 publish
       if (severity === 100) return decide(false, severity);
-      pending = severity;   // 50-75: staff decide in context
+      pending = severity;   // 75: staff decide in context
       render();
     }
 

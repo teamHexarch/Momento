@@ -8,7 +8,7 @@ const schema = new mongoose.Schema({
   scoreVersion: Number,   // the stage-one score definition it was built with (uploadChecks.js, SCORE_VERSION)
   builtAt: Date,
   reviewed: Number,       // staff-reviewed uploads used
-  publishable: Number,    // of which rated 0-25 (or approved without a level)
+  publishable: Number,    // of which rated 0-50 (or approved without a level)
   albums: Number,
   fit: Number,
   holdout: Number,

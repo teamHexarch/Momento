@@ -20,7 +20,8 @@ import { sanitizePhoto } from './imageService.js';
 export const stageOneOnly = process.env.NSFW_PIPELINE === 'stage-one';
 export const cascadeEnabled = stageOneOnly || process.env.NSFW_PIPELINE === 'three-stage';
 export const lastStage = stageOneOnly ? 1 : 3;
-const thresholds = [0, .90, .85, .85];
+// How sure a calibrated score range must be before it decides on its own: 85% at every stage
+const thresholds = [0, .85, .85, .85];
 export const STAGE_MODELS = ['', 'NSFW.js MobileNetV2', 'Falconsai/nsfw_image_detection', 'Qwen/Qwen2.5-VL-7B-Instruct'];
 const models = STAGE_MODELS;
 // The API does not load worker configuration or model weights.
@@ -42,8 +43,8 @@ const calibration = (() => {
 // 1. A table file (NSFW_CALIBRATION), when one is set: an explicit choice.
 // 2. Otherwise the table the server learns from staff reviews (services/stageOneLearning.js, kept in MongoDB and
 //    rebuilt every NSFW_RELEARN_HOURS), once it supports at least one score range.
-// 3. Until then, the starter rule: "everyday" score (MobileNetV2 Neutral + Drawing) at or above
-//    NSFW_STARTER_THRESHOLD (0.98 unless set; "off" sends everything to staff) publishes.
+// 3. Until then, the starter rule: a "publishable" score (level 0-50: MobileNetV2 Neutral + Drawing + Sexy) at or
+//    above NSFW_STARTER_THRESHOLD (0.85 unless set; "off" sends everything to staff) publishes.
 // Everything else waits for staff. Nothing is ever declined automatically in stage-one mode.
 let learned = null;
 // The version must be given and match exactly: a table with no version is never trusted
@@ -51,9 +52,9 @@ export function setLearnedTable(table, version) {
   learned = version === SCORE_VERSION && table && typeof table === 'object' && !Array.isArray(table) ? table : null;
 }
 const binsOf = (table, stage) => table?.[stage]?.allow?.length || 0;
-const starterSetting = process.env.NSFW_STARTER_THRESHOLD ?? '0.98';
+const starterSetting = process.env.NSFW_STARTER_THRESHOLD ?? '0.85';
 export const starterThreshold = starterSetting === 'off' ? null
-  : Number.isFinite(Number(starterSetting)) && Number(starterSetting) > 0 && Number(starterSetting) <= 1 ? Number(starterSetting) : .98;
+  : Number.isFinite(Number(starterSetting)) && Number(starterSetting) > 0 && Number(starterSetting) <= 1 ? Number(starterSetting) : .85;
 // Share of the photos the model would publish that go to staff anyway (0.1 unless set): keeps the review history,
 // and so the learning, covering confident photos too
 const spotSetting = Number(process.env.NSFW_SPOT_CHECK ?? '0.1');
@@ -77,16 +78,18 @@ export function isSpotCheck(id, rate = spotCheckRate) {
   return n / 0x100000000 < rate;
 }
 
-// MobileNetV2's own classes, against Momento's levels (0/15/25 publish, 50/75 staff, 100 explicit): Neutral and
-// Drawing are everyday (0), Sexy covers swimwear to clearly suggestive (15-50), Porn and Hentai are explicit (100).
-// The "allow" score is the chance of an everyday photo; the estimated level is kept for comparison with staff ratings.
+// MobileNetV2's own classes, against Momento's levels (one model: 0-50 publish, 75 staff, 100 explicit): Neutral and
+// Drawing are everyday (0), Sexy covers swimwear to clearly suggestive (15-50), Porn and Hentai are explicit (75-100).
+// The "allow" score is the chance of a publishable (0-50) photo: everything but Porn and Hentai. The model can't tell
+// level 50 from 75, which is why staff spot checks and the learned table keep watching it. The estimated level is
+// kept for comparison with staff ratings.
 // SCORE_VERSION names this definition: learning only uses reviews scored the same way (recomputed from the raw
 // classes with this same function), and a learned table built under another version is never loaded.
-export const SCORE_VERSION = 2;
+export const SCORE_VERSION = 3;
 const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
 export function stageOneScores(classes) {
   const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
-  const allow = Math.min(1, p('Neutral') + p('Drawing'));
+  const allow = Math.min(1, p('Neutral') + p('Drawing') + p('Sexy'));
   const top = Object.keys(CLASS_LEVEL).reduce((a, b) => (p(b) > p(a) ? b : a), 'Neutral');
   return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])), version: SCORE_VERSION };
 }

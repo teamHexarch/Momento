@@ -30,19 +30,23 @@ const user = new mongoose.Types.ObjectId(), staff = new mongoose.Types.ObjectId(
 let n = 0;
 // Reviews as the live check stores them: the raw classes (allow is recomputed from them when learning)
 const decision = (album, allow, status, extra = {}) => ({ user, album, kind: 'photo', hash: 'h' + n++, model: 'NSFW.js MobileNetV2',
-  scores: { allow: 0, classes: { Neutral: allow, Sexy: 1 - allow }, version: 2 }, status, reviewedBy: staff, ...extra });
+  scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 3 }, status, reviewedBy: staff, ...extra });
 try {
-  // The model's classes against Momento's levels: everyday (Neutral + Drawing) is the publishable score
-  assert.deepEqual(stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 }),
-    { allow: .8, level: 0, classes: { Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 }, version: 2 });
+  // The model's classes against Momento's one-model standard: the publishable (0-50) score is everything but
+  // Porn and Hentai (Neutral + Drawing + Sexy)
+  const scored = stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 });
+  assert.equal(scored.allow.toFixed(6), '0.950000');
+  assert.equal(scored.level, 0);
+  assert.equal(scored.version, 3);
+  assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.950000', 'swimwear-like (Sexy) counts as publishable');
   assert.equal(stageOneScores({ Neutral: .2, Sexy: .7, Porn: .1 }).level, 25);
   assert.equal(stageOneScores({ Neutral: .1, Porn: .9 }).level, 100);
-  // Method B until the reviews teach it: the starter rule (0.98 unless NSFW_STARTER_THRESHOLD)
-  assert.equal(starterThreshold, .98);
+  // Method B until the reviews teach it: the starter rule, 85% sure (NSFW_STARTER_THRESHOLD)
+  assert.equal(starterThreshold, .85);
   assert.equal(activeTable().source, 'starter');
-  assert.equal(routeScore(1, { allow: .985 }).action, 'allow');
-  assert.equal(routeScore(1, { allow: .985 }).starter, true);
-  assert.equal(routeScore(1, { allow: .97 }).action, 'escalate');
+  assert.equal(routeScore(1, { allow: .86 }).action, 'allow');
+  assert.equal(routeScore(1, { allow: .86 }).starter, true);
+  assert.equal(routeScore(1, { allow: .84 }).action, 'escalate');
   // Spot checks: the same file always gets the same answer, about the configured share of files
   assert.equal(isSpotCheck('a', 1), true);
   assert.equal(isSpotCheck('a', 0), false);
@@ -58,10 +62,10 @@ try {
   const docs = [];
   // Confident, ordinary photos staff approved (some with a level, some without)
   for (const album of albums) for (let i = 0; i < 8; i++) docs.push(decision(album, .91 + i / 100, 'allowed', i % 2 ? { severity: 15 } : {}));
-  // Uncertain photos: declined ones, and approvals staff rated 50 (allowed in context, not publishable unseen)
+  // Uncertain photos: declined ones, and approvals staff rated 75 (allowed in context, not publishable unseen)
   const mixed = new mongoose.Types.ObjectId();
   for (let i = 0; i < 10; i++) docs.push(decision(mixed, .3, 'upheld'));
-  for (let i = 0; i < 30; i++) docs.push(decision(albums[i % 8], .85, 'allowed', { severity: 50 }));
+  for (let i = 0; i < 30; i++) docs.push(decision(albums[i % 8], .85, 'allowed', { severity: 75 }));
   // Not usable: still waiting, another model, no score, a cover, unreviewed, and a duplicate file
   docs.push(decision(mixed, .99, 'review-requested'));
   docs.push(decision(mixed, .99, 'allowed', { model: 'nsfwjs 4.4.0 / MobileNetV2' }));
@@ -90,8 +94,9 @@ try {
   assert.equal(learned.ranges, 1);
   assert.equal(activeTable().source, 'learned');
   assert.deepEqual(activeTable().table, table);
-  assert.equal(routeScore(1, { allow: .93 }).action, 'allow', 'the learned range (0.9+) replaces the 0.98 starter');
+  assert.equal(routeScore(1, { allow: .93 }).action, 'allow');
   assert.equal(routeScore(1, { allow: .93 }).starter, undefined);
+  assert.equal(routeScore(1, { allow: .87 }).action, 'escalate', 'the learned table (0.9+) replaces the 0.85 starter rule');
   const stored = await ModerationCalibration.findById('stage-one').lean();
   assert.deepEqual(stored.table, table);
   assert.equal(stored.lastError, null);
@@ -112,10 +117,19 @@ try {
   assert.equal(activeTable().source, 'starter', 'nor when set without one');
   await relearn();
   assert.equal(activeTable().source, 'learned');
-  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 2);
+  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 3);
   assert.ok(table[1].allow[0].confidence >= .9);
   assert.equal(routeScore(1, { allow: .95 }, table).action, 'allow');
-  assert.equal(routeScore(1, { allow: .85 }, table).action, 'escalate', 'severity 50 approvals do not enable a range');
+  assert.equal(routeScore(1, { allow: .85 }, table).action, 'escalate', 'level-75 approvals do not enable a range');
+  // Level 50 is publishable with one model: the same photos rated 50 enable that range too
+  const { buildTable } = await import('../src/services/calibrationTable.js');
+  const { truthOf, STAGE_ONE_PUBLISH_MAX } = await import('../src/services/calibrationTable.js');
+  assert.equal(truthOf(50, STAGE_ONE_PUBLISH_MAX), 'allow');
+  assert.equal(truthOf(75, STAGE_ONE_PUBLISH_MAX), 'review');
+  assert.equal(truthOf(50), 'review', 'the three-stage cascade keeps 0-25');
+  const fifty = n => Array.from({ length: n }, () => ({ truth: truthOf(50, STAGE_ONE_PUBLISH_MAX), scores: [, { allow: .85 }] }));
+  assert.deepEqual(buildTable(fifty(16), fifty(16), [1], () => {})[1].allow.map(bin => [bin.min, bin.max]), [[.8, .9]], '16 per half reach 85%');
+  assert.deepEqual(buildTable(fifty(15), fifty(15), [1], () => {})[1].allow, [], '15 per half do not');
   // A later rebuild with too little data never throws away what was learned
   await ModerationDecision.deleteMany({});
   assert.equal((await relearn()).ok, false);

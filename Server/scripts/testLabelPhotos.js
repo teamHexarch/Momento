@@ -35,7 +35,7 @@ try {
   const eventsOf = rows => new Set(rows.map(row => row.image.includes('/') ? row.image.split('/')[0] : row.image));
   assert.equal(split.fit.length + split.holdout.length, 13);
   for (const event of eventsOf(split.fit)) assert.ok(!eventsOf(split.holdout).has(event), 'event in both splits: ' + event);
-  const safe = rows => rows.filter(row => row.severity <= 25).length;
+  const safe = rows => rows.filter(row => row.severity <= 50).length;
   assert.ok(Math.abs(safe(split.fit) - safe(split.holdout)) <= 3);
   assert.deepEqual(splitByEvent(photos, labels), split, 'split is repeatable');
   assert.equal(splitByEvent(photos, { 'beach/0.jpg': 7 }).fit.length, 0, 'invalid severities are ignored');

@@ -10,7 +10,7 @@ The model host needs enough GPU memory or system RAM for Qwen2.5-VL-7B-Instruct 
 
 ## Calibration and activation
 
-Prepare two disjoint human-labelled image collections reflecting the actual album mix. Each JSONL row contains an image path relative to the manifest and a severity from 0, 15, 25, 50, 75, 100. Keep pictures from the same event in one split. For this policy 0–25 may publish, 50–75 require review and 100 can be rejected. Check those labels with the moderation team before enabling automatic decisions.
+Prepare two disjoint human-labelled image collections reflecting the actual album mix. Each JSONL row contains an image path relative to the manifest and a severity from 0, 15, 25, 50, 75, 100. Keep pictures from the same event in one split. For the three-stage cascade 0–25 may publish, 50–75 require review and 100 can be rejected (stage one alone: 0–50 may publish). Check those labels with the moderation team before enabling automatic decisions.
 
 With the model endpoint running, execute this from Server on a worker with its usual environment:
 
@@ -31,7 +31,7 @@ node scripts/labelPhotos.js <photo folder>   # label in the browser at http://lo
 NSFW_PIPELINE=stage-one node scripts/calibrateModeration.js <photo folder>/fit.jsonl <photo folder>/holdout.jsonl calibration.json
 ```
 
-**It learns by itself.** Staff rate waiting photos on Momento's 0-100 scale on the review page (`review.html`, "Photo review" under Account settings, staff plan only). On start-up and every `NSFW_RELEARN_HOURS` (24) the API rebuilds the stage-one table from all staff ratings and keeps it in MongoDB (`moderationcalibrations`); a rebuild with too little data keeps the previous table. Until the learned table supports a score range, a starter rule applies: an "everyday" score (MobileNetV2 Neutral + Drawing) of `NSFW_STARTER_THRESHOLD` (0.98) or more publishes. `NSFW_SPOT_CHECK` (10%) of the photos the model would publish still go to staff, so ratings keep covering confident photos too. The review page shows which rule is active and can relearn on demand.
+**It learns by itself.** Staff rate waiting photos on Momento's 0-100 scale on the review page (`review.html`, "Photo review" under Account settings, staff plan only). On start-up and every `NSFW_RELEARN_HOURS` (24) the API rebuilds the stage-one table from all staff ratings and keeps it in MongoDB (`moderationcalibrations`); a rebuild with too little data keeps the previous table. With one model the standard is: level 0-50 may publish (75 is staff's call in context, 100 is declined), and a score range must be 85% sure. The score is the chance of level 0-50 (MobileNetV2 Neutral + Drawing + Sexy). Until the learned table supports a score range, a starter rule applies: a score of `NSFW_STARTER_THRESHOLD` (0.85) or more publishes. MobileNetV2 can't tell level 50 from 75, so keep the spot checks on. `NSFW_SPOT_CHECK` (10%) of the photos the model would publish still go to staff, so ratings keep covering confident photos too. The review page shows which rule is active and can relearn on demand.
 
 A table file can still be pinned instead of the learned one: calibrate from staff decisions by hand. While uncalibrated every upload waits for staff, and each decision keeps the MobileNetV2 score. Staff send the content level with each decision (`POST /api/admin/moderation/:id { allow, severity: 0|15|25|50|75|100 }`); once a few hundred uploads from many albums are reviewed, run on the AWS server:
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { sanitizePhoto } from '../src/services/imageService.js';
 import { classify, lastStage } from '../src/services/uploadChecks.js';
-import { LEVELS, truthOf, buildTable } from '../src/services/calibrationTable.js';
+import { LEVELS, truthOf, buildTable, STAGE_ONE_PUBLISH_MAX, CASCADE_PUBLISH_MAX } from '../src/services/calibrationTable.js';
 // NSFW_PIPELINE=stage-one calibrates only the first model (no model service needed)
 const stages = [1, 2, 3].filter(stage => stage <= lastStage);
 
@@ -25,7 +25,7 @@ async function records(file) {
     const clean = await sanitizePhoto(bytes, { name: image });
     const scores = [];
     for (const stage of stages) scores[stage] = await classify(stage, stage === 3 ? clean.preview : clean.thumbnail);
-    rows.push({ truth: truthOf(severity), scores });
+    rows.push({ truth: truthOf(severity, lastStage === 1 ? STAGE_ONE_PUBLISH_MAX : CASCADE_PUBLISH_MAX), scores });
   }
   return rows;
 }
