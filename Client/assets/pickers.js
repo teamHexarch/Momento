@@ -350,7 +350,7 @@
 // Album select menus: native values/events, with Momento's glass menu in every browser.
 // The original select remains the source of truth for sharing, validation and form resets.
 (() => {
-  const selector = '#mCreate .m-share select, #mCreate select[name="evLead"]';
+  const selector = '#mCreate .m-share select, #mCreate select[name="evLead"], #mCreate select[name="evVis"], dialog.ev-ask select[name="reason"]';
   const controls = new WeakMap();
   let current = null, sequence = 0, typed = '', typedAt = 0;
   const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
@@ -510,4 +510,37 @@
   window.addEventListener('resize', place);
   window.visualViewport?.addEventListener('resize', place);
   window.visualViewport?.addEventListener('scroll', place);
+})();
+
+// Phones: the on-screen keyboard. A phone's keyboard covers the bottom of the screen without making the
+// page any shorter, so a window that fills the screen (Create album) went on reaching down behind it: the
+// fields under the keyboard couldn't be scrolled up, and the window stayed put while the page slid under it.
+// The visible part of the screen is kept in --vv-top / --vv-bottom (assets/glass.css fits open windows to it),
+// and the field being typed in is brought into the middle of what's left.
+(() => {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const root = document.documentElement;
+  let last = '';
+  const sync = () => {
+    const top = Math.max(0, vv.offsetTop), bottom = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const key = top + '/' + bottom;
+    if (key === last) return;
+    last = key;
+    root.style.setProperty('--vv-top', top + 'px');
+    root.style.setProperty('--vv-bottom', bottom + 'px');
+    root.classList.toggle('has-keyboard', bottom > 120);
+  };
+  vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync);
+  sync();
+  const typing = (el) => el?.matches?.('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="button"], [type="submit"]), textarea, [contenteditable="true"]');
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!typing(el) || !el.closest('dialog[open]') || !matchMedia('(pointer: coarse)').matches) return;
+    // Wait for the keyboard to finish opening, then centre the field in the space above it
+    const bring = () => { if (document.activeElement === el) el.scrollIntoView({ block: 'center', behavior: 'auto' }); };
+    setTimeout(bring, 320);
+    vv.addEventListener('resize', bring, { once: true });
+  });
 })();

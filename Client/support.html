@@ -1083,6 +1083,7 @@
       const dx = f.left + f.width / 2 - (c.left + c.width / 2), dy = f.top + f.height / 2 - (c.top + c.height / 2);
       return `translate(${dx}px, ${dy}px) scale(${Math.max(.08, f.width / c.width)}, ${Math.max(.05, f.height / c.height)})`;
     };
+    const phoneStill = () => matchMedia('(max-width: 600px)').matches;
     function dialog(id, html, getReturn) {
       const d = document.createElement('dialog');
       d.className = 'acct-dialog'; d.id = id; d.setAttribute('aria-labelledby', `${id}Title`);
@@ -1094,7 +1095,7 @@
         if (closing || !d.open) return;
         closing = true;
         const c = card(), from = getReturn(), shape = from && c && morph(from, c);
-        if (!reduced.matches && c) {
+        if (!reduced.matches && !phoneStill() && c) {   // phones: it simply goes
           const out = shape ? [{ transform: 'none', opacity: 1 }, { transform: shape, opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }];
           try { await c.animate(out, { duration: shape ? 340 : 200, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished; } catch (e) {}
         }
@@ -1117,7 +1118,7 @@
         // title. It always starts at the top, title and close button in view
         const top = () => { d.scrollTop = 0; const c0 = card(); if (c0) c0.scrollTop = 0; };
         top(); requestAnimationFrame(top);
-        if (reduced.matches) return;
+        if (reduced.matches || phoneStill()) return;   // phones: the window is simply there, no morph and no rows rising in
         const c = card(), from = getReturn(), shape = from && morph(from, c);
         c.animate(shape
           ? [{ transform: shape, opacity: 0 }, { opacity: 1, offset: .22 }, { transform: 'none', opacity: 1 }]

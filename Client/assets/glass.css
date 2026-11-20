@@ -801,6 +801,23 @@ html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
 /* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
 html.pt-file.is-leaving .header { opacity: 1; }
 html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+/* Phones: one motion only. The header and the nav are simply there on the next page (the current tab
+   swaps straight to its new place, without gliding or resizing across), and the page swaps with a
+   single short fade instead of sinking away and rising in */
+@media (max-width: 600px) {
+  :root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current),
+  :root:not(.theming)::view-transition-old(site-header), :root:not(.theming)::view-transition-new(site-header),
+  :root:not(.theming)::view-transition-old(nav-current), :root:not(.theming)::view-transition-new(nav-current) { animation: none; }
+  :root:not(.theming)::view-transition-old(nav-current) { display: none; }
+  :root:not(.theming)::view-transition-old(root) { animation: pt-fade-out .14s linear both; }
+  :root:not(.theming)::view-transition-new(root) { animation: pt-fade-in .2s linear both; }
+  html.is-leaving .page-wrap { animation: pt-fade-out .14s linear both; }
+  html.is-leaving .header { opacity: 1; transition: none; }
+  html.is-arriving .page-wrap { animation: pt-fade-in .2s linear both; }
+  .rise { translate: 0 0 !important; transition: none !important; }   /* the title doesn't rise in on top of the fade */
+}
+@keyframes pt-fade-out { to { opacity: 0; } }
+@keyframes pt-fade-in { from { opacity: 0; } }
 
 /* ============================================================================================
    Glass primitives. Every glass element on the site joins one of these groups by its existing
@@ -1113,19 +1130,19 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
 :root[data-theme="dark"] :is(.acct-field select, .ev-lead select) { color-scheme: dark; }
 
 /* Album dropdowns use the same recessed fields and floating glass as the date/time pickers. */
-#mCreate .ms-select {
+:is(#mCreate, dialog.ev-ask) .ms-select {
   display: flex; align-items: center; justify-content: space-between; gap: .75rem;
   width: 100%; min-width: 0; min-height: 2.9rem; box-sizing: border-box; padding: .65rem 1rem;
   border: none; border-radius: var(--r-group); background: var(--g-input); box-shadow: var(--g-input-rim);
   color: var(--dusk); font: 500 1rem var(--font-main); text-align: left; cursor: pointer;
 }
-#mCreate .ms-select .ms-value { display: block; min-width: 0; margin: 0; overflow: hidden; color: inherit; font: inherit; white-space: nowrap; text-overflow: ellipsis; }
-#mCreate .ms-select > svg { flex: none; width: 16px; height: 16px; color: var(--slate); transition: transform var(--t-med) var(--out); }
-#mCreate .ms-select[aria-expanded="true"] > svg { transform: rotate(180deg); }
-@media (hover: hover) { #mCreate .ms-select:hover:not(:disabled) { box-shadow: var(--g-input-rim-hover); } }
-#mCreate .ms-select:active:not(:disabled) { background-color: var(--g-wash-press); }
-#mCreate .ms-select:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
-#mCreate .ms-select:disabled { color: var(--g-disabled-ink); background: var(--g-disabled); cursor: not-allowed; }
+:is(#mCreate, dialog.ev-ask) .ms-select .ms-value { display: block; min-width: 0; margin: 0; overflow: hidden; color: inherit; font: inherit; white-space: nowrap; text-overflow: ellipsis; }
+:is(#mCreate, dialog.ev-ask) .ms-select > svg { flex: none; width: 16px; height: 16px; color: var(--slate); transition: transform var(--t-med) var(--out); }
+:is(#mCreate, dialog.ev-ask) .ms-select[aria-expanded="true"] > svg { transform: rotate(180deg); }
+@media (hover: hover) { :is(#mCreate, dialog.ev-ask) .ms-select:hover:not(:disabled) { box-shadow: var(--g-input-rim-hover); } }
+:is(#mCreate, dialog.ev-ask) .ms-select:active:not(:disabled) { background-color: var(--g-wash-press); }
+:is(#mCreate, dialog.ev-ask) .ms-select:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+:is(#mCreate, dialog.ev-ask) .ms-select:disabled { color: var(--g-disabled-ink); background: var(--g-disabled); cursor: not-allowed; }
 .ms-menu {
   position: fixed; inset: auto; z-index: 2147483000; margin: 0; padding: .35rem;
   box-sizing: border-box; max-width: calc(100vw - 16px); overflow-x: hidden; overflow-y: auto;
@@ -1140,8 +1157,8 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
 @media (hover: hover) { .ms-option:hover:not([aria-disabled="true"]) { background-color: var(--g-wash); } }
 .ms-option:active:not([aria-disabled="true"]) { background-color: var(--g-wash-press); }
 .ms-option[aria-disabled="true"] { color: var(--g-disabled-ink); cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { #mCreate .ms-select > svg { transition: none; } }
-@media (forced-colors: active) { #mCreate .ms-select, .ms-menu { border: 1px solid CanvasText; } .ms-option[aria-selected="true"] { outline: 1px solid Highlight; outline-offset: -2px; } }
+@media (prefers-reduced-motion: reduce) { :is(#mCreate, dialog.ev-ask) .ms-select > svg { transition: none; } }
+@media (forced-colors: active) { :is(#mCreate, dialog.ev-ask) .ms-select, .ms-menu { border: 1px solid CanvasText; } .ms-option[aria-selected="true"] { outline: 1px solid Highlight; outline-offset: -2px; } }
 
 /* Choice cards (one of several, like who can join or which device to sign out) */
 :is(.ev-who label, .device-choice, dialog .m-kind label) {
@@ -1263,4 +1280,15 @@ html .header { top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-lef
   html body .page { width: min(80rem, 92%); }
   html body .site-foot { width: min(78.5rem, 100% - 3rem); }
   html body :is(.hiw-head, .hiw-steps, .divider, .feat-list, .zone-panel, .quality-panel) { width: min(78.5rem, 100%); }
+}
+
+/* ---------- Phones: windows fit the part of the screen above the keyboard ----------
+   assets/pickers.js keeps --vv-top / --vv-bottom up to date (0 when there's no keyboard). Create album's
+   screen-filling scroller ends at the keyboard's top edge, so every field can be scrolled into view and
+   the window moves with the page when the phone shifts it; smaller windows stay centred in that space. */
+@media (pointer: coarse) {
+  #mCreate[open] { top: var(--vv-top, 0px); bottom: var(--vv-bottom, 0px); height: auto; }
+  :is(.acct-dialog:not(#mCreate), dialog.ev-ask)[open] { top: var(--vv-top, 0px); bottom: var(--vv-bottom, 0px); }
+  .acct-dialog:not(#mCreate) > .acct-card { max-height: calc(100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px) - 32px); }
+  dialog.ev-ask { max-height: calc(100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px) - 32px); }
 }

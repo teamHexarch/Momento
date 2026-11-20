@@ -73,7 +73,10 @@
     /* Venue suggestions: a list that opens under the search box as you type */
     /* (Scoped to the dialog: the Social page has its own search list with the same class.) The pane is the
        GlassPopover in assets/glass.css */
-    dialog .ev-suggest { display: grid; gap: 2px; margin: 0; padding: .35rem; list-style: none; }
+    /* It floats just under the box (it doesn't push the rest of the form down) and scrolls on its own */
+    dialog .ev-venue-search { position: relative; z-index: 5; }
+    dialog .ev-suggest { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 5; display: grid; gap: 2px; margin: 0; padding: .35rem; list-style: none;
+      max-height: min(16rem, 45dvh); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
     dialog .ev-suggest[hidden] { display: none; }
     dialog .ev-suggest li { display: grid; gap: 1px; padding: .6rem .75rem; border-radius: 13px; cursor: pointer; }
     dialog .ev-suggest li b { overflow: hidden; font-size: .9rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; color: var(--dusk, #2e2c3a); }
@@ -257,6 +260,23 @@
     .ev-ask .ev-err { color: #a33a2c; font-weight: 600; }
     .ev-ask .mq-row { justify-content: flex-end; margin-top: 1.2rem; }
     :root[data-theme="dark"] .ev-ask .ev-err { color: #ffb4a8; }
+    /* An event that has already happened: the note offering to save it as an album (pastOffer). The form's
+       error line lands inside it and leads it */
+    .ev-past { display: flex; flex-direction: column; align-items: flex-start; gap: .55rem; margin: .1rem 0 1rem; padding: .85rem 1rem 1rem; border-radius: var(--r-group, 16px);
+      background: rgba(154, 96, 61, .1); box-shadow: inset 0 0 0 1px rgba(154, 96, 61, .22); }
+    #mCreate .ev-past .m-field-error { order: -1; margin: 0; font-size: .9rem; font-weight: 700; }
+    .ev-past p { margin: 0; font-size: .86rem; line-height: 1.5; color: var(--slate, #5c596b); }
+    .ev-past .ev-past-btn[aria-invalid] { outline-offset: 2px; }
+    :root[data-theme="dark"] .ev-past { background: rgba(232, 196, 138, .08); box-shadow: inset 0 0 0 1px rgba(232, 196, 138, .2); }
+    /* Report a photo (albums.html): the same recessed fields and glass dropdown as Create album */
+    .ev-ask .rp-field { margin: 0; }
+    .ev-ask .rp-field textarea { min-height: 6rem; }
+    .ev-ask .rp-field :is(select, textarea), .ev-ask .rp-field .ms-select { font-size: 16px; }   /* 16px: iOS doesn't zoom in */
+    .ev-ask .rp-err { min-height: 1.2em; margin: 0; color: #a33a2c; font-size: .85rem; font-weight: 600; }
+    .ev-ask .rp-err:empty { min-height: 0; }
+    :root[data-theme="dark"] .ev-ask .rp-err { color: #ffb4a8; }
+    /* Phones: the window is simply there when it opens */
+    @media (max-width: 600px) { .ev-ask[open] { animation: none; } }
     @media (prefers-reduced-motion: reduce) { .ev-ask[open], .ev-shots img, .ev-flash.is-on { animation: none; } }`;
   document.head.append(css);
 
@@ -670,6 +690,7 @@
     box._reset = () => {
       // Both start empty ("Enter a start date and time"); their calendars open on today
       form.evStart.value = ''; form.evEnd.value = '';
+      box.querySelector('.ev-past')?.remove();
       lastStart = '';
       form.evLead.value = '30';
       form.evRadius.value = '1';
@@ -748,6 +769,39 @@
     return { startsAt, endsAt, leadMin };
   }
 
+  // ---- An event that has already happened: save it as an album instead ----
+  // A note under Starts and Ends with one button. The button switches the form to Album (the create form
+  // shows that on its first step), keeps the name, dates it the day the event started, and creates it.
+  const PAST_GRACE_MS = 12 * 3600000;
+  function pastOffer(form, box) {
+    let note = box.querySelector('.ev-past');
+    if (!note) {
+      note = document.createElement('div');
+      note.className = 'ev-past';
+      note.innerHTML = `<p></p><button class="ev-link ev-past-btn" type="button">Save as an album</button>`;
+      box.querySelector('.ev-when').after(note);
+      note.querySelector('button').addEventListener('click', () => {
+        const day = form.evStart.value.slice(0, 10);
+        note.remove();
+        const album = form.querySelector('input[name="kind"][value="album"]');
+        if (!album || !form.date) return;
+        album.checked = true;
+        album.dispatchEvent(new Event('change', { bubbles: true }));   // the form goes back to step one, as an album
+        form.date.value = day;
+        form.date.dispatchEvent(new Event('input', { bubbles: true }));
+        form.date.dispatchEvent(new Event('change', { bubbles: true }));
+        form.requestSubmit();
+      });
+      // Changing the times means the note may no longer apply: it's checked again on Create event
+      const drop = () => note.remove();
+      form.evStart.addEventListener('change', drop, { once: true });
+      form.evEnd.addEventListener('change', drop, { once: true });
+    }
+    const day = new Date(form.evStart.value.slice(0, 10) + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    note.querySelector('p').textContent = `Events are for sharing photos while they happen. To keep the photos from this one, save it as an album dated ${day}. You can add photos to it any time.`;
+    return note.querySelector('button');
+  }
+
   function read(form) {
     const box = form.querySelector('.ev');
     if (!box) return { fields: {} };
@@ -759,7 +813,11 @@
     if (!t) return { error: 'Pick the date and time the event starts.', focus: form.evStart };
     if (t.endsAt <= t.startsAt) return { error: 'The event has to end after it starts.', focus: form.evEnd };
     if (t.endsAt - t.startsAt > 7 * 86400000) return { error: 'Keep the event under a week long.', focus: form.evEnd };
-    if (t.endsAt < new Date()) return { error: 'That event has already finished. Check the dates and times.', focus: form.evEnd };
+    // Already happened (started more than 12 hours ago, or over): a live event's zone and upload window
+    // would never open, so it's offered as an album (a memory) instead. Up to 12 hours late is fine, for
+    // hosts who make the event once it's under way
+    if (t.startsAt < Date.now() - PAST_GRACE_MS || t.endsAt < new Date()) return { error: 'That event has already happened, so it can’t be a live event.', focus: pastOffer(form, box) };
+    box.querySelector('.ev-past')?.remove();
     if (!Number.isFinite(t.leadMin) || t.leadMin < 0 || t.leadMin > 1440) { form.evLead.closest('details')?.setAttribute('open', ''); return { error: 'Choose when uploads open, up to 24 hours before the event.', focus: form.evLead }; }
     if (!st.venue) return { error: 'Select a venue or use your location.', focus: box.querySelector('gmp-place-autocomplete, .ev-venue-search input, [data-here]') };
     // "Where you are now" and "Pinned on the map" only label the pin while choosing: they aren't the venue's name
