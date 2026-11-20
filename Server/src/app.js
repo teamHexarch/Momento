@@ -95,7 +95,7 @@ app.get('/s/:code/:tag.jpg', shareLimit, shareImage);
 // In production the site is hosted on its own (FRONTEND_URL) and this server is API only.
 // Only what the Pages workflow publishes is served: the pages and simple files in assets/ and
 // assets/vendor/, assets/i18n/, assets/globe/ and assets/photos/, and the web app manifest (plain names, so not the design screenshot). Everything else in Client/ stays private.
-const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/events.html', '/groups.html', '/privacy.html', '/404.html', '/manifest.webmanifest']);
+const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/events.html', '/groups.html', '/privacy.html', '/404.html', '/manifest.webmanifest', '/favicon.ico']);
 const PUBLIC_ASSET = /^\/assets\/((vendor|i18n|globe|photos)\/)?[\w-]+(\.[\w-]+)*\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i;
 if (!config.serveClient) {
   console.log(`API only: the site is served from ${config.frontendUrl}.`);

@@ -1,7 +1,7 @@
 // Album settings for hosts, on every page.
 // - Momento.albumSettings.open(albumId, from)   a sheet to change the album's name, date and place, its cover, who gets in,
 //                                               the join deadline, and to let waiting guests in. Hosts only.
-// - Momento.groupLink(code)                     the link a group's QR code and "Copy link" hold (events.html?group=CODE)
+// - Momento.groupLink(code)                     the link a group's "Copy link" / share hold (https://api.hexarch.org/s/CODE); its QR code keeps events.html?group=CODE
 // An "Album settings" button is also added to the "Album created" screen on every page.
 // Built from the site's popup glass (.acct-dialog / .acct-card), like the QR slab, so it matches every other popup.
 (() => {
@@ -31,7 +31,7 @@
   }
 
   // The link for a friend group (the same way an album's link is made)
-  Momento.groupLink = (code) => new URL('events.html?group=' + encodeURIComponent(code), location.href).href;
+  Momento.groupLink = (code) => 'https://api.hexarch.org/s/' + encodeURIComponent(code);
 
   // ---- Styles (scoped to .as-*) ----
   const css = document.createElement('style');

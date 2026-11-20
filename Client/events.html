@@ -68,7 +68,9 @@
        Esri satellite imagery and NASA's Earth at night -->
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous">
   <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js" integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous" defer></script>
-  <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
   <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
@@ -2558,7 +2560,9 @@
       };
 
       // The link (and so the QR code) that lets people into a group; a native share sheet only where there is one
-      const linkOf = (g) => (Momento.groupLink ? Momento.groupLink(g.inviteCode) : new URL('events.html?group=' + encodeURIComponent(g.inviteCode), location.href).href);
+      const linkOf = (g) => (Momento.groupLink ? Momento.groupLink(g.inviteCode) : 'https://api.hexarch.org/s/' + encodeURIComponent(g.inviteCode));
+      // The QR keeps the old-style link: the in-app scanner reads ?group= (a /s/ code can't say album or group)
+      const qrLinkOf = (g) => new URL('events.html?group=' + encodeURIComponent(g.inviteCode), location.href).href;
       const canShare = !!navigator.share && matchMedia('(pointer: coarse)').matches;
       const cleanCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -2804,7 +2808,7 @@
       }
 
       // ---- Inviting: a link, a QR code, or the phone's share sheet ----
-      const showQr = (g, from) => Momento.qr.show({ name: g.name, url: linkOf(g), kicker: 'Scan to join the group', hideCode: true }, from);
+      const showQr = (g, from) => Momento.qr.show({ name: g.name, url: qrLinkOf(g), shareUrl: linkOf(g), kicker: 'Scan to join the group', hideCode: true }, from);
 
       async function copyLink(g, btn) {
         const label = btn.textContent;
@@ -3494,7 +3498,7 @@
 
     // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
     // The link a host sends guests: opening it asks them to log in or sign up first, then offers to join
-    Momento.inviteLink = (code) => new URL('events.html?join=' + encodeURIComponent(code), location.href).href;
+    Momento.inviteLink = (code) => 'https://api.hexarch.org/s/' + encodeURIComponent(code);
     Momento.shareInvite = async (album, btn, label = 'Share link') => {
       const url = Momento.inviteLink(album.code);
       if (navigator.share && matchMedia('(pointer: coarse)').matches) {

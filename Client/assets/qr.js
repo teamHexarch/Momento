@@ -20,7 +20,10 @@
   });
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const linkFor = (code) => (Momento.inviteLink ? Momento.inviteLink(code) : new URL('events.html?join=' + encodeURIComponent(code), location.href).href);
+  // QR codes keep the old-style in-app link (the scanner below reads ?join= / ?group=); "Copy link" uses the share link
+  const linkFor = (code) => new URL('events.html?join=' + encodeURIComponent(code), location.href).href;
+  const groupLinkFor = (code) => new URL('events.html?group=' + encodeURIComponent(code), location.href).href;
+  const shareLinkFor = (code) => (Momento.inviteLink ? Momento.inviteLink(code) : 'https://api.hexarch.org/s/' + encodeURIComponent(code));
   const toast = (t, b) => (Momento.toast ? Momento.toast(t, b) : null);
   const isPhone = () => (navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) && matchMedia('(pointer: coarse)').matches;
   const svgIcon = (inner, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
@@ -158,6 +161,7 @@
   async function show(album, from) {
     if (!album?.code && !album?.url) return;
     const url = album.url || linkFor(album.code);
+    const copyUrl = album.shareUrl || (album.code ? shareLinkFor(album.code) : url);
     // Built from the site's popup glass (.acct-dialog / .acct-card), so it matches every other popup
     const d = document.createElement('dialog');
     d.className = 'acct-dialog mq-pop';
@@ -201,7 +205,7 @@
     d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', dismiss));
     d.querySelector('[data-copy]').addEventListener('click', async (e) => {
       const b = e.currentTarget;
-      try { await navigator.clipboard.writeText(url); b.textContent = 'Link copied'; } catch (err) { b.textContent = 'Copy failed'; }
+      try { await navigator.clipboard.writeText(copyUrl); b.textContent = 'Link copied'; } catch (err) { b.textContent = 'Copy failed'; }
       setTimeout(() => { b.textContent = 'Copy link'; }, 1800);
     });
     document.addEventListener('visibilitychange', rewake);
@@ -348,7 +352,7 @@
         setTimeout(() => {
           d.close();
           if (Momento.joinGroupFromLink) Momento.joinGroupFromLink(group);
-          else location.href = Momento.groupLink ? Momento.groupLink(group) : new URL('events.html?group=' + encodeURIComponent(group), location.href).href;
+          else location.href = groupLinkFor(group);
         }, 550);
         return;
       }

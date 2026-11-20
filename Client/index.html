@@ -63,10 +63,13 @@
   </script>
   <!-- /@shared:boot -->
   <title>Momento | Moments, kept.</title>
-  <meta name="description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
-  <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
+  <meta name="description" content="One shared album for every event. Guests join with a code or QR code and add their photos, so every picture ends up in one place.">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
   <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Momento","alternateName":["Momento by Hexarch","hexarch.org"],"url":"https://hexarch.org/"}</script>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
@@ -76,7 +79,7 @@
   <meta property="og:site_name" content="Momento">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Momento: every photo from your event, in one album">
-  <meta property="og:description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
+  <meta property="og:description" content="One shared album for every event. Guests join with a code or QR code and add their photos, so every picture ends up in one place.">
   <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
@@ -85,7 +88,7 @@
   <meta property="og:url" content="https://hexarch.org/">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Momento: every photo from your event, in one album">
-  <meta name="twitter:description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
+  <meta name="twitter:description" content="One shared album for every event. Guests join with a code or QR code and add their photos, so every picture ends up in one place.">
   <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -4244,7 +4247,7 @@
 
     // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
     // The link a host sends guests: opening it asks them to log in or sign up first, then offers to join
-    Momento.inviteLink = (code) => new URL('events.html?join=' + encodeURIComponent(code), location.href).href;
+    Momento.inviteLink = (code) => 'https://api.hexarch.org/s/' + encodeURIComponent(code);
     Momento.shareInvite = async (album, btn, label = 'Share link') => {
       const url = Momento.inviteLink(album.code);
       if (navigator.share && matchMedia('(pointer: coarse)').matches) {
