@@ -101,6 +101,13 @@
     table { width: 100%; border-collapse: collapse; font-size: .88rem; }
     td { padding: 3px 0; vertical-align: top; } td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
     td.lv { width: 2.6em; font-weight: 600; }
+    td.lv.safe { color: var(--safe); } td.lv.hold { color: var(--hold); } td.lv.stop { color: var(--stop); }
+    .guide td { padding: 5px 0; border-top: 1px solid var(--line); }
+    .guide tr:first-child td { border-top: 0; }
+    .guide td:last-child { text-align: left; }
+    .guide b { display: block; font-weight: 600; }
+    .guide small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.35; }
+    #relearn { margin-top: 10px; }
     .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; font-weight: 600; background: var(--well); }
     .chip.ok { color: var(--safe); } .chip.no { color: var(--stop); } .chip.gone { color: var(--faint); }
     .gate { max-width: 520px; margin: 12vh auto; padding: 28px; text-align: center; }
@@ -146,7 +153,13 @@
     <aside>
       <section class="card">
         <h2>How to rate</h2>
-        <p>Judge the photo itself, by Momento’s standard.<br>0–25: publish · 50–75: your call, in context · 100: decline</p>
+        <p>Judge the photo itself, by Momento’s standard. 0–25 publish · 50–75 your call, in context · 100 decline.</p>
+        <table class="guide" id="guide"></table>
+      </section>
+      <section class="card">
+        <h2>Auto-publishing</h2>
+        <p id="learnText">Checking…</p>
+        <button class="btn" type="button" id="relearn" hidden>Relearn now</button>
       </section>
       <section class="card">
         <h2>Rated this session</h2>
@@ -166,13 +179,14 @@
   <script>
   (() => {
     // Momento's content levels (the same standard as the calibration and labelling tools)
+    // [level, name, how to judge, Momento examples, group]
     const LEVELS = [
-      [0, 'Everyday', 'Ordinary life, nothing suggestive', 'safe'],
-      [15, 'Everyday exposure', 'Swimwear, sportswear: dressed for the setting', 'safe'],
-      [25, 'Mild suggestion', 'Suggestive pose, private parts covered', 'safe'],
-      [50, 'Clear suggestion', 'Framing focuses on covered private parts', 'hold'],
-      [75, 'Explicit nudity', 'Private parts clearly visible, no sexual act', 'hold'],
-      [100, 'Explicit sexual content', 'Sexual acts or sexual display', 'stop'],
+      [0, 'Everyday', 'Ordinary life, nothing suggestive', 'Meals, group photos, hugs or kisses', 'safe'],
+      [15, 'Everyday exposure', 'Dressed for the setting; the photo is about the people or the activity', 'Pool group photos, beach swimwear, shirtless sport', 'safe'],
+      [25, 'Mild suggestion', 'Suggestive pose or framing, private parts covered, no simulated sexual acts', 'Sexy stage outfits, flirty fashion shots', 'safe'],
+      [50, 'Clear suggestion', 'Deliberately focuses on covered private parts, or simulates a sexual pose', 'Swimwear framed on the lower body with a clear sexual hint', 'hold'],
+      [75, 'Explicit nudity', 'Private parts clearly visible, no sexual act', 'Adult full-frontal nude art photography', 'hold'],
+      [100, 'Explicit sexual content', 'Sexual acts shown, or private parts displayed sexually', 'Explicit pornographic images', 'stop'],
     ];
     const $ = (id) => document.getElementById(id);
     let items = [], index = 0, pending = null, busy = false;
@@ -189,18 +203,53 @@
     }
     const say = (text, error) => { $('status').textContent = text || ''; $('status').classList.toggle('err', !!error); };
 
-    for (const [value, title, text, group] of LEVELS) {
+    for (const [value, title, text, example, group] of LEVELS) {
       const b = document.createElement('button');
       b.type = 'button';
       b.dataset.value = value;
       b.dataset.group = group;
-      b.title = text;
+      b.title = `${text}. e.g. ${example}`;
+      b.setAttribute('aria-label', `${value}, ${title}: ${text}`);
       b.innerHTML = '<b></b><small></small>';
       b.querySelector('b').textContent = value;
       b.querySelector('small').textContent = title;
       b.addEventListener('click', () => choose(value));
       $('levels').append(b);
     }
+
+    // The standard, in full, beside the photo
+    for (const [value, title, text, example, group] of LEVELS) {
+      const row = $('guide').insertRow();
+      const lv = row.insertCell(); lv.className = 'lv ' + group; lv.textContent = value;
+      const what = row.insertCell();
+      const b = document.createElement('b'); b.textContent = title;
+      const s = document.createElement('small'); s.textContent = `${text}. e.g. ${example}`;
+      what.append(b, s);
+    }
+
+    // What publishes on its own, and what it has learned from the ratings
+    const pct = (n) => Math.round(n * 100) + '%';
+    function showLearning(s) {
+      const range = s.ranges.length ? s.ranges.map((r) => `${r.min.toFixed(2)}–${r.max.toFixed(2)}`).join(', ') : '';
+      const learned = s.learned?.builtAt ? ` Last relearned ${new Date(s.learned.builtAt).toLocaleString()} from ${s.learned.reviewed} reviews.` : '';
+      const why = s.learned?.lastError && s.source !== 'learned' ? ` ${s.learned.lastError}` : '';
+      const rule = s.source === 'learned' ? `Learned from your ratings: photos the model scores ${range} as everyday publish at once.`
+        : s.source === 'starter' ? `Starter rule: photos the model scores ${s.starterThreshold}+ as everyday publish at once. It switches to what it learns from your ratings once there are enough.`
+          : s.source === 'file' ? `A fixed calibration file decides (${range || 'nothing'} publishes at once).`
+            : 'Every photo waits for staff.';
+      $('learnText').textContent = `${rule} ${pct(s.spotCheck)} of those still come here as spot checks. ${s.rated} of ${s.reviewed} reviews have a level.${learned}${why} Relearns every ${s.relearnHours} h.`;
+      $('relearn').hidden = !s.enabled;
+    }
+    const loadLearning = () => momentoApi('/api/admin/moderation-status').then(showLearning, () => { $('learnText').textContent = 'Status unavailable.'; });
+    $('relearn').addEventListener('click', async () => {
+      $('relearn').disabled = true;
+      try {
+        const { result, status } = await momentoApi('/api/admin/moderation-status/relearn', momentoJson('POST', {}));
+        showLearning(status);
+        say(result.ok ? `Relearned from ${result.reviewed} reviews: ${result.ranges} score range(s) publish at once.` : 'Kept the current rule: ' + result.error);
+      } catch (err) { say(err.message, true); }
+      $('relearn').disabled = false;
+    });
 
     const visible = () => $('onlyOpen').checked ? items.filter((it) => !it.done || it === items[index]) : items;
     function move(step) {
@@ -327,6 +376,7 @@
       $('app').hidden = false;
       $('controls').hidden = false;
       render();
+      loadLearning();
     }
 
     $('approve').addEventListener('click', () => decide(true));

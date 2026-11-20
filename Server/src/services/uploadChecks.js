@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { buffer } from 'node:stream/consumers';
 import { UploadCheck } from '../models/UploadCheck.js';
@@ -38,12 +38,54 @@ const calibration = (() => {
     return {};
   }
 })();
+// ---- Stage one: which table decides what publishes on its own ----
+// 1. A table file (NSFW_CALIBRATION), when one is set: an explicit choice.
+// 2. Otherwise the table the server learns from staff reviews (services/stageOneLearning.js, kept in MongoDB and
+//    rebuilt every NSFW_RELEARN_HOURS), once it supports at least one score range.
+// 3. Until then, the starter rule: "everyday" score (MobileNetV2 Neutral + Drawing) at or above
+//    NSFW_STARTER_THRESHOLD (0.98 unless set; "off" sends everything to staff) publishes.
+// Everything else waits for staff. Nothing is ever declined automatically in stage-one mode.
+let learned = null;
+export function setLearnedTable(table) { learned = table && typeof table === 'object' && !Array.isArray(table) ? table : null; }
+const binsOf = (table, stage) => table?.[stage]?.allow?.length || 0;
+const starterSetting = process.env.NSFW_STARTER_THRESHOLD ?? '0.98';
+export const starterThreshold = starterSetting === 'off' ? null
+  : Number.isFinite(Number(starterSetting)) && Number(starterSetting) > 0 && Number(starterSetting) <= 1 ? Number(starterSetting) : .98;
+// Share of the photos the model would publish that go to staff anyway (0.1 unless set): keeps the review history,
+// and so the learning, covering confident photos too
+const spotSetting = Number(process.env.NSFW_SPOT_CHECK ?? '0.1');
+export const spotCheckRate = Number.isFinite(spotSetting) ? Math.min(Math.max(spotSetting, 0), 1) : .1;
+export function activeTable() {
+  if (process.env.NSFW_CALIBRATION && !calibrationError) return { source: 'file', table: calibration };
+  if (binsOf(learned, 1)) return { source: 'learned', table: learned };
+  if (stageOneOnly && starterThreshold != null) {
+    return { source: 'starter', table: { 1: { allow: [{ min: starterThreshold, max: 1, confidence: thresholds[1], starter: true }] } } };
+  }
+  return { source: 'none', table: learned || calibration };
+}
 // How many score ranges each stage may release on its own
-export const calibratedBins = stage => calibration[stage]?.allow?.length || 0;
+export const calibratedBins = stage => binsOf(activeTable().table, stage);
+// The same file always gets the same answer (no coin toss per retry)
+export function isSpotCheck(id, rate = spotCheckRate) {
+  if (!(rate > 0)) return false;
+  const n = parseInt(createHash('sha256').update('spot-check:' + String(id)).digest('hex').slice(0, 8), 16);
+  return n / 0x100000000 < rate;
+}
+
+// MobileNetV2's own classes, against Momento's levels (0/15/25 publish, 50/75 staff, 100 explicit): Neutral and
+// Drawing are everyday (0), Sexy covers swimwear to clearly suggestive (15-50), Porn and Hentai are explicit (100).
+// The "allow" score is the chance of an everyday photo; the estimated level is kept for comparison with staff ratings.
+const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
+export function stageOneScores(classes) {
+  const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
+  const allow = Math.min(1, p('Neutral') + p('Drawing'));
+  const top = Object.keys(CLASS_LEVEL).reduce((a, b) => (p(b) > p(a) ? b : a), 'Neutral');
+  return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])) };
+}
 
 // Calibration files map raw scores to observed decision precision on routed, labelled photos.
 // A missing bin gives no authority to release or reject a private upload.
-export function routeScore(stage, scores, table = calibration) {
+export function routeScore(stage, scores, table = activeTable().table) {
   if (stage === 3 && ![0, 15, 25, 100].includes(scores.severity)) return { action: 'review' };
   for (const action of stage === 3 ? ['allow', 'reject'] : ['allow']) {
     if (stage === 3 && ((scores.severity === 100) !== (action === 'reject'))) continue;
@@ -51,7 +93,7 @@ export function routeScore(stage, scores, table = calibration) {
     if (!Number.isFinite(raw) || raw < 0 || raw > 1) continue;
     const bin = table[stage]?.[action]?.find(b => raw >= b.min && (raw < b.max || (raw === 1 && b.max === 1)));
     if (bin && Number.isFinite(bin.confidence) && bin.confidence <= 1 && bin.confidence >= thresholds[stage]) {
-      return { action, confidence: bin.confidence };
+      return { action, confidence: bin.confidence, ...(bin.starter && { starter: true }) };
     }
   }
   return { action: stage === 3 ? 'review' : 'escalate' };
@@ -95,7 +137,7 @@ export async function classify(stage, image) {
   if (stage === 1) {
     const result = await scan(image);
     if (!result) throw new Error('First model unavailable');
-    return { allow: result.Neutral };
+    return stageOneScores(result);
   }
   const origin = process.env.NSFW_MODEL_URL || 'http://127.0.0.1:8071';
   const response = await fetch(new URL('/stage/' + stage, origin), {
@@ -128,7 +170,7 @@ async function publish(job) {
   }
 }
 
-export async function processCheck(stage, infer = classify, table = calibration, last = lastStage) {
+export async function processCheck(stage, infer = classify, table = activeTable().table, last = lastStage, spot = spotCheckRate) {
   const claim = randomUUID();
   const job = await UploadCheck.findOneAndUpdate({
     state: stage === 0 ? 'publish' : 'checking', ...(stage && { stage }), due: { $lte: new Date() },
@@ -158,20 +200,24 @@ export async function processCheck(stage, infer = classify, table = calibration,
     }
     const image = await buffer(await openPhoto(stage === 3 ? job.files.previewKey : job.files.thumbnailKey));
     const scores = await infer(stage, image);
-    let { action, confidence } = routeScore(stage, scores, table);
+    let { action, confidence, starter } = routeScore(stage, scores, table);
     // Nothing after the last enabled stage: an uncertain photo goes to staff instead
     if (action === 'escalate' && stage >= last) action = 'review';
+    let reason = action === 'review' ? 'Needs staff review before publication' : 'Explicit sexual content';
+    // Stage one: a sample of what the model would publish still goes to staff, so the learning keeps seeing it
+    const spotCheck = action === 'allow' && last === 1 && isSpotCheck(job._id, spot);
+    if (spotCheck) { action = 'review'; reason = 'Spot check: the model would have published this'; }
     const state = { allow: 'publish', reject: 'rejected', review: 'review', escalate: 'checking' }[action];
     if (action === 'review' || action === 'reject') {
       await ModerationDecision.updateOne({ _id: job._id }, { $setOnInsert: {
         user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: models[stage],
-        threshold: thresholds[stage], scores, status: action === 'review' ? 'review-requested' : 'final',
-        reason: action === 'review' ? 'Needs staff review before publication' : 'Explicit sexual content',
+        threshold: thresholds[stage], scores, status: action === 'review' ? 'review-requested' : 'final', reason,
       } }, { upsert: true });
     }
     await UploadCheck.updateOne(owns, { $set: { state, stage: action === 'escalate' ? stage + 1 : stage,
       ...(Number.isFinite(scores.severity) && { severity: scores.severity }), attempts: 0, due: new Date() },
-      $unset: { claim: 1 }, $push: { history: { stage, model: models[stage], scores, confidence, action } } });
+      $unset: { claim: 1 }, $push: { history: { stage, model: models[stage], scores, confidence, action,
+        ...(starter && { rule: 'starter' }), ...(spotCheck && { spotCheck: true }) } } });
   } catch (error) {
     const attempts = job.attempts + 1;
     console.error('Upload check stage %d: %s', stage, error.message);

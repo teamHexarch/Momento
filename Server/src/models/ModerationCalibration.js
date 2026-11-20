@@ -1,0 +1,18 @@
+import mongoose from 'mongoose';
+
+// The stage-one calibration table the server learns from staff reviews (services/stageOneLearning.js), one
+// document ('stage-one'). Rebuilt on start-up and every NSFW_RELEARN_HOURS; a failed rebuild keeps the last table.
+const schema = new mongoose.Schema({
+  _id: String,
+  table: mongoose.Schema.Types.Mixed,
+  builtAt: Date,
+  reviewed: Number,       // staff-reviewed uploads used
+  publishable: Number,    // of which rated 0-25 (or approved without a level)
+  albums: Number,
+  fit: Number,
+  holdout: Number,
+  lastAttemptAt: Date,
+  lastError: String,      // why the latest rebuild kept the previous table (e.g. not enough reviews yet)
+}, { versionKey: false });
+
+export const ModerationCalibration = mongoose.model('ModerationCalibration', schema);

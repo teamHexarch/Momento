@@ -6,6 +6,9 @@ import { Takedown } from '../models/Takedown.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { UploadCheck } from '../models/UploadCheck.js';
 import { Album } from '../models/Album.js';
+import { ModerationCalibration } from '../models/ModerationCalibration.js';
+import { activeTable, starterThreshold, spotCheckRate, stageOneOnly } from '../services/uploadChecks.js';
+import { relearn, relearnHours } from '../services/stageOneLearning.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
 import { sha256 } from '../services/contentSafety.js';
@@ -122,6 +125,33 @@ export async function decide(req, res) {
   if (!d) throw new HttpError(404, 'Not found.');
   await audit('moderation.reviewed', { req, target: d._id, meta: { allow, ...(severity !== undefined && { severity }) } });
   res.json({ id: d.id, status: d.status, severity: d.severity ?? null });
+}
+
+// ---- What publishes on its own (stage one), and what it has learned from staff reviews ----
+// GET /api/admin/moderation-status · POST /api/admin/moderation-status/relearn
+async function learningStatus() {
+  const { source, table } = activeTable();
+  const doc = await ModerationCalibration.findById('stage-one').lean();
+  const [waiting, reviewed, rated] = await Promise.all([
+    ModerationDecision.countDocuments({ kind: 'photo', status: 'review-requested' }),
+    ModerationDecision.countDocuments({ kind: 'photo', status: { $in: ['allowed', 'upheld'] }, reviewedBy: { $exists: true } }),
+    ModerationDecision.countDocuments({ kind: 'photo', status: { $in: ['allowed', 'upheld'] }, severity: { $in: SEVERITIES } }),
+  ]);
+  return {
+    enabled: stageOneOnly, source, starterThreshold, spotCheck: spotCheckRate, relearnHours,
+    ranges: (table[1]?.allow || []).map((b) => ({ min: b.min, max: b.max, confidence: b.confidence, starter: !!b.starter })),
+    waiting, reviewed, rated,
+    learned: doc ? { builtAt: doc.builtAt || null, reviewed: doc.reviewed ?? null, publishable: doc.publishable ?? null, albums: doc.albums ?? null,
+      ranges: (doc.table?.[1]?.allow || []).length, lastAttemptAt: doc.lastAttemptAt || null, lastError: doc.lastError || null } : null,
+  };
+}
+export async function moderationStatus(req, res) {
+  res.json(await learningStatus());
+}
+export async function relearnNow(req, res) {
+  const result = await relearn();
+  await audit('moderation.relearned', { req, meta: result });
+  res.json({ result, status: await learningStatus() });
 }
 
 export async function moderationPreview(req, res) {

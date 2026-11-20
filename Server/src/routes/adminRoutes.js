@@ -14,6 +14,8 @@ adminRoutes.post('/reports/:id/dismiss', admin.dismissReport);
 adminRoutes.post('/photos/:id/takedown', admin.takedown);
 adminRoutes.post('/users/:id/unsuspend', admin.unsuspend);
 adminRoutes.get('/moderation', admin.decisions);
+adminRoutes.get('/moderation-status', admin.moderationStatus);
+adminRoutes.post('/moderation-status/relearn', admin.relearnNow);
 adminRoutes.get('/moderation/:id/preview', admin.moderationPreview);
 adminRoutes.post('/moderation/:id', admin.decide);
 adminRoutes.get('/switches', admin.getSwitches);

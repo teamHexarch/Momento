@@ -6,7 +6,8 @@ import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
 import { warmUp } from './services/nsfwService.js';
-import { stageOneOnly, startUploadChecks, calibratedBins, calibrationError } from './services/uploadChecks.js';
+import { stageOneOnly, startUploadChecks, calibratedBins, calibrationError, activeTable, starterThreshold, spotCheckRate } from './services/uploadChecks.js';
+import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
 import { moveStaffRoleToPlan } from './services/planMigration.js';
 
@@ -33,13 +34,18 @@ setTimeout(warmUp, 5000).unref();
 // Stage-one moderation runs its queue here (it uses the same in-process model), unless a separate worker
 // runs it instead (NSFW_SEPARATE_WORKER=1)
 if (stageOneOnly && process.env.NSFW_SEPARATE_WORKER !== '1') {
+  await loadLearned().catch((error) => console.error('Photo check learning:', error.message));
   startUploadChecks();
   startRefusalCleanup();
-  const bins = calibratedBins(1);
-  console.log('Photo checks: stage one only (MobileNetV2)' + (!process.env.NSFW_CALIBRATION
-    ? '. No calibration table yet (NSFW_CALIBRATION), so every upload waits for staff review.'
-    : calibrationError ? '. The calibration table could not be read, so every upload waits for staff review.'
-      : `. Calibrated: ${bins} score range(s) publish at once` + (bins ? ', the rest wait for staff review.' : ', so every upload waits for staff review.')));
+  const { source } = activeTable(), bins = calibratedBins(1);
+  console.log('Photo checks: stage one only (MobileNetV2). ' + (
+    source === 'file' ? `Table file ${process.env.NSFW_CALIBRATION}: ${bins} score range(s) publish at once`
+      : source === 'learned' ? `Learned from staff reviews: ${bins} score range(s) publish at once`
+        : source === 'starter' ? `Starter rule until staff reviews teach it: everyday score ${starterThreshold}+ publishes at once`
+          : 'Every upload waits for staff review')
+    + `; ${Math.round(spotCheckRate * 100)}% of those still go to staff as spot checks; relearns every ${relearnHours} h.`);
+  if (calibrationError) console.error('The calibration table file could not be read; using the learned or starter rules instead.');
+  startLearning();
 }
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
 

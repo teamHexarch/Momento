@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'momento-upload-checks-'));
 const mongo = await MongoMemoryServer.create();
-Object.assign(process.env, { NSFW_PIPELINE: 'three-stage', NSFW_CALIBRATION: '', NODE_ENV: 'test', S3_BUCKET: '',
+Object.assign(process.env, { NSFW_PIPELINE: 'three-stage', NSFW_CALIBRATION: '', NSFW_SPOT_CHECK: '0', NODE_ENV: 'test', S3_BUCKET: '',
   MONGODB_URI: mongo.getUri(), JWT_SECRET: 'test-only-isolated', UPLOAD_DIR: dir, PUBLIC_URL: 'http://localhost:4000',
   CLIENT_DIR: fileURLToPath(new URL('../../Client/', import.meta.url)) });
 await mongoose.connect(process.env.MONGODB_URI);
@@ -116,6 +116,19 @@ try {
   assert.equal((await UploadCheck.findById(sure.id)).state, 'publish');
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: sure.id }));
+  // A spot check sends a photo the model would publish to staff instead, saying so
+  const spot = await upload('teal', 'stage-one-spot-check.jpg');
+  await processCheck(1, async () => ({ allow: .99 }), table, 1, 1);
+  assert.equal((await UploadCheck.findById(spot.id)).state, 'review');
+  const { ModerationDecision } = await import('../src/models/ModerationDecision.js');
+  assert.match((await ModerationDecision.findById(spot.id)).reason, /Spot check/);
+  assert.equal((await UploadCheck.findById(spot.id)).history.at(-1).spotCheck, true);
+  // The review page's status of what publishes on its own (three-stage here: no stage-one learning)
+  const status = await (await request('/api/admin/moderation-status', 200, cookie)).json();
+  assert.equal(status.enabled, false);
+  assert.equal(typeof status.reviewed, 'number');
+  const relearned = await (await request('/api/admin/moderation-status/relearn', 200, cookie, 'POST', {})).json();
+  assert.equal(typeof relearned.result.ok, 'boolean');
   const unsure = await upload('orange', 'stage-one-unsure.jpg');
   await processCheck(1, async () => ({ allow: .5 }), table, 1);
   assert.equal((await UploadCheck.findById(unsure.id)).state, 'review');

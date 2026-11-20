@@ -31,7 +31,9 @@ node scripts/labelPhotos.js <photo folder>   # label in the browser at http://lo
 NSFW_PIPELINE=stage-one node scripts/calibrateModeration.js <photo folder>/fit.jsonl <photo folder>/holdout.jsonl calibration.json
 ```
 
-Or skip separate labelling and calibrate from staff decisions. While uncalibrated every upload waits for staff, and each decision keeps the MobileNetV2 score. Staff send the content level with each decision (`POST /api/admin/moderation/:id { allow, severity: 0|15|25|50|75|100 }`); once a few hundred uploads from many albums are reviewed, run on the AWS server:
+**It learns by itself.** Staff rate waiting photos on Momento's 0-100 scale on the review page (`review.html`, "Photo review" under Account settings, staff plan only). On start-up and every `NSFW_RELEARN_HOURS` (24) the API rebuilds the stage-one table from all staff ratings and keeps it in MongoDB (`moderationcalibrations`); a rebuild with too little data keeps the previous table. Until the learned table supports a score range, a starter rule applies: an "everyday" score (MobileNetV2 Neutral + Drawing) of `NSFW_STARTER_THRESHOLD` (0.98) or more publishes. `NSFW_SPOT_CHECK` (10%) of the photos the model would publish still go to staff, so ratings keep covering confident photos too. The review page shows which rule is active and can relearn on demand.
+
+A table file can still be pinned instead of the learned one: calibrate from staff decisions by hand. While uncalibrated every upload waits for staff, and each decision keeps the MobileNetV2 score. Staff send the content level with each decision (`POST /api/admin/moderation/:id { allow, severity: 0|15|25|50|75|100 }`); once a few hundred uploads from many albums are reviewed, run on the AWS server:
 
 ```sh
 cd /opt/momento/Server/deploy && sudo docker compose exec -T api node scripts/calibrateFromReviews.js > /tmp/calibration.json \
