@@ -47,6 +47,9 @@ try {
   assert.equal(routeScore(1, { allow: .86 }).action, 'allow');
   assert.equal(routeScore(1, { allow: .86 }).starter, true);
   assert.equal(routeScore(1, { allow: .84 }).action, 'escalate');
+  // One model: a range must be 85% sure
+  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .8499 }] } }).action, 'escalate');
+  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .85 }] } }).action, 'allow');
   // Spot checks: the same file always gets the same answer, about the configured share of files
   assert.equal(isSpotCheck('a', 1), true);
   assert.equal(isSpotCheck('a', 0), false);
@@ -161,6 +164,13 @@ try {
   assert.equal((await probe(path.join(dir, 'broken.json'))).source, 'none');
   await writeFile(path.join(dir, 'good.json'), JSON.stringify(table));
   assert.deepEqual(await probe(path.join(dir, 'good.json')), { error: null, source: 'file', bins: 1 });
+  // A table file built with another score definition (or none recorded) is refused: everything waits for staff
+  await writeFile(path.join(dir, 'old.json'), JSON.stringify({ 1: table[1] }));
+  const old = await probe(path.join(dir, 'old.json'));
+  assert.match(old.error, /score version none/);
+  assert.equal(old.source, 'none');
+  await writeFile(path.join(dir, 'v2.json'), JSON.stringify({ ...table, scoreVersion: 2 }));
+  assert.equal((await probe(path.join(dir, 'v2.json'))).source, 'none');
   // NSFW_STARTER_THRESHOLD=off: until it learns, everything waits for staff
   assert.deepEqual(await probe('', { NSFW_STARTER_THRESHOLD: 'off' }), { error: null, source: 'none', bins: 0 });
   console.log('Passed: staff-decision calibration (severity, album halves, exclusions, stdout), fail-safe table loading.');

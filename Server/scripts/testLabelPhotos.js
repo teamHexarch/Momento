@@ -91,7 +91,8 @@ try {
   { cwd: fileURLToPath(new URL('..', import.meta.url)), env: { ...process.env, NSFW_PIPELINE: 'stage-one', NSFW_CALIBRATION: '', NODE_ENV: 'development', S3_BUCKET: '',
     JWT_SECRET: 'test-only-isolated', MONGODB_URI: 'mongodb://127.0.0.1:9/unused' } });
   const calibration = JSON.parse(await readFile(table, 'utf8'));
-  assert.deepEqual(Object.keys(calibration), ['1']);
+  assert.deepEqual(Object.keys(calibration), ['1', 'scoreVersion']);
+  assert.equal(calibration.scoreVersion, 3, 'the table records the score definition it was built with');
   assert.deepEqual(calibration[1].allow, [], 'a dozen photos cannot support 90% confidence');
   console.log('Passed: photo scan, duplicates, event split, local-only access, saved labels, export and stage-one calibration.');
 } finally {

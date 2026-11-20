@@ -1,6 +1,6 @@
 // Builds the calibration table (NSFW_CALIBRATION) from human-labelled rows: { truth, scores[stage] }.
 // Used by scripts/calibrateModeration.js (labelled photo files) and scripts/calibrateFromReviews.js (staff decisions).
-import { routeScore } from './uploadChecks.js';
+import { routeScore, stageThreshold, SCORE_VERSION } from './uploadChecks.js';
 
 // Momento's content levels (0/15/25/50/75/100). With one model (stage one) 0-50 may publish, 75 needs staff and
 // 100 can be rejected; the three-stage cascade keeps its stricter 0-25.
@@ -19,12 +19,14 @@ export function lowerBound(correct, n) {
 // A score bin is enabled only when both the fit and the holdout rows support its action at the stage threshold.
 // Each later stage is evaluated only on the rows the earlier stages would have escalated.
 export function buildTable(fit, holdout, stages, log = console.log) {
-  const table = {};
+  // The score definition it was built with: a table file of another version is refused when loaded
+  const table = { scoreVersion: SCORE_VERSION };
   for (const stage of stages) {
     table[stage] = {};
     for (const action of stage === 3 ? ['allow', 'reject'] : ['allow']) {
-      // A range is trusted at 85% (one-sided 95% lower bound, in both halves)
-      const threshold = .85;
+      // A range is trusted at the stage's level: 85% (one model), 90% for the cascade's first check
+      // (one-sided 95% lower bound, in both halves)
+      const threshold = stageThreshold(stage);
       const bins = [];
       for (let i = 0; i < 10; i++) {
         const min = i / 10, max = (i + 1) / 10;

@@ -34,8 +34,10 @@ async function request(url, status, cookie = '', method = 'GET', body) {
   return response;
 }
 try {
-  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: bins(.8499) } }).action, 'escalate', 'a range must be 85% sure');
-  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: bins(.85) } }).action, 'allow');
+  // The three-stage cascade keeps 90% for its first check (85% is the one-model standard)
+  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: bins(.8999) } }).action, 'escalate');
+  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: bins(.90) } }).action, 'allow');
+  assert.equal(routeScore(2, { allow: 1 }, { 2: { allow: bins(.85) } }).action, 'allow');
   assert.equal(routeScore(2, { allow: .85 }, table).action, 'allow');
   assert.equal(routeScore(2, { reject: 1 }, table).action, 'escalate');
   assert.equal(routeScore(3, { severity: 75, reject: 1 }, table).action, 'review');

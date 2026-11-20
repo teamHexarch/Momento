@@ -20,8 +20,12 @@ import { sanitizePhoto } from './imageService.js';
 export const stageOneOnly = process.env.NSFW_PIPELINE === 'stage-one';
 export const cascadeEnabled = stageOneOnly || process.env.NSFW_PIPELINE === 'three-stage';
 export const lastStage = stageOneOnly ? 1 : 3;
-// How sure a calibrated score range must be before it decides on its own: 85% at every stage
-const thresholds = [0, .85, .85, .85];
+// How sure a calibrated score range must be before it decides on its own: 85%, except the cascade's first check,
+// which stays at 90% (with one model, stage one, the agreed standard is 85%)
+const thresholds = [0, stageOneOnly ? .85 : .90, .85, .85];
+export const stageThreshold = (stage) => thresholds[stage];
+// The stage-one score definition (stageOneScores, below); every table records the version it was built with
+export const SCORE_VERSION = 3;
 export const STAGE_MODELS = ['', 'NSFW.js MobileNetV2', 'Falconsai/nsfw_image_detection', 'Qwen/Qwen2.5-VL-7B-Instruct'];
 const models = STAGE_MODELS;
 // The API does not load worker configuration or model weights.
@@ -32,6 +36,8 @@ const calibration = (() => {
   try {
     const table = JSON.parse(readFileSync(process.env.NSFW_CALIBRATION, 'utf8'));
     if (!table || typeof table !== 'object' || Array.isArray(table)) throw new Error('not a calibration table');
+    // Built with today's stage-one score definition, or not trusted at all (then everything waits for staff)
+    if (table.scoreVersion !== SCORE_VERSION) throw new Error(`built with score version ${table.scoreVersion ?? 'none'}, not ${SCORE_VERSION}; rebuild it`);
     return table;
   } catch (error) {
     calibrationError = error.message;
@@ -83,9 +89,8 @@ export function isSpotCheck(id, rate = spotCheckRate) {
 // The "allow" score is the chance of a publishable (0-50) photo: everything but Porn and Hentai. The model can't tell
 // level 50 from 75, which is why staff spot checks and the learned table keep watching it. The estimated level is
 // kept for comparison with staff ratings.
-// SCORE_VERSION names this definition: learning only uses reviews scored the same way (recomputed from the raw
-// classes with this same function), and a learned table built under another version is never loaded.
-export const SCORE_VERSION = 3;
+// SCORE_VERSION (declared at the top) names this definition: learning only uses reviews scored the same way
+// (recomputed from the raw classes with this same function), and tables built under another version are never used.
 const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
 export function stageOneScores(classes) {
   const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
