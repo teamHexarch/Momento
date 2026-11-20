@@ -2,16 +2,16 @@ import mongoose from 'mongoose';
 import { connectDb } from '../src/config/database.js';
 import { initStorage } from '../src/services/storageService.js';
 process.env.NSFW_WORKER = '1';
-const { startUploadChecks, cascadeEnabled } = await import('../src/services/uploadChecks.js');
-const { startAlbumAudits } = await import('../src/services/albumAudit.js');
+const { startUploadChecks, cascadeEnabled, stageOneOnly } = await import('../src/services/uploadChecks.js');
+const { startAlbumAudits, startRefusalCleanup } = await import('../src/services/albumAudit.js');
 const { verifyModerationModels } = await import('../src/services/moderationReadiness.js');
 
-if (!cascadeEnabled) throw new Error('Set NSFW_PIPELINE=three-stage for the moderation worker.');
+if (!cascadeEnabled) throw new Error('Set NSFW_PIPELINE=three-stage (or stage-one) for the moderation worker.');
 await verifyModerationModels();
 await connectDb();
 await initStorage();
 const stopUploads = startUploadChecks();
-const stopAudits = startAlbumAudits();
+const stopAudits = stageOneOnly ? startRefusalCleanup() : startAlbumAudits();
 const shutdown = () => {
   stopUploads();
   stopAudits();

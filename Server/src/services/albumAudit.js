@@ -58,3 +58,11 @@ export function startAlbumAudits(infer = classify, table, schedule = setTimeout)
   timer = schedule(tick, 60000).unref();
   return () => { stopped = true; clearTimeout(timer); };
 }
+
+// Stage-one mode has no context model, so routine album audits could only ever escalate. Declined uploads
+// are still removed after 30 days.
+export function startRefusalCleanup() {
+  const timer = setInterval(() => expireRefusals().catch(error => console.error('Refusal cleanup:', error.message)), 3600000);
+  timer.unref();
+  return () => clearInterval(timer);
+}

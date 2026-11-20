@@ -14,11 +14,16 @@ import { isBanned } from './contentSafety.js';
 import { storePhoto, openPhoto, deletePhoto, removeFile } from './storageService.js';
 import { sanitizePhoto } from './imageService.js';
 
-export const cascadeEnabled = process.env.NSFW_PIPELINE === 'three-stage';
+// NSFW_PIPELINE=stage-one: only the in-process MobileNetV2 check. Calibrated confident passes publish at once;
+// everything else stays private for staff review. No model service or worker machine is needed: the API runs
+// the queue itself. NSFW_PIPELINE=three-stage: the full cascade on a dedicated worker (moderation/README.md).
+export const stageOneOnly = process.env.NSFW_PIPELINE === 'stage-one';
+export const cascadeEnabled = stageOneOnly || process.env.NSFW_PIPELINE === 'three-stage';
+export const lastStage = stageOneOnly ? 1 : 3;
 const thresholds = [0, .90, .85, .85];
 const models = ['', 'NSFW.js MobileNetV2', 'Falconsai/nsfw_image_detection', 'Qwen/Qwen2.5-VL-7B-Instruct'];
 // The API does not load worker configuration or model weights.
-const calibration = process.env.NSFW_WORKER === '1' && process.env.NSFW_CALIBRATION
+const calibration = (process.env.NSFW_WORKER === '1' || stageOneOnly) && process.env.NSFW_CALIBRATION
   ? JSON.parse(readFileSync(process.env.NSFW_CALIBRATION, 'utf8')) : {};
 
 // Calibration files map raw scores to observed decision precision on routed, labelled photos.
@@ -108,7 +113,7 @@ async function publish(job) {
   }
 }
 
-export async function processCheck(stage, infer = classify, table = calibration) {
+export async function processCheck(stage, infer = classify, table = calibration, last = lastStage) {
   const claim = randomUUID();
   const job = await UploadCheck.findOneAndUpdate({
     state: stage === 0 ? 'publish' : 'checking', ...(stage && { stage }), due: { $lte: new Date() },
@@ -138,7 +143,9 @@ export async function processCheck(stage, infer = classify, table = calibration)
     }
     const image = await buffer(await openPhoto(stage === 3 ? job.files.previewKey : job.files.thumbnailKey));
     const scores = await infer(stage, image);
-    const { action, confidence } = routeScore(stage, scores, table);
+    let { action, confidence } = routeScore(stage, scores, table);
+    // Nothing after the last enabled stage: an uncertain photo goes to staff instead
+    if (action === 'escalate' && stage >= last) action = 'review';
     const state = { allow: 'publish', reject: 'rejected', review: 'review', escalate: 'checking' }[action];
     if (action === 'review' || action === 'reject') {
       await ModerationDecision.updateOne({ _id: job._id }, { $setOnInsert: {
@@ -169,7 +176,7 @@ export async function processCheck(stage, infer = classify, table = calibration)
 
 export function startUploadChecks() {
   let stopped = false;
-  for (const stage of [0, 1, 2, 3]) {
+  for (let stage = 0; stage <= lastStage; stage++) {
     const tick = async () => {
       if (stopped) return;
       let worked = false;

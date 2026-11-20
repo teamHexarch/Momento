@@ -3,7 +3,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { sanitizePhoto } from '../src/services/imageService.js';
-import { classify, routeScore } from '../src/services/uploadChecks.js';
+import { classify, routeScore, lastStage } from '../src/services/uploadChecks.js';
+// NSFW_PIPELINE=stage-one calibrates only the first model (no model service needed)
+const stages = [1, 2, 3].filter(stage => stage <= lastStage);
 
 const [fitFile, holdoutFile, output] = process.argv.slice(2);
 if (!output) throw new Error('Usage: node scripts/calibrateModeration.js fit.jsonl holdout.jsonl calibration.json');
@@ -22,7 +24,7 @@ async function records(file) {
     seen.add(hash);
     const clean = await sanitizePhoto(bytes, { name: image });
     const scores = [];
-    for (const stage of [1, 2, 3]) scores[stage] = await classify(stage, stage === 3 ? clean.preview : clean.thumbnail);
+    for (const stage of stages) scores[stage] = await classify(stage, stage === 3 ? clean.preview : clean.thumbnail);
     rows.push({ truth: severity <= 25 ? 'allow' : severity === 100 ? 'reject' : 'review', scores });
   }
   return rows;
@@ -36,7 +38,7 @@ function lowerBound(correct, n) {
 const table = {};
 let fit = await records(fitFile);
 let holdout = await records(holdoutFile);
-for (const stage of [1, 2, 3]) {
+for (const stage of stages) {
   table[stage] = {};
   for (const action of stage === 3 ? ['allow', 'reject'] : ['allow']) {
     const threshold = stage === 1 ? .90 : .85;

@@ -6,6 +6,8 @@ import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
 import { warmUp } from './services/nsfwService.js';
+import { stageOneOnly, startUploadChecks } from './services/uploadChecks.js';
+import { startRefusalCleanup } from './services/albumAudit.js';
 
 await connectDb();
 await initStorage();
@@ -26,6 +28,14 @@ setTimeout(runJobs, 2 * 60000).unref();
 setInterval(runJobs, 3600000).unref();
 // The nudity check's model loads in the background, so the first upload isn't slow
 setTimeout(warmUp, 5000).unref();
+// Stage-one moderation runs its queue here (it uses the same in-process model), unless a separate worker
+// runs it instead (NSFW_SEPARATE_WORKER=1)
+if (stageOneOnly && process.env.NSFW_SEPARATE_WORKER !== '1') {
+  startUploadChecks();
+  startRefusalCleanup();
+  console.log('Photo checks: stage one only (MobileNetV2)' + (process.env.NSFW_CALIBRATION ? ''
+    : '. No calibration table yet (NSFW_CALIBRATION), so every upload waits for staff review.'));
+}
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
 
 // ---- Stopping cleanly (an update or restart sends SIGTERM) ----

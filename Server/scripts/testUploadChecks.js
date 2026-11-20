@@ -93,6 +93,18 @@ try {
   await processCheck(2, async () => ({ allow: .99 }), table);
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: retry.id }));
+  // Stage-one mode (last stage 1): a confident pass publishes, an uncertain score goes to staff, never to stage 2
+  const sure = await upload('yellow', 'stage-one-sure.jpg');
+  await processCheck(1, async () => ({ allow: .95 }), table, 1);
+  assert.equal((await UploadCheck.findById(sure.id)).state, 'publish');
+  await processCheck(0);
+  assert.ok(await Photo.exists({ _id: sure.id }));
+  const unsure = await upload('orange', 'stage-one-unsure.jpg');
+  await processCheck(1, async () => ({ allow: .5 }), table, 1);
+  assert.equal((await UploadCheck.findById(unsure.id)).state, 'review');
+  const uncalibrated = await upload('pink', 'stage-one-uncalibrated.jpg');
+  await processCheck(1, async () => ({ allow: .99 }), {}, 1);
+  assert.equal((await UploadCheck.findById(uncalibrated.id)).state, 'review');
   await Photo.updateOne({ _id: retry.id }, { $set: { nextAudit: new Date(0) } });
   await auditOne(async () => ({ allow: 1 }), table);
   assert.ok((await Photo.findById(retry.id)).nextAudit > new Date());
