@@ -22,6 +22,17 @@ The script checks file hashes for overlap, groups raw scores into bins and evalu
 
 For the AWS worker host, put the resulting file in /opt/momento-config/calibration.json and use `docker compose -f deploy/moderation-compose.yml up -d --build`. The worker and model service share a private loopback interface. For direct execution, set NSFW_PIPELINE=three-stage and NSFW_CALIBRATION to the table path, then run `npm run moderation:worker`. Enable NSFW_PIPELINE=three-stage on the API after verifying the worker against the same database and bucket. Keep the worker running to drain existing jobs if intake is rolled back.
 
+## Stage one only
+
+With NSFW_PIPELINE=stage-one the API runs MobileNetV2 itself and needs no worker or model service. Calibrate only the first check:
+
+```sh
+node scripts/labelPhotos.js <photo folder>   # label in the browser at http://localhost:4100, then Export
+NSFW_PIPELINE=stage-one node scripts/calibrateModeration.js <photo folder>/fit.jsonl <photo folder>/holdout.jsonl calibration.json
+```
+
+Put one subfolder per event in the photo folder. The labelling tool never shows model scores, keeps each event in one split and skips byte-identical copies. On the AWS server copy the table to /opt/momento-config/calibration.json, add NSFW_CALIBRATION=/config/calibration.json to server.env and run `sudo momento-update`.
+
 ## Audits and review
 
 Each worker checks at most one due album photo per minute, waiting 60 seconds after each audit pass. New uploads use a separate queue. A nudity report schedules a context check; routine reviews yield to queued uploads. Older photos are eligible on rollout and checked again after 30 days. Uncertain findings open a staff report, and strong explicit findings also hide the image. Existing staff routes handle report dismissal and takedown. Staff can inspect a private image with GET /api/admin/reports/:id/preview or GET /api/admin/moderation/:id/preview. Upload approvals are published by the worker. Declined private files are retained for 30 days for review. Model failures never make a pending image public.
