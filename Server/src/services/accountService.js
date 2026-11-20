@@ -112,6 +112,8 @@ export async function deleteAccount(user) {
   const { removeCoverFiles } = await import('./coverService.js');
   await removeCoverFiles(hosted.flatMap((a) => [a.cover?.key, a.cover?.thumbKey]));
   const hostedIds = hosted.map((a) => a._id);
+  const { discardChecks } = await import('./uploadChecks.js');
+  await discardChecks({ $or: [{ album: { $in: hostedIds } }, { user: user._id }] });
   const photos = await Photo.find({ $or: [{ album: { $in: hostedIds } }, { uploader: user._id }] }, 'storageKey');
   await deletePhotos(photos.map((p) => p.storageKey));
   // Their likes and reactions come off other people's photos

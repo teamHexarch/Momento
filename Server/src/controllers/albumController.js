@@ -23,8 +23,10 @@ import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services
 import { notifyPhotos } from '../services/notifyService.js';
 import { isBig, requestZip, ZipFile } from '../services/zipService.js';
 import { judge } from '../services/nsfwService.js';
+import { cascadeEnabled, discardChecks, queueUpload } from '../services/uploadChecks.js';
+import { UploadCheck } from '../models/UploadCheck.js';
 import { isBanned, BANNED_MESSAGE } from '../services/contentSafety.js';
-import { sendPhoto } from '../services/storageService.js';
+import { sendPhoto, removeFile } from '../services/storageService.js';
 
 const PREVIEW_PICS = 12;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
@@ -460,6 +462,16 @@ export async function join(req, res) {
 
 // ---- One album ----
 
+async function checksFor(album, user) {
+  if (!cascadeEnabled) return [];
+  const rows = await UploadCheck.find({ album, user, state: { $in: ['checking', 'review', 'publish', 'rejected', 'failed'] } },
+    'originalName state').sort({ createdAt: -1 }).lean();
+  return rows.map(row => ({ id: row.id || String(row._id), name: row.originalName, state: row.state }));
+}
+export async function checkStatus(req, res) {
+  const member = await membershipOf(req, req.params.id);
+  res.set('Cache-Control', 'private, no-store').json({ checks: await checksFor(member.album._id, req.user._id) });
+}
 export async function show(req, res) {
   const m = await membershipOf(req, req.params.id);
   const hidden = m.hidden || [];
@@ -472,6 +484,7 @@ export async function show(req, res) {
   ]);
   const hiddenSet = new Set(hidden.map(String));
   res.json({
+    checks: await checksFor(m.album._id, req.user._id),
     album: { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)) },
     photos: photos.map((p) => {
       const mine = p.uploader?._id.equals(req.user._id);
@@ -532,6 +545,7 @@ export async function update(req, res) {
 export async function remove(req, res) {
   const m = await membershipOf(req, req.params.id);
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can delete the album.');
+  await discardChecks({ album: m.album._id });
   const photos = await Photo.find({ album: m.album._id }, 'storageKey');
   await deletePhotos(photos.map((p) => p.storageKey));
   await removeCoverFiles([m.album.cover?.key, m.album.cover?.thumbKey]);
@@ -570,15 +584,23 @@ export async function checkMember(req, res, next) {
 }
 
 export async function addPhotos(req, res) {
+  try { await acceptPhotoBatch(req, res); }
+  finally {
+    await Promise.all((req.files || []).filter(f => f.rawKey && !f.queued).map(f => removeFile(f.rawKey)));
+  }
+}
+
+async function acceptPhotoBatch(req, res) {
   const files = req.files || [];
   if (!files.length) throw new HttpError(400, 'Choose at least one photo.');
   const album = req.membership.album;
   const saved = [];
   // The same file twice (in this upload, or already in the album and not deleted): skipped
-  const hashes = files.map((f) => crypto.createHash('sha256').update(f.buffer).digest('hex'));
+  const hashes = files.map((f) => f.hash || crypto.createHash('sha256').update(f.buffer).digest('hex'));
   const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
   let skipped = 0, blocked = 0, banned = 0;
   const decisions = [], tooBig = [], failed = [];
+  const checks = [];
   let failMessage = '';
   // One photo, start to finish. Anything wrong with it skips just that photo; the rest still go in.
   async function one(f, i) {
@@ -590,6 +612,12 @@ export async function addPhotos(req, res) {
     if (f.size > limit) { tooBig.push(name); there.delete(hash); return; }
     // Files taken down after a complaint can't come back
     if (await isBanned(hash)) { banned++; return; }
+    if (cascadeEnabled) {
+      const job = await queueUpload(album._id, req.user._id, hash, name, f);
+      checks.push({ id: job.id, name, state: job.state });
+      f.buffer = null;
+      return;
+    }
     let clean;
     try { clean = await sanitizePhoto(f.buffer, { name, inPlace: true }); } catch (err) {
       failed.push(name); failMessage ||= err.message; there.delete(hash); return;
@@ -608,7 +636,9 @@ export async function addPhotos(req, res) {
   // Two photos at a time: resizing one while the other is being stored keeps a big upload quick,
   // without holding many big files in the server's memory at once
   let next = 0;
-  await Promise.all([0, 1].map(async () => { while (next < files.length) { const i = next++; await one(files[i], i); } }));
+  const workers = await Promise.allSettled([0, 1].map(async () => { while (next < files.length) { const i = next++; await one(files[i], i); } }));
+  const failure = workers.find(worker => worker.status === 'rejected');
+  if (failure) throw failure.reason;
   saved.sort((a, b) => a.i - b.i);
   saved.splice(0, saved.length, ...saved.map((s) => s.photo));
   // Everyone else in the album hears (one notification per person, adding up while unread)
@@ -620,11 +650,11 @@ export async function addPhotos(req, res) {
     notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length, photoIds: saved.map((p) => p.id) });
   }
   // Nothing could be added, only because of size or an unreadable file: say why
-  if (!saved.length && !skipped && !blocked && !banned) {
+  if (!checks.length && !saved.length && !skipped && !blocked && !banned) {
     if (tooBig.length && !failed.length) throw new HttpError(413, `Photos can be up to ${Math.round(config.maxUploadBytes / 1048576)} MB each (camera RAW files can be bigger).`, 'too-big', { tooBig });
     if (failed.length) throw new HttpError(400, failMessage, 'unreadable', { failed, tooBig });
   }
-  if (banned && !blocked && !saved.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
+  if (banned && !checks.length && !blocked && !saved.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
   if (blocked && !saved.length && !skipped) {
     throw new HttpError(422, blocked === 1
       ? 'This photo can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.'
@@ -634,7 +664,7 @@ export async function addPhotos(req, res) {
   // blocked: photos refused because they look like they contain nudity
   // banned: files removed from Momento before; decisionIds: the refused ones, for "ask for a review"
   // tooBig / failed: the names of photos left out for being over the size limit, or unreadable
-  res.status(201).json({ photos: saved, skipped, blocked, banned, decisionIds: decisions, tooBig, failed });
+  res.status(checks.length ? 202 : 201).json({ photos: saved, checks, skipped, blocked, banned, decisionIds: decisions, tooBig, failed });
 }
 
 export async function download(req, res) {

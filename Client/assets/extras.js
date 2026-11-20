@@ -316,6 +316,7 @@
     link.className = 'btn btn-dark nl-login';
     link.href = 'index.html?login=1&next=' + encodeURIComponent(here());
     link.textContent = 'Log in';
+    window.rollButton?.(link);
     slot.replaceChildren(link);
     slot.hidden = false;
   }

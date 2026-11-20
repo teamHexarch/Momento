@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { quarantineStorage } from '../services/uploadIntake.js';
+import { cascadeEnabled } from '../services/uploadChecks.js';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { requireVerified } from '../middleware/authMiddleware.js';
@@ -23,7 +25,7 @@ const uploadLimit = rateLimit({
 });
 
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: cascadeEnabled ? quarantineStorage : multer.memoryStorage(),
   // The ceiling is the RAW one; ordinary photos over MAX_UPLOAD_MB are skipped one by one in addPhotos,
   // so one oversized file never sinks the rest of the upload
   limits: { fileSize: Math.max(config.maxUploadBytes, config.maxRawUploadBytes), files: 30 },
@@ -65,6 +67,7 @@ albumRoutes.post('/', createLimit, albums.create);
 albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
+albumRoutes.get('/:id/checks', albums.checkStatus);
 albumRoutes.patch('/:id', albums.update);
 albumRoutes.delete('/:id', albums.remove);
 albumRoutes.delete('/:id/membership', albums.leave);

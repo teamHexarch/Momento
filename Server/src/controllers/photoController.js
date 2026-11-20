@@ -22,7 +22,7 @@ async function photoFor(req, { react = false } = {}) {
     m = await hasGroupAccess(req.user._id, album) ? (m || { role: 'guest', via: 'group' }) : null;
   }
   // A photo in the bin: only its album's host still sees it (to recover it), and nobody can react
-  if (!m || (photo.deletedAt && (m.role !== 'host' || react))) {
+  if (!m || photo.auditHidden || (photo.deletedAt && (m.role !== 'host' || react))) {
     throw new HttpError(404, 'Photo not found.');
   }
   return { photo, m };
@@ -76,6 +76,9 @@ export async function report(req, res) {
   const note = String(req.body?.note ?? '').trim().slice(0, 1000);
   const { Report } = await import('../models/Report.js');
   await Report.updateOne({ photo: photo._id, reporter: req.user._id }, { $set: { reason, note, status: 'open', album: photo.album } }, { upsert: true });
+  if (reason === 'nudity' && process.env.NSFW_PIPELINE === 'three-stage') {
+    await Photo.updateOne({ _id: photo._id }, { $set: { auditRequested: true, nextAudit: new Date() } });
+  }
   // Out of the reporter's own view straight away
   await Membership.updateOne({ album: photo.album, user: req.user._id }, { $addToSet: { hidden: photo._id }, $setOnInsert: { role: 'guest', via: 'group' } }, { upsert: true });
   const reports = await Report.countDocuments({ photo: photo._id, status: 'open' });

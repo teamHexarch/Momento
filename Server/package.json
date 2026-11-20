@@ -6,6 +6,8 @@
   "description": "Momento API: accounts (email, Google, email confirmation), albums, join codes and photo uploads.",
   "main": "src/server.js",
   "scripts": {
+    "moderation:worker": "node --env-file-if-exists=.env scripts/moderationWorker.js",
+    "test:moderation": "node scripts/testUploadChecks.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "test:guest": "node scripts/testGuest.js",

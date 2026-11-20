@@ -1591,6 +1591,7 @@
         <div class="upload-track" id="uploadTrack" role="progressbar" aria-labelledby="uploadLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="uploadFill"></i></div>
       </div>
       <p class="note" id="albumNote" role="status"></p>
+      <div class="note" id="albumChecks" role="status" hidden></div>
       <footer class="ab-bar" id="abBar">
         <button class="btn btn-dark" type="button" id="albumAdd" title="Up to 50 MB a photo. Camera RAW files can be bigger.">Add photos</button>
         <button class="btn btn-light btn-icon" type="button" id="albumCamera" aria-label="Take a photo" title="Take a photo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
@@ -2610,7 +2611,7 @@
       }
       const sizeOf = (b) => b.reduce((t, f) => t + f.size, 0);
       const sent = batches.map(() => 0);
-      const r = { added: 0, dupes: 0, blocked: 0, removed: 0, tooBig: [], failed: [], errors: [] };
+      const r = { added: 0, queued: 0, dupes: 0, blocked: 0, removed: 0, tooBig: [], failed: [], errors: [] };
       let stop = false, lastRefresh = 0;
       const paint = () => {
         const done = sent.reduce((t, n) => t + n, 0), p = Math.min(1, done / total);
@@ -2626,6 +2627,7 @@
           try {
             const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => { sent[k] = sizeOf(b) * Math.min(1, p); paint(); }, headers);
             r.added += d.photos?.length || 0; r.dupes += d.skipped || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
+            r.queued += d.checks?.length || 0;
             r.tooBig.push(...(d.tooBig || [])); r.failed.push(...(d.failed || []));
             sent[k] = sizeOf(b); paint();
             // The photos show up in the album while the rest are still going (not while one is open full size)
@@ -2660,7 +2662,8 @@
         if (r.blocked) lines.push(`${plural(r.blocked, 'photo', 'photos')} couldn’t be added: ${r.blocked === 1 ? 'it looks' : 'they look'} like ${r.blocked === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
         if (r.removed) lines.push(`${plural(r.removed, 'photo was', 'photos were')} removed from Momento before and can’t be added again.`);
         if (r.errors.length) lines.push(r.errors[0]);
-        if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
+        if (r.queued) setUpload('done', 1, 'Upload received. You can keep using Momento.');
+        else if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
         else { setUpload('failed', 1, 'Nothing was uploaded'); uploadPct.textContent = ''; }
         await loadAlbums();
         await fetchAlbum(a);
@@ -2668,7 +2671,7 @@
         await gpsCheck;
         if (hadGps && r.added) lines.push(r.added === 1 ? 'Location data was removed from this photo.' : 'Location data was removed from these photos.');
         note.textContent = lines.join(' ');
-        if (r.added) uploadHide = setTimeout(() => setUpload('off'), 2500);
+        if (r.added || r.queued) uploadHide = setTimeout(() => setUpload('off'), 2500);
       } catch (err) {
         setUpload('failed', 1, 'Upload didn’t finish');
         uploadPct.textContent = '';
@@ -4270,10 +4273,50 @@
       }
     }
 
+    let checkTimer;
+    function showChecks(a, checks) {
+      if (M.a && M.a.id !== a.id && albumModal.open) return;
+      clearTimeout(checkTimer);
+      const box = document.getElementById('albumChecks');
+      const labels = { checking: 'Checking', publish: 'Publishing', review: 'Awaiting staff review', rejected: 'Declined', failed: 'Unreadable file' };
+      box.replaceChildren(...checks.map(check => {
+        const line = document.createElement('div');
+        line.textContent = check.name + ' — ' + labels[check.state];
+        if (check.state === 'rejected') {
+          const appeal = document.createElement('button');
+          appeal.type = 'button'; appeal.className = 'm-toast-act'; appeal.textContent = 'Request review';
+          appeal.addEventListener('click', async () => {
+            appeal.disabled = true;
+            try {
+              await momentoApi('/api/auth/moderation/' + check.id + '/review', momentoJson('POST', {}));
+              await fetchAlbum(a);
+            } catch (error) { Momento.toast('Review request', error.message); appeal.disabled = false; }
+          });
+          line.append(' ', appeal);
+        }
+        return line;
+      }));
+      box.hidden = !checks.length;
+      if (!checks.some(c => ['checking', 'publish', 'review'].includes(c.state))) return;
+      const poll = async () => {
+        if (!albumModal.open || M.a?.id !== a.id) return;
+        if (document.hidden || viewer.open) { checkTimer = setTimeout(poll, 5000); return; }
+        try {
+          const { checks: current } = await momentoApi('/api/albums/' + a.id + '/checks');
+          if (!albumModal.open || M.a?.id !== a.id) return;
+          if (JSON.stringify(checks) !== JSON.stringify(current)) {
+            await fetchAlbum(a);
+            if (albumModal.open && M.a?.id === a.id && !viewer.open) photosChanged(a, 0);
+          } else showChecks(a, current);
+        } catch { checkTimer = setTimeout(poll, 15000); }
+      };
+      checkTimer = setTimeout(poll, checks.some(c => c.state !== 'review') ? 4000 : 60000);
+    }
     async function fetchAlbum(a) {
       const result = await momentoApi('/api/albums/' + a.id);
       Object.assign(a, fromStore(result.album));
       a.photoItems = result.photos;
+      showChecks(a, result.checks || []);
       a.pics = result.photos.map((p) => p.thumbnailUrl || p.url + '?size=thumb');
     }
     async function loadAlbums() {

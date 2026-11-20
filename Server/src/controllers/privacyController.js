@@ -12,6 +12,7 @@ import { PushSubscription } from '../models/PushSubscription.js';
 import { Consent } from '../models/Consent.js';
 import { Report } from '../models/Report.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
+import { UploadCheck } from '../models/UploadCheck.js';
 import { audit, ipHash } from '../services/auditService.js';
 import { countExport } from '../services/securityAlerts.js';
 import { currentPolicies, hasAccepted } from '../middleware/authMiddleware.js';
@@ -131,6 +132,9 @@ export async function requestReview(req, res) {
     { $set: { status: 'review-requested' } }, { returnDocument: 'after' },
   );
   if (!d) throw new HttpError(404, 'That decision can’t be reviewed (it may have been reviewed already).');
+  const pending = await UploadCheck.updateOne({ _id: d._id, user: req.user._id, state: 'rejected' }, { $set: { state: 'review' } });
   await audit('moderation.review-requested', { req, target: d._id });
-  res.json({ id: d.id, status: d.status, message: 'Thanks. A person will look at it. If it’s allowed, you can add the same photo again.' });
+  res.json({ id: d.id, status: d.status, message: pending.modifiedCount
+    ? 'A staff member will review your photo. If approved, it will appear in the album.'
+    : 'Thanks. A person will look at it. If it’s allowed, you can add the same photo again.' });
 }

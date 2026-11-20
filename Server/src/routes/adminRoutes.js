@@ -9,10 +9,12 @@ adminRoutes.use(requireStaff);
 adminRoutes.use(rateLimit({ windowMs: 10 * 60000, limit: 300, keyGenerator: (req) => 'staff:' + req.user.id, standardHeaders: 'draft-8', legacyHeaders: false }));
 
 adminRoutes.get('/reports', admin.reports);
+adminRoutes.get('/reports/:id/preview', admin.reportPreview);
 adminRoutes.post('/reports/:id/dismiss', admin.dismissReport);
 adminRoutes.post('/photos/:id/takedown', admin.takedown);
 adminRoutes.post('/users/:id/unsuspend', admin.unsuspend);
 adminRoutes.get('/moderation', admin.decisions);
+adminRoutes.get('/moderation/:id/preview', admin.moderationPreview);
 adminRoutes.post('/moderation/:id', admin.decide);
 adminRoutes.get('/switches', admin.getSwitches);
 adminRoutes.patch('/switches', admin.setSwitches);

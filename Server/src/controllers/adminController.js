@@ -4,6 +4,7 @@ import { Photo } from '../models/Photo.js';
 import { Report } from '../models/Report.js';
 import { Takedown } from '../models/Takedown.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
+import { UploadCheck } from '../models/UploadCheck.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
 import { sha256 } from '../services/contentSafety.js';
@@ -20,7 +21,7 @@ const id = (v) => { if (!mongoose.isValidObjectId(v)) throw new HttpError(404, '
 export async function reports(req, res) {
   const status = ['open', 'removed', 'dismissed'].includes(req.query.status) ? req.query.status : 'open';
   const rows = await Report.find({ status }).sort({ createdAt: -1 }).limit(200).lean();
-  res.json({ reports: rows.map((r) => ({ id: String(r._id), photo: String(r.photo), album: String(r.album), reporter: String(r.reporter), reason: r.reason, note: r.note, status: r.status, at: r.createdAt })) });
+  res.json({ reports: rows.map((r) => ({ id: String(r._id), photo: String(r.photo), album: String(r.album), reporter: r.reporter ? String(r.reporter) : null, source: r.source || 'user', reason: r.reason, note: r.note, status: r.status, at: r.createdAt })) });
 }
 
 // POST /api/admin/reports/:id/dismiss  Nothing wrong: the report closes, and if reports had hidden the
@@ -29,7 +30,7 @@ export async function dismissReport(req, res) {
   const r = await Report.findById(id(req.params.id));
   if (!r) throw new HttpError(404, 'Not found.');
   await Report.updateMany({ photo: r.photo, status: 'open' }, { status: 'dismissed', decidedBy: req.user._id, decidedAt: new Date() });
-  await Photo.updateOne({ _id: r.photo, flaggedAt: { $ne: null } }, { $unset: { flaggedAt: 1, deletedAt: 1, deletedBy: 1 } });
+  await Photo.updateOne({ _id: r.photo, flaggedAt: { $ne: null } }, { $unset: { flaggedAt: 1, auditHidden: 1, deletedAt: 1, deletedBy: 1 } });
   await audit('report.dismissed', { req, target: r.photo });
   res.json({ ok: true });
 }
@@ -88,11 +89,35 @@ export async function decisions(req, res) {
 }
 // POST /api/admin/moderation/:id  { allow: true|false }  Allowed: that exact file passes the check next time
 export async function decide(req, res) {
+  if (typeof req.body?.allow !== 'boolean') throw new HttpError(400, 'Choose approve or uphold.');
   const allow = req.body?.allow === true;
+  const job = await UploadCheck.findById(id(req.params.id));
+  if (job) {
+    const result = await UploadCheck.updateOne({ _id: job._id, state: { $in: ['review', 'rejected'] } },
+      { $set: { state: allow ? 'publish' : 'rejected', due: new Date(), attempts: 0 } });
+    if (!result.matchedCount) throw new HttpError(409, 'This upload is no longer awaiting a decision.');
+  }
   const d = await ModerationDecision.findOneAndUpdate({ _id: id(req.params.id) }, { $set: { status: allow ? 'allowed' : 'upheld', reviewedBy: req.user._id, reviewedAt: new Date() } }, { returnDocument: 'after' });
   if (!d) throw new HttpError(404, 'Not found.');
   await audit('moderation.reviewed', { req, target: d._id, meta: { allow } });
   res.json({ id: d.id, status: d.status });
+}
+
+export async function moderationPreview(req, res) {
+  const job = await UploadCheck.findOne({ _id: id(req.params.id), state: { $in: ['review', 'rejected'] } }).select('+files');
+  if (!job?.files) throw new HttpError(404, 'Review image unavailable.');
+  const stream = await openPhoto(job.files.thumbnailKey);
+  res.set('Cache-Control', 'private, no-store').type('webp');
+  stream.on('error', () => res.destroy()).pipe(res);
+}
+
+export async function reportPreview(req, res) {
+  const report = await Report.findById(id(req.params.id));
+  const photo = report && await Photo.findById(report.photo);
+  if (!photo?.thumbnailKey) throw new HttpError(404, 'Review image unavailable.');
+  const stream = await openPhoto(photo.thumbnailKey);
+  res.set('Cache-Control', 'private, no-store').type('webp');
+  stream.on('error', () => res.destroy()).pipe(res);
 }
 
 // ---- Emergency switches ----

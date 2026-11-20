@@ -6,7 +6,8 @@ import mongoose from 'mongoose';
 const reportSchema = new mongoose.Schema({
   photo: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo', required: true },
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
-  reporter: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  reporter: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required() { return this.source !== 'model'; } },
+  source: { type: String, enum: ['user', 'model'], default: 'user' },
   reason: { type: String, enum: ['nudity', 'abuse', 'privacy', 'copyright', 'other'], required: true },
   note: { type: String, maxlength: 1000, default: '' },
   status: { type: String, enum: ['open', 'removed', 'dismissed'], default: 'open' },
