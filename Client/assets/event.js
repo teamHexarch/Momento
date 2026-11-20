@@ -964,4 +964,25 @@
   }
 
   Momento.event = { mount, activate, read, camera, confirmUpload, locate, windowText, distanceM, prepareCover, isPlaceholder };
+
+  // ---- Your friend groups, for the Create form's "Share with" ----
+  // The form used to ask the server each time it opened and only then show the field, so it popped in a
+  // moment after everything else. The list is remembered for the tab (per account) and fetched in the
+  // background once the page has loaded, so the field is there as the form opens; each opening still
+  // refreshes it quietly. cached(): [{ id, name }] or null if not known yet. refresh(): the fresh list.
+  const groupsKey = () => 'momento-groups:' + (Momento.account?.get?.()?.id || 'me');
+  let groupsAsking = null;
+  Momento.myGroups = {
+    cached() {
+      try { const v = JSON.parse(sessionStorage.getItem(groupsKey()) || 'null'); return Array.isArray(v) ? v : null; } catch (e) { return null; }
+    },
+    refresh() {
+      return (groupsAsking ||= window.momentoApi('/api/groups').then(({ groups }) => {
+        const list = (Array.isArray(groups) ? groups : []).map((g) => ({ id: String(g.id), name: String(g.name || '') }));
+        try { sessionStorage.setItem(groupsKey(), JSON.stringify(list)); } catch (e) {}
+        return list;
+      }).finally(() => { groupsAsking = null; }));
+    },
+  };
+  Momento.sessionReady?.then((user) => { if (user && !Momento.myGroups.cached()) Momento.myGroups.refresh().catch(() => {}); }, () => {});
 })();

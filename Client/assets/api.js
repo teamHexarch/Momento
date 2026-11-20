@@ -64,6 +64,13 @@ for (const type of ['pageswap', 'pagereveal']) {
   };
   window.momentoJson = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
+  // The notifications bell (assets/inbox.js) only appears once the server has answered, which pushed the
+  // header sideways a moment after a reload. When it was beside the account chip earlier in this tab, its
+  // place is held from the first paint instead (glass.css, .bell-ready)
+  try {
+    if (sessionStorage.getItem('momento-account') && sessionStorage.getItem('momento-bell') === '1') document.documentElement.classList.add('bell-ready');
+  } catch (e) {}
+
   // Dev preview: assets/devpreview.js answers the API calls with sample albums and photos, so every
   // page works with no server. It's on by default for the local preview (node serve.mjs, port 3000),
   // on this computer or a phone on the same Wi-Fi. ?dev=off turns it off, ?dev turns it back on,

@@ -3692,13 +3692,21 @@
           groupField.hidden = false;
           return;
         }
-        shareList.replaceChildren(shareOption('', 'Guests at the event'));
-        groupField.hidden = true;
+        // Your groups as remembered for this tab (assets/event.js, Momento.myGroups): the field is there as the
+        // form opens, not a moment later. The fresh list follows and only changes what's different
+        const fill = (groups) => {
+          const keep = shareList.value;
+          shareList.replaceChildren(shareOption('', 'Guests at the event'), ...groups.map((g) => shareOption(g.id, g.name)));
+          if (groups.some((g) => g.id === keep)) shareList.value = keep;
+          groupField.hidden = !groups.length;
+          shareList.options[0].textContent = isEvent() ? 'Guests at the event' : 'Anyone with the code or link';   // (as showStep words it)
+        };
+        const known = Momento.myGroups?.cached();
+        fill(known || []);
         let groups;
-        try { ({ groups } = await momentoApi('/api/groups')); } catch { return; }
+        try { groups = Momento.myGroups ? await Momento.myGroups.refresh() : (await momentoApi('/api/groups')).groups; } catch { return; }
         if (ask !== groupsAsked) return;
-        for (const g of groups) shareList.append(shareOption(g.id, g.name));
-        groupField.hidden = !groups.length;
+        if (JSON.stringify(groups.map((g) => [String(g.id), g.name])) !== JSON.stringify((known || []).map((g) => [g.id, g.name]))) fill(groups);
       }
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');

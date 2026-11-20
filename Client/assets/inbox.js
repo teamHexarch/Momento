@@ -256,7 +256,10 @@
   function mount(host) {
     const wrap = document.createElement('div');
     wrap.className = 'inbox';
-    wrap.hidden = true;   // shown once the first check works
+    // Shown once the first check works; straight away when it worked earlier in this tab (remembered below),
+    // so the header is drawn once with the bell in it instead of shifting when the server answers
+    const remembered = bellMemory.get();
+    wrap.hidden = !remembered;
     wrap.innerHTML = `
       <button class="inbox-btn glass" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="inboxPop" aria-label="Notifications" title="Notifications">${ICON.bell}<span class="inbox-pip" hidden aria-hidden="true"></span></button>
       <section class="inbox-pop" id="inboxPop" role="dialog" aria-labelledby="inboxTitle" tabindex="-1">
@@ -322,13 +325,14 @@
     }
     // Measured, not a fixed screen width: each page's header holds a different amount
     function fit() {
-      if (gone || wrap.hidden) return;
+      if (gone || wrap.hidden || host.hidden) return;   // (home: the account area is hidden until the session is known)
       host.classList.remove('inbox-compact');
       const a = acctBtn(), navEl = host.closest('header')?.querySelector('.nav-wrap, .nav');
       const r = a?.getBoundingClientRect(), b = btn.getBoundingClientRect(), nv = navEl?.getBoundingClientRect();
       const tooWide = !!r && r.width > 0 && (r.right > document.documentElement.clientWidth - 2 || (nv && nv.width > 0 && b.left < nv.right + 2));
       compact = tooWide;
       host.classList.toggle('inbox-compact', compact);
+      bellMemory.set(compact ? 'c' : '1');
       syncCompactBits();
       if (open) place();
     }
@@ -338,6 +342,7 @@
     function setBadge(n) {
       const rose = loaded && n > unread;
       unread = n;
+      bellMemory.unread(n);
       pip.hidden = !n;
       pip.textContent = count(n);
       btn.setAttribute('aria-label', n ? `Notifications, ${n} unread` : 'Notifications');
@@ -474,10 +479,11 @@
         // (the server's count can include ones cleared only in this browser)
         setBadge(Number.isFinite(data.unread) && !cut ? data.unread : items.filter((n) => !n.read).length);
         loaded = true;
-        if (wrap.hidden) { wrap.hidden = false; fit(); }
+        wrap.hidden = false;
+        fit();   // (also when it was shown from memory: the account area may only just have appeared)
       } catch (err) {
         // No such endpoint on this server, or signed out: no bell
-        if (err.status === 404 || err.status === 401) { stop(); return; }
+        if (err.status === 404 || err.status === 401) { stop(true); return; }
         failed = true;
       }
       if (open || !failed) render();
@@ -589,8 +595,10 @@
     document.addEventListener('visibilitychange', onVisible);
     // A page marked some read itself (opening an album marks its notifications read): the bell catches up now
     document.addEventListener('momento:notifications', () => refresh());
-    function stop() {
+    function stop(forget) {
       gone = true;
+      if (forget) bellMemory.clear();
+      document.documentElement.classList.remove('bell-ready');   // no empty space held for it any more
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
       removeEventListener('resize', onResize);
@@ -599,9 +607,21 @@
       wrap.remove();
       host.classList.remove('has-inbox', 'inbox-compact');
     }
+    // Remembered from earlier in this tab: the bell and its last count are there from the start
+    if (!wrap.hidden) { setBadge(bellMemory.unreadWas()); fit(); }
     refresh();
     return { stop };
   }
+
+  // What the bell looked like earlier in this tab (sessionStorage, like the account): '1' beside the account
+  // chip, 'c' inside its menu (narrow phones), and the unread count. assets/api.js reads '1' in <head>
+  const bellMemory = {
+    get() { try { return sessionStorage.getItem('momento-bell'); } catch (e) { return null; } },
+    set(v) { try { sessionStorage.setItem('momento-bell', v); } catch (e) {} },
+    unread(n) { try { sessionStorage.setItem('momento-bell-unread', String(n)); } catch (e) {} },
+    unreadWas() { try { return Math.max(0, +sessionStorage.getItem('momento-bell-unread') || 0); } catch (e) { return 0; } },
+    clear() { try { sessionStorage.removeItem('momento-bell'); sessionStorage.removeItem('momento-bell-unread'); } catch (e) {} document.documentElement.classList.remove('bell-ready'); },
+  };
 
   // One bell per account chip, there only while someone is signed in
   const mounted = new Map();
@@ -614,6 +634,11 @@
   }
   async function start() {
     if (!document.querySelector('[data-acct-host]') || !window.momentoApi) return;
+    // Signed in earlier in this tab: the bell goes in now, beside the account chip drawn from the same memory,
+    // rather than after the server confirms the session (if it doesn't, the bell is taken away again)
+    let cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem('momento-account') || 'null'); } catch (e) {}
+    if (cached) sync(cached);
     const user = await M.sessionReady?.catch?.(() => null);
     sync(user || M.account?.get?.());
     M.account?.onChange?.((u) => sync(u));

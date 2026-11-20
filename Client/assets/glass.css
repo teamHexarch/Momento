@@ -1292,3 +1292,9 @@ html .header { top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-lef
   .acct-dialog:not(#mCreate) > .acct-card { max-height: calc(100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px) - 32px); }
   dialog.ev-ask { max-height: calc(100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px) - 32px); }
 }
+
+/* ---------- The notifications bell's place, held while the page loads ----------
+   assets/api.js sets .bell-ready when the bell sat beside the account chip earlier in this tab. Until
+   assets/inbox.js puts the bell in (.has-inbox), an empty space the bell's size keeps the chip where it will be */
+:root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden]) { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
+:root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden])::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }
