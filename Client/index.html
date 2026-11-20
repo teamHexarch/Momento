@@ -3280,9 +3280,16 @@
               setBusy('Opening your albums…');
               location.href = nextPage();
             } catch (err) {
-              loginError(err);
               googleBtn.disabled = submit.disabled = false;
               setBusy(null, idle());
+              // A new Google account, started from Log in: Momento needs the Terms agreed first, which is on Sign up
+              if (err.code === 'terms-required') {
+                setMode('signup');
+                error.textContent = 'This Google account is new to Momento. Agree to the Terms and Privacy Policy, then press Continue with Google again.';
+                field('acceptTerms')?.focus();
+                return;
+              }
+              loginError(err);
             }
           },
           error_callback: (e) => { if (e?.type !== 'popup_closed') error.textContent = 'Google’s window didn’t open. Allow pop-ups for this site and try again.'; },

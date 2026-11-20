@@ -87,9 +87,9 @@ app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 // Locally, the site itself comes from the Client folder too, so one address does everything.
 // In production the site is hosted on its own (FRONTEND_URL) and this server is API only.
 // Only what the Pages workflow publishes is served: the pages and simple files in assets/ and
-// assets/vendor/ (plain names, so not the design screenshot). Everything else in Client/ stays private.
-const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/events.html', '/groups.html', '/privacy.html']);
-const PUBLIC_ASSET = /^\/assets\/(vendor\/)?[\w-]+(\.[\w-]+)*\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i;
+// assets/vendor/, assets/i18n/ and assets/globe/ (plain names, so not the design screenshot). Everything else in Client/ stays private.
+const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/events.html', '/groups.html', '/privacy.html', '/404.html']);
+const PUBLIC_ASSET = /^\/assets\/((vendor|i18n|globe)\/)?[\w-]+(\.[\w-]+)*\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i;
 if (!config.serveClient) {
   console.log(`API only: the site is served from ${config.frontendUrl}.`);
 } else if (fs.existsSync(config.clientDir)) {

@@ -14,6 +14,10 @@ import { HttpError } from './httpError.js';
 // after which presenting it again means it was copied: that login is ended and staff are alerted.
 export const SESSION_COOKIE = 'momento_session';
 export const MAX_SESSIONS = 3;
+// Accounts on the 'admin' plan (every account since 2026-11-10) get more devices, but still a limit, so a
+// stolen password can't keep piling up logins
+export const ADMIN_MAX_SESSIONS = 10;
+export const maxSessionsFor = (plan) => (plan === 'admin' ? ADMIN_MAX_SESSIONS : MAX_SESSIONS);
 const ISSUER = 'momento-api', AUDIENCE = 'momento-session';
 export const ROTATE_MS = 12 * 3600000;
 export const GRACE_MS = 2 * 60000;
@@ -57,11 +61,14 @@ export async function startSession(res, user, replacement) {
     // logins cannot both claim the final slot.
     const result = await User.updateOne({
       _id: user.id,
-      $or: [{ plan: 'admin' }, { [`sessions.${MAX_SESSIONS - 1}`]: { $exists: false } }],
+      $or: [
+        { plan: 'admin', [`sessions.${ADMIN_MAX_SESSIONS - 1}`]: { $exists: false } },
+        { plan: { $ne: 'admin' }, [`sessions.${MAX_SESSIONS - 1}`]: { $exists: false } },
+      ],
     }, {
       $push: { sessions: session },
     });
-    if (!result.matchedCount) throw new HttpError(409, 'This account already has 3 active logins. Log out on another device or browser, then try again.', 'session_limit');
+    if (!result.matchedCount) throw new HttpError(409, `This account already has ${maxSessionsFor(user.plan)} active logins. Log out on another device or browser, then try again.`, 'session_limit');
   }
   setCookie(res, token);
 }
@@ -87,7 +94,7 @@ export async function endSession(req, res) {
 
 // The cookie's signed payload ({ sub: user id, jti: login id, iat: issued-at seconds }), or null when
 // there is no valid one. Only HS256, and only tokens made for logins here (issuer and audience).
-// Tokens from before issuer/audience existed are accepted until their first rotation (legacy: true).
+// (Old-style tokens without an issuer and audience are no longer accepted: every one of them expired long ago.)
 export function readSession(req) {
   const token = req.cookies?.[SESSION_COOKIE];
   if (!token || typeof token !== 'string' || token.length > 2000) return null;
@@ -95,15 +102,7 @@ export function readSession(req) {
   try {
     payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'], issuer: ISSUER, audience: AUDIENCE });
   } catch {
-    try {
-      payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
-      // Only true old-style login tokens: no issuer or audience at all (other signed things, such as the
-      // new-device challenge, have an audience of their own and are never a login)
-      if (payload.iss !== undefined || payload.aud !== undefined) return null;
-      payload.legacy = true;
-    } catch {
-      return null;
-    }
+    return null;
   }
   return typeof payload.sub === 'string' && typeof payload.jti === 'string' ? payload : null;
 }

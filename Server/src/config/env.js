@@ -12,8 +12,9 @@ function required(name) {
 
 const jwtSecret = required('JWT_SECRET');
 if (jwtSecret === 'change-me' && env.NODE_ENV === 'production') throw new Error('Set a real JWT_SECRET before running in production.');
+// A short secret could be guessed, and with it anyone could forge a login: production refuses to start
 if (jwtSecret.length < 32 && env.NODE_ENV === 'production') {
-  console.warn('[security alert] JWT_SECRET is shorter than 32 characters. Make a long random one (openssl rand -base64 48) and set it in the settings; every login will need to log in again.');
+  throw new Error('JWT_SECRET is shorter than 32 characters. Make a long random one (openssl rand -base64 48) and set it in the settings; everyone will need to log in again.');
 }
 
 const trimSlash = (u) => u.replace(/\/+$/, '');

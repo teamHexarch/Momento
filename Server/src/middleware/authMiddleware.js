@@ -37,7 +37,7 @@ export async function loadUser(req, res, next) {
       await audit('session.reuse', { req, actor: user._id, target: user._id, meta: { device: record.deviceName } });
       return next();
     }
-  } else if (session.legacy || now - session.iat * 1000 > ROTATE_MS) {
+  } else if (now - session.iat * 1000 > ROTATE_MS) {
     await rotateSession(res, user._id, session.jti);
   }
   req.user = user;

@@ -35,9 +35,13 @@ jobs:
       - name: Collect the public site files
         run: |
           mkdir -p _site/assets
-          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/events.html Client/groups.html Client/privacy.html Client/sw.js Client/CNAME _site/
+          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/events.html Client/groups.html Client/privacy.html Client/404.html Client/sw.js Client/CNAME _site/
           cp Client/assets/*.js Client/assets/*.css Client/assets/momento-icon.png _site/assets/
           mkdir -p _site/assets/vendor && cp Client/assets/vendor/*.js _site/assets/vendor/
+          # The translations (one file per language) and the night globe picture
+          mkdir -p _site/assets/i18n _site/assets/globe
+          cp Client/assets/i18n/*.js _site/assets/i18n/
+          cp Client/assets/globe/*.jpg _site/assets/globe/
           rm -f _site/assets/devpreview.js
           ls -R _site
 

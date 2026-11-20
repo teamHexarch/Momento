@@ -2,6 +2,18 @@
 // - Live site (hexarch.org): the API is on its own address, api.hexarch.org.
 // - Locally through the Momento server (localhost:4000): same address, so no prefix.
 // - Locally through serve.mjs (localhost:3000): the API is the Momento server on port 4000.
+// Clickjacking guard: Momento's pages may only be shown inside a frame by Momento itself (the album window on
+// Social is one). Put in a frame by another site, the page stays blank, so it can't be used to trick people
+// into clicking (GitHub Pages can't send the X-Frame-Options / frame-ancestors headers that would do this).
+(() => {
+  if (window.top === window.self) return;
+  let ours = false;
+  try { ours = window.top.location.origin === location.origin; } catch { /* another site: can't even read it */ }
+  if (ours) return;
+  document.documentElement.style.setProperty('visibility', 'hidden', 'important');
+  try { window.top.location.replace(location.href); } catch { /* browsers may block this; the page stays blank */ }
+})();
+
 // Page-to-page transitions (glass.css @view-transition): when one is skipped (a second click, a hidden tab, the
 // page already revealed) the browser rejects its promises, which shows up as an uncaught console error. The page
 // itself is fine, so those rejections are caught here. This file loads in <head>, early enough for pagereveal.

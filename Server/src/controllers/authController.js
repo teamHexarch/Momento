@@ -6,7 +6,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env.js';
 import { User } from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
-import { startSession, endSession } from '../utils/session.js';
+import { startSession, endSession, maxSessionsFor } from '../utils/session.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, peekEmailApproval, approveEmailChange, cancelEmailChange, finishEmailChange, dropEmailChange, deleteAccount } from '../services/accountService.js';
@@ -63,7 +63,7 @@ async function signedIn(res, user, status = 200) {
     await startSession(res, user);
   } catch (error) {
     if (error.code !== 'session_limit') throw error;
-    return res.status(409).json({ code: 'session_limit', error: 'Three devices are logged in. Verify your email to replace one.', challenge: deviceLoginChallenge(user) });
+    return res.status(409).json({ code: 'session_limit', error: `${maxSessionsFor(user.plan)} devices are logged in. Verify your email to replace one.`, challenge: deviceLoginChallenge(user) });
   }
   res.status(status).json({ user: user.toPublic() });
 }
@@ -445,8 +445,9 @@ async function socialSignIn(res, { provider, providerId, email, emailVerified, n
       user[idField] = providerId;
       user.emailVerified = true;
     } else {
-      // A brand-new account: the same rules as signing up with email
+      // A brand-new account: the same rules as signing up with email, including agreeing to the Terms
       if ((await switches()).signupsPaused) throw new HttpError(503, 'New sign-ups are paused for a little while. Please try again later.', 'paused');
+      if (req.body?.acceptTerms !== true) throw new HttpError(400, 'Agree to the Terms and Privacy Policy to create an account.', 'terms-required');
       user = new User({ email, emailVerified: true, [idField]: providerId, ...checkAge(req.body) });
     }
   }
@@ -454,7 +455,7 @@ async function socialSignIn(res, { provider, providerId, email, emailVerified, n
   if (!user.avatarUrl && avatarUrl) user.avatarUrl = avatarUrl;
   const isNew = user.isNew;
   await signedIn(res, user, isNew ? 201 : 200);
-  if (isNew && req.body?.acceptTerms === true) await recordConsent(user, req, 'google');
+  if (isNew) await recordConsent(user, req, 'google');
   if (isNew) await audit('account.created', { req, actor: user._id, target: user._id, meta: { via: provider } });
 }
 
