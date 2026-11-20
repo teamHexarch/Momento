@@ -4,18 +4,20 @@
 // at least 90% (one-sided 95% lower bound) publishable photos, so roughly 25+ per range in each half are needed.
 import { createHash } from 'node:crypto';
 import { ModerationDecision } from '../models/ModerationDecision.js';
-import { STAGE_MODELS } from './uploadChecks.js';
+import { STAGE_MODELS, stageOneScores } from './uploadChecks.js';
 import { LEVELS, truthOf, buildTable } from './calibrationTable.js';
 
-// Staff decisions on stage-one uploads, one per file, as { group, truth, scores }
+// Staff decisions on stage-one uploads, one per file, as { group, truth, scores }. The score is recomputed from the
+// model's raw classes with the same function the live check uses, so learning and checking always agree; older
+// decisions without the raw classes (scored another way) are left out.
 export async function reviewedRows() {
   const docs = await ModerationDecision.find({
     kind: 'photo', model: STAGE_MODELS[1], status: { $in: ['allowed', 'upheld'] }, reviewedBy: { $exists: true },
-    'scores.allow': { $type: 'number' },
+    'scores.classes': { $type: 'object' },
   }, 'album hash scores status severity').sort({ at: 1 }).lean();
   const seen = new Set(), rows = [];
   for (const d of docs) {
-    const allow = d.scores.allow;
+    const { allow } = stageOneScores(d.scores.classes);
     if (!(allow >= 0 && allow <= 1) || seen.has(d.hash)) continue;
     seen.add(d.hash);
     const truth = LEVELS.includes(d.severity) ? truthOf(d.severity) : d.status === 'allowed' ? 'allow' : 'reject';

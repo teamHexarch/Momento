@@ -46,7 +46,9 @@ const calibration = (() => {
 //    NSFW_STARTER_THRESHOLD (0.98 unless set; "off" sends everything to staff) publishes.
 // Everything else waits for staff. Nothing is ever declined automatically in stage-one mode.
 let learned = null;
-export function setLearnedTable(table) { learned = table && typeof table === 'object' && !Array.isArray(table) ? table : null; }
+export function setLearnedTable(table, version = SCORE_VERSION) {
+  learned = version === SCORE_VERSION && table && typeof table === 'object' && !Array.isArray(table) ? table : null;
+}
 const binsOf = (table, stage) => table?.[stage]?.allow?.length || 0;
 const starterSetting = process.env.NSFW_STARTER_THRESHOLD ?? '0.98';
 export const starterThreshold = starterSetting === 'off' ? null
@@ -56,7 +58,9 @@ export const starterThreshold = starterSetting === 'off' ? null
 const spotSetting = Number(process.env.NSFW_SPOT_CHECK ?? '0.1');
 export const spotCheckRate = Number.isFinite(spotSetting) ? Math.min(Math.max(spotSetting, 0), 1) : .1;
 export function activeTable() {
-  if (process.env.NSFW_CALIBRATION && !calibrationError) return { source: 'file', table: calibration };
+  // A table file that is set but can't be read: fail closed (everything to staff), never fall back to other rules
+  if (process.env.NSFW_CALIBRATION && calibrationError) return { source: 'none', table: {} };
+  if (process.env.NSFW_CALIBRATION) return { source: 'file', table: calibration };
   if (binsOf(learned, 1)) return { source: 'learned', table: learned };
   if (stageOneOnly && starterThreshold != null) {
     return { source: 'starter', table: { 1: { allow: [{ min: starterThreshold, max: 1, confidence: thresholds[1], starter: true }] } } };
@@ -75,12 +79,15 @@ export function isSpotCheck(id, rate = spotCheckRate) {
 // MobileNetV2's own classes, against Momento's levels (0/15/25 publish, 50/75 staff, 100 explicit): Neutral and
 // Drawing are everyday (0), Sexy covers swimwear to clearly suggestive (15-50), Porn and Hentai are explicit (100).
 // The "allow" score is the chance of an everyday photo; the estimated level is kept for comparison with staff ratings.
+// SCORE_VERSION names this definition: learning only uses reviews scored the same way (recomputed from the raw
+// classes with this same function), and a learned table built under another version is never loaded.
+export const SCORE_VERSION = 2;
 const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
 export function stageOneScores(classes) {
   const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
   const allow = Math.min(1, p('Neutral') + p('Drawing'));
   const top = Object.keys(CLASS_LEVEL).reduce((a, b) => (p(b) > p(a) ? b : a), 'Neutral');
-  return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])) };
+  return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])), version: SCORE_VERSION };
 }
 
 // Calibration files map raw scores to observed decision precision on routed, labelled photos.

@@ -4,7 +4,7 @@
 // (services/uploadChecks.js, activeTable). A rebuild that fails, or finds too few reviews, keeps the last table.
 import { ModerationCalibration } from '../models/ModerationCalibration.js';
 import { calibrateFromReviews } from './reviewCalibration.js';
-import { setLearnedTable } from './uploadChecks.js';
+import { setLearnedTable, SCORE_VERSION } from './uploadChecks.js';
 
 const ID = 'stage-one';
 const hoursSetting = Number(process.env.NSFW_RELEARN_HOURS ?? '24');
@@ -12,7 +12,8 @@ export const relearnHours = Number.isFinite(hoursSetting) && hoursSetting > 0 ? 
 
 export async function loadLearned() {
   const doc = await ModerationCalibration.findById(ID).lean();
-  setLearnedTable(doc?.table || null);
+  // A table learned under another score definition is ignored until it is relearned
+  setLearnedTable(doc?.table || null, doc?.scoreVersion);
   return doc;
 }
 
@@ -22,8 +23,8 @@ export function relearn() {
     const at = new Date();
     try {
       const { table, summary } = await calibrateFromReviews();
-      await ModerationCalibration.updateOne({ _id: ID }, { $set: { table, builtAt: at, ...summary, lastAttemptAt: at, lastError: null } }, { upsert: true });
-      setLearnedTable(table);
+      await ModerationCalibration.updateOne({ _id: ID }, { $set: { table, scoreVersion: SCORE_VERSION, builtAt: at, ...summary, lastAttemptAt: at, lastError: null } }, { upsert: true });
+      setLearnedTable(table, SCORE_VERSION);
       return { ok: true, builtAt: at, ...summary, ranges: (table[1]?.allow || []).length };
     } catch (error) {
       await ModerationCalibration.updateOne({ _id: ID }, { $set: { lastAttemptAt: at, lastError: error.message } }, { upsert: true }).catch(() => {});

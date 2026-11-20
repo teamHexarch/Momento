@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 const schema = new mongoose.Schema({
   _id: String,
   table: mongoose.Schema.Types.Mixed,
+  scoreVersion: Number,   // the stage-one score definition it was built with (uploadChecks.js, SCORE_VERSION)
   builtAt: Date,
   reviewed: Number,       // staff-reviewed uploads used
   publishable: Number,    // of which rated 0-25 (or approved without a level)

@@ -28,12 +28,13 @@ const { ModerationCalibration } = await import('../src/models/ModerationCalibrat
 
 const user = new mongoose.Types.ObjectId(), staff = new mongoose.Types.ObjectId();
 let n = 0;
+// Reviews as the live check stores them: the raw classes (allow is recomputed from them when learning)
 const decision = (album, allow, status, extra = {}) => ({ user, album, kind: 'photo', hash: 'h' + n++, model: 'NSFW.js MobileNetV2',
-  scores: { allow }, status, reviewedBy: staff, ...extra });
+  scores: { allow: 0, classes: { Neutral: allow, Sexy: 1 - allow }, version: 2 }, status, reviewedBy: staff, ...extra });
 try {
   // The model's classes against Momento's levels: everyday (Neutral + Drawing) is the publishable score
   assert.deepEqual(stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 }),
-    { allow: .8, level: 0, classes: { Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 } });
+    { allow: .8, level: 0, classes: { Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 }, version: 2 });
   assert.equal(stageOneScores({ Neutral: .2, Sexy: .7, Porn: .1 }).level, 25);
   assert.equal(stageOneScores({ Neutral: .1, Porn: .9 }).level, 100);
   // Method B until the reviews teach it: the starter rule (0.98 unless NSFW_STARTER_THRESHOLD)
@@ -68,6 +69,8 @@ try {
   docs.push(decision(mixed, .99, 'allowed', { kind: 'cover' }));
   docs.push(decision(mixed, .99, 'allowed', { reviewedBy: undefined }));
   docs.push({ ...decision(mixed, .99, 'upheld'), hash: 'h0', at: new Date(Date.now() + 60000) });
+  // Scored the old way (Neutral only, no raw classes): left out, so learning never mixes score definitions
+  docs.push({ ...decision(mixed, .99, 'upheld'), scores: { allow: .99 } });
   await ModerationDecision.insertMany(docs);
 
   const rows = await reviewedRows();
@@ -98,6 +101,13 @@ try {
   assert.equal(activeTable().source, 'starter');
   await loadLearned();
   assert.equal(activeTable().source, 'learned');
+  // A table learned under another score definition is ignored until relearned
+  await ModerationCalibration.updateOne({ _id: 'stage-one' }, { $set: { scoreVersion: 1 } });
+  await loadLearned();
+  assert.equal(activeTable().source, 'starter');
+  await relearn();
+  assert.equal(activeTable().source, 'learned');
+  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 2);
   assert.ok(table[1].allow[0].confidence >= .9);
   assert.equal(routeScore(1, { allow: .95 }, table).action, 'allow');
   assert.equal(routeScore(1, { allow: .85 }, table).action, 'escalate', 'severity 50 approvals do not enable a range');
@@ -120,15 +130,16 @@ try {
   assert.equal(empty.stdout, '');
   assert.match(empty.stderr, /Not enough reviewed uploads/);
 
-  // A missing or broken table file never stops the API: the learned or starter rule applies instead
+  // A missing or broken table file never stops the API, and fails closed: everything waits for staff
   const probe = async (file, extra = {}) => JSON.parse((await run(process.execPath, ['--input-type=module', '-e',
     "const m = await import('./src/services/uploadChecks.js'); console.log(JSON.stringify({ error: m.calibrationError, source: m.activeTable().source, bins: m.calibratedBins(1) }))"],
   { cwd: serverDir, env: { ...childEnv, NSFW_CALIBRATION: file, ...extra } })).stdout.trim().split('\n').pop());
   const missing = await probe(path.join(dir, 'missing.json'));
   assert.ok(missing.error);
-  assert.equal(missing.source, 'starter');
+  assert.equal(missing.source, 'none');
+  assert.equal(missing.bins, 0);
   await writeFile(path.join(dir, 'broken.json'), '');
-  assert.equal((await probe(path.join(dir, 'broken.json'))).source, 'starter');
+  assert.equal((await probe(path.join(dir, 'broken.json'))).source, 'none');
   await writeFile(path.join(dir, 'good.json'), JSON.stringify(table));
   assert.deepEqual(await probe(path.join(dir, 'good.json')), { error: null, source: 'file', bins: 1 });
   // NSFW_STARTER_THRESHOLD=off: until it learns, everything waits for staff
