@@ -4,8 +4,10 @@ import { initStorage } from '../src/services/storageService.js';
 process.env.NSFW_WORKER = '1';
 const { startUploadChecks, cascadeEnabled } = await import('../src/services/uploadChecks.js');
 const { startAlbumAudits } = await import('../src/services/albumAudit.js');
+const { verifyModerationModels } = await import('../src/services/moderationReadiness.js');
 
 if (!cascadeEnabled) throw new Error('Set NSFW_PIPELINE=three-stage for the moderation worker.');
+await verifyModerationModels();
 await connectDb();
 await initStorage();
 const stopUploads = startUploadChecks();
