@@ -2679,7 +2679,8 @@
     document.getElementById('albumLink').addEventListener('click', async () => {
       const a = M.a;
       if (!a || a.role !== 'host' || !a.code) return;
-      const link = albumLinkFor(a);
+      // The share link (https://api.hexarch.org/s/CODE), so chat apps show the album's own preview card
+      const link = Momento.inviteLink?.(a.code) || albumLinkFor(a);
       if (await copyText(link)) Momento.toast('Album link copied', a.code ? `Anyone with the link can join ${a.name} with the code ${a.code}.` : `People already in ${a.name} can open it with this link.`);
       else document.getElementById('albumNote').textContent = 'Copy this link: ' + link;
     });
