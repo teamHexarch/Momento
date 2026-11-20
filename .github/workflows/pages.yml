@@ -35,7 +35,7 @@ jobs:
       - name: Collect the public site files
         run: |
           mkdir -p _site
-          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/events.html Client/groups.html Client/privacy.html Client/404.html Client/sw.js Client/CNAME Client/manifest.webmanifest Client/favicon.ico _site/
+          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/events.html Client/groups.html Client/privacy.html Client/terms.html Client/404.html Client/sw.js Client/CNAME Client/manifest.webmanifest Client/favicon.ico _site/
           # The whole assets folder (scripts, styles, translations, icons, the link preview picture, the globe
           # and the site's own photos), so a new kind of file there is never left off the live site
           cp -r Client/assets _site/assets

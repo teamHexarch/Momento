@@ -1653,7 +1653,7 @@
       <p class="vw-count" id="vwCount"></p>
       <div class="vw-tools">
         <button class="vw-btn vw-mark" type="button" id="vwMark" aria-pressed="false" aria-label="Bookmark this photo" title="Bookmark"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/></svg></button>
-        <button class="vw-btn" type="button" id="vwHide" aria-label="Hide from my view" title="Hide from my view" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-10-8-10-8a17 17 0 0 1 4.1-5.4M9.9 4.2A9.1 9.1 0 0 1 12 4c7 0 10 8 10 8a17 17 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M2 2l20 20"/></svg></button>
+        <button class="vw-btn" type="button" id="vwHide" aria-label="Hide from my view" title="Hide from my view" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-10-8-10-8a17 17 0 0 1 4.1-5.4M9.9 4.2A9.1 9.1 0 0 1 12 4c7 0 10 8 10 8a17 17 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M2 2l20 20"/></svg></button><button class="vw-btn" type="button" id="vwReport" aria-label="Report this photo" title="Report this photo" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
         <button class="vw-btn" type="button" id="vwDownload" aria-label="Download this photo" title="Download"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg></button>
         <button class="vw-btn vw-danger" type="button" id="vwDel" aria-label="Delete this photo" title="Delete" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
         <button class="vw-btn" type="button" id="vwClose" aria-label="Close full size" title="Close (Esc)"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -2231,6 +2231,7 @@
         try { albumFiles.click(); } catch {}
       }
       showModal(albumModal);
+      syncAddress();
       albumModal.querySelector('.album-scroll').scrollTop = 0;
       paintMore();
       if (!still && !abMore.hidden) abMore.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 600, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' });
@@ -2242,6 +2243,18 @@
       }
       if (peek >= 0) openPhoto(peek, thumbsEl.children[peek]?.querySelector('img'));
     }
+    // ---- Staying put on reload: the address says which album (and which photo) is open ----
+    // albums.html?album=<id>&photo=<id> reopens the same album and photo after a reload; closing them takes
+    // them off the address again. (Inside another page's window the outer page keeps track instead)
+    function syncAddress() {
+      if (root.classList.contains('is-embed')) return;
+      const u = new URL(location.href);
+      const a = albumModal.open && M.a ? M.a : null;
+      if (a) u.searchParams.set('album', a.id); else ['album', 'photos', 'by'].forEach((k) => u.searchParams.delete(k));
+      const ph = a && viewer.open ? a.photoItems?.[M.i]?.id : null;
+      if (ph) u.searchParams.set('photo', ph); else u.searchParams.delete('photo');
+      if (u.href !== location.href) history.replaceState(history.state, '', u);
+    }
     // Closing (X, Esc or a click on the page behind): the window and its backdrop fade out together
     async function closeAlbum() {
       if (M.closing || !albumModal.open) return;
@@ -2249,6 +2262,7 @@
       await softClose(albumModal, albumCard);
     }
     albumModal.addEventListener('close', () => {
+      syncAddress();
       albumCard.getAnimations().forEach((a) => a.cancel());
       albumSel.stop(); closeMenu(); closePulse();
       M.closing = false;
@@ -2924,6 +2938,7 @@
       // Delete is for photos you added (or any, as the host); Hide is for other people's photos
       document.getElementById('vwDel').hidden = !canDel(M.a);
       document.getElementById('vwHide').hidden = !canHide(M.a, p);
+      document.getElementById('vwReport').hidden = !canHide(M.a, p);
     }
     // The photo d steps away (1 = next, -1 = previous), among just a notification's photos when that's what's
     // showing. null past the first or last one, unless `wrap` (the keyboard goes round)
@@ -3091,6 +3106,7 @@
       paintFilm();
       prefetchAround();
       prefetchWho(p);
+      if (viewer.open) syncAddress(); else setTimeout(syncAddress, 0);   // (the viewer opens right after this)
       if (!fade || still) return;
       // A jump (the strip along the bottom): a quick soft fade, never a wait
       vwImg.getAnimations().forEach((a) => a.cancel());
@@ -3204,7 +3220,55 @@
     document.getElementById('vwClose').addEventListener('click', closeViewer);
     document.getElementById('vwDel').addEventListener('click', (e) => { const p = current(); if (p) binPhotos([p], e.currentTarget); });
     document.getElementById('vwHide').addEventListener('click', (e) => { const p = current(); if (p) hidePhotos([p], e.currentTarget); });
+    document.getElementById('vwReport').addEventListener('click', (e) => { const p = current(); if (p) reportPhoto(p, e.currentTarget); });
+    // ---- Report a photo (Terms: "Reporting a photo"): a reason and an optional note go to the server, the photo
+    // leaves the reporter's view straight away, and enough reports hide it for everyone until staff decide ----
+    function reportPhoto(p, from) {
+      const a = M.a;
+      if (!a || !canHide(a, p)) return;
+      const d = document.createElement('dialog');
+      d.className = 'ev-ask';
+      d.setAttribute('aria-labelledby', 'rpTitle');
+      d.innerHTML = `<form method="dialog" style="display:grid;gap:.7rem">
+        <h2 id="rpTitle">Report this photo?</h2>
+        <p>Tell us what's wrong. You won't see it again, and we'll take a look.</p>
+        <label style="display:grid;gap:.3rem;font-weight:600;font-size:.9rem">Reason
+          <select name="reason" required style="font:inherit;font-size:16px;padding:.6rem .7rem;border-radius:12px;border:1px solid rgba(127,127,140,.4);background:transparent;color:inherit">
+            <option value="">Choose a reason</option>
+            <option value="nudity">Nudity or sexual content</option>
+            <option value="abuse">Violence, hate or harassment</option>
+            <option value="privacy">I'm in it and didn't agree to it</option>
+            <option value="copyright">It's my photo or work (copyright)</option>
+            <option value="other">Something else</option>
+          </select></label>
+        <label style="display:grid;gap:.3rem;font-weight:600;font-size:.9rem">More detail (optional)
+          <textarea name="note" maxlength="1000" rows="3" style="font:inherit;font-size:16px;padding:.6rem .7rem;border-radius:12px;border:1px solid rgba(127,127,140,.4);background:transparent;color:inherit;resize:vertical"></textarea></label>
+        <p class="rp-err" role="alert" style="margin:0;color:#c0392b;min-height:1.2em"></p>
+        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="submit" data-yes>Report</button></div>
+      </form>`;
+      document.body.append(d);
+      const form = d.querySelector('form'), err = d.querySelector('.rp-err'), yes = d.querySelector('[data-yes]');
+      const done = () => { if (d.open) d.close(); d.remove(); from?.focus?.(); };
+      d.querySelector('[data-no]').addEventListener('click', done);
+      d.addEventListener('cancel', (e) => { e.preventDefault(); done(); });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const reason = form.reason.value;
+        if (!reason) { err.textContent = 'Choose a reason.'; form.reason.focus(); return; }
+        if (yes.disabled) return;
+        yes.disabled = true; yes.textContent = 'Reporting…';
+        try {
+          const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/report', momentoJson('POST', { reason, note: form.note.value.trim() }));
+          done();
+          Momento.toast('Photo reported', r.message || 'Thanks for telling us. You won’t see this photo any more.');
+          try { await afterPhotos(a, M.i); } catch {}
+        } catch (e2) { err.textContent = e2.message; yes.disabled = false; yes.textContent = 'Report'; }
+      });
+      d.showModal();
+      form.reason.focus();
+    }
     // Back in the grid, the photo you were looking at is the one in view
+    viewer.addEventListener('close', () => syncAddress());
     viewer.addEventListener('close', () => { thumbsEl.children[M.i]?.scrollIntoView({ block: 'nearest' }); thumbsEl.children[M.i]?.focus({ preventScroll: true }); });
     document.getElementById('vwPrev').addEventListener('click', () => vwStep(-1));
     document.getElementById('vwNext').addEventListener('click', () => vwStep(1));
@@ -4515,7 +4579,12 @@
           tellParent(albumModal.open ? 'ready' : 'closed');
           return;
         }
-        if (params.get('album')) await openAlbum(params.get('album'));
+        if (params.get('album')) {
+          await openAlbum(params.get('album'));
+          // Reloaded with a photo open: open it again
+          const ph = params.get('photo'), at = ph ? (M.a?.photoItems || []).findIndex((x) => x.id === ph) : -1;
+          if (albumModal.open && at >= 0) openPhoto(at, thumbsEl.children[at]?.querySelector('img'));
+        }
         else if (joinCode) location.replace('events.html?join=' + encodeURIComponent(joinCode));
         else albumFromHash();
       } catch (err) {
@@ -5538,6 +5607,7 @@
               <li><a class="sf-link" href="${P}#faq">FAQ</a></li>
               <li><a class="sf-link" href="mailto:${SUPPORT}">Email support</a></li>
               <li><a class="sf-link" href="privacy.html">Privacy policy</a></li>
+              <li><a class="sf-link" href="terms.html">Terms of Service</a></li>
               <li data-foot-account hidden><button class="sf-link" type="button" data-foot-act="settings">Account settings</button></li>
             </ul>
           </nav>

@@ -5,6 +5,10 @@ services:
   api:
     build: ..
     restart: unless-stopped
+    # A small init process passes stop signals on to Node, and an update waits up to 30 s for requests in
+    # progress (uploads) to finish before stopping the old container (src/server.js stops cleanly in 25 s)
+    init: true
+    stop_grace_period: 30s
     env_file: /opt/momento-config/server.env
     environment:
       NODE_ENV: production

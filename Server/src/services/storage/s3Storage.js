@@ -10,7 +10,9 @@ const store = objectStorage({
   label: 'Amazon S3',
   bucket: config.aws.s3Bucket,
   keyHint: 'give the IAM user in AWS_ACCESS_KEY_ID s3:GetObject, s3:PutObject, s3:DeleteObject and s3:ListBucket on this bucket',
-  client: new S3Client({ region: config.aws.region }),
+  // Timeouts, so a stuck connection to S3 can't hold an upload (and its memory) forever: 5 s to connect,
+  // 60 s with no data moving; failed requests are retried up to 3 times with back-off (the SDK's own)
+  client: new S3Client({ region: config.aws.region, maxAttempts: 3, requestHandler: { connectionTimeout: 5000, requestTimeout: 60000 } }),
   cdn: config.aws.cloudfront,
 });
 

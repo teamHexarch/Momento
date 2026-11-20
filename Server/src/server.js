@@ -26,4 +26,25 @@ setTimeout(runJobs, 2 * 60000).unref();
 setInterval(runJobs, 3600000).unref();
 // The nudity check's model loads in the background, so the first upload isn't slow
 setTimeout(warmUp, 5000).unref();
-app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
+const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
+
+// ---- Stopping cleanly (an update or restart sends SIGTERM) ----
+// New connections stop at once, requests already running (an upload) get up to 25 seconds to finish, then
+// the database connection closes. Docker waits 30 seconds before forcing it.
+let stopping = false;
+async function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal}: finishing requests in progress, then stopping`);
+  const force = setTimeout(() => { console.error('Still busy after 25 s: stopping anyway'); process.exit(1); }, 25000);
+  force.unref();
+  server.close(async () => {
+    try { const { default: mongoose } = await import('mongoose'); await mongoose.disconnect(); } catch { /* already closed */ }
+    process.exit(0);
+  });
+  server.closeIdleConnections?.();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+// A promise nobody caught is logged (with the redaction in utils/logRedaction.js) instead of passing silently
+process.on('unhandledRejection', (err) => console.error(`Unhandled rejection: ${err?.stack || err}`));

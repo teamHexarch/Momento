@@ -149,13 +149,21 @@
       MQ.toast?.('Couldn’t open the album', message || 'It took too long. Check your connection and try again.');
       closeViewer();
     }
+    // The open album is kept in the address (?album=<id>), so a reload opens it again
+    function keepAlbum(id) {
+      const u = new URL(location.href);
+      if (id) u.searchParams.set('album', id); else u.searchParams.delete('album');
+      if (u.href !== location.href) history.replaceState(history.state, '', u);
+    }
     function closeViewer() {
       stopWatch();
+      keepAlbum('');
       if (viewer.open) viewer.close();
       frame?.remove(); frame = null;
       viewer.classList.remove('is-ready');
       void loadJoined();
     }
+    viewer.addEventListener('close', () => keepAlbum(''));
     viewer.addEventListener('cancel', (e) => {
       // Esc goes to the album window first, so it can close itself the way it always does
       e.preventDefault();
@@ -185,6 +193,7 @@
       viewer.classList.remove('is-ready');
       viewer.append(frame);
       if (!viewer.open) viewer.showModal();
+      keepAlbum(id);
       stopWatch();
       watchdog = setTimeout(() => { if (viewer.open && !viewer.classList.contains('is-ready')) giveUp(); }, 15000);
     }
@@ -336,6 +345,9 @@
         me = user.name || '';
       } catch (err) { joined.textContent = err.message; joinedReady(); return; }
       loadJoined().finally(joinedReady);
+      // Reloaded with an album open: open it again
+      const again = new URLSearchParams(location.search).get('album');
+      if (again && !code) openAlbumHere(again);
       if (code) {
         try { localStorage.removeItem('momento-pending-join'); } catch {}
         submitInvite(code);

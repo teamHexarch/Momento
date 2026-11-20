@@ -833,6 +833,7 @@
         <h2 id="evAskTitle">Upload ${n === 1 ? '1 photo' : `${n} photos`}?</h2>
         <p>Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.</p>
         <p class="ev-limit">Up to ${Number(limits.maxPhotoMB) || 50} MB a photo. Camera RAW files (CR3, NEF, ARW, RAF, DNG and more) can be bigger.</p>
+        <p class="ev-limit">By uploading, you confirm you took ${n === 1 ? 'this photo' : 'these photos'} or have permission to share ${n === 1 ? 'it' : 'them'} (<a href="terms.html" target="_blank" rel="noopener">Terms</a>).</p>
         <div class="ev-thumbs">${urls.map((u) => `<img src="${u}" alt="">`).join('')}${n > urls.length ? `<span>+${n - urls.length}</span>` : ''}</div>
         <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
       document.body.append(d);

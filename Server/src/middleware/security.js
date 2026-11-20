@@ -20,6 +20,9 @@ export function requestId(req, res, next) {
 export function securityHeaders(req, res, next) {
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Pages served from here may use the camera and location (taking photos, finding the venue); nothing
+  // else, and no other site framing them, may use the camera, microphone, location or payments
+  res.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=()');
   if (config.secureCookies) res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   if (req.path.startsWith('/api/')) {
     res.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");

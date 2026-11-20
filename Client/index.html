@@ -1437,7 +1437,7 @@
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
         <label class="auth-field"><span>Password</span><input name="password" type="password" autocomplete="new-password"></label>
         <a class="auth-forgot" data-only="login" href="#">Forgot your password?</a>
-        <label class="auth-consent" data-only="signup"><input type="checkbox" name="acceptTerms"><span>I agree to Momento’s <a href="privacy.html" target="_blank" rel="noopener">Terms and Privacy Policy</a></span></label>
+        <label class="auth-consent" data-only="signup"><input type="checkbox" name="acceptTerms"><span>I’m 13 or older and agree to Momento’s <a href="terms.html" target="_blank" rel="noopener">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a></span></label>
         <div data-only="signup"><div id="signupCaptcha"></div><p id="captchaStatus" role="status"></p></div>
         <p class="auth-error" id="authError" role="alert"></p>
         <button class="btn btn-dark auth-submit" type="submit" id="authSubmit">Create account</button>
@@ -3303,7 +3303,7 @@
       googleBtn.addEventListener('click', async () => {
         error.textContent = '';
         // A new Google account is a sign-up too, so it needs the same agreement
-        if (form.dataset.mode === 'signup' && !field('acceptTerms').checked) { error.textContent = 'Agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
+        if (form.dataset.mode === 'signup' && !field('acceptTerms').checked) { error.textContent = 'Confirm you’re 13 or older and agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
         if (!googleId) { error.textContent = 'Google sign-in isn’t switched on yet. Use your email for now.'; return; }
         try { await loadGsi(); } catch (err) { error.textContent = err.message; return; }
         const idle = () => (form.dataset.mode === 'signup' ? 'Create account' : 'Log in');
@@ -3345,7 +3345,7 @@
         if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
         if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
-        if (signup && !field('acceptTerms').checked) { error.textContent = 'Agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
+        if (signup && !field('acceptTerms').checked) { error.textContent = 'Confirm you’re 13 or older and agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
         if (signup && !captchaToken) { error.textContent = 'Complete the security check before signing up.'; return; }
         submit.disabled = true;
         error.textContent = '';
@@ -4808,6 +4808,7 @@
               <li><a class="sf-link" href="${P}#faq">FAQ</a></li>
               <li><a class="sf-link" href="mailto:${SUPPORT}">Email support</a></li>
               <li><a class="sf-link" href="privacy.html">Privacy policy</a></li>
+              <li><a class="sf-link" href="terms.html">Terms of Service</a></li>
               <li data-foot-account hidden><button class="sf-link" type="button" data-foot-act="settings">Account settings</button></li>
             </ul>
           </nav>

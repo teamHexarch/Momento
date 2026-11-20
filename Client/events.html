@@ -2748,6 +2748,8 @@
         if (!g) return;
         openId = id;
         if (from) opener = from;
+        // The open group is kept in the address, so a reload opens it again
+        history.replaceState(history.state, '', location.pathname + location.search + '#group=' + encodeURIComponent(id));
         paintPanel(g);
         if (drawer.open) return;
         panel.scrollTop = 0;
@@ -2778,7 +2780,10 @@
       drawer.addEventListener('cancel', (e) => { e.preventDefault(); closePanel(); });
       drawer.addEventListener('pointerdown', (e) => { drawer._down = e.target === drawer; });
       drawer.addEventListener('click', (e) => { if (e.target === drawer && drawer._down) closePanel(); });
-      drawer.addEventListener('close', () => { openId = null; });
+      drawer.addEventListener('close', () => {
+        openId = null;
+        if (/^#group=/.test(location.hash)) history.replaceState(history.state, '', location.pathname + location.search + '#groups');
+      });
 
       // Links like events.html#group=<id> open that group
       function openFromHash() {
@@ -4073,6 +4078,7 @@
               <li><a class="sf-link" href="${P}#faq">FAQ</a></li>
               <li><a class="sf-link" href="mailto:${SUPPORT}">Email support</a></li>
               <li><a class="sf-link" href="privacy.html">Privacy policy</a></li>
+              <li><a class="sf-link" href="terms.html">Terms of Service</a></li>
               <li data-foot-account hidden><button class="sf-link" type="button" data-foot-act="settings">Account settings</button></li>
             </ul>
           </nav>

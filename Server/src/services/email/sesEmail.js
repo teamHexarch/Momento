@@ -31,7 +31,7 @@ function explain(err) {
 }
 
 export async function send({ to, subject, html, replyTo, unsubscribe }) {
-  client ||= new SESv2Client({ region: config.aws.region });
+  client ||= new SESv2Client({ region: config.aws.region, maxAttempts: 3, requestHandler: { connectionTimeout: 5000, requestTimeout: 15000 } });
   try {
     await client.send(new SendEmailCommand({
       FromEmailAddress: config.email.from,

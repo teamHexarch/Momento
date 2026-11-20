@@ -92,7 +92,7 @@ export const config = {
   // The Terms and Privacy Policy versions people must have accepted. REQUIRE_CONSENT=on makes accepting
   // the current versions a condition for using the site (off until the site asks for it).
   policies: {
-    tos: env.TOS_VERSION || '2026-11-19',
+    tos: env.TOS_VERSION || '2026-11-20',
     privacy: env.PRIVACY_VERSION || '2026-11-19',
     enforce: env.REQUIRE_CONSENT === 'on',
   },

@@ -49,7 +49,7 @@
    beside them. Social only borrows from My albums on the My albums page, where that item is the wide current
    pill with room to spare; everywhere else My albums is a 38px icon and keeps all of its own width */
 @media (pointer: coarse) and (max-width: 520px) {
-  .nav .nav-caret::before { left: -9px; right: -9px; }
+  .nav .nav-caret::before { left: -13px; right: -3px; }   /* reaches into Home (its own pair), not into My albums */
   .nav .nav-social::before { left: 0; z-index: 1; }
   .nav:has(.nav-albums[aria-current="page"]) .nav-social::before { left: -13px; }
   .nav .nav-settings::before { right: -13px; z-index: 1; }
