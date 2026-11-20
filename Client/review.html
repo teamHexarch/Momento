@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en" data-page="review">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="robots" content="noindex">
+  <title>Photo review · Momento</title>
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <style>[hidden] { display: none !important; }</style>
+  <script>
+  // Staff only: uploads waiting for a human decision. Each photo gets a content level (0-100, Momento's standard);
+  // 0-25 publishes it, 100 declines it, and 50-75 asks staff to approve or decline after looking at the context.
+  // The levels are kept with each decision, so they can later calibrate the automatic check
+  // (Server/scripts/calibrateFromReviews.js). Model scores are not shown, so they can't sway the rating.
+  (() => {
+    let pref = 'system';
+    try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
+    const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+  </script>
+  <script src="assets/api.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #ECEAF0; --card: #F8F7FA; --ink: #2E2C3A; --muted: #5C596B; --faint: #8A8697; --line: #D6D2DE;
+      --accent: #6C5FC7; --accent-ink: #fff; --well: rgba(46,44,58,.06);
+      --safe: #2F7D4F; --hold: #A86A12; --stop: #9A3D3D;
+      --shadow: 0 0 0 .5px rgba(46,44,58,.06), 0 18px 40px -24px rgba(60,50,90,.35);
+      --ease: cubic-bezier(.16, 1, .3, 1);
+    }
+    :root[data-theme="dark"] {
+      --bg: #121119; --card: #1A1922; --ink: #ECEAF4; --muted: #B4B0C4; --faint: #8A8697; --line: #2A2834;
+      --accent: #B8AEF5; --accent-ink: #15131D; --well: rgba(255,255,255,.05);
+      --safe: #7CC79A; --hold: #E2B062; --stop: #E79A9A;
+      --shadow: 0 0 0 .5px rgba(0,0,0,.5), 0 18px 40px -24px rgba(0,0,0,.8);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); color-scheme: light dark; }
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+    body { margin: 0; color: var(--ink); font: 15px/1.6 Inter, system-ui, sans-serif; min-height: 100vh; }
+    a { color: var(--accent); }
+    header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+      padding: 12px 20px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line); }
+    header h1 { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
+    header h1 a { color: inherit; text-decoration: none; }
+    .muted { color: var(--muted); }
+    .bar { flex: 1 1 200px; height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; background: var(--accent); transform-origin: left; transition: width .4s var(--ease); }
+    label.toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; max-width: 1360px; margin: 0 auto; padding: 18px 20px 40px; }
+    @media (max-width: 920px) { main { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+    .stage { padding: 14px; min-width: 0; }
+    .frame { position: relative; height: min(64vh, 860px); border-radius: 10px; background: var(--well); display: grid; place-items: center; overflow: hidden; }
+    .frame img { width: 100%; height: 100%; object-fit: contain; }
+    .frame p { margin: 0; padding: 24px; text-align: center; color: var(--muted); max-width: 46ch; }
+    .meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin: 10px 2px; word-break: break-word; }
+    .meta b { font-weight: 600; }
+    .levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+    @media (max-width: 640px) { .levels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .levels button { padding: 10px 6px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); text-align: center;
+      transition: transform .2s var(--ease), border-color .2s ease, background-color .2s ease; }
+    .levels button b { display: block; font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; }
+    .levels button small { display: block; color: var(--muted); font-size: .76rem; line-height: 1.3; }
+    .levels button[data-group="safe"] b { color: var(--safe); }
+    .levels button[data-group="hold"] b { color: var(--hold); }
+    .levels button[data-group="stop"] b { color: var(--stop); }
+    .levels button:hover { border-color: var(--accent); }
+    .levels button:active { transform: scale(.97); }
+    .levels button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+    .levels button:disabled { cursor: default; opacity: .55; transform: none; }
+    :is(button, a, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .confirm { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--well); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .confirm span { flex: 1 1 220px; }
+    .btn { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-weight: 500;
+      transition: transform .2s var(--ease), border-color .2s ease; }
+    .btn:hover { border-color: var(--accent); }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .5; cursor: default; transform: none; }
+    a.btn { display: inline-block; text-decoration: none; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .btn.primary kbd { background: transparent; border-color: currentColor; color: inherit; }
+    .controls { display: contents; }
+    .btn.danger { color: var(--stop); }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .status { margin: 10px 2px 0; min-height: 1.6em; }
+    .status.err { color: var(--stop); }
+    .hint { margin: 10px 2px 0; font-size: .85rem; }
+    kbd { font: 600 .75rem/1 Inter, sans-serif; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; background: var(--card); }
+    aside { display: flex; flex-direction: column; gap: 14px; }
+    aside section { padding: 14px 16px; }
+    aside h2 { margin: 0 0 6px; font-size: .95rem; font-weight: 600; }
+    aside p { margin: 0; color: var(--muted); font-size: .88rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    td { padding: 3px 0; vertical-align: top; } td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    td.lv { width: 2.6em; font-weight: 600; }
+    .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; font-weight: 600; background: var(--well); }
+    .chip.ok { color: var(--safe); } .chip.no { color: var(--stop); } .chip.gone { color: var(--faint); }
+    .gate { max-width: 520px; margin: 12vh auto; padding: 28px; text-align: center; }
+    .gate h2 { margin: 0 0 8px; font-size: 1.3rem; letter-spacing: -.02em; }
+    .gate p { color: var(--muted); margin: 0 0 16px; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="index.html">Momento</a> · Photo review</h1>
+    <div class="controls" id="controls" hidden>
+      <span id="progress" class="muted"></span>
+      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <label class="toggle"><input type="checkbox" id="onlyOpen" checked> Only show photos waiting</label>
+      <button class="btn" type="button" id="refresh">Refresh</button>
+    </div>
+  </header>
+
+  <div class="card gate" id="gate" hidden>
+    <h2 id="gateTitle">Checking your account…</h2>
+    <p id="gateText"></p>
+    <a class="btn primary" id="gateLink" href="index.html" hidden>Back to Momento</a>
+  </div>
+
+  <main id="app" hidden>
+    <div class="card stage">
+      <div class="frame" id="frame"><img id="photo" alt="" hidden><p id="noPhoto" hidden></p></div>
+      <div class="meta"><span id="name"></span><span id="where" class="muted"></span></div>
+      <div class="levels" id="levels" role="group" aria-label="Content level"></div>
+      <div class="confirm" id="confirm" hidden>
+        <span id="confirmText"></span>
+        <button class="btn primary" type="button" id="approve">Approve and publish <kbd>A</kbd></button>
+        <button class="btn danger" type="button" id="decline">Decline <kbd>D</kbd></button>
+      </div>
+      <div class="nav">
+        <button class="btn" type="button" id="prev">← Previous</button>
+        <button class="btn" type="button" id="next">Next →</button>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint muted">Keys: <kbd>1</kbd>–<kbd>6</kbd> choose a level, <kbd>A</kbd> / <kbd>D</kbd> approve or decline, <kbd>←</kbd> <kbd>→</kbd> move between photos. 0–25 publishes the photo at once and 100 declines it; decisions can’t be undone here.</p>
+    </div>
+    <aside>
+      <section class="card">
+        <h2>How to rate</h2>
+        <p>Judge the photo itself, by Momento’s standard.<br>0–25: publish · 50–75: your call, in context · 100: decline</p>
+      </section>
+      <section class="card">
+        <h2>Rated this session</h2>
+        <table id="counts"></table>
+      </section>
+      <section class="card">
+        <h2>Decisions this session</h2>
+        <table>
+          <tr><td>Approved and published</td><td id="nApproved">0</td></tr>
+          <tr><td>Declined</td><td id="nDeclined">0</td></tr>
+          <tr><td>Still waiting</td><td id="nWaiting">0</td></tr>
+        </table>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+  (() => {
+    // Momento's content levels (the same standard as the calibration and labelling tools)
+    const LEVELS = [
+      [0, 'Everyday', 'Ordinary life, nothing suggestive', 'safe'],
+      [15, 'Everyday exposure', 'Swimwear, sportswear: dressed for the setting', 'safe'],
+      [25, 'Mild suggestion', 'Suggestive pose, private parts covered', 'safe'],
+      [50, 'Clear suggestion', 'Framing focuses on covered private parts', 'hold'],
+      [75, 'Explicit nudity', 'Private parts clearly visible, no sexual act', 'hold'],
+      [100, 'Explicit sexual content', 'Sexual acts or sexual display', 'stop'],
+    ];
+    const $ = (id) => document.getElementById(id);
+    let items = [], index = 0, pending = null, busy = false;
+    const rated = new Map(LEVELS.map(([v]) => [v, 0]));
+    let approved = 0, declined = 0;
+
+    function gate(title, text, link) {
+      $('app').hidden = true;
+      $('controls').hidden = true;
+      $('gate').hidden = false;
+      $('gateTitle').textContent = title;
+      $('gateText').textContent = text || '';
+      $('gateLink').hidden = !link;
+    }
+    const say = (text, error) => { $('status').textContent = text || ''; $('status').classList.toggle('err', !!error); };
+
+    for (const [value, title, text, group] of LEVELS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.value = value;
+      b.dataset.group = group;
+      b.title = text;
+      b.innerHTML = '<b></b><small></small>';
+      b.querySelector('b').textContent = value;
+      b.querySelector('small').textContent = title;
+      b.addEventListener('click', () => choose(value));
+      $('levels').append(b);
+    }
+
+    const visible = () => $('onlyOpen').checked ? items.filter((it) => !it.done || it === items[index]) : items;
+    function move(step) {
+      const list = visible(), at = list.indexOf(items[index]), next = list[at + step];
+      if (next) { index = items.indexOf(next); pending = null; render(); }
+    }
+    function nextOpen() {
+      const open = items.slice(index + 1).concat(items.slice(0, index)).find((it) => !it.done);
+      if (open) index = items.indexOf(open);
+      else $('status').textContent += ' All caught up. Press Refresh to check for new uploads.';
+      pending = null;
+      render();
+    }
+
+    function choose(severity) {
+      const it = items[index];
+      if (!it || it.done || busy) return;
+      if (severity <= 25) return decide(true, severity);
+      if (severity === 100) return decide(false, severity);
+      pending = severity;   // 50-75: staff decide in context
+      render();
+    }
+
+    async function decide(allow, severity = pending) {
+      const it = items[index];
+      if (!it || it.done || busy || severity == null) return;
+      busy = true;
+      say(allow ? 'Publishing…' : 'Declining…');
+      try {
+        await momentoApi('/api/admin/moderation/' + it.id, momentoJson('POST', { allow, severity }));
+        it.done = allow ? 'approved' : 'declined';
+        it.severity = severity;
+        rated.set(severity, rated.get(severity) + 1);
+        if (allow) approved++; else declined++;
+        say(allow ? 'Approved: the photo is being published.' : 'Declined: the photo stays private.');
+        busy = false;
+        nextOpen();
+      } catch (err) {
+        busy = false;
+        if (err.status === 409) { it.done = 'gone'; say('Someone already decided this photo.'); nextOpen(); return; }
+        if (err.status === 404) { gate('Staff only', 'This page is for Momento staff.', true); return; }
+        say(err.message, true);
+      }
+    }
+
+    function render() {
+      const it = items[index];
+      const waiting = items.filter((x) => !x.done).length;
+      const total = items.length, done = total - waiting;
+      $('progress').textContent = total ? `${done} of ${total} decided` : '';
+      $('bar').style.width = (total ? done / total * 100 : 0) + '%';
+      $('nApproved').textContent = approved;
+      $('nDeclined').textContent = declined;
+      $('nWaiting').textContent = waiting;
+      $('counts').innerHTML = '';
+      for (const [value, title] of LEVELS) {
+        const row = $('counts').insertRow();
+        const lv = row.insertCell(); lv.className = 'lv'; lv.textContent = value;
+        row.insertCell().textContent = title;
+        row.insertCell().textContent = rated.get(value);
+      }
+      const photo = $('photo'), none = $('noPhoto');
+      if (!it) {
+        photo.hidden = true; photo.removeAttribute('src');
+        none.hidden = false;
+        none.textContent = 'Nothing is waiting for review. New uploads appear here when you press Refresh.';
+        $('name').textContent = ''; $('where').textContent = '';
+      } else {
+        if (it.preview) {
+          const src = window.MOMENTO_API + '/api/admin/moderation/' + it.id + '/preview';
+          if (photo.dataset.src !== src) { photo.dataset.src = src; photo.src = src; }
+          photo.alt = it.fileName || 'Photo waiting for review';
+          photo.hidden = false; none.hidden = true;
+        } else {
+          photo.hidden = true; photo.removeAttribute('src'); delete photo.dataset.src;
+          none.hidden = false;
+          none.textContent = it.kind === 'photo' ? 'The preview isn’t available any more.' : `This ${it.kind} was refused automatically and never stored, so there is no picture. Decide from the report alone.`;
+        }
+        const name = document.createElement('b');
+        name.textContent = it.fileName || (it.kind === 'photo' ? 'Photo' : it.kind[0].toUpperCase() + it.kind.slice(1));
+        $('name').replaceChildren(name);
+        if (it.done) {
+          const chip = document.createElement('span');
+          chip.className = 'chip ' + (it.done === 'approved' ? 'ok' : it.done === 'declined' ? 'no' : 'gone');
+          chip.textContent = it.done === 'gone' ? 'Decided elsewhere' : `${it.done[0].toUpperCase() + it.done.slice(1)} · level ${it.severity}`;
+          $('name').append(' ', chip);
+        }
+        const when = it.at ? new Date(it.at).toLocaleString() : '';
+        $('where').textContent = [it.albumName && 'Album: ' + it.albumName, when, it.reason].filter(Boolean).join(' · ');
+      }
+      for (const b of $('levels').children) {
+        b.disabled = !it || !!it.done || busy;
+        b.classList.toggle('on', !!it && (Number(b.dataset.value) === (it.done ? it.severity : pending)));
+      }
+      $('confirm').hidden = !(it && !it.done && pending != null);
+      if (pending != null) $('confirmText').textContent = `Level ${pending}: ${LEVELS.find(([v]) => v === pending)[1].toLowerCase()}. Publish it, or keep it private?`;
+      const list = visible(), at = list.indexOf(it);
+      $('prev').disabled = at <= 0;
+      $('next').disabled = at < 0 || at >= list.length - 1;
+    }
+
+    async function load() {
+      say('');
+      let user = null;
+      try { ({ user } = await momentoApi('/api/auth/me')); } catch (err) { gate('Can’t reach Momento', err.message, true); return; }
+      if (!user) { gate('Log in first', 'Log in with a staff account to review photos.', true); return; }
+      if (user.plan !== 'staff') { gate('Staff only', 'This page is for Momento staff.', true); return; }
+      let data;
+      try { data = await momentoApi('/api/admin/moderation'); }
+      catch (err) {
+        if (err.status === 404) gate('Staff only', 'This page is for Momento staff. Staff accounts need a confirmed email.', true);
+        else gate('Can’t load the photos', err.message, true);
+        return;
+      }
+      // Oldest first, so nothing waits longer than it has to
+      const fresh = (data.decisions || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+      const decided = items.filter((it) => it.done);
+      items = decided.concat(fresh.filter((d) => !decided.some((it) => it.id === d.id)));
+      const open = items.find((it) => !it.done);
+      index = open ? items.indexOf(open) : Math.max(0, items.length - 1);
+      if (!open && items.length) say('All caught up. Press Refresh to check for new uploads.');
+      pending = null;
+      $('gate').hidden = true;
+      $('app').hidden = false;
+      $('controls').hidden = false;
+      render();
+    }
+
+    $('approve').addEventListener('click', () => decide(true));
+    $('decline').addEventListener('click', () => decide(false));
+    $('prev').addEventListener('click', () => move(-1));
+    $('next').addEventListener('click', () => move(1));
+    $('onlyOpen').addEventListener('change', render);
+    $('refresh').addEventListener('click', load);
+    $('photo').addEventListener('error', () => { const it = items[index]; if (it) { it.preview = false; render(); } });
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea, select') || $('app').hidden) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= 6) { e.preventDefault(); choose(LEVELS[n - 1][0]); }
+      else if ((e.key === 'a' || e.key === 'A') && pending != null) decide(true);
+      else if ((e.key === 'd' || e.key === 'D') && pending != null) decide(false);
+      else if (e.key === 'ArrowRight') move(1);
+      else if (e.key === 'ArrowLeft') move(-1);
+      else if (e.key === 'Escape' && pending != null) { pending = null; render(); }
+    });
+    gate('Checking your account…', '');
+    load();
+  })();
+  </script>
+</body>
+</html>

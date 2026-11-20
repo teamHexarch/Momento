@@ -31,7 +31,16 @@ node scripts/labelPhotos.js <photo folder>   # label in the browser at http://lo
 NSFW_PIPELINE=stage-one node scripts/calibrateModeration.js <photo folder>/fit.jsonl <photo folder>/holdout.jsonl calibration.json
 ```
 
-Put one subfolder per event in the photo folder. The labelling tool never shows model scores, keeps each event in one split and skips byte-identical copies. On the AWS server copy the table to /opt/momento-config/calibration.json, add NSFW_CALIBRATION=/config/calibration.json to server.env and run `sudo momento-update`.
+Or skip separate labelling and calibrate from staff decisions. While uncalibrated every upload waits for staff, and each decision keeps the MobileNetV2 score. Staff send the content level with each decision (`POST /api/admin/moderation/:id { allow, severity: 0|15|25|50|75|100 }`); once a few hundred uploads from many albums are reviewed, run on the AWS server:
+
+```sh
+cd /opt/momento/Server/deploy && sudo docker compose exec -T api node scripts/calibrateFromReviews.js > /tmp/calibration.json \
+  && sudo install -m 644 /tmp/calibration.json /opt/momento-config/calibration.json
+```
+
+The table is installed only when the run succeeds. A missing or unreadable table never stops the API: every upload then waits for staff.
+
+For the labelling tool, put one subfolder per event in the photo folder. The labelling tool never shows model scores, keeps each event in one split and skips byte-identical copies. On the AWS server copy the table to /opt/momento-config/calibration.json, add NSFW_CALIBRATION=/config/calibration.json to server.env and run `sudo momento-update`.
 
 ## Audits and review
 

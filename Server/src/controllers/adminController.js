@@ -5,6 +5,7 @@ import { Report } from '../models/Report.js';
 import { Takedown } from '../models/Takedown.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { UploadCheck } from '../models/UploadCheck.js';
+import { Album } from '../models/Album.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
 import { sha256 } from '../services/contentSafety.js';
@@ -85,11 +86,30 @@ export async function unsuspend(req, res) {
 export async function decisions(req, res) {
   const status = ['final', 'review-requested', 'allowed', 'upheld'].includes(req.query.status) ? req.query.status : 'review-requested';
   const rows = await ModerationDecision.find({ status }).sort({ at: -1 }).limit(200).lean();
-  res.json({ decisions: rows.map((d) => ({ id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, at: d.at })) });
+  // For the review page (review.html): which album and file each one is, and whether a private preview exists
+  // (uploads waiting for a decision; refused covers and avatars were never stored)
+  const ids = rows.map((d) => d._id);
+  const [jobs, albums] = await Promise.all([
+    UploadCheck.find({ _id: { $in: ids } }, 'originalName state').lean(),
+    Album.find({ _id: { $in: rows.map((d) => d.album).filter(Boolean) } }, 'name').lean(),
+  ]);
+  const jobOf = new Map(jobs.map((j) => [String(j._id), j]));
+  const albumName = new Map(albums.map((a) => [String(a._id), a.name]));
+  res.json({ decisions: rows.map((d) => {
+    const job = jobOf.get(String(d._id));
+    return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, severity: d.severity ?? null, at: d.at,
+      album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName || null,
+      preview: !!job && ['review', 'rejected'].includes(job.state) };
+  }) });
 }
-// POST /api/admin/moderation/:id  { allow: true|false }  Allowed: that exact file passes the check next time
+// POST /api/admin/moderation/:id  { allow: true|false, severity?: 0|15|25|50|75|100 }
+// Allowed: that exact file passes the check next time. The optional severity (Momento's content level) makes
+// the decision usable for calibration (scripts/calibrateFromReviews.js).
+const SEVERITIES = [0, 15, 25, 50, 75, 100];
 export async function decide(req, res) {
   if (typeof req.body?.allow !== 'boolean') throw new HttpError(400, 'Choose approve or uphold.');
+  const severity = req.body?.severity;
+  if (severity !== undefined && !SEVERITIES.includes(severity)) throw new HttpError(400, 'Severity must be 0, 15, 25, 50, 75 or 100.');
   const allow = req.body?.allow === true;
   const job = await UploadCheck.findById(id(req.params.id));
   if (job) {
@@ -97,10 +117,11 @@ export async function decide(req, res) {
       { $set: { state: allow ? 'publish' : 'rejected', due: new Date(), attempts: 0 } });
     if (!result.matchedCount) throw new HttpError(409, 'This upload is no longer awaiting a decision.');
   }
-  const d = await ModerationDecision.findOneAndUpdate({ _id: id(req.params.id) }, { $set: { status: allow ? 'allowed' : 'upheld', reviewedBy: req.user._id, reviewedAt: new Date() } }, { returnDocument: 'after' });
+  const d = await ModerationDecision.findOneAndUpdate({ _id: id(req.params.id) }, { $set: { status: allow ? 'allowed' : 'upheld', reviewedBy: req.user._id, reviewedAt: new Date(),
+    ...(severity !== undefined && { severity }) } }, { returnDocument: 'after' });
   if (!d) throw new HttpError(404, 'Not found.');
-  await audit('moderation.reviewed', { req, target: d._id, meta: { allow } });
-  res.json({ id: d.id, status: d.status });
+  await audit('moderation.reviewed', { req, target: d._id, meta: { allow, ...(severity !== undefined && { severity }) } });
+  res.json({ id: d.id, status: d.status, severity: d.severity ?? null });
 }
 
 export async function moderationPreview(req, res) {

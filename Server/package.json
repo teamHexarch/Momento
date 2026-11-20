@@ -9,6 +9,8 @@
     "moderation:worker": "node --env-file-if-exists=.env scripts/moderationWorker.js",
     "test:moderation": "node scripts/testUploadChecks.js",
     "test:labels": "node scripts/testLabelPhotos.js",
+    "test:calibration": "node scripts/testCalibrateFromReviews.js",
+    "calibrate:reviews": "node --env-file-if-exists=.env scripts/calibrateFromReviews.js",
     "label:photos": "node scripts/labelPhotos.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --watch --env-file-if-exists=.env src/server.js",

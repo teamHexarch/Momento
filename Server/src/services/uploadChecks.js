@@ -21,10 +21,25 @@ export const stageOneOnly = process.env.NSFW_PIPELINE === 'stage-one';
 export const cascadeEnabled = stageOneOnly || process.env.NSFW_PIPELINE === 'three-stage';
 export const lastStage = stageOneOnly ? 1 : 3;
 const thresholds = [0, .90, .85, .85];
-const models = ['', 'NSFW.js MobileNetV2', 'Falconsai/nsfw_image_detection', 'Qwen/Qwen2.5-VL-7B-Instruct'];
+export const STAGE_MODELS = ['', 'NSFW.js MobileNetV2', 'Falconsai/nsfw_image_detection', 'Qwen/Qwen2.5-VL-7B-Instruct'];
+const models = STAGE_MODELS;
 // The API does not load worker configuration or model weights.
-const calibration = (process.env.NSFW_WORKER === '1' || stageOneOnly) && process.env.NSFW_CALIBRATION
-  ? JSON.parse(readFileSync(process.env.NSFW_CALIBRATION, 'utf8')) : {};
+// A missing or unreadable table fails safe: nothing is released automatically, everything waits for staff.
+export let calibrationError = null;
+const calibration = (() => {
+  if (!((process.env.NSFW_WORKER === '1' || stageOneOnly) && process.env.NSFW_CALIBRATION)) return {};
+  try {
+    const table = JSON.parse(readFileSync(process.env.NSFW_CALIBRATION, 'utf8'));
+    if (!table || typeof table !== 'object' || Array.isArray(table)) throw new Error('not a calibration table');
+    return table;
+  } catch (error) {
+    calibrationError = error.message;
+    console.error(`Calibration table ${process.env.NSFW_CALIBRATION} unusable (${error.message}): every upload waits for staff review.`);
+    return {};
+  }
+})();
+// How many score ranges each stage may release on its own
+export const calibratedBins = stage => calibration[stage]?.allow?.length || 0;
 
 // Calibration files map raw scores to observed decision precision on routed, labelled photos.
 // A missing bin gives no authority to release or reject a private upload.

@@ -1,6 +1,7 @@
 import { User } from '../models/User.js';
 import { readSession, rotateSession, ROTATE_MS, GRACE_MS } from '../utils/session.js';
 import { HttpError } from '../utils/httpError.js';
+import { isStaffPlan } from '../utils/plans.js';
 import { switches } from '../services/switches.js';
 import { config } from '../config/env.js';
 
@@ -20,7 +21,7 @@ export async function loadUser(req, res, next) {
   const user = await User.findOne({
     _id: session.sub,
     sessions: { $elemMatch: { $or: [{ id: session.jti }, { prev: session.jti }], expiresAt: { $gt: now } } },
-  }).select('+passwordHash +sessions +role +accepted +deletingAt');
+  }).select('+passwordHash +sessions +accepted +deletingAt');
   if (!user || user.deletingAt) return next();
   const changed = user.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
   if (session.iat < changed) return next();
@@ -45,9 +46,10 @@ export async function loadUser(req, res, next) {
 }
 
 // Staff only (moderation, takedowns, the emergency switches). Everyone else gets a plain 404, as if
-// the address didn't exist. Staff are made only on the server itself (scripts/setRole.js), never through the API.
+// the address didn't exist. Staff are accounts on the 'staff' plan, set only on the server itself
+// (scripts/setPlan.js), never through the API.
 export function requireStaff(req, res, next) {
-  if (!req.user || req.user.role !== 'staff' || !req.user.emailVerified) return next(new HttpError(404, 'Not found.'));
+  if (!req.user || !isStaffPlan(req.user.plan) || !req.user.emailVerified) return next(new HttpError(404, 'Not found.'));
   next();
 }
 

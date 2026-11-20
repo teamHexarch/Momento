@@ -8,7 +8,7 @@ const ipKey = crypto.createHmac('sha256', config.jwtSecret).update('momento-ip-h
 export const ipHash = (ip) => (ip ? crypto.createHmac('sha256', ipKey).update(String(ip)).digest('hex').slice(0, 32) : undefined);
 
 // Events that also go out as a security alert to staff
-const ALERT = new Set(['staff.role-changed', 'staff.switches', 'staff.sessions-revoked', 'session.reuse', 'account.suspended']);
+const ALERT = new Set(['staff.plan-changed','staff.switches', 'staff.sessions-revoked', 'session.reuse', 'account.suspended']);
 
 /**
  * Appends one security event. Never throws: a logging problem must not break what the person did.

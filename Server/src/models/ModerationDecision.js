@@ -17,6 +17,8 @@ const decisionSchema = new mongoose.Schema({
   status: { type: String, enum: ['final', 'review-requested', 'allowed', 'upheld'], default: 'final' },
   reviewedBy: mongoose.Schema.Types.ObjectId,
   reviewedAt: Date,
+  // Staff's content level when reviewing (0/15/25/50/75/100), used by scripts/calibrateFromReviews.js
+  severity: Number,
   at: { type: Date, default: Date.now },
 }, { versionKey: false });
 

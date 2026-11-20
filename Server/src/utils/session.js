@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { User } from '../models/User.js';
 import { config } from '../config/env.js';
 import { HttpError } from './httpError.js';
+import { ADMIN_PLANS } from './plans.js';
 
 // Logins live in an httpOnly cookie holding a signed JWT, so page scripts never touch the token.
 // Every login also has a record on the account (sessions[]), checked on every request, so logging
@@ -14,10 +15,9 @@ import { HttpError } from './httpError.js';
 // after which presenting it again means it was copied: that login is ended and staff are alerted.
 export const SESSION_COOKIE = 'momento_session';
 export const MAX_SESSIONS = 3;
-// Accounts on the 'admin' plan (every account since 2026-11-10) get more devices, but still a limit, so a
-// stolen password can't keep piling up logins
-export const ADMIN_MAX_SESSIONS = 10;
-export const maxSessionsFor = (plan) => (plan === 'admin' ? ADMIN_MAX_SESSIONS : MAX_SESSIONS);
+// Accounts on the 'admin' plan (every account since 2026-11-10) and 'staff' have no device limit. Unused logins
+// still end after TOKEN_DAYS, and "sign everyone out" / a password reset ends them all.
+export const maxSessionsFor = (plan) => (ADMIN_PLANS.includes(plan) ? Infinity : MAX_SESSIONS);
 const ISSUER = 'momento-api', AUDIENCE = 'momento-session';
 export const ROTATE_MS = 12 * 3600000;
 export const GRACE_MS = 2 * 60000;
@@ -62,8 +62,8 @@ export async function startSession(res, user, replacement) {
     const result = await User.updateOne({
       _id: user.id,
       $or: [
-        { plan: 'admin', [`sessions.${ADMIN_MAX_SESSIONS - 1}`]: { $exists: false } },
-        { plan: { $ne: 'admin' }, [`sessions.${MAX_SESSIONS - 1}`]: { $exists: false } },
+        { plan: { $in: ADMIN_PLANS } },
+        { plan: { $nin: ADMIN_PLANS }, [`sessions.${MAX_SESSIONS - 1}`]: { $exists: false } },
       ],
     }, {
       $push: { sessions: session },

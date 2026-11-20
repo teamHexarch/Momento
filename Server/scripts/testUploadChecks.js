@@ -72,9 +72,26 @@ try {
   await processCheck(3, async () => ({ allow: .1, reject: .1, severity: 75 }), table);
   assert.equal((await UploadCheck.findById(two.id)).state, 'review');
   await request('/api/admin/moderation/' + two.id + '/preview', 404, cookie);
-  await User.updateOne({ _id: user._id }, { $set: { role: 'staff' } });
+  await User.updateOne({ _id: user._id }, { $set: { plan: 'staff' } });
   await request('/api/admin/moderation/' + two.id + '/preview', 200, cookie);
-  await request('/api/admin/moderation/' + two.id, 200, cookie, 'POST', { allow: true });
+  // The review page's list: album, file name and whether a private preview exists
+  const queue = (await (await request('/api/admin/moderation', 200, cookie)).json()).decisions;
+  const waiting = queue.find(d => d.id === two.id);
+  assert.equal(waiting.albumName, 'Moderation test');
+  assert.equal(waiting.fileName, 'needs-review.jpg');
+  assert.equal(waiting.preview, true);
+  assert.equal(waiting.severity, null);
+  // The page itself, and the staff-only menu item under "Account settings" on every page
+  assert.match(await (await request('/review.html', 200)).text(), /Photo review/);
+  for (const page of ['index.html', 'albums.html', 'events.html', 'settings.html', 'support.html']) {
+    const html = await (await request('/' + page, 200)).text();
+    assert.match(html, /data-act="review" hidden>\$\{ICON\.review\}Photo review/, page);
+    assert.match(html, /built\.review\.hidden = !\(a && a\.plan === 'staff'\)/, page);
+  }
+  await request('/api/admin/moderation/' + two.id, 400, cookie, 'POST', { allow: true, severity: 33 });
+  assert.equal((await UploadCheck.findById(two.id)).state, 'review', 'an invalid severity changes nothing');
+  const reviewed = await (await request('/api/admin/moderation/' + two.id, 200, cookie, 'POST', { allow: true, severity: 15 })).json();
+  assert.equal(reviewed.severity, 15);
   await processCheck(0);
   assert.equal(await Photo.countDocuments(), 2);
   const three = await upload('blue', 'declined.jpg');

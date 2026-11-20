@@ -6,10 +6,12 @@ import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
 import { warmUp } from './services/nsfwService.js';
-import { stageOneOnly, startUploadChecks } from './services/uploadChecks.js';
+import { stageOneOnly, startUploadChecks, calibratedBins, calibrationError } from './services/uploadChecks.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
+import { moveStaffRoleToPlan } from './services/planMigration.js';
 
 await connectDb();
+await moveStaffRoleToPlan();
 await initStorage();
 console.log(storageName === 's3' ? `Photos: Amazon S3 bucket "${config.aws.s3Bucket}" (${config.aws.region})`
   : `Photos: on disk in ${config.uploadDir}`);
@@ -33,8 +35,11 @@ setTimeout(warmUp, 5000).unref();
 if (stageOneOnly && process.env.NSFW_SEPARATE_WORKER !== '1') {
   startUploadChecks();
   startRefusalCleanup();
-  console.log('Photo checks: stage one only (MobileNetV2)' + (process.env.NSFW_CALIBRATION ? ''
-    : '. No calibration table yet (NSFW_CALIBRATION), so every upload waits for staff review.'));
+  const bins = calibratedBins(1);
+  console.log('Photo checks: stage one only (MobileNetV2)' + (!process.env.NSFW_CALIBRATION
+    ? '. No calibration table yet (NSFW_CALIBRATION), so every upload waits for staff review.'
+    : calibrationError ? '. The calibration table could not be read, so every upload waits for staff review.'
+      : `. Calibrated: ${bins} score range(s) publish at once` + (bins ? ', the rest wait for staff review.' : ', so every upload waits for staff review.')));
 }
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
 

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { avatarOf } from '../services/avatarService.js';
+import { PLANS } from '../utils/plans.js';
 
 const userSchema = new mongoose.Schema({
   name: { type: String, trim: true, maxlength: 80, default: '' },
@@ -12,12 +13,9 @@ const userSchema = new mongoose.Schema({
   avatarKey: String,
   // Google vouches for the address; email/password signups start unverified
   emailVerified: { type: Boolean, default: false },
-  // Every new account starts as admin (set 2026-11-10; was 'free'). The plan only changes limits
-  // (admin: no 3-device limit); it gives no extra powers. Powers come from role, below.
-  plan: { type: String, enum: ['free', 'plus', 'admin'], default: 'admin' },
-  // Staff can moderate (reports, takedowns) and use the emergency switches. Only ever set on the server
-  // (scripts/setRole.js), never through the API, and never sent to the browser.
-  role: { type: String, enum: ['user', 'staff'], default: 'user', select: false },
+  // Limits and powers (utils/plans.js). Every new account starts as admin (set 2026-11-10; was 'free').
+  // 'staff' = admin + the staff tools. Only ever set on the server (scripts/setPlan.js), never through the API.
+  plan: { type: String, enum: PLANS, default: 'admin' },
   // Copyright strikes from takedowns; at 3 the account is suspended (suspendedAt)
   strikes: { type: Number, default: 0 },
   suspendedAt: Date,

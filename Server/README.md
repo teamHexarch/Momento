@@ -249,7 +249,7 @@ Each album is **upcoming** before its date, **live** around the day and the day 
 - "Forgot your password?" emails a reset link (valid 1 hour, single use). The reply is the same whether or not the address has an account, so it can't be used to find out who uses Momento. Accounts that only use Google or Apple can use it to add a password. Saving a new password logs the person in, logs out every other device (logins issued before `passwordChangedAt` are refused), marks the email confirmed, and sends a "your password was changed" email.
 - Login, signup and social sign-in are limited to 20 tries per 15 minutes per IP address; resending the confirm email and asking for reset links to 5 per hour.
 
-User fields: `name`, `email`, `passwordHash`, `avatarUrl`, `emailVerified`, `plan` (`free` or `plus`), `googleId`, `lastLoginAt`.
+User fields: `name`, `email`, `passwordHash`, `avatarUrl`, `emailVerified`, `plan` (`free`, `plus`, `admin` or `staff`), `googleId`, `lastLoginAt`.
 
 ## API
 
@@ -354,9 +354,12 @@ new one every 12 hours of use and expire after `TOKEN_DAYS` (7) unused. An old t
 2 minutes after its swap means it was copied: that login ends and staff are alerted. Logging out,
 changing the password, "sign everyone out" and deleting the account end logins on the server at once.
 
-**Staff** (moderation and emergency tools under `/api/admin`) are made only on the server:
-`sudo docker compose exec api node scripts/setRole.js someone@example.com staff` (in
-`/opt/momento/Server/deploy`). The `plan` field gives no powers. Everyone else gets 404 from `/api/admin`.
+**Plans** decide limits and powers (`src/utils/plans.js`): `free`/`plus` 3 devices, `admin` (every new account)
+no device limit, and `staff` = everything `admin` has plus the moderation and emergency tools under `/api/admin`
+(needs a confirmed email). Plans are changed only on the server:
+`sudo docker compose exec api node scripts/setPlan.js someone@example.com staff` (in
+`/opt/momento/Server/deploy`; `admin` takes staff away again). Everyone else gets 404 from `/api/admin`.
+Accounts that had the old `role: staff` field are moved to the staff plan automatically at start-up.
 
 **Requests**: JSON up to 100 KB; any key starting with `$` or named `__proto__`/`constructor`/`prototype`
 is refused (no MongoDB operator injection); every route reads only the fields it expects. Uploads are
@@ -372,7 +375,7 @@ passwords, tokens, keys or email addresses (they're masked automatically).
 
 **Emergency switches** (staff): pause sign-ups, uploads or joining, and sign everyone out.
 **Alerts** (to `SECURITY_ALERT_EMAIL` / `SECURITY_ALERT_WEBHOOK`, and the log): spikes of 401/403/429,
-copied login tokens, staff role changes and switches, suspensions, many data exports.
+copied login tokens, plan changes made on the server and staff switches, suspensions, many data exports.
 
 **Photos**: originals are kept as uploaded **minus where they were taken** (GPS in EXIF and XMP is
 emptied in place, so nothing else changes); previews and thumbnails carry no metadata at all. Storage is a
@@ -427,7 +430,7 @@ security (Momento uses its own server with MongoDB Atlas).
 
 - **Saving to the host's Google Drive, Dropbox or OneDrive.** Photos go to Amazon S3 (or this PC's disk
   locally). All file handling is in `src/services/storageService.js`, so that is the one file to change.
-- **Plans.** `plan` is stored on each user, but nothing is limited by it yet.
+- **Plans.** Only the device limit and staff access depend on the plan so far.
 
 ## Deploying
 
