@@ -321,6 +321,8 @@
         section.querySelector('ul').innerHTML = requests.map((r) => `<li class="ea-req glass${r.status === 'declined' ? ' is-declined' : ''}"><i aria-hidden="true"></i><b>${esc(r.name)}</b><span>${r.status === 'declined' ? 'The host declined' : 'Waiting for the host'}</span></li>`).join('');
       } catch (err) { MQ.toast?.('Couldn’t load your events', err.message); }
     }
+    // The Social page waits for this (and for the groups) before it shows its sections, so nothing jumps
+    const joinedReady = () => document.dispatchEvent(new Event('momento:joined-ready'));
     document.addEventListener('DOMContentLoaded', async () => {
       const code = new URLSearchParams(location.search).get('join');
       if (code) {
@@ -329,11 +331,11 @@
       try {
         const user = await Momento.sessionReady;
         // A visitor with an invite link or QR code: show the album and ask them to log in
-        if (!user && code) { guestJoin(code).catch(() => openJoin(code)); return; }
-        if (!user?.emailVerified) return;
+        if (!user && code) { joinedReady(); guestJoin(code).catch(() => openJoin(code)); return; }
+        if (!user?.emailVerified) { joinedReady(); return; }
         me = user.name || '';
-      } catch (err) { joined.textContent = err.message; return; }
-      loadJoined();
+      } catch (err) { joined.textContent = err.message; joinedReady(); return; }
+      loadJoined().finally(joinedReady);
       if (code) {
         try { localStorage.removeItem('momento-pending-join'); } catch {}
         submitInvite(code);

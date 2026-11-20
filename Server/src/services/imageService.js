@@ -67,6 +67,12 @@ async function embeddedJpeg(b) {
   return best && { jpeg: b.subarray(best.at), orientation: best.orientation };
 }
 
+// The 320px-wide "mini" picture shown in grids: from an upright, metadata-free picture (the preview), so it
+// carries no EXIF or GPS; WebP at quality 75, never enlarged
+export const MINI_WIDTH = 320;
+export const makeMini = (input) => sharp(input, { limitInputPixels: MAX_PIXELS }).autoOrient()
+  .resize({ width: MINI_WIDTH, withoutEnlargement: true }).webp({ quality: 75 }).toBuffer();
+
 // Validate the full image before preserving original bytes for downloads.
 // Generated previews apply orientation and discard private metadata.
 // The decoder detects the format from bytes, never the filename or client MIME (a RAW must also start
@@ -100,8 +106,10 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
     const preview = await output.toBuffer();
     // The thumbnail comes from the preview (already small and upright): much quicker than the original
     const thumbnail = await sharp(preview).resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 75 }).toBuffer();
+    // The mini (320px wide, same shape) for grids and strips, where the 600px thumbnail is far bigger than shown
+    const mini = await makeMini(preview);
     const mimeType = raw ? RAW_TYPES[extOf(name)] : TYPES[metadata.format] || (metadata.compression === 'av1' ? 'image/avif' : 'image/heif');
-    return { buffer, mimeType, size: buffer.length, thumbnail, preview, previewMimeType: TYPES[format], raw, ext: raw ? `.${extOf(name)}` : '' };
+    return { buffer, mimeType, size: buffer.length, thumbnail, mini, preview, previewMimeType: TYPES[format], raw, ext: raw ? `.${extOf(name)}` : '' };
   } catch {
     throw new HttpError(400, raw
       ? 'This RAW file could not be read. Try exporting it as JPEG and uploading again.'

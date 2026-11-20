@@ -30,6 +30,8 @@ const PREVIEW_PICS = 12;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
 const photoUrl = (id) => `${config.publicUrl}/api/photos/${id}`;
 const thumbnailUrl = (id) => `${photoUrl(id)}?size=thumb`;
+// The 320px grid picture, only for photos that have one (no miniUrl at all otherwise: the page uses the thumbnail)
+export const miniOf = (p) => (p.miniKey ? { miniUrl: `${photoUrl(p._id || p.id)}?size=mini` } : {});
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 
 // An album's life: 'upcoming' before the day, 'live' around the day itself and the day after
@@ -474,7 +476,7 @@ export async function show(req, res) {
     photos: photos.map((p) => {
       const mine = p.uploader?._id.equals(req.user._id);
       return {
-        id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
+        id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
         // Bookmarked: private, just yours (liked is its old name)
         bookmarked: (p.likes || []).some((id) => id.equals(req.user._id)), liked: (p.likes || []).some((id) => id.equals(req.user._id)),
         reactions: reactionCounts(p), reaction: myReaction(p, req.user._id),
@@ -601,7 +603,7 @@ export async function addPhotos(req, res) {
     let p;
     try { p = await Photo.create({ album: album._id, uploader: req.user._id, ...stored, hash, originalName: name }); }
     catch (err) { await deletePhotos([stored.storageKey]); throw err; }
-    saved.push({ i, photo: { id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), by: 'You', mine: true, at: p.createdAt } });
+    saved.push({ i, photo: { id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), by: 'You', mine: true, at: p.createdAt } });
   }
   // Two photos at a time: resizing one while the other is being stored keeps a big upload quick,
   // without holding many big files in the server's memory at once

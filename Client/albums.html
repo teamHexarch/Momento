@@ -1,7 +1,12 @@
 <!doctype html>
 <html lang="en" data-page="albums">
 <head>
-  <script src="assets/i18n.js"></script>
+  <script>
+    /* Language: English needs nothing more, so assets/i18n.js (73 KB) only loads, before the page draws, when
+       another language is chosen. (Settings always loads it: its language menu is built from it) */
+    window.Momento ||= {};   // (i18n.js used to be the first to make this; the page scripts expect it)
+    (() => { let l = 'en'; try { l = localStorage.getItem('momento-lang') || 'en'; } catch (e) {} l = new URLSearchParams(location.search).get('lang') || l; if (l !== 'en') document.write('<script src="assets/i18n.js"><\/script>'); })();
+  </script>
   <script>if (location.hash === "#join" || new URLSearchParams(location.search).has("join")) location.replace("events.html" + location.search + location.hash);</script>
   <script>
     // Embedded (albums.html?album=<id>&embed=1 inside another Momento page): only the album window shows,
@@ -18,7 +23,6 @@
     html.is-embed, html.is-embed body { background: transparent !important; }
     html.is-embed .bg, html.is-embed .grain, html.is-embed .header, html.is-embed .page-wrap, html.is-embed #intro { display: none !important; }
   </style>
-  <script src="assets/emoji.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -30,7 +34,7 @@
   <script src="assets/event.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
@@ -77,6 +81,28 @@
   <title>My albums | Momento</title>
   <meta name="description" content="Every Momento album you've joined or hosted, in one place.">
   <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <link rel="canonical" href="https://hexarch.org/albums.html">
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="My albums | Momento">
+  <meta property="og:description" content="Every Momento album you've joined or hosted, in one place.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta property="og:url" content="https://hexarch.org/albums.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="My albums | Momento">
+  <meta name="twitter:description" content="Every Momento album you've joined or hosted, in one place.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -321,6 +347,12 @@
     /* ---------- What's happening: what's waiting on you, and who just added what ---------- */
     .pulse { display: block; margin-bottom: var(--s5); }
     .pulse.is-quiet { display: none; }
+    /* Until the albums arrive, the to-do list and the album grid hold roughly their usual room (two to-do
+       rows, a screen of albums), so the page doesn't jump as they fill in and the footer starts out of view */
+    .todo-list .todo-ghost { min-height: 108px; padding: 0; box-sizing: border-box; opacity: .55; }
+    @media (max-width: 960px) { .todo-list .todo-ghost + .todo-ghost { display: none; } }
+    @media (max-width: 600px) { .todo-list .todo-ghost { min-height: 162px; } }
+    #years.is-loading { min-height: 100svh; }
     .pulse .panel { display: block; padding: 1.3rem 1.4rem 1.4rem; }
     .pulse .head { margin-bottom: 1rem; }
     .todo-list, .feed-list { display: grid; margin: 0; padding: 0; list-style: none; }
@@ -467,10 +499,12 @@
 
     /* An album: a cover in a glass frame, then its name, date and who's in it */
     .album {
-      display: block; width: 100%; height: 100%; padding: 0; border: none; background: none; text-align: left;
-      color: inherit; font: inherit; cursor: pointer; border-radius: 28px;
+      position: relative; display: block; width: 100%; height: 100%; text-align: left; color: inherit; cursor: pointer; border-radius: 28px;
     }
-    .album:focus-visible { outline: 2px solid var(--dusk); outline-offset: 5px; }
+    /* The open button covers the whole card; the bookmark (z-index 3) sits above it */
+    .album-hit { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: inherit; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .album-hit:focus { outline: none; }
+    .album:has(.album-hit:focus-visible) { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: 5px; }
     .frame {
       display: block; box-sizing: border-box; height: 100%; --radius: 28px; padding: 8px 8px 0; opacity: 0; translate: 0 14px;
       transition: opacity .6s ease, translate .8s var(--out), transform .4s var(--spring);
@@ -605,13 +639,13 @@
     /* The strip of photos: the one you're on stands taller with a light rim; the rest wait, dimmed */
     .vw-film {
       position: absolute; left: 0; right: 0; bottom: calc(max(1.1rem, env(safe-area-inset-bottom)) + 3.3rem); z-index: 3;
-      display: flex; gap: 6px; padding: .4rem calc(50% - .8rem); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; scroll-behavior: smooth; contain: layout paint;
+      display: flex; gap: 6px; padding: .4rem calc(50% - .8rem); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; contain: layout paint;
       -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
       transition: opacity .28s ease, transform .4s var(--out);
     }
     .vw-film::-webkit-scrollbar { display: none; }
     .vw-film:empty { display: none; }
-    .vw-film button { flex: none; width: 1.6rem; height: 2.1rem; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: rgba(255, 255, 255, .08); cursor: pointer; opacity: .5;
+    .vw-film button { flex: none; scroll-snap-align: center; scroll-snap-stop: normal; width: 1.6rem; height: 2.1rem; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: rgba(255, 255, 255, .08); cursor: pointer; opacity: .5;
       transition: opacity .3s ease, transform .4s var(--spring); -webkit-tap-highlight-color: transparent; }
     .vw-film img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: rgba(255, 255, 255, .06); }
     .vw-film button[aria-current="true"] { opacity: 1; transform: scale(1.16); box-shadow: 0 0 0 1.5px #F2EFF8, 0 6px 14px -6px rgba(0, 0, 0, .8); z-index: 1; }
@@ -652,7 +686,7 @@
     .viewer.is-bare .vw-foot { opacity: 0; transform: translateY(14px); }
     .viewer.is-bare .vw-foot > * { pointer-events: none; }
     .viewer.is-bare .vw-nav { opacity: 0; pointer-events: none; }
-    .vw-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: max(.9rem, env(safe-area-inset-top)) 1rem .9rem 1.4rem; background: linear-gradient(to bottom, rgba(9, 8, 13, .7), transparent); transition: opacity .25s ease; }
+    .vw-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: max(.9rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) .9rem max(1.4rem, env(safe-area-inset-left)); background: linear-gradient(to bottom, rgba(9, 8, 13, .7), transparent); transition: opacity .25s ease; }
     .vw-count { margin: 0; overflow: hidden; font-size: .95rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
     .vw-count small { margin-left: .55rem; font-size: .88rem; font-weight: 500; opacity: .75; }
     .vw-tools { display: flex; gap: .45rem; flex: none; }
@@ -695,7 +729,7 @@
     /* Phones and tablets swipe between photos: no arrow buttons over the picture */
     @media (hover: none), (pointer: coarse) { .vw-nav { display: none; } }
     @media (max-width: 600px) {
-      .vw-top { align-items: flex-start; padding: max(.75rem, env(safe-area-inset-top)) .75rem 1.6rem 1rem; }
+      .vw-top { align-items: flex-start; padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) 1.6rem max(1rem, env(safe-area-inset-left)); }
       .vw-count { padding-top: .55rem; font-size: .92rem; }
       .vw-count small { display: block; margin: .15rem 0 0; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; }
       .vw-stage img { max-height: calc(100dvh - 15rem); }
@@ -855,7 +889,7 @@
 
     /* Save: a bookmark for albums you want close. Saved albums sit with your bookmarked photos, under Bookmarked */
     .bookmark {
-      position: absolute; top: .8rem; right: .8rem; z-index: 3; display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 50%;
+      position: absolute; top: .8rem; right: .8rem; z-index: 3; margin: 0; padding: 0; border: 0; font: inherit; display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 50%;
       background: rgba(255,255,255,.84); color: #2E2C3A; box-shadow: 0 4px 14px -6px rgba(46,44,58,.5); cursor: pointer;
       transition: transform .35s var(--spring), background-color .2s ease, color .2s ease;
     }
@@ -1158,7 +1192,7 @@
       .album-card, .album-card.activity-card { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
       .bin-card { min-height: 0; }
       .activity-card .album-scroll { padding: 0 1rem 1.2rem; }
-      .ab-head { padding: max(1rem, env(safe-area-inset-top)) .8rem .7rem 1.1rem; }
+      .ab-head { padding: max(1rem, env(safe-area-inset-top)) max(.8rem, env(safe-area-inset-right)) .7rem max(1.1rem, env(safe-area-inset-left)); }
       .ab-title h2 { font-size: 1.3rem; }
       .ab-acts { gap: .25rem; }
       .ab-btn { padding: 0 .85rem; }
@@ -1431,7 +1465,7 @@
       <section class="pulse" aria-label="What's happening">
         <div class="todo panel" aria-labelledby="todoLabel">
           <div class="head"><span class="label glass" id="todoLabel">Waiting on you</span><span class="rule" aria-hidden="true"></span></div>
-          <ul class="todo-list" id="todo"></ul>
+          <ul class="todo-list" id="todo"><li class="todo-row todo-ghost" aria-hidden="true"></li><li class="todo-row todo-ghost" aria-hidden="true"></li></ul>
         </div>
       </section>
 
@@ -1443,7 +1477,7 @@
             <button class="tab" role="tab" type="button" data-filter="host" aria-selected="false">Hosting <small></small></button>
             <button class="tab" role="tab" type="button" data-filter="guest" aria-selected="false">Joined <small></small></button>
             <button class="tab" role="tab" type="button" data-filter="group" aria-selected="false">Groups <small></small></button>
-            <button class="tab" role="tab" type="button" data-filter="liked" aria-selected="false"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/></svg><span class="tab-label">Bookmarked</span></button>
+            <button class="tab" role="tab" type="button" data-filter="liked" aria-selected="false" title="Bookmarked"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/></svg><span class="tab-label">Bookmarked</span></button>
           </div>
           <div class="tools-end">
             <label class="search">
@@ -1454,7 +1488,7 @@
             <button class="tool-icon" type="button" id="binOpen" aria-label="Recently deleted" title="Recently deleted"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg><span class="tool-badge" id="binBadge" hidden>0</span></button>
           </div>
         </div>
-        <div id="years"></div>
+        <div id="years" class="is-loading"></div>
         <!-- Bookmarked: albums you saved, and photos you bookmarked, from all your albums (the filter is still called "liked" in the code) -->
         <div id="likedView" hidden>
           <section class="lk-block" id="lkAlbumsBlock" aria-labelledby="lkAlbumsTitle" hidden>
@@ -1653,6 +1687,8 @@
     <p class="vw-hint" id="vwHint">Click to zoom in. Double-click to react with a ❤️</p>
   </dialog>
 
+  <!-- The reaction emoji list: needed from here on, so it no longer holds up the first paint in <head> -->
+  <script src="assets/emoji.js"></script>
   <script>
     const still =matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
@@ -1717,6 +1753,14 @@
     const daysTo = (d) => Math.round((new Date(d + 'T12:00') - TODAY) / 864e5);
     const closesIn = (a) => daysTo(a.closes);
     const inDays = (n) => n <= 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days';
+    // Small pictures: when the server sends a 320px "mini" (miniUrl) beside the 600px thumbnail, the browser picks
+    // whichever suits the space (srcset); until then this is just the thumbnail, as before. sizes: how wide it shows
+    const GRID_SIZES = '(max-width: 699px) 34vw, (max-width: 999px) 20vw, 170px';
+    function smallImg(p, fallback, sizes = GRID_SIZES) {
+      const thumb = p.thumbnailUrl || fallback || p.url || '';
+      if (!p.miniUrl) return `src="${esc(thumb)}"`;
+      return `src="${esc(p.miniUrl)}" srcset="${esc(p.miniUrl)} 320w, ${esc(thumb)} 600w" sizes="${sizes}"`;
+    }
     const pic = (id, w = 600, h = Math.round(w * .8)) => (typeof id === 'string' ? id : `https://picsum.photos/id/${id}/${w}/${h}`);
     // The album's cover: the host's own image while it's upcoming, then its most loved photo (the server decides)
     const coverPic = (a) => a.cover?.thumbUrl || a.pics?.[0] || null;
@@ -1799,6 +1843,7 @@
 
     // ---- The archive: albums built once, then regrouped by year as filters change ----
     const yearsEl = document.getElementById('years');
+    setTimeout(() => yearsEl.classList.remove('is-loading'), 6000);   // never holds room for long if the albums can't load
     const cards = new Map(), years = new Map();
 
     const reveal = new IntersectionObserver((entries) => entries.forEach((e) => {
@@ -1824,11 +1869,14 @@
     }
 
     // A bookmark on the cover saves the album (it's a span, since a button can't sit inside the card's button)
-    const bookmarkHtml = (a) => `<span class="bookmark" role="button" tabindex="0" aria-pressed="${!!a.saved}" aria-label="${a.saved ? 'Remove' : 'Save'} ${esc(a.name)}" title="${a.saved ? 'Saved. Click to remove' : 'Save album'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/></svg></span>`;
+    const bookmarkHtml = (a) => `<button class="bookmark" type="button" aria-pressed="${!!a.saved}" aria-label="${a.saved ? 'Remove' : 'Save'} ${esc(a.name)}" title="${a.saved ? 'Saved. Click to remove' : 'Save album'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/></svg></button>`;
+    // A card is an <article>: one full-card button opens the album (it sits over the picture and text), and
+    // the bookmark is its own button above that. Never a button inside a button, for screen readers and keyboards
     function makeCard(a, n) {
-      const el = document.createElement('button');
-      el.className = 'album'; el.type = 'button'; el.dataset.id = a.id;
+      const el = document.createElement('article');
+      el.className = 'album'; el.dataset.id = a.id;
       el.innerHTML = `
+        <button class="album-hit" type="button" aria-label="Open ${esc(a.name)}"></button>
         <span class="frame glass">
           <span class="media">
             <span class="cover">${coverPic(a) ? `<img src="${esc(pic(coverPic(a), 1100, 620))}" alt="" loading="lazy">` : `<span class="cover-new" aria-hidden="true"><b>${esc((a.name.trim()[0] || '·').toUpperCase())}</b><small>No photos yet</small></span>`}
@@ -1842,11 +1890,8 @@
         </span>`;
       el.cover = el.querySelector('.cover');
       el.img = el.cover.querySelector('img');
-      el.addEventListener('click', () => openAlbum(a.id, 0, el.img));
-      const bookmark = el.querySelector('.bookmark');
-      const flip = (e) => { e.preventDefault(); e.stopPropagation(); toggleSave(a); };
-      bookmark.addEventListener('click', flip);
-      bookmark.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') flip(e); });
+      el.querySelector('.album-hit').addEventListener('click', () => openAlbum(a.id, 0, el.img));
+      el.querySelector('.bookmark').addEventListener('click', (e) => { e.stopPropagation(); toggleSave(a); });
       lightUp(el.querySelector('.frame'));
       return el;
     }
@@ -1999,7 +2044,7 @@
       el.className = 'lk-item';
       el.innerHTML = `
         <button class="lk-photo" type="button" aria-label="Open this photo in ${esc(p.albumName || 'its album')}">
-          <img src="${esc(p.thumbnailUrl || p.url || '')}" alt="" loading="lazy">
+          <img ${smallImg(p, '', '(max-width: 600px) 50vw, 240px')} alt="" loading="lazy" decoding="async">
           <span class="lk-cap"><b>${esc(p.albumName || 'Album')}</b>${p.by ? `<small>Photo by ${esc(p.by)}</small>` : ''}</span>
         </button>
         <button class="lk-heart" type="button" aria-label="Remove this photo’s bookmark" title="Remove bookmark">${MARK_ICON}</button>`;
@@ -2373,7 +2418,7 @@
       document.getElementById('albumLink').hidden = !isHost;
       document.getElementById('albumQr').hidden = !isHost;
       document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : '', a.group ? `Shared with ${a.group.name}` : ''].filter(Boolean).join(' · ');
-      thumbsEl.innerHTML = (a.photoItems || []).map((p, n) => `<button class="ab-tile" type="button" data-n="${n}" data-id="${esc(p.id)}" aria-label="Photo ${n + 1}${p.by ? ', added by ' + esc(p.by) : ''}"><img src="${esc(p.thumbnailUrl || pic(p.url, 400, 400))}" alt="" loading="lazy" decoding="async"><span class="ab-check" aria-hidden="true"></span></button>`).join('');
+      thumbsEl.innerHTML = (a.photoItems || []).map((p, n) => `<button class="ab-tile" type="button" data-n="${n}" data-id="${esc(p.id)}" aria-label="Photo ${n + 1}${p.by ? ', added by ' + esc(p.by) : ''}"><img ${smallImg(p, pic(p.url, 400, 400))} alt="" loading="lazy" decoding="async"><span class="ab-check" aria-hidden="true"></span></button>`).join('');
       albumSel.paint();
       if (M.focus && M.focus.album === a.id) applyFocus(M.focus); else clearFocus();
       document.getElementById('abSelect').hidden = empty;
@@ -2913,7 +2958,7 @@
           // The ones near where you are load straight away (no blank boxes while swiping); far ones as you get there
           const img = document.createElement('img'); img.alt = ''; img.decoding = 'async';
           if (Math.abs(n - at) > 20) img.loading = 'lazy';
-          img.src = thumbAt(n);
+          img.src = M.a?.photoItems?.[n]?.miniUrl || thumbAt(n);   // the strip pictures are 26-32px: the mini is plenty
           b.append(img);
           return b;
         }));
@@ -2930,11 +2975,35 @@
     vwFilm.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b || sliding) return;
+      filmUser = false;   // a tap picks the photo itself; the strip's glide to it isn't a swipe
       const n = +b.dataset.n;
       if (n === M.i) return;
       if (n === stepTarget(1)) slideTo(1); else if (n === stepTarget(-1)) slideTo(-1); else show(n);
       hideSwipeHint(true);
     });
+    // Swiping the strip itself: it snaps to one photo, and when it comes to rest that photo is shown. Only a
+    // scroll you made counts (the strip gliding along after a photo change is ours, and is ignored)
+    let filmTouch = false, filmUser = false, filmT = 0;
+    function filmSettle() {
+      clearTimeout(filmT);
+      if (filmTouch || !filmUser || !viewer.open || sliding || viewer._closing) return;
+      filmUser = false;
+      const mid = vwFilm.getBoundingClientRect().left + vwFilm.clientWidth / 2;
+      let best = null, bestD = Infinity;
+      for (const b of vwFilm.children) { const r = b.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid); if (d < bestD) { bestD = d; best = b; } }
+      if (!best) return;
+      const n = +best.dataset.n;
+      if (n !== M.i) { show(n); hideSwipeHint(true); navigator.vibrate?.(4); }
+      else paintFilm();   // back on the same photo: centre it exactly
+    }
+    vwFilm.addEventListener('touchstart', () => { filmTouch = true; filmUser = true; clearTimeout(filmT); }, { passive: true });
+    const filmLift = () => { filmTouch = false; clearTimeout(filmT); filmT = setTimeout(filmSettle, 180); };
+    vwFilm.addEventListener('touchend', filmLift, { passive: true });
+    vwFilm.addEventListener('touchcancel', filmLift, { passive: true });
+    vwFilm.addEventListener('wheel', () => { filmUser = true; }, { passive: true });
+    vwFilm.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') filmUser = true; });
+    vwFilm.addEventListener('scroll', () => { if (!filmUser) return; clearTimeout(filmT); filmT = setTimeout(filmSettle, 140); }, { passive: true });
+    vwFilm.addEventListener('scrollend', () => { if (filmUser) filmSettle(); });
     // "Swipe to see more photos": on the first few visits, until you've moved between photos once
     const vwSwipe = document.getElementById('vwSwipe');
     let swipeTimer = 0;
@@ -3045,9 +3114,17 @@
         runs.forEach((a) => a.cancel());
         sliding = false;
         vwLoad(false);
-      }, () => { sliding = false; });
+        runQueuedSlide();
+      }, () => { sliding = false; queuedSlide = 0; });
       navigator.vibrate?.(4);
       return true;
+    }
+    // A swipe made while the last slide was still running carries straight on once it lands
+    let queuedSlide = 0;
+    function runQueuedSlide() {
+      const d = queuedSlide;
+      queuedSlide = 0;
+      if (d && viewer.open && !viewer._closing && !sliding) slideTo(d);
     }
     // Back into place after a swipe that didn't go far enough (or ran into the first or last photo)
     function settleX(fromDx) {
@@ -3173,7 +3250,8 @@
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       // Zoomed with a finger: the browser scrolls the big photo; a tap that doesn't move fits it again
       if (zoomed) { g = { tapOnly: true, x: e.clientX, y: e.clientY, moved: false }; return; }
-      if (sliding) return;
+      // Mid-slide: the photos keep gliding, and a quick swipe now is remembered and runs the moment they land
+      if (sliding) { if (fingers.size === 1) g = { queue: true, x: e.clientX, y: e.clientY, dx: 0, lx: e.clientX, lt: performance.now(), vx: 0 }; return; }
       if (fingers.size === 2) {
         // A second finger: this is a pinch. Whatever the first finger was doing is put back
         if (g?.axis === 'x') settleX(g.dx); else if (g?.axis === 'y') settleY(g);
@@ -3198,6 +3276,7 @@
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (!g) return;
       if (g.tapOnly) { if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 8) g.moved = true; return; }
+      if (g.queue) { const t = performance.now(); g.vx = .7 * ((e.clientX - g.lx) / Math.max(1, t - g.lt)) + .3 * g.vx; g.lx = e.clientX; g.lt = t; g.dx = e.clientX - g.x; return; }
       if (g.pinch) {
         if (fingers.size < 2) return;
         const [a, b] = [...fingers.values()];
@@ -3222,7 +3301,8 @@
       if (g.axis === 'x') {
         // Past the first or last photo it gives a little, like a rubber band
         const can = stepTarget(dx < 0 ? 1 : -1) != null;
-        place(can ? dx : dx / (1 + Math.abs(dx) / 120) );
+        g.px = can ? dx : dx / (1 + Math.abs(dx) / 120);   // where the photo actually is: settling starts from here, not the finger
+        place(g.px);
       } else {
         // Pulling down: the photo follows (and shrinks a touch) as the dark thins out; up only gives a little
         const y = dy > 0 ? dy : dy / (1 + Math.abs(dy) / 80), p = clamp(Math.max(0, dy) / (innerHeight * .45), 0, 1);
@@ -3254,11 +3334,17 @@
       }
       g = null;
       if (s.tapOnly) { if (!s.moved && e.type === 'pointerup') unzoom(); return; }
-      if (e.type === 'pointercancel') { if (s.axis === 'x') settleX(s.dx); else if (s.axis === 'y') settleY(s); return; }
+      if (s.queue) {
+        if (e.type === 'pointerup' && (Math.abs(s.dx) > 30 || Math.abs(s.vx) > .3)) queuedSlide = s.dx < 0 ? 1 : -1;
+        if (!sliding) runQueuedSlide();
+        return;
+      }
+      const px = s.px ?? s.dx;
+      if (e.type === 'pointercancel') { if (s.axis === 'x') settleX(px); else if (s.axis === 'y') settleY(s); return; }
       if (s.axis === 'x') {
         const d = s.dx < 0 ? 1 : -1, flick = Math.abs(s.vx) > .35 && Math.sign(s.vx) === Math.sign(s.dx);
         if ((Math.abs(s.dx) > innerWidth * .22 || flick) && slideTo(d, s.dx, flick ? s.vx : 0)) return;
-        settleX(s.dx);
+        settleX(px);
         return;
       }
       if (s.axis === 'y') {
@@ -3314,7 +3400,7 @@
           { opacity: 0, transform: 'translateY(-60px) scale(.85)' },
         ], { duration: 900, easing: 'cubic-bezier(.22, 1, .36, 1)' });
     }
-    viewer.addEventListener('close', () => { clearTimeout(tapTimer); lastTap = null; g = null; pan = null; fingers.clear(); sliding = false; place(0); hideSwipeHint(false); });
+    viewer.addEventListener('close', () => { clearTimeout(tapTimer); lastTap = null; g = null; pan = null; fingers.clear(); sliding = false; queuedSlide = 0; place(0); hideSwipeHint(false); });
     // Only a real change of width (a phone turned round, a window resized) resets things: the keyboard
     // opening for the emoji search changes the height, and mustn't close anything
     let lastW = innerWidth;
@@ -3685,7 +3771,7 @@
       for (const p of list) (groups.get(p.albumId) || groups.set(p.albumId, { name: p.albumName, items: [] }).get(p.albumId)).items.push(p);
       const heads = !BIN.album && groups.size > 0;
       binBody.innerHTML = [...groups.values()].map((g) => `${heads ? `<h3 class="bin-album">${esc(g.name)}</h3>` : ''}
-        <div class="ab-grid">${g.items.map((p) => `<button class="ab-tile" type="button" data-id="${esc(p.id)}" aria-label="Photo from ${esc(g.name)}${deleted ? `, deleted ${binDays(p) === 1 ? 'today' : 'with ' + plural(binDays(p), 'day', 'days') + ' left'}` : ''}"><img src="${esc(p.thumbnailUrl || p.url)}" alt="" loading="lazy" decoding="async">${deleted ? `<span class="bin-days${binDays(p) <= 3 ? ' is-soon' : ''}">${plural(binDays(p), 'day', 'days')}</span>` : ''}<span class="ab-check" aria-hidden="true"></span></button>`).join('')}</div>`).join('');
+        <div class="ab-grid">${g.items.map((p) => `<button class="ab-tile" type="button" data-id="${esc(p.id)}" aria-label="Photo from ${esc(g.name)}${deleted ? `, deleted ${binDays(p) === 1 ? 'today' : 'with ' + plural(binDays(p), 'day', 'days') + ' left'}` : ''}"><img ${smallImg(p)} alt="" loading="lazy" decoding="async">${deleted ? `<span class="bin-days${binDays(p) <= 3 ? ' is-soon' : ''}">${plural(binDays(p), 'day', 'days')}</span>` : ''}<span class="ab-check" aria-hidden="true"></span></button>`).join('')}</div>`).join('');
       binEmpty.hidden = list.length > 0;
       binEmpty.querySelector('b').textContent = deleted ? 'Nothing here' : 'Nothing hidden';
       binEmpty.querySelector('span').textContent = deleted ? 'Photos you delete stay here for 30 days.' : 'Photos you hide from an album show up here.';
@@ -4086,6 +4172,7 @@
       ALBUMS.splice(0, ALBUMS.length, ...updated);
       ALBUMS.forEach((a, i) => cards.set(a.id, makeCard(a, i)));
       render(false); sumUp(false); renderLive();
+      yearsEl.classList.remove('is-loading');
       document.querySelector('#empty > span').textContent = ALBUMS.length ? 'Try another name or place.' : 'Your event and group albums will appear here.';
       renderFeed(result);
       renderTodo(result);
@@ -4590,6 +4677,10 @@
         if (!document.querySelector('dialog[open]')) cursorWas = root.classList.contains('has-cursor');
         root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
         d.showModal();
+        // Opening focuses the first control; on a short phone that could leave the window scrolled past its
+        // title. It always starts at the top, title and close button in view
+        const top = () => { d.scrollTop = 0; const c0 = card(); if (c0) c0.scrollTop = 0; };
+        top(); requestAnimationFrame(top);
         if (reduced.matches) return;
         const c = card(), from = getReturn(), shape = from && morph(from, c);
         c.animate(shape
@@ -5260,7 +5351,7 @@
           const el = document.createElement('span');
           el.className = 'tp';
           el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * .25, -14, 14) + TILT[k % TILT.length] * .5).toFixed(1)}deg`;
-          el.innerHTML = `<img src="https://picsum.photos/id/${IDS[k % IDS.length]}/96/96" alt="" loading="lazy" decoding="async" draggable="false">`;
+          el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
           host.append(el);
           prints.push({ el, l, on: false });
           k++;

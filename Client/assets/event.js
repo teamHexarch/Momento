@@ -215,7 +215,7 @@
     .ev-cam { background: #0b0a10; color: #fff; }
     .ev-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .ev-cam.is-front video { transform: scaleX(-1); }
-    .ev-cam-top { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: 16px; right: 4.5rem; z-index: 2; }
+    .ev-cam-top { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: 4.5rem; z-index: 2; }
     .ev-cam-top h2 { margin: .35rem 0 0; font-size: 1.25rem; font-weight: 750; letter-spacing: -.03em; }
     .ev-cam-top p { margin: .25rem 0 0; color: rgba(255, 255, 255, .78); font-size: .88rem; line-height: 1.45; }
     .ev-cam-top p.is-error { color: #ffb4a8; }

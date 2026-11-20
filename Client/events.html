@@ -2,11 +2,16 @@
 <html lang="en" data-page="social">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
-  <script src="assets/i18n.js"></script>
+  <script>
+    /* Language: English needs nothing more, so assets/i18n.js (73 KB) only loads, before the page draws, when
+       another language is chosen. (Settings always loads it: its language menu is built from it) */
+    window.Momento ||= {};   // (i18n.js used to be the first to make this; the page scripts expect it)
+    (() => { let l = 'en'; try { l = localStorage.getItem('momento-lang') || 'en'; } catch (e) {} l = new URLSearchParams(location.search).get('lang') || l; if (l !== 'en') document.write('<script src="assets/i18n.js"><\/script>'); })();
+  </script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -64,6 +69,28 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous">
   <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js" integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous" defer></script>
   <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <link rel="canonical" href="https://hexarch.org/events.html">
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Join the album on Momento">
+  <meta property="og:description" content="You’re invited to share photos. Open the link to see the album and add yours. No sign-up needed.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta property="og:url" content="https://hexarch.org/events.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Join the album on Momento">
+  <meta name="twitter:description" content="You’re invited to share photos. Open the link to see the album and add yours. No sign-up needed.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -247,6 +274,23 @@
     /* Until the first scan, a soft lavender ring breathes out from the scan button (transform + opacity only) */
     .ev-scanbar.is-fresh .ev-go-wrap::before { content: ""; position: absolute; inset: 0; border-radius: 100px; border: 2px solid rgba(184, 174, 245, .85); box-shadow: 0 0 22px 2px rgba(184, 174, 245, .45); opacity: 0; pointer-events: none; animation: ev-nudge 2.6s cubic-bezier(.2, .7, .3, 1) infinite; }
     @keyframes ev-nudge { 0% { transform: scale(1); opacity: .9; } 70%, 100% { transform: scale(var(--nx, 1.14), var(--ny, 1.5)); opacity: 0; } }
+    /* While a scan runs the button stays itself (never the dashed "unavailable" look): a band of light sweeps
+       across it and rings pulse out from it, quicker than the first-visit nudge (transform + opacity only) */
+    .ev-go.is-scanning { cursor: progress; --press: 1; }
+    .ev-go.is-scanning::after { content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(100deg, transparent 20%, rgba(184, 174, 245, .55) 50%, transparent 80%); transform: translateX(-110%); animation: ev-sweep 1.3s cubic-bezier(.45, 0, .25, 1) infinite; }
+    @keyframes ev-sweep { to { transform: translateX(110%); } }
+    .ev-go-wrap.is-scanning::before, .ev-go-wrap.is-scanning::after { content: ""; position: absolute; inset: 0; border-radius: 100px; border: 2px solid rgba(184, 174, 245, .9); box-shadow: 0 0 18px 1px rgba(184, 174, 245, .45); opacity: 0; pointer-events: none; animation: ev-nudge 1.5s cubic-bezier(.2, .7, .3, 1) infinite; }
+    .ev-go-wrap.is-scanning::after { animation-delay: .75s; }
+    .ev-go-dot { display: none; }
+    .ev-go.is-scanning .ev-go-dot { position: relative; z-index: 1; display: inline-block; flex: none; width: .55rem; height: .55rem; margin-right: .55rem; border-radius: 50%; background: currentColor; animation: ev-blip 1s ease-in-out infinite; }
+    @keyframes ev-blip { 0%, 100% { transform: scale(.6); opacity: .55; } 50% { transform: scale(1); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      .ev-go.is-scanning::after { animation: none; transform: none; opacity: .35; }
+      .ev-go-wrap.is-scanning::before { animation: none; opacity: .7; }
+      .ev-go-wrap.is-scanning::after { display: none; }
+      .ev-go.is-scanning .ev-go-dot { animation: none; }
+    }
     /* How far to look: five equal chips, with one glass pill that slides under the chosen one (transform only).
        (Not called .ev-range: assets/event.js styles that name for its slider.) */
     .ev-reach { --i: 1; position: relative; isolation: isolate; flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 3rem; margin: 0; padding: 0; border-radius: 100px; }
@@ -324,7 +368,7 @@
     .ev-zoom [data-back]:hover svg { transform: scale(1.12); }
     /* Map credits: a small glass pill (the "i" opens them) */
     /* Imagery credits: small print in the corner, outside the globe's faded edge so it always reads */
-    .ev-credit { position: absolute; right: .4rem; bottom: 0; z-index: 3; max-width: calc(100% - .8rem); margin: 0; color: var(--stone); font: 500 9.5px/1.4 var(--font-main); text-align: right; }
+    .ev-credit { position: absolute; right: .4rem; bottom: 0; z-index: 3; max-width: calc(100% - .8rem); margin: 0; color: var(--stone); font: 500 11px/1.4 var(--font-main); text-align: right; }
     .ev-credit a { color: inherit; text-decoration: none; border-radius: 4px; }
     .ev-credit a:hover { color: var(--dusk); text-decoration: underline; }
     .ev-credit a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
@@ -597,6 +641,11 @@
     .gr-empty h3 { margin: 0 0 .5rem; font-size: 1.5rem; letter-spacing: -.03em; }
     .gr-empty p { margin: 0 0 1.3rem; color: var(--slate); line-height: 1.6; }
     .gr-loading { min-height: 12rem; opacity: .55; }
+    /* While the groups and your albums load, the sections below the heading wait out of sight and then
+       appear together, so "Needs you" never arrives late and pushes Groups and Events down the page. The
+       groups' loading panel holds the place meanwhile. (Never longer than 2.5s: see "Settling" in the script) */
+    .page.is-settling :is(#soNeed, #groups, #events) { visibility: hidden; }
+    .page.is-settling #groups .gr-loading { visibility: visible; }
 
     :root[data-theme="dark"] .gr-status.is-error { color: #F0A3A3; }
     :root[data-theme="dark"] .grc-faces .grc-face { box-shadow: 0 0 0 2.5px rgba(22, 20, 32, .95), 0 6px 14px -8px rgba(0, 0, 0, .6); }
@@ -996,7 +1045,8 @@
   </header>
 
   <div class="page-wrap" id="pageWrap">
-    <main class="page">
+    <noscript><style>.page.is-settling :is(#soNeed, #groups, #events) { visibility: visible; }</style></noscript>
+    <main class="page is-settling">
 
       <section class="so-head">
         <span class="mask"><h1 class="so-title ink rise" data-text="Social">Social</h1></span>
@@ -1421,7 +1471,7 @@
       const markers = new Map();   // event id → its print on the globe
       const box = document.querySelector('.ev-mapbox');
       const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
-      const NIGHT_IMG = 'assets/globe/earth-night.jpg';
+      const NIGHT_IMG = 'assets/globe/earth-night.webp';   // 216 KB (the .jpg beside it, 715 KB, is the fallback)
       const rad = Math.PI / 180;
       const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
       const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -1454,7 +1504,7 @@
         const im = new Image();
         im.decoding = 'async';
         im.onload = () => ok(im);
-        im.onerror = no;
+        im.onerror = () => { if (im.src.endsWith('.jpg')) no(); else im.src = NIGHT_IMG.replace(/\.webp$/, '.jpg'); };
         im.src = NIGHT_IMG;
       }));
       function nightTiles() {
@@ -1969,7 +2019,19 @@
           },
         };
       }
-      let scanning = false;
+      let scanning = false, locating = false, busyLooks = 0;
+      // The Scan button shows a scan is running (a sweep of light, rings pulsing out) instead of going flat and
+      // dashed like a disabled button. It stays pressable-looking but a second press is ignored while busy
+      function scanBusy(on) {
+        const b = document.getElementById('evLocate');
+        if (!b) return;
+        busyLooks = Math.max(0, busyLooks + (on ? 1 : -1));
+        const busy = busyLooks > 0;
+        if (busy && !b.querySelector('.ev-go-dot')) { const dot = document.createElement('i'); dot.className = 'ev-go-dot'; dot.setAttribute('aria-hidden', 'true'); b.prepend(dot); }
+        b.classList.toggle('is-scanning', busy);
+        b.parentElement?.classList.toggle('is-scanning', busy);
+        if (busy) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
+      }
       async function look(at, label, radius = rangeM, { quiet = false } = {}) {
         document.querySelector('.ev-scanbar')?.classList.remove('is-fresh');   // the first scan has happened: stop nudging
         mapScan.hidden = true;
@@ -1982,7 +2044,9 @@
           listMsg(`Scanning ${scanLabel()} around ${label}…`, 'Looking for public events happening nearby.', { scanning: true });
         }
         const fx = quiet ? null : scanFx(at, radius);
-        const stopFx = () => fx?.stop();
+        if (!quiet) scanBusy(true);
+        let unbusy = !quiet;
+        const stopFx = () => { fx?.stop(); if (unbusy) { unbusy = false; scanBusy(false); } };
         let r;
         try {
           [r] = await Promise.all([
@@ -2344,8 +2408,8 @@
       }
 
       async function useMyLocation() {
-        if (locBtn.disabled) return;
-        locBtn.disabled = true;
+        if (locating) return;
+        locating = true; scanBusy(true);
         say('Finding you…');
         listMsg('Scanning for events near you…', `Checking for public events within ${fmtRange(rangeM)}.`, { scanning: true });
         try {
@@ -2359,7 +2423,7 @@
           stopFollowing();
           locationHelp(err);
         }
-        finally { locBtn.disabled = false; }
+        finally { locating = false; scanBusy(false); }
       }
       locBtn.addEventListener('click', useMyLocation);
 
@@ -2886,6 +2950,27 @@
       });
     })();
 
+    // ---- Settling: the sections appear once the groups and your albums have both arrived ----
+    // Both fill "Needs you" at the top, at different moments; showing the sections only when both are in
+    // keeps the page from jumping. A slow or failed load never holds them back for more than 2.5s
+    (() => {
+      const page = document.querySelector('main.page'), body = document.getElementById('grBody');
+      let groups = !body?.hasAttribute('aria-busy'), joined = !document.querySelector('script[src*="event-albums.js"]'), done = false;
+      const reveal = () => {
+        if (done) return;
+        done = true;
+        page.classList.remove('is-settling');
+        if (still) return;
+        for (const el of page.querySelectorAll('#soNeed:not([hidden]), #groups, #events')) el.animate({ opacity: [0, 1] }, { duration: 320, easing: 'ease-out' });
+      };
+      const check = () => { if (groups && joined) reveal(); };
+      if (body) new MutationObserver(() => { if (!body.hasAttribute('aria-busy')) { groups = true; check(); } }).observe(body, { attributes: true, attributeFilter: ['aria-busy'] });
+      document.addEventListener('momento:joined-ready', () => { joined = true; check(); }, { once: true });
+      // A link to a part of the page (#events, #needs) shouldn't wait on the rest
+      setTimeout(reveal, /^#(events|join|alerts)/.test(location.hash) ? 0 : 2500);
+      check();
+    })();
+
     // ---- Social: one page, read top to bottom ----
     // Links that point at a part of it scroll there: #groups, or #events (and #alerts, #join, ?join=, ?event=,
     // which open what they name). "Needs you" only shows while something is waiting for an answer.
@@ -3092,6 +3177,10 @@
         if (!document.querySelector('dialog[open]')) cursorWas = root.classList.contains('has-cursor');
         root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
         d.showModal();
+        // Opening focuses the first control; on a short phone that could leave the window scrolled past its
+        // title. It always starts at the top, title and close button in view
+        const top = () => { d.scrollTop = 0; const c0 = card(); if (c0) c0.scrollTop = 0; };
+        top(); requestAnimationFrame(top);
         if (reduced.matches) return;
         const c = card(), from = getReturn(), shape = from && morph(from, c);
         c.animate(shape
@@ -3796,7 +3885,7 @@
           const el = document.createElement('span');
           el.className = 'tp';
           el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * .25, -14, 14) + TILT[k % TILT.length] * .5).toFixed(1)}deg`;
-          el.innerHTML = `<img src="https://picsum.photos/id/${IDS[k % IDS.length]}/96/96" alt="" loading="lazy" decoding="async" draggable="false">`;
+          el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
           host.append(el);
           prints.push({ el, l, on: false });
           k++;

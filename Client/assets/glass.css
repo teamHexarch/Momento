@@ -1230,3 +1230,35 @@ dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) borde
   :is(.nav-item, .nav-caret, .tab, .acct-seg button, .todo-act)::before { content: ""; position: absolute; inset: -6px 0; }
   :is(.sw, .s-sw, .acct-sw)[role="switch"]::before { content: ""; position: absolute; inset: -8px -4px; }
 }
+
+/* ---------- An open window holds the page still behind it ----------
+   On every device (a mouse wheel over the dark backdrop used to scroll the page on desktop). The scrollbar's
+   space is kept, so nothing shifts sideways when the window opens. On phones the notifications panel covers
+   the screen too, so it holds the page the same way */
+html:has(dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
+@media (max-width: 600px) { html:has(.inbox-pop.is-open) { overflow: hidden; } }
+
+/* ---------- Keyboard focus on the search boxes and the Social map pins ----------
+   The field itself draws no outline (its pill is the field), so the pill takes the ring, with a halo that
+   shows on any glass. Map pins are round photos: the ring follows their circle */
+:is(.search, .ev-search):has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 5px var(--focus-halo) !important; }
+.ev-pin:focus-visible { outline: 3px solid var(--focus-ring) !important; outline-offset: 3px; }
+
+/* ---------- Notched phones (viewport-fit=cover on every page) ----------
+   The page may now run under the notch and the home bar, so anything pinned to an edge keeps clear of
+   them. In Safari held upright the insets are 0 and nothing moves; they matter held sideways (the notch is
+   at a side) and when Momento runs from the home screen. The page's own side margins stay as designed,
+   with the inset added only where it is bigger */
+html body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+html .header { top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); width: auto; }
+
+/* ---------- Very wide screens ----------
+   Past 1700px the type grows gently with the window (16px → 18px at 2560px) and the content column widens
+   with it (about 1320px at 1920, 1440px at 2560), so a big monitor isn't mostly empty margin around small text.
+   Everything sized in rem follows; nothing changes below 1700px */
+@media (min-width: 1700px) {
+  html { font-size: calc(12.05px + .2326vw); }
+  html body .page { width: min(80rem, 92%); }
+  html body .site-foot { width: min(78.5rem, 100% - 3rem); }
+  html body :is(.hiw-head, .hiw-steps, .divider, .feat-list, .zone-panel, .quality-panel) { width: min(78.5rem, 100%); }
+}

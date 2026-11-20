@@ -156,7 +156,7 @@
     for (let i = 0; i < total && out.length < Math.min(a.photos, 60); i++) {
       if (gone.has(i) || binned.has(i)) continue;
       const mine = i < mineUpTo, n = salt(a) + i, so = socialOf(a, i, mine);
-      out.push({ id: `${a.id}-p${i}`, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), downloadUrl: picsum(n, 1200, 750),
+      out.push({ id: `${a.id}-p${i}`, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), miniUrl: picsum(n, 320, 256), downloadUrl: picsum(n, 1200, 750),
         by: mine ? 'You' : NAMES[(i + 1) % NAMES.length], mine, at: new Date(Date.now() - i * 37 * 60000).toISOString(),
         likes: so.likes, liked: so.liked, bookmarked: so.bookmarked ?? !!so.liked, reactions: so.reactions, reaction: so.reaction });
     }
@@ -606,7 +606,7 @@
     const whose = (id) => { const m = /^(.+)-p(\d+)$/.exec(String(id)); const a = m && state.albums.find((x) => x.id === m[1]); return a ? { a, i: Number(m[2]) } : null; };
     const binRow = (a, t) => {
       const n = salt(a) + t.i;
-      return { id: `${a.id}-p${t.i}`, albumId: a.id, albumName: a.name, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), downloadUrl: picsum(n, 1200, 750),
+      return { id: `${a.id}-p${t.i}`, albumId: a.id, albumName: a.name, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), miniUrl: picsum(n, 320, 256), downloadUrl: picsum(n, 1200, 750),
         deletedAt: new Date(t.at).toISOString(), purgeAt: new Date(t.at + KEEP_DAYS * DAY).toISOString() };
     };
     if (path === '/api/trash' && method === 'GET') {

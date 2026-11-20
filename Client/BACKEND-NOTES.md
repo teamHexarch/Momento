@@ -59,3 +59,89 @@ The front end for these is done; each needs a matching change in `Server/`.
   (search `me/export`) and in `assets/devpreview.js`.
 - **My albums before the email is confirmed.** The page no longer asks for `GET /api/albums` until the email is
   confirmed, so those 403s stop. No server change needed.
+
+## Backend to-do from the front-end audit (20 November 2026)
+
+Two tasks. Task 1 is required, task 2 is optional. The site keeps working as it does today until these ship.
+
+### Task 1 (required): add a small "mini" thumbnail to every photo
+
+Why:
+- Grids show the 600px thumbnail at only 26–170px wide.
+- A 60-photo album downloads 3–4 MB of thumbnails; with minis it's under 1 MB.
+
+Make the mini:
+- Make it wherever the 600px thumbnail is made today, from the same original.
+- 320px wide, height to keep the photo's shape (no crop).
+- WebP, quality about 75.
+- Apply orientation, strip EXIF (no GPS in the file).
+- Store it next to the thumbnail, with the same access rules.
+
+Backfill:
+- Run a one-off job to make minis for all existing photos.
+- Include photos in the bin and hidden photos.
+
+Send it:
+- Add `miniUrl` to every photo object that already has `thumbnailUrl`, in:
+  - `GET /api/albums/:id` (`photos[]`)
+  - `GET /api/photos/bookmarked`
+  - `GET /api/photos/liked`
+  - `GET /api/trash`
+  - `GET /api/hidden`
+- No mini yet for a photo? Leave `miniUrl` out. Don't send `null` or `""`.
+- Example: `{ "id": "p_123", "thumbnailUrl": "…?size=thumb", "miniUrl": "…?size=mini", … }`
+
+Caching:
+- Same cache headers as the thumbnail.
+- If the URL changes when the image changes: `Cache-Control: public, max-age=31536000, immutable`.
+
+Good to know:
+- The front end is already done: it uses `miniUrl` when present and falls back to `thumbnailUrl` when not.
+- `assets/devpreview.js` (sample data) already sends `miniUrl`, so you can check the shape there.
+- 320px, not 200px: a 2× phone screen needs about 250–340px for these tiles; 200px would look blurry and the
+  browser would skip it.
+
+Check it worked:
+- Open an album on a phone with the network panel open.
+- Grid pictures should be the mini files, about 15–35 KB each (not 60–120 KB).
+
+### Task 2 (optional): invite links show the album's own name and cover
+
+Why:
+- Pasting an invite link in WhatsApp or iMessage shows one generic Momento card today.
+- The site is static (GitHub Pages) and those apps don't run JavaScript, so only the API can fill in the album.
+
+Build one public route:
+- `GET https://api.hexarch.org/s/:code` (works for album codes and group codes).
+- Returns a small HTML page (`Content-Type: text/html; charset=utf-8`).
+
+The page must have:
+- `og:title`: "Join {album name} on Momento"
+- `og:description`: e.g. "48 people are sharing photos. Open the link to see the album and add yours."
+- `og:image`: the album cover, 1200×630 JPEG, under 300 KB (WhatsApp ignores bigger images)
+- `og:image:width` 1200, `og:image:height` 630
+- `og:url`: `https://api.hexarch.org/s/CODE`
+- `og:site_name`: Momento, `og:type`: website
+- `twitter:card`: `summary_large_image`
+- A redirect: `<meta http-equiv="refresh" content="0; url=https://hexarch.org/events.html?join=CODE">`
+  (groups: `events.html?group=CODE`), plus a normal link to the same address.
+
+Rules:
+- Private album, or a wrong / expired / revoked code: use the generic card
+  (`https://hexarch.org/assets/og-momento.jpg`, title "Momento"), and still redirect.
+- Never put a private album's name or photos in the tags.
+- Cover = the host's chosen cover, else the most-liked photo.
+- Cache the cover image per album; remake it when the cover changes.
+- Escape the album name in the HTML.
+- Cache the response for about 10 minutes.
+
+When it's live:
+- Tell the front end. The share and copy-link buttons will switch to `https://api.hexarch.org/s/CODE` links.
+- QR codes can stay as they are.
+
+### Nothing else needs the server
+
+- All other audit fixes are front end only.
+- One check: if the Momento server also serves the site locally (port 4000), it should send
+  `manifest.webmanifest` as `application/manifest+json` and `.webp` as `image/webp`.
+  Express's static middleware already does this.

@@ -18,6 +18,8 @@ const types = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 };
 
 http.createServer((req, res) => {

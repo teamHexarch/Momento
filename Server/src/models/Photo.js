@@ -6,6 +6,8 @@ const photoSchema = new mongoose.Schema({
   // Path inside the upload folder, e.g. "<albumId>/<random>.jpg"
   storageKey: { type: String, required: true },
   thumbnailKey: String,
+  // The 320px-wide mini for grids (photos from before minis get one from scripts/makeMinis.js)
+  miniKey: String,
   previewKey: String,
   previewMimeType: String,
   originalName: { type: String, default: '' },

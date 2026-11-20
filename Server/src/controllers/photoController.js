@@ -33,7 +33,12 @@ export async function file(req, res) {
   // Seeing a photo means its preview (up to 2500 px, a few hundred KB) unless ?size=original is asked for:
   // the original can be tens of MB (or a camera RAW no browser can show), which made the viewer slow.
   // "Download" (/download) always gives the original.
-  const thumbnail = req.query.size === 'thumb' && await ensureThumbnail(photo);
+  // ?size=mini: the 320px grid picture (a photo without one yet gets its thumbnail instead)
+  if (req.query.size === 'mini' && photo.miniKey) {
+    if (!(await sendPhoto(res, photo.miniKey, 'image/webp'))) throw new HttpError(404, 'Photo file is missing.');
+    return;
+  }
+  const thumbnail = (req.query.size === 'thumb' || req.query.size === 'mini') && await ensureThumbnail(photo);
   const preview = req.query.size !== 'original' && photo.previewKey;
   if (!(await sendPhoto(res, thumbnail || preview || photo.storageKey, thumbnail ? 'image/webp' : preview ? photo.previewMimeType : photo.mimeType))) throw new HttpError(404, 'Photo file is missing.');
 }
@@ -150,12 +155,12 @@ export async function reactions(req, res) {
 export async function liked(req, res) {
   const { albumIdsOf } = await import('./albumController.js');
   const ids = await albumIdsOf(req.user._id);
-  const photos = await Photo.find({ 'likeLog.user': req.user._id, album: { $in: ids }, deletedAt: null }, 'album uploader likeLog')
+  const photos = await Photo.find({ 'likeLog.user': req.user._id, album: { $in: ids }, deletedAt: null }, 'album uploader likeLog miniKey')
     .populate('album', 'name').populate('uploader', 'name').limit(500);
   const url = (id) => `${config.publicUrl}/api/photos/${id}`;
   const out = photos.filter((p) => p.album).map((p) => ({
     id: p.id, albumId: p.album.id, albumName: p.album.name,
-    url: url(p.id), thumbnailUrl: `${url(p.id)}?size=thumb`,
+    url: url(p.id), thumbnailUrl: `${url(p.id)}?size=thumb`, ...(p.miniKey && { miniUrl: `${url(p.id)}?size=mini` }),
     by: p.uploader?._id.equals(req.user._id) ? 'You' : firstName(p.uploader?.name),
     bookmarkedAt: p.likeLog.find((l) => l.user?.equals(req.user._id))?.at,
   })).sort((a, b) => (b.bookmarkedAt || 0) - (a.bookmarkedAt || 0));

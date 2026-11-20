@@ -2,13 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Privacy policy | Momento</title>
   <meta name="description" content="What Momento collects, why, where it's kept and how to have it deleted.">
   <link rel="icon" href="assets/momento-icon.png">
-  <script src="assets/i18n.js"></script>
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <link rel="canonical" href="https://hexarch.org/privacy.html">
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Privacy policy | Momento">
+  <meta property="og:description" content="What Momento collects, why, where it's kept and how to have it deleted.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta property="og:url" content="https://hexarch.org/privacy.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Privacy policy | Momento">
+  <meta name="twitter:description" content="What Momento collects, why, where it's kept and how to have it deleted.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <script>
+    /* Language: English needs nothing more, so assets/i18n.js (73 KB) only loads, before the page draws, when
+       another language is chosen. (Settings always loads it: its language menu is built from it) */
+    window.Momento ||= {};   // (i18n.js used to be the first to make this; the page scripts expect it)
+    (() => { let l = 'en'; try { l = localStorage.getItem('momento-lang') || 'en'; } catch (e) {} l = new URLSearchParams(location.search).get('lang') || l; if (l !== 'en') document.write('<script src="assets/i18n.js"><\/script>'); })();
+  </script>
   <script>
     // Same theme choice as the rest of the site
     (() => {
@@ -53,6 +80,7 @@
     th { color: var(--slate); font-weight: 600; font-size: .85rem; }
     td:first-child { font-weight: 600; white-space: nowrap; padding-right: 1rem; }
     footer { max-width: 46rem; margin: 0 auto; padding: 1.5rem 16px 3rem; border-top: 1px solid var(--line); color: var(--slate); font-size: .9rem; }
+    @media (pointer: coarse) { footer a { display: inline-block; padding-block: 12px; } }   /* 44px rows for a thumb */
     @media (max-width: 560px) {
       table, tbody, tr, td { display: block; }
       thead { display: none; }

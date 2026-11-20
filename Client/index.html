@@ -1,7 +1,12 @@
 <!doctype html>
 <html lang="en" data-page="home">
 <head>
-  <script src="assets/i18n.js"></script>
+  <script>
+    /* Language: English needs nothing more, so assets/i18n.js (73 KB) only loads, before the page draws, when
+       another language is chosen. (Settings always loads it: its language menu is built from it) */
+    window.Momento ||= {};   // (i18n.js used to be the first to make this; the page scripts expect it)
+    (() => { let l = 'en'; try { l = localStorage.getItem('momento-lang') || 'en'; } catch (e) {} l = new URLSearchParams(location.search).get('lang') || l; if (l !== 'en') document.write('<script src="assets/i18n.js"><\/script>'); })();
+  </script>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
   <script src="assets/inbox.js" defer></script>
@@ -13,7 +18,7 @@
   <script src="assets/event.js" defer></script>
   <style>[hidden] { display: none !important; }</style>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
@@ -60,6 +65,28 @@
   <title>Momento | Moments, kept.</title>
   <meta name="description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
   <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <link rel="canonical" href="https://hexarch.org/">
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Momento: every photo from your event, in one album">
+  <meta property="og:description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta property="og:url" content="https://hexarch.org/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Momento: every photo from your event, in one album">
+  <meta name="twitter:description" content="Every photo from your event, in one shared album. Guests scan one code to add their photos. No sign-up needed.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -266,6 +293,7 @@
     .btn-light:hover { color: var(--paper); }
 
     /* ---------- Album story ---------- */
+    .home-main { display: contents; }
     .story { position: relative; height: 800vh; }
     .stage {
       position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden;
@@ -812,7 +840,7 @@
     }
     .hiw-card.is-on .hiw-art { scale: 1.02; }
     .hiw-card.is-on .hiw-art::after { opacity: 1; }
-    .art-chip { position: absolute; z-index: 3; left: 10px; top: 10px; padding: 4px 9px; border-radius: 10px; background: rgba(255,255,255,.92); box-shadow: 0 4px 10px -6px rgba(46,44,58,.4); font-size: 10.5px; font-weight: 650; white-space: nowrap; }
+    .art-chip { position: absolute; z-index: 3; left: 10px; top: 10px; padding: 4px 9px; border-radius: 10px; background: rgba(255,255,255,.92); box-shadow: 0 4px 10px -6px rgba(46,44,58,.4); font-size: 11.5px; font-weight: 650; white-space: nowrap; }
 
     /* 01: the map, with a sharing zone being dragged around the venue */
     .art-map { background: var(--fog); }
@@ -825,7 +853,7 @@
     .art-zone::after { content: ""; position: absolute; right: -6px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--copper), 0 3px 8px rgba(46,44,58,.3); }
     @keyframes art-zone { 0%, 100% { scale: .5; } 45%, 80% { scale: 1; } }
     .art-pin { position: absolute; z-index: 2; left: 50%; top: 56%; width: 26px; height: 26px; margin: -24px 0 0 -13px; filter: drop-shadow(0 3px 4px rgba(46,44,58,.3)); }
-    .art-tag { position: absolute; z-index: 3; right: 10px; bottom: 10px; padding: 4px 9px; border-radius: 10px; background: rgba(255,255,255,.92); font-weight: 700; font-size: 10.5px; }
+    .art-tag { position: absolute; z-index: 3; right: 10px; bottom: 10px; padding: 4px 9px; border-radius: 10px; background: rgba(255,255,255,.92); font-weight: 700; font-size: 11.5px; }
 
     /* 02: the QR code being scanned, and the six-letter code beside it */
     .art-code { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 12px; }
@@ -1433,7 +1461,9 @@
   <div class="page-wrap" id="pageWrap">
     <div class="trail" id="trail" data-trail data-avoid=".stage, .divider, .site-foot" aria-hidden="true"></div>
 
-    <main class="story" id="home">
+    <!-- The whole page, from the hero to the questions, is the main landmark (display: contents keeps the layout) -->
+    <main class="home-main">
+    <div class="story" id="home">
       <div class="stage" id="stage">
         <div class="floaters floaters-back" aria-hidden="true"></div>
 
@@ -1477,7 +1507,7 @@
 
         <div class="floaters floaters-front" aria-hidden="true"></div>
       </div>
-    </main>
+    </div>
 
     <!-- How it works: five cards, three to a line, each with a small live scene; lit up one after another -->
     <section class="hiw" id="how-it-works">
@@ -1667,9 +1697,10 @@
           </div>
         </div>
       </div>
-
-      <footer class="site-foot" data-site-foot></footer>
     </section>
+    </main>
+
+    <footer class="site-foot" data-site-foot></footer>
   </div>
 
   <script>
@@ -1688,7 +1719,14 @@
     // for real files, e.g. PHOTO_SRC[1] = 'photos/01.jpg'.
     const PICSUM = [0, 91, 1027, 64, 1011, 1040, 1035, 1005, 1015, 1012, 177, 1047, 1062, 1025];
     const PHOTO_SRC = {};
-    const photo = (n, w = 400, h = w) => PHOTO_SRC[n] || `https://picsum.photos/id/${PICSUM[n]}/${w}/${h}`;
+    // The demo photos are kept in assets/photos (no third-party request on a visit): square WebP copies at a few
+    // sizes, and the nearest one at least as big as asked for is used (the 36px one is the 'chat app' copy)
+    const photo = (n, w = 400, h = w) => {
+      if (PHOTO_SRC[n]) return PHOTO_SRC[n];
+      const id = PICSUM[n], m = Math.max(w, h);
+      const size = m <= 40 && id === 1015 ? 36 : m <= 96 ? 96 : m <= 480 || id !== 1015 ? 480 : 1200;
+      return `assets/photos/${id}-${size}.webp`;
+    };
     for (const img of document.querySelectorAll('img[data-p]')) {
       img.src = photo(+img.dataset.p, +(img.dataset.w || 200), +(img.dataset.h || img.dataset.w || 200));
       img.loading = 'lazy';
@@ -2279,7 +2317,7 @@
     }
     document.addEventListener('error', (e) => {
       const img = e.target;
-      if (img?.tagName !== 'IMG' || img.dataset.scene || !/picsum\.photos/.test(img.src)) return;
+      if (img?.tagName !== 'IMG' || img.dataset.scene || !/picsum\.photos|assets\/photos\//.test(img.src)) return;
       img.dataset.scene = '1';
       img.src = scene([...img.src].reduce((t, c) => t + c.charCodeAt(0), 0));
     }, true);
@@ -3923,6 +3961,10 @@
         if (!document.querySelector('dialog[open]')) cursorWas = root.classList.contains('has-cursor');
         root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
         d.showModal();
+        // Opening focuses the first control; on a short phone that could leave the window scrolled past its
+        // title. It always starts at the top, title and close button in view
+        const top = () => { d.scrollTop = 0; const c0 = card(); if (c0) c0.scrollTop = 0; };
+        top(); requestAnimationFrame(top);
         if (reduced.matches) return;
         const c = card(), from = getReturn(), shape = from && morph(from, c);
         c.animate(shape
@@ -4577,7 +4619,7 @@
           const el = document.createElement('span');
           el.className = 'tp';
           el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * .25, -14, 14) + TILT[k % TILT.length] * .5).toFixed(1)}deg`;
-          el.innerHTML = `<img src="https://picsum.photos/id/${IDS[k % IDS.length]}/96/96" alt="" loading="lazy" decoding="async" draggable="false">`;
+          el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
           host.append(el);
           prints.push({ el, l, on: false });
           k++;

@@ -54,8 +54,8 @@
     .inbox-btn.is-ringing svg { animation: inbox-ring .9s var(--out) 1; }
     @keyframes inbox-ring { 0% { rotate: 0deg; } 15% { rotate: 16deg; } 35% { rotate: -12deg; } 55% { rotate: 7deg; } 75% { rotate: -3deg; } 100% { rotate: 0deg; } }
     .inbox-pip {
-      position: absolute; top: .1rem; right: .05rem; min-width: 1.1rem; height: 1.1rem; padding: 0 .28rem; box-sizing: border-box; border-radius: 100px;
-      background: var(--pick, #8A5232); color: #fff; font: 700 .66rem/1.1rem var(--font-main, system-ui); text-align: center; font-variant-numeric: tabular-nums;
+      position: absolute; top: .1rem; right: .05rem; min-width: 1.2rem; height: 1.2rem; padding: 0 .28rem; box-sizing: border-box; border-radius: 100px;
+      background: var(--pick, #8A5232); color: #fff; font: 700 .72rem/1.2rem var(--font-main, system-ui); text-align: center; font-variant-numeric: tabular-nums;
       box-shadow: 0 0 0 2px var(--paper, #F8F7FA); pointer-events: none;
     }
     .inbox-pip[hidden] { display: none; }

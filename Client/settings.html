@@ -2,7 +2,7 @@
 <html lang="en" data-page="settings">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>[hidden] { display: none !important; }</style>
@@ -95,6 +95,28 @@
   <title>Settings | Momento</title>
   <meta name="description" content="Upload rules, cloud destination, privacy and appearance for your Momento account.">
   <link rel="icon" type="image/png" href="assets/momento-icon.png?v=3">
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <link rel="canonical" href="https://hexarch.org/settings.html">
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Settings | Momento">
+  <meta property="og:description" content="Upload rules, cloud destination, privacy and appearance for your Momento account.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta property="og:url" content="https://hexarch.org/settings.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Settings | Momento">
+  <meta name="twitter:description" content="Upload rules, cloud destination, privacy and appearance for your Momento account.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1951,6 +1973,10 @@
         if (!document.querySelector('dialog[open]')) cursorWas = root.classList.contains('has-cursor');
         root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
         d.showModal();
+        // Opening focuses the first control; on a short phone that could leave the window scrolled past its
+        // title. It always starts at the top, title and close button in view
+        const top = () => { d.scrollTop = 0; const c0 = card(); if (c0) c0.scrollTop = 0; };
+        top(); requestAnimationFrame(top);
         if (reduced.matches) return;
         const c = card(), from = getReturn(), shape = from && morph(from, c);
         c.animate(shape
@@ -2605,7 +2631,7 @@
           const el = document.createElement('span');
           el.className = 'tp';
           el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * .25, -14, 14) + TILT[k % TILT.length] * .5).toFixed(1)}deg`;
-          el.innerHTML = `<img src="https://picsum.photos/id/${IDS[k % IDS.length]}/96/96" alt="" loading="lazy" decoding="async" draggable="false">`;
+          el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
           host.append(el);
           prints.push({ el, l, on: false });
           k++;

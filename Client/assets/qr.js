@@ -44,7 +44,7 @@
     @keyframes mq-in { from { opacity: 0; transform: scale(.97); } }
     .mq-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.9rem; padding: 0 1.25rem; border: none; border-radius: 100px; font-family: inherit; font-size: .92rem; font-weight: 650; line-height: 1; cursor: pointer; text-decoration: none; }   /* glass, states and motion: GlassButton in assets/glass.css */
     .mq-tile:focus-visible { outline: 2px solid var(--focus-ring, currentColor); outline-offset: 3px; }
-    .mq-x { position: absolute; top: max(1rem, env(safe-area-inset-top)); right: 1rem; z-index: 3; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: none; border-radius: 50%; cursor: pointer; }
+    .mq-x { position: absolute; top: max(1rem, env(safe-area-inset-top)); right: max(1rem, env(safe-area-inset-right)); z-index: 3; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: none; border-radius: 50%; cursor: pointer; }
     .mq-x:hover { transform: rotate(90deg); }
 
     /* Showing a code: a small slab of the site's popup glass that grows out of the button pressed.
@@ -87,7 +87,7 @@
     .mq-scan.is-found .mq-win i { border-color: #9fd2cd; }
     .mq-scan.is-found .mq-beam, .mq-scan.is-off .mq-beam { opacity: 0; }
     .mq-scan.is-off .mq-shade { opacity: 0; }
-    .mq-top { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: 16px; right: 4.5rem; z-index: 2; }
+    .mq-top { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: 4.5rem; z-index: 2; }
     .mq-top h2 { margin: .35rem 0 0; font-size: 1.35rem; font-weight: 750; letter-spacing: -.03em; }
     .mq-status { margin: .3rem 0 0; color: rgba(255, 255, 255, .78); font-size: .92rem; line-height: 1.5; min-height: 1.4em; }
     .mq-status.is-error { color: #ffb4a8; }

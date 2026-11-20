@@ -21,21 +21,37 @@ export async function savePhoto(albumId, inputBuffer, opts) {
 }
 
 // Stores a photo sanitizePhoto has already checked: the original, its thumbnail and its preview, all at once
-export async function storePhoto(albumId, { buffer, mimeType, size, thumbnail, preview, previewMimeType, ext }) {
+export async function storePhoto(albumId, { buffer, mimeType, size, thumbnail, mini, preview, previewMimeType, ext }) {
   const key = `${albumId}/${crypto.randomUUID()}${ext || EXT[mimeType] || ''}`;
   const thumbnailKey = `${key}.thumb.webp`;
+  const miniKey = mini ? `${key}.mini.webp` : undefined;
   const previewKey = `${key}.preview${EXT[previewMimeType]}`;
   try {
     await Promise.all([
       driver.save(key, buffer, mimeType, { tier: true }),
       driver.save(thumbnailKey, thumbnail, 'image/webp'),
+      miniKey && driver.save(miniKey, mini, 'image/webp'),
       driver.save(previewKey, preview, previewMimeType),
     ]);
   } catch (err) {
-    await Promise.allSettled([driver.remove(key), driver.remove(thumbnailKey), driver.remove(previewKey)]);
+    await Promise.allSettled([driver.remove(key), driver.remove(thumbnailKey), miniKey && driver.remove(miniKey), driver.remove(previewKey)]);
     throw err;
   }
-  return { storageKey: key, thumbnailKey, previewKey, previewMimeType, mimeType, size };
+  return { storageKey: key, thumbnailKey, miniKey, previewKey, previewMimeType, mimeType, size };
+}
+
+// Makes the 320px mini for a photo from before minis existed (the backfill job, scripts/makeMinis.js):
+// from its preview when it has one (already upright, no metadata), otherwise from the original
+export async function addMini(photo) {
+  const { makeMini } = await import('./imageService.js');
+  const stream = await driver.open(photo.previewKey || photo.storageKey);
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const mini = await makeMini(Buffer.concat(chunks));
+  const key = `${photo.storageKey}.mini.webp`;
+  await driver.save(key, mini, 'image/webp');
+  await photo.constructor.updateOne({ _id: photo._id }, { $set: { miniKey: key } });
+  return key;
 }
 
 // Any other file (profile photos): saved and removed by key
@@ -76,6 +92,7 @@ export function ensureThumbnail(photo) {
 
 export const deletePhoto = async (key) => {
   await driver.remove(`${key}.thumb.webp`);
+  await driver.remove(`${key}.mini.webp`);
   await driver.remove(`${key}.preview.jpg`);
   await driver.remove(`${key}.preview.webp`);
   await driver.remove(key);

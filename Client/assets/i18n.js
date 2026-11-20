@@ -365,6 +365,10 @@
     }
     els.forEach((e, i) => { if (!used.has(i)) out.push(e); });
     if (RTL) { out.unshift(document.createTextNode(RLE)); out.push(document.createTextNode(PDF)); }
+    // Already in this form (a phrase whose translation reads the same, or one done before): leave it. Replacing
+    // it anyway is a change the observer below sees, which runs this again, and the page never settles
+    const shape = (list) => list.filter((n) => n.nodeType !== 8).map((n) => (n.nodeType === 3 ? n.nodeValue : ' ' + els.indexOf(n))).join('');
+    if (shape(out) === shape(kids)) return false;
     el.replaceChildren(...out);
     return true;
   }

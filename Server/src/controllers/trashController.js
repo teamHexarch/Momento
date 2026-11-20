@@ -18,7 +18,7 @@ const photoUrl = (id) => `${config.publicUrl}/api/photos/${id}`;
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 const rowOf = (p, albumName) => ({
   id: p.id, albumId: String(p.album), albumName,
-  url: photoUrl(p.id), thumbnailUrl: `${photoUrl(p.id)}?size=thumb`, downloadUrl: `${photoUrl(p.id)}/download`,
+  url: photoUrl(p.id), thumbnailUrl: `${photoUrl(p.id)}?size=thumb`, ...(p.miniKey && { miniUrl: `${photoUrl(p.id)}?size=mini` }), downloadUrl: `${photoUrl(p.id)}/download`,
 });
 const readIds = (body) => {
   const raw = Array.isArray(body?.photoIds) ? body.photoIds : [];

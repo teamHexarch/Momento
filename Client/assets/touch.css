@@ -30,20 +30,28 @@
   /* ---------- Small round buttons ---------- */
   .bookmark::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
   .s-delete-btn { min-height: 44px; }
+  /* Close and show-password buttons are 35–40px: an invisible ring takes their reach to 44+ without moving them */
+  .ab-icon { position: relative; }   /* .acct-x and .pw-eye are already positioned (absolute) */
+  :is(.acct-x, .pw-eye, .ab-icon)::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
+  /* Text buttons and inbox actions: a full 44px row for a thumb */
+  :is(.s-change, .s-cancel, .gri-acts .btn, .inbox-act, .inbox-link) { min-height: 44px; }
+  .vw-film { gap: 4px; padding-inline: calc(50% - 1rem); }
+  .vw-film button { width: 2rem; height: 2.75rem; }   /* the viewer's strip pictures */
+  .auth-forgot { min-height: 44px; box-sizing: border-box; padding-block: 12px; margin-block: -12px calc(.4rem - 12px); }
   #evMap .leaflet-bar a { width: 2.75rem; height: 2.75rem; line-height: 2.75rem; }
 
   /* ---------- Text fields at 16px, so iOS doesn't zoom the page when one is tapped ---------- */
   #search, #evSearch { font-size: 16px; }
 
-  /* ---------- An open dialog holds the page still behind it ---------- */
-  html:has(dialog[open]) { overflow: hidden; }
 }
 
 /* Icon-only nav on phones: Social and Settings are ~31px wide, so their hit areas reach into the room
-   beside them (My albums is wide enough to share; Settings has free space to its right) */
+   beside them. Social only borrows from My albums on the My albums page, where that item is the wide current
+   pill with room to spare; everywhere else My albums is a 38px icon and keeps all of its own width */
 @media (pointer: coarse) and (max-width: 520px) {
   .nav .nav-caret::before { left: -9px; right: -9px; }
-  .nav .nav-social::before { left: -13px; z-index: 1; }
+  .nav .nav-social::before { left: 0; z-index: 1; }
+  .nav:has(.nav-albums[aria-current="page"]) .nav-social::before { left: -13px; }
   .nav .nav-settings::before { right: -13px; z-index: 1; }
 }
 
