@@ -280,7 +280,7 @@
     M.createAlbum = Object.assign((from, opts) => {
       if (signedIn()) return make(from, opts);
       const page = here().split(/[?#]/)[0];
-      return M.needLogin({ action: 'create', from, next: `${page}?create=1` });
+      return M.needLogin({ action: 'create', from, next: `${page}?create=${opts?.kind === 'event' ? 'event' : '1'}` });
     }, { guarded: true, original: make });
   };
   // A big album's download is made in the background and emailed: say so
@@ -298,10 +298,11 @@
     const user = await M.sessionReady?.catch?.(() => null);
     // Unconfirmed accounts can't create albums yet (the confirm-your-email popup is showing); keep ?create for later
     if (!user || !user.emailVerified) return;
+    const kind = q.get('create');
     q.delete('create');
     history.replaceState(null, '', location.pathname + (q.size ? '?' + q : '') + location.hash);
     // (straight to the form: the account was just confirmed above)
-    (M.createAlbum?.original || M.createAlbum)?.();
+    (M.createAlbum?.original || M.createAlbum)?.(undefined, { kind: kind === 'event' ? 'event' : undefined });
   }
 
   // In the header, visitors get a "Log in" button (and come back to this page afterwards) instead of an
@@ -342,4 +343,120 @@
 
   const go = () => { wrapCreate(); afterLogin(); zipNotice(); guestHeader(); start(); setUpPush(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+})();
+
+// ---- Right after signing up: "Which language do you prefer?" ----
+// Momento.chooseLanguage() resolves once one is chosen; it's saved for next time (no reload: the caller is about
+// to open the next page anyway). Settings > Language changes it later.
+(() => {
+  // The languages Momento speaks (the same list as assets/i18n.js, which only loads for languages other than English)
+  const LANGS = [
+    { code: 'en', html: 'en', name: 'English', en: 'English' },
+    { code: 'zh', html: 'zh-Hans', name: '中文（普通话）', en: 'Mandarin Chinese' },
+    { code: 'hi', html: 'hi', name: 'हिन्दी', en: 'Hindi' },
+    { code: 'es', html: 'es', name: 'Español', en: 'Spanish' },
+    { code: 'ar', html: 'ar', name: 'العربية', en: 'Arabic' },
+    { code: 'fr', html: 'fr', name: 'Français', en: 'French' },
+    { code: 'bn', html: 'bn', name: 'বাংলা', en: 'Bengali' },
+    { code: 'pt', html: 'pt', name: 'Português', en: 'Portuguese' },
+    { code: 'ru', html: 'ru', name: 'Русский', en: 'Russian' },
+    { code: 'ur', html: 'ur', name: 'اردو', en: 'Urdu' },
+    { code: 'yue', html: 'zh-Hant-HK', name: '粵語（廣東話）', en: 'Cantonese' },
+    { code: 'id', html: 'id', name: 'Bahasa Indonesia', en: 'Indonesian' },
+  ];
+  const KEY = 'momento-lang';
+  let lang = 'en';
+  try { lang = localStorage.getItem(KEY) || 'en'; } catch (e) {}
+  window.Momento = window.Momento || {};
+  window.Momento.chooseLanguage = function chooseLanguage() {
+    return new Promise((resolve) => {
+      const guess = (navigator.languages || [navigator.language || 'en']).map((l) => l.toLowerCase())
+        .map((l) => (l.startsWith('zh') ? (/hk|mo|yue/.test(l) ? 'yue' : 'zh') : l.split('-')[0]))
+        .find((c) => LANGS.some((x) => x.code === c));
+      let pick = lang !== 'en' ? lang : guess || 'en';
+      const css = document.createElement('style');
+      css.textContent = `
+        dialog.lang-dlg { width: min(30rem, calc(100vw - 32px)); }
+        .lang-dlg h2 { margin: 0; font-size: 1.4rem; letter-spacing: -.03em; }
+        .lang-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: 1.1rem 0 0; padding: 0; list-style: none; }
+        .lang-grid button { display: grid; gap: .1rem; width: 100%; min-height: 3.4rem; padding: .6rem .8rem; text-align: start; border: 0; border-radius: 16px; cursor: pointer;
+          font: inherit; color: var(--dusk, #2e2c3a); background: rgba(127, 120, 150, .1); box-shadow: inset 0 0 0 1.5px transparent;
+          transition: background-color .2s ease, box-shadow .2s ease, transform .2s cubic-bezier(.34, 1.4, .64, 1); }
+        .lang-grid b { font-size: .98rem; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .lang-grid small { font-size: .76rem; color: var(--slate, #5c596b); }
+        .lang-grid button[aria-checked="true"] { background: rgba(108, 95, 199, .14); box-shadow: inset 0 0 0 2px rgba(108, 95, 199, .8); }
+        :root[data-theme="dark"] .lang-grid button { color: #f2eff8; }
+        :root[data-theme="dark"] .lang-grid button[aria-checked="true"] { background: rgba(201, 192, 255, .16); box-shadow: inset 0 0 0 2px rgba(201, 192, 255, .85); }
+        @media (hover: hover) { .lang-grid button:hover { background: rgba(127, 120, 150, .18); } }
+        .lang-grid button:active { transform: scale(.97); }
+        .lang-grid button:focus-visible { outline: 2px solid var(--focus-ring, #6c5fc7); outline-offset: 2px; }
+        @media (max-width: 360px) { .lang-grid { grid-template-columns: minmax(0, 1fr); } }
+        @media (prefers-reduced-motion: reduce) { .lang-grid button { transition: none; } }`;
+      document.head.append(css);
+      const d = document.createElement('dialog');
+      d.className = 'ev-ask lang-dlg';
+      d.setAttribute('aria-labelledby', 'langTitle');
+      d.innerHTML = `<h2 id="langTitle">Which language do you prefer?</h2>
+        <p>Momento will use it everywhere. You can change it any time in Settings.</p>
+        <ul class="lang-grid" role="radiogroup" aria-labelledby="langTitle"></ul>
+        <div class="mq-row"><button class="mq-btn" type="button" data-ok>Continue</button></div>`;
+      const grid = d.querySelector('.lang-grid');
+      for (const l of LANGS) {
+        const li = document.createElement('li'), b = document.createElement('button');
+        b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.code = l.code; b.lang = l.html;
+        const name = document.createElement('b'); name.textContent = l.name;
+        const en = document.createElement('small'); en.textContent = l.en; en.lang = 'en';
+        b.append(name, en); li.append(b); grid.append(li);
+      }
+      const sync = () => grid.querySelectorAll('button').forEach((b) => { const on = b.dataset.code === pick; b.setAttribute('aria-checked', on); b.tabIndex = on ? 0 : -1; });
+      grid.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { pick = b.dataset.code; sync(); } });
+      grid.addEventListener('keydown', (e) => {
+        const all = [...grid.querySelectorAll('button')], i = all.findIndex((b) => b.dataset.code === pick);
+        const step = { ArrowRight: 1, ArrowDown: 2, ArrowLeft: -1, ArrowUp: -2 }[e.key];
+        if (step == null) return;
+        e.preventDefault();
+        const next = all[(i + step + all.length) % all.length];
+        pick = next.dataset.code; sync(); next.focus();
+      });
+      sync();
+      const done = () => {
+        try { localStorage.setItem(KEY, pick); } catch (e) {}
+        d.close(); d.remove(); css.remove();
+        resolve(pick);
+      };
+      d.querySelector('[data-ok]').addEventListener('click', done);
+      d.addEventListener('cancel', (e) => { e.preventDefault(); done(); });   // Esc keeps the highlighted choice
+      document.body.append(d);
+      d.showModal();
+      grid.querySelector('[aria-checked="true"]')?.focus();
+    });
+  };
+})();
+
+// ---- Country flags on Windows ----
+// Windows has no flag emoji, so 🇵🇰 shows as the letters "PK". There (and only where flags can't be drawn) a small
+// font with just the flags is added in front of the page's fonts. Flags from Twemoji (CC BY 4.0, by Twitter),
+// font from country-flag-emoji-polyfill (MIT, TalkJS): assets/fonts/TwemojiCountryFlags.woff2
+(() => {
+  let drawsFlags = true;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 24;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = '#000'; g.textBaseline = 'top'; g.font = '20px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    g.fillText('\u{1F1F5}\u{1F1F0}', 0, 0);
+    const px = g.getImageData(0, 0, 24, 24).data;
+    drawsFlags = false;
+    // A real flag has colour; letters drawn in black don't
+    for (let i = 0; i < px.length; i += 4) if (px[i + 3] && (Math.abs(px[i] - px[i + 1]) > 40 || Math.abs(px[i + 1] - px[i + 2]) > 40)) { drawsFlags = true; break; }
+  } catch (e) { drawsFlags = true; }
+  if (drawsFlags) return;
+  const css = document.createElement('style');
+  css.textContent = `
+    @font-face { font-family: 'Twemoji Country Flags'; src: url('assets/fonts/TwemojiCountryFlags.woff2') format('woff2'); font-display: swap;
+      unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F; }
+    :root.flag-font { --font-main: 'Twemoji Country Flags', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif; }
+    :root.flag-font body, :root.flag-font :is(button, input, textarea, select) { font-family: 'Twemoji Country Flags', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif; }`;
+  document.head.append(css);
+  document.documentElement.classList.add('flag-font');
 })();

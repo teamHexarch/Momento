@@ -21,6 +21,9 @@ for (const type of ['pageswap', 'pagereveal']) {
   addEventListener(type, (e) => {
     const vt = e.viewTransition;
     if (!vt) return;
+    // Arriving through the page-to-page motion: the whole page already rises in, so the big title doesn't
+    // rise a second time on its own (glass.css, :root.vt-in)
+    if (type === 'pagereveal') document.documentElement.classList.add('vt-in');
     vt.ready?.catch(() => {});
     vt.finished?.catch(() => {});
     vt.updateCallbackDone?.catch(() => {});

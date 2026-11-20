@@ -18,8 +18,8 @@ const photoSchema = new mongoose.Schema({
   likeCount: { type: Number, default: 0 },
   // When each like happened, for the Liked tab (newest first)
   likeLog: { type: [{ _id: false, user: mongoose.Schema.Types.ObjectId, at: Date }], default: [] },
-  // Emoji reactions: one per person, from the six on the album page
-  reactions: { type: [{ _id: false, user: mongoose.Schema.Types.ObjectId, emoji: String }], default: [] },
+  // Emoji reactions: one per person, any single emoji, with when it was made (older ones have no time)
+  reactions: { type: [{ _id: false, user: mongoose.Schema.Types.ObjectId, emoji: String, at: Date }], default: [] },
   // A fingerprint of the file as uploaded (SHA-256), so the same photo added twice to an album is skipped
   hash: String,
   // In the "Recently deleted" bin since then (by the host); removed for good after 30 days

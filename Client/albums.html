@@ -25,6 +25,7 @@
   </style>
   <script src="assets/api.js"></script>
   <script src="assets/extras.js" defer></script>
+  <script src="assets/crop.js" defer></script>
   <script src="assets/inbox.js" defer></script>
   <script src="assets/pickers.js" defer></script>
   <script src="assets/nearby.js" defer></script>
@@ -800,8 +801,16 @@
     .rx-who-list .note { display: block; padding: .8rem .5rem; color: var(--slate); font-size: .88rem; text-align: center; }
     .rx-av { position: relative; overflow: hidden; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--c, #D9D0EA); color: #2E2C3A; font-size: .82rem; font-weight: 700; }
     .rx-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .rx-who-text { display: grid; min-width: 0; gap: .05rem; }
     .rx-name { overflow: hidden; color: var(--dusk); font-size: .92rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+    .rx-when { overflow: hidden; color: var(--slate); font-size: .74rem; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+    :root[data-theme="dark"] .rx-when, .viewer .rx-who .rx-when { color: rgba(242, 239, 248, .68); }
     .rx-e { font-size: 1.25rem; line-height: 1; }
+    .rx-sec.rx-typed { padding: .2rem 0 .4rem; }
+    .rx.rx-typed-btn { display: flex; align-items: center; gap: .65rem; width: 100%; height: auto; min-height: 3rem; padding: .35rem .8rem; border-radius: 14px;
+      font: 650 .9rem var(--font-main); color: var(--dusk); background: rgba(127, 120, 150, .12); text-align: start; }
+    .rx.rx-typed-btn .e { font-size: 1.6rem; line-height: 1; }
+    .viewer .rx.rx-typed-btn, :root[data-theme="dark"] .rx.rx-typed-btn { color: #F2EFF8; background: rgba(242, 239, 248, .1); }
     .rx-undo { min-height: 2rem; padding: 0 .7rem; border-radius: 100px; color: var(--dusk); font: 650 .78rem var(--font-main); cursor: pointer; }
 
 
@@ -2845,6 +2854,27 @@
       ? Object.fromEntries(MomentoEmoji.all.map((it) => [it.e, it.name]))
       : { '😍': 'Love it', '😂': 'Haha', '🔥': 'Fire', '👏': 'Applause', '🥹': 'So sweet', '😮': 'Wow', '🎉': 'Celebrate', '🥳': 'Party', '❤️': 'Heart', '🙌': 'Hooray', '✨': 'Sparkles', '🤩': 'Starstruck' };
     const REACTIONS = Object.keys(REACT_NAME);
+    // Any single emoji is a reaction, also one typed or pasted from the phone's emoji keyboard (the server checks
+    // the same way); the named ones come from assets/emoji.js
+    const graphemes = window.Intl?.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+    const isEmoji = (e) => typeof e === 'string' && e.length > 0 && e.length <= 32
+      && (!graphemes || [...graphemes.segment(e)].length === 1)
+      && /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3/u.test(e);
+    const nameOf = (e) => REACT_NAME[e] || e;
+    // When someone reacted: "just now", "5 min ago", "3 h ago", "Yesterday, 21:04", "12 Nov, 21:04"
+    const reactedWhen = (iso) => {
+      const t = Date.parse(iso);
+      if (!Number.isFinite(t)) return '';
+      const mins = Math.round((Date.now() - t) / 60000), d = new Date(t);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins} min ago`;
+      if (mins < 6 * 60) return `${Math.round(mins / 60)} h ago`;
+      const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const day = new Date(); day.setHours(0, 0, 0, 0);
+      if (t >= day.getTime()) return `Today, ${time}`;
+      if (t >= day.getTime() - 86400000) return `Yesterday, ${time}`;
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) }) + ', ' + time;
+    };
     const VW_SMILE = document.getElementById('vwFace').innerHTML;
     const reactTotal = (p) => Object.values(p.reactions || {}).reduce((s, n) => s + n, 0);
     let openPick = null, reactBusy = false, dismissedAt = 0;
@@ -2863,14 +2893,14 @@
       if (!p) return;
       const mine = p.reaction || null;
       // Everyone's reactions, most popular first; tap one to add (or take back) yours
-      const counts = Object.entries(p.reactions || {}).filter(([e, n]) => n > 0 && REACT_NAME[e]).sort((x, y) => y[1] - x[1] || REACTIONS.indexOf(x[0]) - REACTIONS.indexOf(y[0]));
+      const counts = Object.entries(p.reactions || {}).filter(([e, n]) => n > 0 && isEmoji(e)).sort((x, y) => y[1] - x[1] || REACTIONS.indexOf(x[0]) - REACTIONS.indexOf(y[0]));
       pbTally.replaceChildren(...counts.map(([e, n]) => {
         const chip = document.createElement('button');
         chip.type = 'button'; chip.className = 'pb-chip'; chip.dataset.e = e;
         chip.setAttribute('aria-pressed', e === mine);
         chip.setAttribute('aria-haspopup', 'dialog');
         chip.setAttribute('aria-expanded', openPick?.el === pbWho && who.tab === e);
-        chip.setAttribute('aria-label', `${REACT_NAME[e]}, ${plural(n, 'reaction', 'reactions')}${e === mine ? ', including yours' : ''}. See who reacted`);
+        chip.setAttribute('aria-label', `${nameOf(e)}, ${plural(n, 'reaction', 'reactions')}${e === mine ? ', including yours' : ''}. See who reacted`);
         chip.innerHTML = '<span class="e" aria-hidden="true"></span><span></span>';
         chip.firstChild.textContent = e; chip.lastChild.textContent = num(n);
         return chip;
@@ -3529,15 +3559,30 @@
     // Search: by name or a word for it ("love", "party", "cat"); Enter picks the first one found
     function filterEmoji() {
       const q = rxSearch.value.trim(), E = window.MomentoEmoji;
-      const hits = q && E ? new Set(E.search(q).map((it) => it.e)) : null;
+      // (an emoji typed into the search finds itself)
+      const hits = q && isEmoji(q) && REACT_NAME[q] ? new Set([q]) : q && E ? new Set(E.search(q).map((it) => it.e)) : null;
       emojiEl.classList.toggle('is-searching', !!hits);
       for (const sec of emojiEl.querySelectorAll('.rx-sec')) {
         let any = false;
         for (const b of sec.querySelectorAll('.rx')) { const on = !hits || hits.has(b.dataset.e); b.hidden = !on; any ||= on; }
         sec.hidden = !any;
       }
-      rxNone.hidden = !hits || hits.size > 0;
-      if (hits && !hits.size) rxNone.textContent = `No emoji for “${q}”. Try another word, like love, party or wow.`;
+      // An emoji typed or pasted from the keyboard reacts with exactly that emoji, listed or not
+      emojiEl.querySelector('.rx-typed')?.remove();
+      if (isEmoji(q) && !REACT_NAME[q]) {
+        const sec = document.createElement('section');
+        sec.className = 'rx-sec rx-typed';
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'rx rx-typed-btn'; b.dataset.e = q;
+        b.innerHTML = '<span class="e" aria-hidden="true"></span><span>React with this emoji</span>';
+        b.firstChild.textContent = q; b.setAttribute('aria-label', `React with ${q}`);
+        sec.append(b);
+        emojiEl.prepend(sec);
+        emojiEl.classList.add('is-searching');
+      }
+      const typed = !!emojiEl.querySelector('.rx-typed');
+      rxNone.hidden = !hits || hits.size > 0 || typed;
+      if (hits && !hits.size && !typed) rxNone.textContent = `No emoji for “${q}”. Try another word, or type the emoji itself.`;
       emojiEl.scrollTop = 0;
     }
     rxSearch.addEventListener('input', filterEmoji);
@@ -3661,14 +3706,14 @@
     function paintWho() {
       const p = current();
       if (!p) return;
-      const counts = Object.entries(p.reactions || {}).filter(([e, n]) => n > 0 && REACT_NAME[e]).sort((x, y) => y[1] - x[1]);
+      const counts = Object.entries(p.reactions || {}).filter(([e, n]) => n > 0 && isEmoji(e)).sort((x, y) => y[1] - x[1]);
       if (!counts.length) { closePicker(true); return; }
       if (who.tab !== 'all' && !counts.some(([e]) => e === who.tab)) who.tab = 'all';
       const tab = (key, label, n) => {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'rx-who-tab'; b.dataset.tab = key;
         b.setAttribute('aria-pressed', who.tab === key);
-        b.setAttribute('aria-label', `${key === 'all' ? 'Everyone' : REACT_NAME[key]}, ${plural(n, 'reaction', 'reactions')}`);
+        b.setAttribute('aria-label', `${key === 'all' ? 'Everyone' : nameOf(key)}, ${plural(n, 'reaction', 'reactions')}`);
         b.innerHTML = `<span class="e" aria-hidden="true"></span><span aria-hidden="true"></span>`;
         b.firstChild.textContent = label; b.lastChild.textContent = num(n);
         if (key === 'all') b.firstChild.className = '';
@@ -3684,13 +3729,15 @@
     function personRow(r, allowRemove = false) {
         const li = document.createElement('li');
         if (r.mine) li.className = 'is-mine';
-        li.innerHTML = '<span class="rx-av" aria-hidden="true"></span><span class="rx-name"></span><span></span><span class="rx-e"></span>';
+        li.innerHTML = '<span class="rx-av" aria-hidden="true"></span><span class="rx-who-text"><span class="rx-name"></span><time class="rx-when"></time></span><span></span><span class="rx-e"></span>';
         const av = li.querySelector('.rx-av'), name = r.mine ? 'You' : r.by;
         av.textContent = (String(name).trim()[0] || '·').toUpperCase(); av.style.setProperty('--c', avColor(name));
         const pic = r.avatarUrl || (r.mine && Momento.account?.get()?.avatarUrl);
         if (pic) { const img = document.createElement('img'); img.src = pic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => img.remove(); av.append(img); }
         li.querySelector('.rx-name').textContent = name;
-        const e = li.querySelector('.rx-e'); e.textContent = r.emoji || '♥'; e.setAttribute('aria-label', REACT_NAME[r.emoji] || 'Like'); e.setAttribute('role', 'img');
+        const when = li.querySelector('.rx-when'), said = reactedWhen(r.at);
+        if (said) { when.textContent = said; when.dateTime = r.at; when.title = new Date(r.at).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }); } else when.remove();
+        const e = li.querySelector('.rx-e'); e.textContent = r.emoji || '♥'; e.setAttribute('aria-label', r.emoji ? nameOf(r.emoji) : 'Like'); e.setAttribute('role', 'img');
         if (allowRemove && r.mine) {
           const undo = document.createElement('button');
           undo.type = 'button'; undo.className = 'rx-undo'; undo.textContent = 'Remove';
@@ -3761,7 +3808,7 @@
     viewer.addEventListener('close', () => { closePicker(false); [picker, pbWho].forEach((el) => { el.hidden = true; el.style.transform = ''; }); viewer.classList.remove('has-sheet'); });
     async function toggleReaction(emoji, fromPicker) {
       const p = current();
-      if (!p || reactBusy || !REACT_NAME[emoji]) return;
+      if (!p || reactBusy || !isEmoji(emoji)) return;
       reactBusy = true;
       whoCache.delete(p.id);   // your own reaction changes who's on the list
       const before = { reactions: { ...(p.reactions || {}) }, reaction: p.reaction || null };
@@ -4817,8 +4864,11 @@
         photoFile.value = '';
         if (!f) return;
         if (f.size > 10 * 1024 * 1024) { say('Choose a photo under 10 MB.', true); return; }
+        // Crop it to a square first (Cancel keeps the current photo)
+        const pic = Momento.cropAvatar ? await Momento.cropAvatar(f) : f;
+        if (!pic) return;
         const fd = new FormData();
-        fd.append('avatar', f, f.name || 'photo.jpg');
+        fd.append('avatar', pic, pic === f ? (f.name || 'photo.jpg') : 'avatar.jpg');
         photoAv.classList.add('is-busy'); photoPick.disabled = photoRm.disabled = true; say('Uploading your photo…');
         try {
           const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
@@ -5071,8 +5121,8 @@
             <h2 id="mCreateTitle" tabindex="-1">Create an album</h2>
             <p class="m-progress" data-create-progress>Step 1 of 2</p>
             <div data-create-step="details">
-              <label class="acct-field m-first"><span>Album name</span><input name="name" maxlength="60" placeholder="Maya’s 30th" autocomplete="off"></label>
-              <label class="acct-field"><span>Date</span><input name="date" type="date"></label>
+              <label class="acct-field m-first"><span data-name-label>Album name</span><input name="name" maxlength="60" placeholder="Enter album name" autocomplete="off"></label>
+              <label class="acct-field m-date"><span>Date</span><input name="date" type="date" placeholder="Enter a date"></label>
               <div class="m-kind" role="radiogroup" aria-labelledby="mKindTitle">
                 <span class="m-kind-title" id="mKindTitle">What is it?</span>
                 <label><input type="radio" name="kind" value="album" checked><b>Album</b><small>Photos together, any time. Join with the code or link</small></label>
@@ -5129,7 +5179,11 @@
         step = event ? next : 'details';
         steps.forEach((panel) => { panel.hidden = panel.dataset.createStep !== step; });
         if (kindField) kindField.hidden = grouped;
-        title.textContent = step === 'event' ? 'Event details' : 'Create an album';
+        // An event's date and time are on step two (Starts and Ends), so step one has no date
+        form.querySelector('.m-date').hidden = event;
+        form.querySelector('[data-name-label]').textContent = event ? 'Event name' : 'Album name';
+        form.name.placeholder = event ? 'Enter event name' : 'Enter album name';
+        title.textContent = step === 'event' ? 'Event details' : event ? 'Create an event' : 'Create an album';
         progress.hidden = !event;
         progress.textContent = step === 'event' ? 'Step 2 of 2' : 'Step 1 of 2';
         submit.textContent = event ? (step === 'event' ? 'Create event' : 'Next') : 'Create album';
@@ -5149,10 +5203,11 @@
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (form.dataset.busy || made) return;
-        const name = form.name.value.trim(), date = form.date.value;
+        const name = form.name.value.trim();
+        let date = form.date.value;
         let place = form.place.value.trim();
-        if (!name) { showStep('details'); say('Enter an album name.', form.name); return; }
-        if (!date) { showStep('details'); say('Choose a date.', form.date); return; }
+        if (!name) { showStep('details'); say(isEvent() ? 'Enter an event name.' : 'Enter an album name.', form.name); return; }
+        if (!date && !isEvent()) { showStep('details'); say('Choose a date.', form.date); return; }
         // Group albums finish here. Event albums collect times and a venue on the next screen.
         const groupId = shareList.value || '', groupName = groupId ? shareList.selectedOptions[0]?.textContent || '' : '';
         const event = isEvent();
@@ -5162,6 +5217,7 @@
         const ev = event || groupId ? Momento.event.read(form) : { fields: { place: '' } };
         if (ev.error) { say(ev.error, ev.focus); return; }
         if (ev.fields.place !== undefined) place = ev.fields.place;
+        if (ev.fields.date) date = ev.fields.date;
         say('');
         form.dataset.busy = 'true';
         submit.disabled = back.disabled = true;
@@ -5221,7 +5277,10 @@
       d.launch = (opts = {}) => {
         form.reset(); made = null; say('');
         loadGroups(opts.groupId, opts.groupName);
-        form.date.value = isoToday();
+        // (the date starts empty: the field says "Enter a date" and its calendar opens on today)
+        // "Create an event" opens with Event chosen, "Create an album" with Album
+        const kind = form.querySelector(`input[name="kind"][value="${opts.kind === 'event' ? 'event' : 'album'}"]`);
+        if (kind) kind.checked = true;
         Momento.event?.mount(form, { fromGroup: Boolean(opts.groupId) });
         showStep('details');
         showView('form');
@@ -5237,7 +5296,7 @@
       const t = e.target.closest('[data-create]');
       if (!t) return;
       e.preventDefault();
-      Momento.createAlbum(t, { groupId: t.dataset.createGroup, groupName: t.dataset.createGroupName });
+      Momento.createAlbum(t, { groupId: t.dataset.createGroup, groupName: t.dataset.createGroupName, kind: t.dataset.createKind });
     });
   
     // A Light / Dark / System segment bound to the theme (the account menu and the footer both use it)
@@ -5338,7 +5397,7 @@
         });
         built.name.textContent = first(name) || 'You';
         built.headName.textContent = name || 'You';
-        built.headMail.textContent = (a && a.email) || 'Preview account';
+        built.headMail.textContent = (a && a.email) || 'Your account';
       }
       accountListeners.add(render);
       render();
@@ -5595,7 +5654,7 @@
             <h2 id="sfEvents"><span class="sf-h-text">Events</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfEventsList">Events<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
             <ul id="sfEventsList">
               <li><a class="sf-link" href="events.html#events">Events near you</a></li>
-              <li><a class="sf-link" href="${P}#how-it-works" data-create>Host a public event</a></li>
+              <li><a class="sf-link" href="${P}#how-it-works" data-create data-create-kind="event">Host a public event</a></li>
               <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
             </ul>
           </nav>

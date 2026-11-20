@@ -39,7 +39,9 @@ export async function admit(album, user, body = {}) {
   if (previous?.status === 'declined') throw new HttpError(403, 'The host declined your request.');
   const deadline = album.joinDeadline ?? album.endsAt ?? new Date(Date.parse(album.date) + 31 * 86400000);
   const closed = !album.joiningOpen || (deadline && deadline <= new Date());
-  const needsLocation = !album.group && album.locationRequired && !!album.zone?.radiusM;
+  // A public event (on the Events map) lets anyone in while joining is open: no location check and no
+  // waiting for the host
+  const needsLocation = album.visibility !== 'public' && !album.group && album.locationRequired && !!album.zone?.radiusM;
   if (!closed && needsLocation && body.location === undefined) throw new HttpError(409, 'Check your location to join this event.', 'check-location');
   if (closed || (needsLocation && !inZone(body.location, album.zone))) {
     await Album.updateOne({ _id: album._id, 'requests.user': { $ne: user._id } },

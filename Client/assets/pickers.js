@@ -17,6 +17,9 @@
     /* The field keeps its look; the browser's own picker button gives way to a small icon */
     input.mp-on { cursor: pointer; caret-color: transparent; padding-right: 2.6rem !important; background-repeat: no-repeat !important; background-position: right .95rem center !important; background-size: 17px !important; }
     input.mp-on::-webkit-calendar-picker-indicator { display: none; }
+    /* Empty with a placeholder: the calendar icon stays, so it still reads as a date field */
+    input.mp-on.mp-empty { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
+    :root[data-theme="dark"] input.mp-on.mp-empty { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
     /* iPhone and iPad (Safari) draw date and time fields their own way: a minimum width that ignores the form
        (so the field ran past the card's edge, taking the icon with it), the value centred, and their own grey
        box instead of the glass well. Plain fields instead: as wide as their column, the value on the left */
@@ -50,7 +53,8 @@
     .mp-week span { display: grid; place-items: center; height: 1.9rem; color: var(--slate, #5C596B); font-size: .74rem; font-weight: 650; }
     .mp-days .mp-btn { width: 100%; height: 2.35rem; border-radius: 12px; }
     .mp-days .is-out { color: var(--stone, #8E8A9C); }
-    .mp-days .is-today { box-shadow: inset 0 0 0 1.5px rgba(46, 44, 58, .35); }
+    /* Today stands out (a tinted ring) until another day is chosen */
+    .mp-days .is-today { box-shadow: inset 0 0 0 2px rgba(108, 95, 199, .75); background: rgba(108, 95, 199, .12); font-weight: 800; }
     /* The chosen day or time: deep smoke glass, the strongest tier, so the choice is unmistakable */
     .mp-btn[aria-pressed="true"], .mp-btn[aria-selected="true"] { background: var(--gb-smoke-sheen) padding-box, var(--gb-smoke-fill) padding-box; color: var(--paper, #F8F7FA); box-shadow: var(--gb-smoke-shadow); }
     .mp-time { display: flex; gap: .3rem; }
@@ -64,7 +68,7 @@
     :root[data-theme="dark"] .mp { color: #F2EFF8; }
     :root[data-theme="dark"] .mp-week span { color: #A8A3B8; }
     :root[data-theme="dark"] .mp-days .is-out { color: #7D7890; }
-    :root[data-theme="dark"] .mp-days .is-today { box-shadow: inset 0 0 0 1.5px rgba(242, 239, 248, .4); }
+    :root[data-theme="dark"] .mp-days .is-today { box-shadow: inset 0 0 0 2px rgba(201, 192, 255, .8); background: rgba(201, 192, 255, .14); }
     :root[data-theme="dark"] .mp-cal + .mp-time { border-left-color: rgba(255, 255, 255, .1); }
     :root[data-theme="dark"] .mp-foot { border-top-color: rgba(255, 255, 255, .08); }
     /* Phones: bigger targets, and date over time when both are asked for */
@@ -85,7 +89,7 @@
   let cur = null;   // { input, el, kind, view, date, time }
 
   function emit(input, v) {
-    valueDesc.set.call(input, v);
+    input.value = v;   // (through the field's own setter, which also swaps the placeholder in and out)
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -247,7 +251,7 @@
   function open(input) {
     if (cur?.input === input) return;
     close(false);
-    const kind = input.type;
+    const kind = input.dataset.mpKind || input.type;
     const v = input.value;
     const date = kind === 'time' ? null : parseDate(v);
     const time = kind === 'date' ? null : parseTime(kind === 'time' ? v : v.split('T')[1]);
@@ -292,7 +296,31 @@
   function enhance(input) {
     if (input.dataset.mp || !TYPES.includes(input.type)) return;
     input.dataset.mp = '1';
+    input.dataset.mpKind = input.type;
     input.classList.add('mp-on');
+    // An empty field with a placeholder ("Enter a date") shows it: date fields can't show a placeholder, so
+    // while empty it's a plain (read-only) text field, and it turns back into a date field once it has a value.
+    // Forms read and set .value exactly as before.
+    if (input.placeholder) {
+      const kind = input.type;
+      const show = () => {
+        const want = valueDesc.get.call(input) ? kind : 'text';
+        if (input.type !== want) input.type = want;
+        input.classList.toggle('mp-empty', want === 'text');
+      };
+      Object.defineProperty(input, 'value', {
+        configurable: true,
+        get() { return valueDesc.get.call(this); },
+        set(v) {
+          v = v == null ? '' : String(v);
+          if (v && this.type !== kind) this.type = kind;
+          valueDesc.set.call(this, v);
+          show();
+        },
+      });
+      input.form?.addEventListener('reset', () => setTimeout(show));
+      show();
+    }
     // Read-only stops the phone's own wheel or calendar from opening; the forms check these fields themselves
     input.readOnly = true;
     input.setAttribute('aria-haspopup', 'dialog');

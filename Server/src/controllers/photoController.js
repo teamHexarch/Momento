@@ -1,3 +1,4 @@
+import { isEmoji } from '../utils/emoji.js';
 import mongoose from 'mongoose';
 import { Photo } from '../models/Photo.js';
 import { Membership } from '../models/Membership.js';
@@ -116,10 +117,11 @@ export async function likes(req, res) {
   res.json({ people: [{ by: 'You', mine: true, avatarUrl: avatarOf(req.user) }] });
 }
 
+// The quick picks on the album page; any other single emoji is accepted too (isEmoji)
 export const REACTIONS = ['😍', '😂', '🔥', '👏', '🥹', '😮', '🎉', '🥳', '❤️', '🙌', '✨', '🤩'];
 export function reactionCounts(photo) {
   const counts = {};
-  for (const r of photo.reactions || []) if (REACTIONS.includes(r.emoji)) counts[r.emoji] = (counts[r.emoji] || 0) + 1;
+  for (const r of photo.reactions || []) if (isEmoji(r.emoji)) counts[r.emoji] = (counts[r.emoji] || 0) + 1;
   return counts;
 }
 export const myReaction = (photo, userId) => (photo.reactions || []).find((r) => r.user?.equals(userId))?.emoji || null;
@@ -128,24 +130,24 @@ export const myReaction = (photo, userId) => (photo.reactions || []).find((r) =>
 export async function react(req, res) {
   const { photo } = await photoFor(req, { react: true });
   const want = req.body?.emoji ?? null;
-  if (want !== null && !REACTIONS.includes(want)) throw new HttpError(400, 'Pick one of the reactions.');
+  if (want !== null && !isEmoji(want)) throw new HttpError(400, 'Pick one emoji to react with.');
   const uid = req.user._id;
   await Photo.updateOne({ _id: photo._id }, { $pull: { reactions: { user: uid } } });
-  if (want) await Photo.updateOne({ _id: photo._id }, { $push: { reactions: { user: uid, emoji: want } } });
+  if (want) await Photo.updateOne({ _id: photo._id }, { $push: { reactions: { user: uid, emoji: want, at: new Date() } } });
   const who = { user: photo.uploader, actor: uid, album: photo.album, photo: photo._id, type: 'reaction' };
   if (want) await notify({ ...who, emoji: want }); else await unnotify(who);
   const now = await Photo.findById(photo._id, 'reactions');
   res.json({ reactions: reactionCounts(now), reaction: myReaction(now, uid) });
 }
 
-// GET /api/photos/:id/reactions  Who reacted with what (yours first)
+// GET /api/photos/:id/reactions  Who reacted with what and when (yours first, then the newest)
 export async function reactions(req, res) {
   const { photo } = await photoFor(req, { react: true });
   await photo.populate({ path: 'reactions.user', model: 'User', select: AVATAR_FIELDS });
-  const people = (photo.reactions || []).filter((r) => r.user && REACTIONS.includes(r.emoji)).map((r) => {
+  const people = (photo.reactions || []).filter((r) => r.user && isEmoji(r.emoji)).map((r) => {
     const mine = r.user._id.equals(req.user._id);
-    return { by: mine ? 'You' : firstName(r.user.name), emoji: r.emoji, mine, avatarUrl: avatarOf(r.user) };
-  }).sort((a, b) => b.mine - a.mine);
+    return { by: mine ? 'You' : firstName(r.user.name), emoji: r.emoji, mine, avatarUrl: avatarOf(r.user), at: r.at || null };
+  }).sort((a, b) => (b.mine - a.mine) || (new Date(b.at || 0) - new Date(a.at || 0)));
   res.json({ people });
 }
 

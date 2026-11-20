@@ -293,6 +293,12 @@
       return { body: { exportedAt: new Date().toISOString(), user: state.user, consents: state.consents || [],
         albums: state.albums.map((a) => ({ id: a.id, name: a.name, role: a.role, photos: photosOf(a).map((p) => ({ id: p.id, url: p.url, by: p.by })) })) } };
     }
+    // The support form: checked like the server does, then "sent" (nothing leaves this preview)
+    if (path === '/api/support' && method === 'POST') {
+      if (!String(body.name || '').trim()) return fail(400, 'Enter your name so we know who to reply to.');
+      if (String(body.message || '').trim().length < 10) return fail(400, 'Tell us a little more. A sentence or two is plenty.');
+      return { status: 201, body: { ok: true } };
+    }
     if (/^\/api\/auth\/(login|signup|google|apple)$/.test(path)) {
       // Sign-up records which Terms and Privacy Policy the person agreed to
       if (path === '/api/auth/signup') {
@@ -587,15 +593,16 @@
         const people = [], pool = [...REACTORS];
         let k = (salt(a) + i) % pool.length;
         for (const [emoji, n] of Object.entries(s.reactions)) {
-          for (let c = n - (s.reaction === emoji ? 1 : 0); c > 0; c--) { people.push({ by: pool[k % pool.length], emoji, mine: false, avatarUrl: '' }); k++; }
+          for (let c = n - (s.reaction === emoji ? 1 : 0); c > 0; c--) { people.push({ by: pool[k % pool.length], emoji, mine: false, avatarUrl: '', at: new Date(Date.now() - ((k * 47) % 3000 + 4) * 60000).toISOString() }); k++; }
         }
-        if (s.reaction) people.unshift({ by: 'You', emoji: s.reaction, mine: true, avatarUrl: '' });
+        if (s.reaction) people.unshift({ by: 'You', emoji: s.reaction, mine: true, avatarUrl: '', at: s.reactedAt || null });
         return { body: { people } };
       }
       // { emoji: '😍' } sets (or switches) your reaction, { emoji: null } takes it back
       if (sm[3] === 'reaction' && method === 'POST') {
         const want = body.emoji == null ? null : String(body.emoji);
-        if (want && !(window.MomentoEmoji ? window.MomentoEmoji.has(want) : RX.includes(want))) return fail(400, 'Pick one of the reactions.');
+        if (want && !(want.length <= 32 && [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(want)].length === 1 && /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[0-9#*]️?⃣/u.test(want))) return fail(400, 'Pick one emoji to react with.');
+        if (want) s.reactedAt = new Date().toISOString();
         if (s.reaction) { s.reactions[s.reaction] = Math.max(0, (s.reactions[s.reaction] || 1) - 1); if (!s.reactions[s.reaction]) delete s.reactions[s.reaction]; }
         if (want) s.reactions[want] = (s.reactions[want] || 0) + 1;
         s.reaction = want; delete s.comments; saveSocial(pid, s);

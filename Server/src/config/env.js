@@ -81,6 +81,8 @@ export const config = {
     // Where replies go, so "reply to this email" reaches a person
     replyTo: env.EMAIL_REPLY_TO || '',
   },
+  // Where the support page's "Send us a message" form is emailed (e.g. the team's Gmail)
+  support: { inbox: env.SUPPORT_EMAIL || 'support@hexarch.org' },
   // Push notifications to phones and computers (Web Push). Make the pair once with
   // "npx web-push generate-vapid-keys"; without them, notifications only show in the inbox.
   push: {

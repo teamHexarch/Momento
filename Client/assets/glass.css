@@ -793,6 +793,8 @@ body { overflow-wrap: break-word; }
 :root:not(.theming)::view-transition-new(root) { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) .06s both; }
 @keyframes pt-out { to { opacity: 0; transform: translateY(-14px) scale(.985); } }
 @keyframes pt-in { from { opacity: 0; transform: translateY(18px); } }
+/* The page rises in as a whole, so its title (.rise on each page) is already in place: one rise, not two */
+:root.vt-in .rise { translate: 0 0; transition: none; }
 /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
 html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
 html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }

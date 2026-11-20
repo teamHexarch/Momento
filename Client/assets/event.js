@@ -124,6 +124,11 @@
     .ev-picked[hidden] { display: none; }
     .ev-picked.is-error { color: #9A3D3D; }
     :root[data-theme="dark"] .ev-picked.is-error { color: #F0A3A3; }
+    .ev-public .acct-field { margin-bottom: .35rem; }
+    .ev-public select { width: 100%; min-width: 0; text-overflow: ellipsis; }   /* the glass well comes from assets/glass.css (.acct-field select) */
+    .ev-public[hidden] { display: none; }
+    .ev-when input { width: 100%; min-width: 0; box-sizing: border-box; }
+    .ev-vis-hint { display: block; padding: 0 .2rem; font-size: .8rem; line-height: 1.45; color: var(--slate, #5c596b); }
     .ev-check { display: flex; align-items: flex-start; gap: .7rem; cursor: pointer; }
     .ev-check[hidden] { display: none; }
     .ev-check input { flex: none; width: 1.15rem; height: 1.15rem; margin: .15rem 0 0; accent-color: var(--dusk, #2e2c3a); cursor: pointer; }
@@ -151,7 +156,8 @@
     #mCreate .m-first { margin-top: 0; }
     #mCreate [data-create-step="details"] > .acct-field { margin-bottom: 1rem; }
     #mCreate [data-create-step] > .ev { margin: 0; }
-    #mCreate .ev-when { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* Starts and Ends each hold a date and a time, so they sit one above the other at full width */
+    #mCreate .ev-when { grid-template-columns: minmax(0, 1fr); gap: .85rem; }
     #mCreate .ev-when .acct-field { margin-bottom: 0; }
     #mCreate .ev-lead select { width: 100%; min-width: 0; font-size: 1rem; }
     #mCreate [data-view="form"] > .acct-actions { margin-top: 1.25rem; }
@@ -337,8 +343,8 @@
       box.className = 'ev';
       box.innerHTML = `
         <div class="m-row2 ev-when">
-          <label class="acct-field"><span>Start time</span><input name="evStart" type="time" required></label>
-          <label class="acct-field"><span>End time</span><input name="evEnd" type="time" required></label>
+          <label class="acct-field"><span>Starts</span><input name="evStart" type="datetime-local" placeholder="Enter a start date and time" required></label>
+          <label class="acct-field"><span>Ends</span><input name="evEnd" type="datetime-local" placeholder="Enter an end date and time" required></label>
         </div>
         <div class="ev-sec ev-venue">
           <span class="ev-label" id="evVenueLabel">Venue</span>
@@ -349,12 +355,20 @@
             <button class="ev-link" type="button" data-here>${ICON.locate}Use my location</button>
           </div>
         </div>
+        <div class="ev-public">
+          <label class="acct-field"><span>Who can join?</span>
+            <select name="evVis" aria-describedby="evVisHint">
+              <option value="invite">Invite only: code, link or QR</option>
+              <option value="public">Public: on the map, no approval</option>
+            </select>
+          </label>
+          <small class="ev-vis-hint" id="evVisHint"></small>
+        </div>
         <!-- Everything optional, folded away: the cover (mountCover puts it first), public or not, and when and
              how far away guests can add photos -->
         <details class="ev-more">
           <summary>More options${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</summary>
           <div class="ev-more-body">
-            <label class="ev-check ev-public"><input type="checkbox" name="evPublic"><span><b>Public event</b><small>Show it on the Events map so anyone there can join</small></span></label>
             <div class="ev-sec ev-lead-sec">
               <label class="ev-label" for="evLead">Uploads open</label>
               <div class="ev-lead">
@@ -523,6 +537,27 @@
     range.addEventListener('input', syncRadius);
     box._syncRadius = syncRadius;
 
+    // Who can join: the line under the dropdown says what the choice means
+    const visHint = box.querySelector('.ev-vis-hint');
+    const syncVis = () => {
+      visHint.textContent = form.evVis.value === 'public'
+        ? 'Shown on the Events map. Anyone can join while joining is open, without waiting for your approval.'
+        : 'Only people you give the code, link or QR code to can join.';
+    };
+    form.evVis.addEventListener('change', syncVis);
+    box._syncVis = syncVis;
+    // Moving the start moves the end with it (same length), so the end is never before the start
+    let lastStart = '';
+    const localValue = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    form.evStart.addEventListener('focus', () => { lastStart = form.evStart.value; });
+    form.evStart.addEventListener('change', () => {
+      const st = Date.parse(form.evStart.value), was = Date.parse(lastStart), en = Date.parse(form.evEnd.value);
+      if (Number.isFinite(st) && Number.isFinite(was) && Number.isFinite(en) && en > was) form.evEnd.value = localValue(new Date(st + (en - was)));
+      // No end yet: four hours after the start, to change if needed
+      else if (Number.isFinite(st) && !form.evEnd.value) form.evEnd.value = localValue(new Date(st + 4 * 3600000));
+      lastStart = form.evStart.value;
+    });
+
     // An album for a friend group is shared with the group, not held at a place and time: no start and
     // end, no venue, no "Who can join?" and no upload window
     // (More options stays: the cover is there)
@@ -534,7 +569,7 @@
       const panel = form.querySelector(`[data-create-step="${grouped ? 'details' : 'event'}"]`);
       if (panel && box.parentElement !== panel) panel.append(box);
       eventOnly.forEach((el) => { if (el) el.hidden = grouped; });
-      if (grouped && form.evPublic) form.evPublic.checked = false;
+      if (grouped && form.evVis) { form.evVis.value = 'invite'; syncVis(); }
       if (form.place) form.place.value = grouped ? '' : ((isPlaceholder(state.venue?.name) ? '' : state.venue?.name) || state.venue?.address || '').slice(0, 60);
     };
     form.addEventListener('change', (e) => { if (e.target.name === 'group') syncWho(); });
@@ -577,7 +612,13 @@
       let results = [], active = -1, timer = 0, ctrl = null, near = null;
       // Places near the host come first, if they have already allowed location (no new prompt)
       navigator.permissions?.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') locate().then((l) => { near = l; }, () => {}); }, () => {});
-      const open = (v) => { list.hidden = !v; input.setAttribute('aria-expanded', v); if (!v) { active = -1; input.removeAttribute('aria-activedescendant'); } };
+      const open = (v) => {
+        const was = list.hidden;
+        list.hidden = !v; input.setAttribute('aria-expanded', v);
+        if (!v) { active = -1; input.removeAttribute('aria-activedescendant'); return; }
+        // Just opened: bring the places into view right under the box (on a phone the keyboard can hide them)
+        if (was) requestAnimationFrame(() => list.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+      };
       const note = (text) => { list.innerHTML = `<li class="ev-suggest-note" role="presentation">${esc(text)}</li>`; open(true); };
       const paint = () => {
         list.innerHTML = results.map((s, i) => `<li role="option" id="evSug${i}" data-i="${i}" aria-selected="${i === active}" class="${i === active ? 'is-active' : ''}"><b>${esc(s.name)}</b>${s.address ? `<small>${esc(s.address)}</small>` : ''}</li>`).join('')
@@ -627,10 +668,12 @@
     };
 
     box._reset = () => {
-      form.evStart.value = '19:00'; form.evEnd.value = '23:00';
+      // Both start empty ("Enter a start date and time"); their calendars open on today
+      form.evStart.value = ''; form.evEnd.value = '';
+      lastStart = '';
       form.evLead.value = '30';
       form.evRadius.value = '1';
-      if (form.evPublic) form.evPublic.checked = false;
+      if (form.evVis) { form.evVis.value = 'invite'; syncVis(); }
       box._syncRadius();
       setVenue(null);
       const input = search.querySelector('input'); if (input) input.value = '';
@@ -696,11 +739,11 @@
 
   // The event's times from the form, or null
   function times(form) {
-    const date = form.date?.value, s = form.evStart?.value, e = form.evEnd?.value;
-    if (!date || !s || !e) return null;
-    const startsAt = new Date(`${date}T${s}`);
-    let endsAt = new Date(`${date}T${e}`);
-    if (endsAt <= startsAt) endsAt = new Date(endsAt.getTime() + 86400000);   // runs past midnight
+    // Start and end are each a date and a time (an event can run past midnight or over several days)
+    const s = form.evStart?.value, e = form.evEnd?.value;
+    if (!s || !e) return null;
+    const startsAt = new Date(s), endsAt = new Date(e);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return null;
     const leadMin = Number(form.evLead?.value || 0);
     return { startsAt, endsAt, leadMin };
   }
@@ -711,10 +754,12 @@
     const st = box._state, t = times(form);
     // A friend group album: just its name and date (see syncWho)
     if (box.dataset.grouped) { if (form.place) form.place.value = ''; return { fields: { place: '', eventUploadWindow: false, visibility: 'invite' } }; }
-    if (!form.evStart.value) return { error: 'Pick the time the event starts.', focus: form.evStart };
-    if (!form.evEnd.value) return { error: 'Pick the time the event ends.', focus: form.evEnd };
-    if (!t) return { error: 'Pick the date of the event.', focus: form.date };
-    if (t.endsAt < new Date()) return { error: 'That event has already finished. Check the date and times.', focus: form.evEnd };
+    if (!form.evStart.value) return { error: 'Pick the date and time the event starts.', focus: form.evStart };
+    if (!form.evEnd.value) return { error: 'Pick the date and time the event ends.', focus: form.evEnd };
+    if (!t) return { error: 'Pick the date and time the event starts.', focus: form.evStart };
+    if (t.endsAt <= t.startsAt) return { error: 'The event has to end after it starts.', focus: form.evEnd };
+    if (t.endsAt - t.startsAt > 7 * 86400000) return { error: 'Keep the event under a week long.', focus: form.evEnd };
+    if (t.endsAt < new Date()) return { error: 'That event has already finished. Check the dates and times.', focus: form.evEnd };
     if (!Number.isFinite(t.leadMin) || t.leadMin < 0 || t.leadMin > 1440) { form.evLead.closest('details')?.setAttribute('open', ''); return { error: 'Choose when uploads open, up to 24 hours before the event.', focus: form.evLead }; }
     if (!st.venue) return { error: 'Select a venue or use your location.', focus: box.querySelector('gmp-place-autocomplete, .ev-venue-search input, [data-here]') };
     // "Where you are now" and "Pinned on the map" only label the pin while choosing: they aren't the venue's name
@@ -723,13 +768,15 @@
     return {
       fields: {
         place: name.slice(0, 60),
+        // The album's date is the day it starts
+        date: form.evStart.value.slice(0, 10),
         startsAt: t.startsAt.toISOString(),
         endsAt: t.endsAt.toISOString(),
         uploadLeadMin: t.leadMin,
         eventUploadWindow: true,
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
-        visibility: !form.group?.value && form.evPublic?.checked ? 'public' : 'invite',
+        visibility: !form.group?.value && form.evVis?.value === 'public' ? 'public' : 'invite',
       },
     };
   }
