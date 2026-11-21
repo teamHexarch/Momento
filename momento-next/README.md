@@ -8,10 +8,15 @@ and `qa/README.md` (how to check that nothing changed).
 
 ## Run it
 
+On Windows, double-click **`Open Momento Next preview.cmd`** (one folder up). It starts this site on
+http://localhost:3001 and the original on http://localhost:3000 (if `qa/reference-site` exists), then opens both.
+Or by hand:
+
 ```
 npm install
 npm run dev      # http://localhost:3001
-npm run build && npm run start
+npm run build    # static export into out/ (the site is hosted on GitHub Pages)
+npm run preview  # serves out/ the way GitHub Pages does: http://localhost:3002
 ```
 
 Locally the site answers its API calls with sample data (`public/assets/devpreview.js`), so no backend is needed.

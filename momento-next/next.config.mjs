@@ -1,22 +1,32 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  devIndicators: false, // keeps the dev-mode badge off the page, so it can be compared with the original
-  // The page scripts (public/legacy, public/assets) must run exactly once per page load
-  // (see src/legacy/LegacyScripts.tsx), so React's development double-render is off.
-  reactStrictMode: false,
-  // One 404 page for the whole app (src/app/global-not-found.tsx). Needed because every page has its own root layout.
-  experimental: { globalNotFound: true },
-  // The pages not ported yet (and the shared scripts) still link home as "index.html". The home page is now "/".
-  // Query strings (?login, ?lang=es) carry over, and the browser keeps the #section.
-  async redirects() {
-    return [
-      { source: '/index.html', destination: '/', permanent: false },
-      // albums.html is the page's real address (the page scripts rely on it); /albums is a convenience
-      { source: '/albums', destination: '/albums.html', permanent: false },
-      // groups.html was only a redirect: groups now live on the Social page, above the events
-      { source: '/groups.html', destination: '/events.html#groups', permanent: false },
-    ];
-  },
-};
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
 
-export default nextConfig;
+/**
+ * The site is hosted on GitHub Pages (static files only), so `next build` makes a static export into `out/`
+ * (then `scripts/finish-export.mjs` tidies it for GitHub Pages: see that file). Test the export locally with
+ * `npm run preview`, which serves `out/` the way GitHub Pages does.
+ *
+ * `npm run dev` is not an export, so it keeps two redirects that GitHub Pages gives us for free:
+ *   /index.html -> /       (on GitHub Pages, out/index.html simply is the home page)
+ *   /albums     -> /albums.html   (GitHub Pages serves name.html for /name)
+ * groups.html is the original redirect page itself, in public/, so it behaves the same everywhere.
+ */
+export default function nextConfig(phase) {
+  const dev = phase === PHASE_DEVELOPMENT_SERVER;
+  /** @type {import('next').NextConfig} */
+  const config = {
+    devIndicators: false, // keeps the dev-mode badge off the page, so it can be compared with the original
+    // The page scripts (public/legacy, public/assets) must run exactly once per page load
+    // (see src/legacy/LegacyScripts.tsx), so React's development double-render is off.
+    reactStrictMode: false,
+    // One 404 page for the whole app (src/app/global-not-found.tsx). Needed because every page has its own root layout.
+    experimental: { globalNotFound: true },
+  };
+  if (!dev) config.output = 'export';
+  else {
+    config.redirects = async () => [
+      { source: '/index.html', destination: '/', permanent: false },
+      { source: '/albums', destination: '/albums.html', permanent: false },
+    ];
+  }
+  return config;
+}

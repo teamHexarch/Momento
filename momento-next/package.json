@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
-    "start": "next start -p 3001"
+    "build": "next build && node scripts/finish-export.mjs",
+    "preview": "node scripts/serve-out.mjs"
   },
   "dependencies": {
     "next": "latest",

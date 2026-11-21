@@ -31,7 +31,7 @@ async function states(base, url, scheme, tag) {
   await p.mouse.move(5, 5); await sleep(300);
   // keyboard focus rings, one stop at a time
   for (let i = 1; i <= 6; i++) { await p.keyboard.press('Tab'); await sleep(350); shots[`tab${i}`] = await p.screenshot(); }
-  const focused = (await p.evaluate(() => document.activeElement?.textContent?.trim().slice(0, 20))) + ' @' + new URL(p.url()).pathname.replace(/^\/no\/such\/page$/, '/404');
+  const focused = (await p.evaluate(() => document.activeElement?.textContent?.trim().slice(0, 20))) + ' @' + new URL(p.url()).pathname.replace(/^\/(no\/such\/page|404\.html)$/, '/404');   // the same page on both sites
   await p.close();
   return { shots, focused };
 }

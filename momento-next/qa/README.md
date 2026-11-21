@@ -17,7 +17,7 @@ node make-reference.mjs "<folder that holds the original index (1).html>"
 
 # 2. Serve both sites
 cd reference-site && node serve.mjs       # original      http://localhost:3000
-cd ../..          && npm run dev          # Next.js       http://localhost:3001   (or: npm run build && npm run start)
+cd ../..          && npm run dev          # Next.js       http://localhost:3001   (or the export: npm run build && npm run preview  -> :3002)
 ```
 
 **Running the checks from Git Bash?** Put `export MSYS_NO_PATHCONV=1` first. Otherwise Git Bash rewrites any argument that

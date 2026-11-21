@@ -46,7 +46,8 @@ The project root also still holds the original files, all with a stray " (1)" in
 cd momento-next
 npm install
 npm run dev          # http://localhost:3001
-npm run build && npm run start   # production check, use this for any speed judgement
+npm run build && npm run preview   # the static export (out/), served like GitHub Pages on :3002. Use this for any
+                                   # production or speed check; it is exactly what gets uploaded
 ```
 
 - Locally the site answers API calls with sample data from `public/assets/devpreview.js` (signed in, sample albums).
@@ -155,8 +156,15 @@ These are duplicated in every page today, so this is where most of the value is.
 (search `public/assets/extras.js`, and the shared block inside each `public/legacy/<page>-N.js`).
 
 The shared shell is the same ~1,080-line block pasted into five pages: `home-5.js`, `albums-2.js`, `events-2.js`, `settings-3.js` and
-`support-2.js` (about 68 KB each). `albums-2` and `settings-3` are identical; `events-2` adds `Momento.choose`; `support-2` differs by
-one line (`NOTIFY` also has `activity: true`); `home-5` has small differences. Diff them first, and make the React version cover
+`support-2.js` (about 68 KB each). `albums-2` and `settings-3` are identical; `events-2` adds `Momento.choose` and an
+`openAlbumHere` hook; `support-2` differs by one line (its `NOTIFY` default lacks `activity: true`, which Albums, Settings and
+Social have); `home-5` lacks `activity: true` too, and drives the thread effect from Home's main loop instead of its own
+`requestAnimationFrame`.
+
+**i18n.js and React-rendered elements.** `i18n.js` translates text nodes in place (`nodeValue`) and attributes
+(`setAttribute`), which React tolerates. But a sentence broken up by inline tags (`<b>4</b> of <b>9</b> guests`) is rebuilt
+with `el.replaceChildren(...)`, and if React later re-renders that element it will try to update nodes that are gone and
+crash. Until translation is a React provider (step 5 below), an element React re-renders must not contain inline-tag sentences. Diff them first, and make the React version cover
 the union. Everything the pages call lives on `window.Momento`: `theme`, `account`, `sessionReady`, `openSettings`, `openHelp`,
 `toast`, `flash`, `confirm`, `ask`, `choose` (Social only), `inviteLink`, `shareInvite`, `removeAlbum`, `createAlbum`, `intro`,
 `flourish` (all in that block), plus `qr`, `event`, `myGroups`, `chooseLanguage`, `groupLink`, `albumSettings`, `openJoin`,
@@ -225,7 +233,9 @@ Page notes:
    sitemap and the embed iframe URL. Keep redirects from every old URL.
 
 ### Phase 6: production hardening
-1. **Hosting decision (ask the owner):** `public/CNAME` suggests the site is on GitHub Pages (static) with the API on
+1. **Hosting: decided 21 Nov 2026, GitHub Pages** (the owner's existing Pages site, which hosts the HTML version today).
+   So the finished app must be a static export: no API routes, server actions, middleware, `redirects()` or request-time
+   rendering in new code. Until it's finished it is only run locally for testing. Background: `public/CNAME` suggests the site is on GitHub Pages (static) with the API on
    `api.hexarch.org`. `next.config.mjs` uses `redirects()`, which needs a Node server and does **not** work with a
    static export (`output: 'export'`). Redirects in use: `/index.html`, `/albums`, `/groups.html`. The 404 page uses the experimental
    `globalNotFound` flag. Either pick a host that runs Next.js, or replace the redirects with static equivalents and check that a
