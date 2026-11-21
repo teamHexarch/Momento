@@ -11,6 +11,8 @@ const schema = new mongoose.Schema({
   state: { type: String, enum: ['checking', 'review', 'publish', 'published', 'rejected', 'failed', 'discarding'], default: 'checking' },
   stage: { type: Number, default: 1 },
   severity: Number,
+  // Declined because the check is 85%+ sure it's nudity (no Request review); otherwise it was unsure
+  explicit: Boolean,
   history: { type: [mongoose.Schema.Types.Mixed], default: [] },
   due: { type: Date, default: Date.now },
   claim: String,

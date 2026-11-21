@@ -6,7 +6,7 @@ import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
 import { warmUp } from './services/nsfwService.js';
-import { startUploadChecks, calibratedBins, calibrationError, activeTable, starterThreshold } from './services/uploadChecks.js';
+import { startUploadChecks, calibratedBins, calibrationError, activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from './services/uploadChecks.js';
 import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
 import { moveStaffRoleToPlan } from './services/planMigration.js';
@@ -37,13 +37,12 @@ startUploadChecks();
 startRefusalCleanup();
 {
   const { source } = activeTable(), bins = calibratedBins();
-  console.log('Photo checks: NSFW.js MobileNetV2 on this server. ' + (
-    source === 'file' ? `Table file ${process.env.NSFW_CALIBRATION}: ${bins} score range(s) publish at once`
-      : source === 'learned' ? `Learned from staff reviews: ${bins} score range(s) publish at once`
-        : source === 'starter' ? `Starter rule until staff reviews teach it: ${Math.round(starterThreshold * 100)}%+ sure of level 0-50 publishes at once`
-          : 'Nothing publishes on its own')
-    + `; the rest is declined until the uploader asks for a review; relearns every ${relearnHours} h.`);
-  if (calibrationError) console.error('The calibration table file could not be read: nothing publishes on its own until it is fixed.');
+  console.log(`Photo checks: NSFW.js MobileNetV2 on this server. Risk under ${Math.round(PUBLISH_BELOW * 100)}% publishes; `
+    + `Porn or Hentai ${Math.round(HARD_DECLINE_AT * 100)}%+ is declined for good; the rest waits for the uploader's Request review`
+    + (source === 'file' ? `, except ${bins} score range(s) from the table file ${process.env.NSFW_CALIBRATION}`
+      : source === 'learned' ? `, except ${bins} score range(s) learned from staff reviews` : '')
+    + `. Relearns from staff reviews every ${relearnHours} h.`);
+  if (calibrationError) console.error('The calibration table file could not be read: only the thresholds apply until it is fixed.');
 }
 startLearning();
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));

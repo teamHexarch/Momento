@@ -46,14 +46,13 @@ const UNSURE = { Neutral: .3, Sexy: .2, Porn: .5 };
 nsfw.useClassifier(async () => SURE);
 
 try {
-  // ---- What publishes on its own: a range trusted at 85% or more ----
-  const bins = confidence => ({ 1: { allow: [{ min: .8, max: 1, confidence }] } });
-  assert.equal(routeScore({ allow: .86 }).action, 'allow', 'the starter rule: 85%+ sure of level 0-50 publishes');
-  assert.equal(routeScore({ allow: .86 }).starter, true);
-  assert.equal(routeScore({ allow: .84 }).action, 'decline');
-  assert.equal(routeScore({ allow: 1 }, bins(.8499)).action, 'decline');
-  assert.equal(routeScore({ allow: 1 }, bins(.85)).action, 'allow');
-  assert.equal(routeScore({ allow: NaN }).action, 'decline');
+  // ---- The thresholds: risk (Porn + Hentai + Sexy) under 25% publishes; Porn or Hentai 85%+ is a hard decline ----
+  const cls = (porn, sexy = 0, hentai = 0) => ({ classes: { Neutral: 1 - porn - sexy - hentai, Drawing: 0, Sexy: sexy, Porn: porn, Hentai: hentai } });
+  assert.equal(routeScore(cls(.1, .1)).action, 'allow');
+  assert.equal(routeScore(cls(.1, .15)).action, 'decline');
+  assert.equal(routeScore(cls(0, .99)).explicit, undefined, 'swimwear can always be reviewed');
+  assert.equal(routeScore(cls(.85)).explicit, true);
+  assert.equal(routeScore(cls(0, 0, .9)).explicit, true);
 
   const password = 'test-user-password-123';
   const user = await User.create({ name: 'Host', email: 'host@example.invalid', passwordHash: await bcrypt.hash(password, 4), emailVerified: true });
@@ -148,10 +147,68 @@ try {
   assert.match((await ModerationDecision.findById(broken.id)).reason, /couldn’t run/);
   await request('/api/photos/' + broken.id, 404, cookie);
 
+  // ---- Names in any language arrive intact; you can delete your own photo; a declined upload can be removed ----
+  nsfw.useClassifier(async () => SURE);
+  const named = (await (await request(url + '/photos', 201, cookie, 'POST', await form('螢幕擷取畫面 2026.png'))).json()).photos[0];
+  assert.equal((await UploadCheck.findById(named.id)).originalName, '螢幕擷取畫面 2026.png');
+  const guestUser = await User.create({ name: 'Guest', email: 'guest@example.invalid', passwordHash: await bcrypt.hash(password, 4), emailVerified: true });
+  const guest = await login(guestUser);
+  await request('/api/albums/join', 201, guest, 'POST', { code: album.code });
+  const guestPhoto = (await (await request(url + '/photos', 201, guest, 'POST', await form('mine.jpg'))).json()).photos[0];
+  await request('/api/trash', 403, guest, 'POST', { photoIds: [named.id] });   // not theirs
+  assert.equal((await (await request('/api/trash', 200, guest, 'POST', { photoIds: [guestPhoto.id] })).json()).moved, 1, 'the uploader deletes their own');
+  assert.equal((await (await request('/api/trash/restore', 200, guest, 'POST', { photoIds: [guestPhoto.id] })).json()).restored, 1, 'and can undo it');
+  assert.equal((await (await request('/api/trash', 200, cookie, 'POST', { photoIds: [guestPhoto.id] })).json()).moved, 1, 'the host deletes any');
+  nsfw.useClassifier(async () => UNSURE);
+  const gone = (await (await request(url + '/photos', 201, cookie, 'POST', await form('remove-me.jpg'))).json()).checks[0];
+  await request(url + '/checks/' + gone.id, 404, guest, 'DELETE');
+  await request(url + '/checks/' + gone.id, 200, cookie, 'DELETE');
+  assert.equal(await UploadCheck.exists({ _id: gone.id }), null, 'removed from the list and deleted');
+
+  // ---- 85%+ sure it's nudity: declined with no Request review, and nobody is emailed ----
+  nsfw.useClassifier(async () => ({ Neutral: .03, Sexy: .02, Porn: .95 }));
+  const sureNo = (await (await request(url + '/photos', 201, cookie, 'POST', await form('sure.jpg'))).json()).checks[0];
+  assert.equal(sureNo.explicit, true);
+  const before = mails.length;
+  await request('/api/auth/moderation/' + sureNo.id + '/review', 400, cookie, 'POST', {});
+  assert.equal(mails.length, before, 'no email for a photo the check is sure about');
+  assert.equal((await (await request(url + '/checks', 200, cookie)).json()).checks.find(c => c.id === sureNo.id).explicit, true);
+
+  // ---- In a real browser: staff open the email's link and see the picture, at its own shape ----
+  if (process.argv.includes('--browser')) {
+    nsfw.useClassifier(async () => UNSURE);
+    const tall = new FormData();
+    tall.append('photos', new Blob([await sharp({ create: { width: 300, height: 600, channels: 3, background: '#c83c64' } }).jpeg().toBuffer()]), 'portrait.jpg');
+    const waitingId = (await (await request(url + '/photos', 201, cookie, 'POST', tall)).json()).checks[0].id;
+    mails.length = 0;
+    await request('/api/auth/moderation/' + waitingId + '/review', 200, cookie, 'POST', {});
+    await new Promise(r => setTimeout(r, 100));
+    const link = 'review.html?id=' + waitingId;   // the email's button (services/reviewAlerts.js)
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge' });
+    try {
+      const page = await (await browser.newContext()).newPage();
+      // The page and the API are served by this test server (as hexarch.org and api.hexarch.org would be)
+      await page.route('**/*', async route => {
+        const target = new URL(route.request().url());
+        if (!['http://localhost:4000'].includes(target.origin)) return route.abort();
+        const response = await route.fetch({ url: origin + target.pathname + target.search, headers: { ...route.request().headers(), cookie: staff } });
+        await route.fulfill({ response });
+      });
+      await page.goto('http://localhost:4000/' + link);
+      await page.locator('#photo:not([hidden])').waitFor();
+      const shown = await page.evaluate(() => { const i = document.getElementById('photo'); return { w: i.naturalWidth, h: i.naturalHeight, shape: document.getElementById('shape').textContent, name: document.getElementById('name').textContent }; });
+      assert.ok(shown.w > 0 && shown.h > shown.w, 'the picture shows, taller than wide: ' + JSON.stringify(shown));
+      assert.equal(shown.shape, 'Portrait');
+      assert.match(shown.name, /portrait\.jpg/);
+      console.log('Browser verified: the email link opens that photo on the review page, shown as a portrait.');
+    } finally { await browser.close(); }
+  }
+
   // ---- The review page and the staff status ----
   const status = await (await request('/api/admin/moderation-status', 200, staff)).json();
   assert.equal(status.enabled, true);
-  assert.equal(status.source, 'starter');
+  assert.equal(status.source, 'thresholds');
   assert.equal('spotCheck' in status, false, 'no spot checks');
   const relearned = await (await request('/api/admin/moderation-status/relearn', 200, staff, 'POST', {})).json();
   assert.equal(typeof relearned.result.ok, 'boolean');

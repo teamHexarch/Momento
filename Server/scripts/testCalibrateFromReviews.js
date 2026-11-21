@@ -22,7 +22,9 @@ await mongoose.connect(process.env.MONGODB_URI);
 const { ModerationDecision } = await import('../src/models/ModerationDecision.js');
 const { reviewedRows, splitByGroup } = await import('./calibrateFromReviews.js');
 const { calibrateFromReviews } = await import('../src/services/reviewCalibration.js');
-const { routeScore, activeTable, stageOneScores, starterThreshold } = await import('../src/services/uploadChecks.js');
+const { routeScore, activeTable, stageOneScores, PUBLISH_BELOW, HARD_DECLINE_AT } = await import('../src/services/uploadChecks.js');
+// A photo whose risk is all "Sexy" (no Porn or Hentai), with the given allow score (1 - risk)
+const rs = (allow, table) => routeScore({ classes: { Neutral: allow, Drawing: 0, Sexy: 1 - allow, Porn: 0, Hentai: 0 } }, table);
 const { relearn, loadLearned } = await import('../src/services/stageOneLearning.js');
 const { ModerationCalibration } = await import('../src/models/ModerationCalibration.js');
 
@@ -32,28 +34,34 @@ let n = 0;
 const decision = (album, allow, status, extra = {}) => ({ user, album, kind: 'photo', hash: 'h' + n++, model: 'NSFW.js MobileNetV2',
   scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 3 }, status, reviewedBy: staff, ...extra });
 try {
-  // The model's classes against Momento's one-model standard: the publishable (0-50) score is everything but
-  // Porn and Hentai (Neutral + Drawing + Sexy)
+  // The score: allow = 1 - risk, where risk = Porn + Hentai + Sexy
   const scored = stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 });
-  assert.equal(scored.allow.toFixed(6), '0.950000');
+  assert.equal(scored.allow.toFixed(6), '0.800000');
   assert.equal(scored.level, 0);
-  assert.equal(scored.version, 3);
-  assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.950000', 'swimwear-like (Sexy) counts as publishable');
+  assert.equal(scored.version, 4);
+  assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.100000', 'swimwear-like (Sexy) counts as risk');
   assert.equal(stageOneScores({ Neutral: .2, Sexy: .7, Porn: .1 }).level, 25);
   assert.equal(stageOneScores({ Neutral: .1, Porn: .9 }).level, 100);
-  // Method B until the reviews teach it: the starter rule, 85% sure (NSFW_STARTER_THRESHOLD)
-  assert.equal(starterThreshold, .85);
-  assert.equal(activeTable().source, 'starter');
-  assert.equal(routeScore({ allow: .86 }).action, 'allow');
-  assert.equal(routeScore({ allow: .86 }).starter, true);
-  assert.equal(routeScore({ allow: .84 }).action, 'decline');
-  // One model: a range must be 85% sure
-  assert.equal(routeScore({ allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .8499 }] } }).action, 'decline');
-  assert.equal(routeScore({ allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .85 }] } }).action, 'allow');
+  // The two thresholds: risk under 25% publishes; Porn or Hentai 85%+ is a hard decline; the rest is declined (review)
+  assert.equal(PUBLISH_BELOW, .25); assert.equal(HARD_DECLINE_AT, .85);
+  assert.equal(activeTable().source, 'thresholds');
+  assert.equal(rs(.76).action, 'allow');
+  assert.equal(rs(.75).action, 'decline');
+  assert.equal(rs(.75).explicit, undefined, 'high Sexy is never a hard decline: it can be reviewed');
+  assert.equal(routeScore({ classes: { Neutral: .1, Sexy: 0, Porn: .85, Hentai: .05 } }).explicit, true);
+  assert.equal(routeScore({ classes: { Neutral: .1, Sexy: .1, Porn: .4, Hentai: .4 } }).explicit, undefined, 'neither class alone at 85%');
+  assert.equal(routeScore({ allow: 1 }).action, 'decline', 'no class scores: never published');
+  // Learning: a range staff approve 85%+ of the time publishes too (but never over a hard decline)
+  const taught = (confidence) => ({ 1: { allow: [{ min: .5, max: .6, confidence }] } });
+  assert.equal(rs(.55, taught(.8499)).action, 'decline');
+  assert.equal(rs(.55, taught(.85)).action, 'allow');
+  assert.equal(rs(.55, taught(.85)).learned, true);
+  assert.equal(rs(.45, taught(.85)).action, 'decline');
+  assert.equal(routeScore({ classes: { Neutral: .1, Sexy: 0, Porn: .9, Hentai: 0 } }, { 1: { allow: [{ min: 0, max: 1, confidence: 1 }] } }).explicit, true);
   // Too few reviews: relearning keeps the starter rule and says why
   assert.equal((await relearn()).ok, false);
   assert.match((await ModerationCalibration.findById('stage-one')).lastError, /Not enough reviewed uploads/);
-  assert.equal(activeTable().source, 'starter');
+  assert.equal(activeTable().source, 'thresholds');
 
   const albums = Array.from({ length: 8 }, () => new mongoose.Types.ObjectId());
   const docs = [];
@@ -91,33 +99,31 @@ try {
   assert.equal(learned.ranges, 1);
   assert.equal(activeTable().source, 'learned');
   assert.deepEqual(activeTable().table, table);
-  assert.equal(routeScore({ allow: .93 }).action, 'allow');
-  assert.equal(routeScore({ allow: .93 }).starter, undefined);
-  assert.equal(routeScore({ allow: .87 }).action, 'decline', 'the learned table (0.9+) replaces the 0.85 starter rule');
+  assert.equal(rs(.93).action, 'allow');
   const stored = await ModerationCalibration.findById('stage-one').lean();
   assert.deepEqual(stored.table, table);
   assert.equal(stored.lastError, null);
   // After a restart it loads what it learned
   const { setLearnedTable } = await import('../src/services/uploadChecks.js');
   setLearnedTable(null);
-  assert.equal(activeTable().source, 'starter');
+  assert.equal(activeTable().source, 'thresholds');
   await loadLearned();
   assert.equal(activeTable().source, 'learned');
   // A table learned under another score definition is ignored until relearned
   await ModerationCalibration.updateOne({ _id: 'stage-one' }, { $set: { scoreVersion: 1 } });
   await loadLearned();
-  assert.equal(activeTable().source, 'starter');
+  assert.equal(activeTable().source, 'thresholds');
   await ModerationCalibration.updateOne({ _id: 'stage-one' }, { $unset: { scoreVersion: 1 } });
   await loadLearned();
-  assert.equal(activeTable().source, 'starter', 'a table with no version is not trusted');
+  assert.equal(activeTable().source, 'thresholds', 'a table with no version is not trusted');
   setLearnedTable(table);
-  assert.equal(activeTable().source, 'starter', 'nor when set without one');
+  assert.equal(activeTable().source, 'thresholds', 'nor when set without one');
   await relearn();
   assert.equal(activeTable().source, 'learned');
-  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 3);
+  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 4);
   assert.ok(table[1].allow[0].confidence >= .9);
-  assert.equal(routeScore({ allow: .95 }, table).action, 'allow');
-  assert.equal(routeScore({ allow: .85 }, table).action, 'decline', 'level-75 approvals do not enable a range');
+  assert.equal(rs(.95, table).action, 'allow');
+  assert.ok(!table[1].allow.some((b) => b.min <= .85 && .85 < b.max), 'level-75 approvals do not enable a range');
   // Level 50 is publishable with one model: the same photos rated 50 enable that range too
   const { buildTable } = await import('../src/services/calibrationTable.js');
   const { truthOf, STAGE_ONE_PUBLISH_MAX } = await import('../src/services/calibrationTable.js');
@@ -152,21 +158,21 @@ try {
   { cwd: serverDir, env: { ...childEnv, NSFW_CALIBRATION: file, ...extra } })).stdout.trim().split('\n').pop());
   const missing = await probe(path.join(dir, 'missing.json'));
   assert.ok(missing.error);
-  assert.equal(missing.source, 'none');
+  assert.equal(missing.source, 'thresholds');
   assert.equal(missing.bins, 0);
   await writeFile(path.join(dir, 'broken.json'), '');
-  assert.equal((await probe(path.join(dir, 'broken.json'))).source, 'none');
+  assert.equal((await probe(path.join(dir, 'broken.json'))).source, 'thresholds');
   await writeFile(path.join(dir, 'good.json'), JSON.stringify(table));
   assert.deepEqual(await probe(path.join(dir, 'good.json')), { error: null, source: 'file', bins: 1 });
   // A table file built with another score definition (or none recorded) is refused: everything waits for staff
   await writeFile(path.join(dir, 'old.json'), JSON.stringify({ 1: table[1] }));
   const old = await probe(path.join(dir, 'old.json'));
   assert.match(old.error, /score version none/);
-  assert.equal(old.source, 'none');
+  assert.equal(old.source, 'thresholds');
   await writeFile(path.join(dir, 'v2.json'), JSON.stringify({ ...table, scoreVersion: 2 }));
-  assert.equal((await probe(path.join(dir, 'v2.json'))).source, 'none');
-  // NSFW_STARTER_THRESHOLD=off: until it learns, everything waits for staff
-  assert.deepEqual(await probe('', { NSFW_STARTER_THRESHOLD: 'off' }), { error: null, source: 'none', bins: 0 });
+  assert.equal((await probe(path.join(dir, 'v2.json'))).source, 'thresholds');
+  // No table and nothing learned: just the two thresholds
+  assert.deepEqual(await probe(''), { error: null, source: 'thresholds', bins: 0 });
   console.log('Passed: staff-decision calibration (severity, album halves, exclusions, stdout), fail-safe table loading.');
 } finally {
   await mongoose.disconnect();

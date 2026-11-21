@@ -35,9 +35,9 @@ async function hosted(userId, only) {
 
 // The photos a restore or purge applies to: the ones listed, or all of them ({ all: true }, optionally
 // in one album), always only in the bin of albums this person hosts
-async function picked(req) {
+async function picked(req, own = false) {
   const names = await hosted(req.user._id, req.body?.album);
-  const filter = { album: { $in: [...names.keys()] }, deletedAt: { $ne: null } };
+  const filter = { $or: [{ album: { $in: [...names.keys()] } }, ...(own ? [{ deletedBy: req.user._id, uploader: req.user._id }] : [])], deletedAt: { $ne: null } };
   if (req.body?.all !== true) filter._id = { $in: readIds(req.body) };
   return Photo.find(filter, 'storageKey');
 }
@@ -45,11 +45,12 @@ async function picked(req) {
 // POST /api/trash  { photoIds }  → { moved, skipped }
 export async function moveToTrash(req, res) {
   const ids = readIds(req.body);
-  const photos = await Photo.find({ _id: { $in: ids }, deletedAt: null }, 'album');
+  const photos = await Photo.find({ _id: { $in: ids }, deletedAt: null }, 'album uploader');
   const names = await hosted(req.user._id);
-  const mine = photos.filter((p) => names.has(String(p.album))).map((p) => p._id);
+  // The host can delete any photo in their album; anyone can delete the photos they added
+  const mine = photos.filter((p) => names.has(String(p.album)) || p.uploader?.equals(req.user._id)).map((p) => p._id);
   const skipped = (Array.isArray(req.body?.photoIds) ? req.body.photoIds.length : 0) - mine.length;
-  if (!mine.length && skipped) throw new HttpError(403, 'Only the host of an album can delete its photos.');
+  if (!mine.length && skipped) throw new HttpError(403, 'You can delete the photos you added; the host can delete any photo in their album.');
   const r = await Photo.updateMany({ _id: { $in: mine }, deletedAt: null }, { $set: { deletedAt: new Date(), deletedBy: req.user._id } });
   res.json({ moved: r.modifiedCount, skipped });
 }
@@ -66,7 +67,7 @@ export async function listTrash(req, res) {
 
 // POST /api/trash/restore  { photoIds } | { all: true[, album] }  → { restored }
 export async function restore(req, res) {
-  const photos = await picked(req);
+  const photos = await picked(req, true);
   // Photos hidden by reports stay hidden until staff decide
   const r = await Photo.updateMany({ _id: { $in: photos.map((p) => p._id) }, flaggedAt: null }, { $unset: { deletedAt: 1, deletedBy: 1 } });
   res.json({ restored: r.modifiedCount });

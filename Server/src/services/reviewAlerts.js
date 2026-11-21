@@ -1,6 +1,7 @@
 import { config } from '../config/env.js';
 import { sendEmail } from './emailService.js';
 import { Album } from '../models/Album.js';
+import { fixFileName } from '../controllers/albumController.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const KIND = { photo: 'An album photo', cover: 'An album cover picture', avatar: 'A profile picture' };
@@ -9,10 +10,10 @@ const KIND = { photo: 'An album photo', cover: 'An album cover picture', avatar:
 // reviewed, with a link to the review page. No picture in the email: staff look at it on review.html.
 export async function tellStaffAboutReview({ decision, fileName, user }) {
   const album = decision.album ? await Album.findById(decision.album, 'name').lean() : null;
-  const link = `${config.frontendUrl}/review.html`;
+  const link = `${config.frontendUrl}/review.html?id=${decision._id || decision.id}`;
   const rows = [
     ['What', KIND[decision.kind] || 'A picture'],
-    ['File', fileName || '(not stored)'],
+    ['File', fileName ? fixFileName(fileName) : '(not stored)'],
     ['Album', album?.name || '(none)'],
     ['Asked by', `${user.name || ''} (account id ${user._id})`],
     ['Why it was declined', decision.reason || 'The automatic nudity check'],

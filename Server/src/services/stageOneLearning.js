@@ -1,6 +1,6 @@
 // Stage one keeps learning from staff: on start-up and every NSFW_RELEARN_HOURS (24 unless set) the calibration
 // table is rebuilt from all staff-reviewed uploads (services/reviewCalibration.js) and stored in MongoDB, so every
-// review makes the automatic check better. Until the table supports a score range, the starter rule applies
+// review makes the automatic check better. Until the table supports a score range, only the two thresholds apply
 // (services/uploadChecks.js, activeTable). A rebuild that fails, or finds too few reviews, keeps the last table.
 import { ModerationCalibration } from '../models/ModerationCalibration.js';
 import { calibrateFromReviews } from './reviewCalibration.js';

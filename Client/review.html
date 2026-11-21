@@ -89,8 +89,10 @@
     @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
     .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); }
     .stage { padding: .9rem; min-width: 0; }
-    .frame { position: relative; height: min(62dvh, 820px); min-height: 16rem; border-radius: 14px; background: var(--well); display: grid; place-items: center; overflow: hidden; }
-    .frame img { width: 100%; height: 100%; object-fit: contain; }
+    /* The picture at its own shape: tall for portrait, wide for landscape, never cropped */
+    .frame { position: relative; min-height: 16rem; padding: .6rem; border-radius: 14px; background: var(--well); display: grid; place-items: center; overflow: hidden; }
+    .frame img { display: block; max-width: 100%; max-height: min(72dvh, 900px); width: auto; height: auto; border-radius: 8px; object-fit: contain; box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .5); }
+    .frame .shape { position: absolute; top: .9rem; left: .9rem; padding: .1rem .55rem; border-radius: 100px; font-size: .74rem; font-weight: 650; color: #fff; background: rgba(20, 18, 28, .6); }
     .frame p { margin: 0; padding: 1.5rem; text-align: center; color: var(--slate); max-width: 46ch; }
     .meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .25rem .75rem; margin: .75rem .2rem; word-break: break-word; }
     .meta b { font-weight: 650; }
@@ -171,7 +173,8 @@
       <h2 id="gateTitle">Checking your account…</h2>
       <p id="gateText"></p>
       <div class="gate-acts" id="gateLink" hidden>
-        <a class="btn primary" href="albums.html">Back to My albums</a>
+        <a class="btn primary" id="gateLogin" href="index.html?login=1&amp;next=review.html" hidden>Log in</a>
+        <a class="btn primary" id="gateAlbums" href="albums.html">Back to My albums</a>
         <a class="btn" href="index.html">Home</a>
       </div>
     </div>
@@ -191,7 +194,7 @@
 
       <main class="layout">
         <div class="card stage">
-          <div class="frame" id="frame"><img id="photo" alt="" hidden><p id="noPhoto" hidden></p></div>
+          <div class="frame" id="frame"><img id="photo" alt="" hidden><span class="shape" id="shape" hidden></span><p id="noPhoto" hidden></p></div>
           <div class="meta"><span id="name"></span><span id="where" class="where"></span></div>
           <div class="levels" id="levels" role="group" aria-label="Content level"></div>
           <div class="confirm" id="confirm" hidden>
@@ -284,14 +287,14 @@
     // What publishes on its own, and what it has learned from the ratings
     const pct = (n) => Math.round(n * 100) + '%';
     function showLearning(s) {
-      const range = s.ranges.length ? s.ranges.map((r) => `${r.min.toFixed(2)}–${r.max.toFixed(2)}`).join(', ') : '';
+      const range = s.ranges.length ? s.ranges.map((r) => `${pct(1 - r.max)}–${pct(1 - r.min)}`).join(', ') : '';
       const learned = s.learned?.builtAt ? ` Last relearned ${new Date(s.learned.builtAt).toLocaleString()} from ${s.learned.reviewed} reviews.` : '';
       const why = s.learned?.lastError && s.source !== 'learned' ? ` ${s.learned.lastError}` : '';
-      const rule = s.source === 'learned' ? `Learned from your ratings: photos the model scores ${range} as level 0–50 publish at once.`
-        : s.source === 'starter' ? `Starter rule: photos the model is ${pct(s.starterThreshold)}+ sure are level 0–50 publish at once. It switches to what it learns from your ratings once there are enough.`
-          : s.source === 'file' ? `A fixed calibration file decides (${range || 'nothing'} publishes at once).`
-            : 'Nothing publishes on its own: every photo is declined until someone asks for a review.';
-      $('learnText').textContent = `${rule} The rest are declined, and come here only if the uploader asks. ${s.rated} of ${s.reviewed} reviews have a level.${learned}${why} Relearns every ${s.relearnHours} h.`;
+      const base = `Risk under ${pct(s.publishBelow)} publishes at once. Porn or Hentai at ${pct(s.hardDeclineAt)} or more is declined for good. Everything in between is declined and comes here only if the uploader asks.`;
+      const extra = s.source === 'learned' ? ` Learned from your decisions: risk ${range} publishes at once too.`
+        : s.source === 'file' ? ` A fixed table also publishes risk ${range || 'nothing'}.`
+          : ' Nothing learned yet: your decisions teach it which riskier photos are fine.';
+      $('learnText').textContent = `${base}${extra} ${s.rated} of ${s.reviewed} reviews have a level.${learned}${why} Relearns every ${s.relearnHours} h.`;
       $('relearn').hidden = !s.enabled;
     }
     const loadLearning = () => momentoApi('/api/admin/moderation-status').then(showLearning, () => { $('learnText').textContent = 'Status unavailable.'; });
@@ -373,12 +376,9 @@
         $('name').textContent = ''; $('where').textContent = '';
       } else {
         if (it.preview) {
-          const src = window.MOMENTO_API + '/api/admin/moderation/' + it.id + '/preview';
-          if (photo.dataset.src !== src) { photo.dataset.src = src; photo.src = src; }
-          photo.alt = it.fileName || 'Picture waiting for review';
-          photo.hidden = false; none.hidden = true;
+          showPreview(it);
         } else {
-          photo.hidden = true; photo.removeAttribute('src'); delete photo.dataset.src;
+          photo.hidden = true; photo.removeAttribute('src'); delete photo.dataset.src; $('shape').hidden = true;
           none.hidden = false;
           none.textContent = it.kind === 'photo' ? 'The preview isn’t available any more.' : `This ${it.kind} was refused automatically and never stored, so there is no picture. Decide from the details alone.`;
         }
@@ -405,14 +405,46 @@
       $('next').disabled = at < 0 || at >= list.length - 1;
     }
 
+    // The private picture, fetched with your login and shown at its own shape (portrait or landscape)
+    const previews = new Map();
+    async function showPreview(it) {
+      const photo = $('photo'), none = $('noPhoto');
+      if (photo.dataset.src === it.id) return;
+      photo.dataset.src = it.id;
+      photo.hidden = true; $('shape').hidden = true; none.hidden = false; none.textContent = 'Loading the picture…';
+      try {
+        let url = previews.get(it.id);
+        if (!url) {
+          const r = await fetch(window.MOMENTO_API + '/api/admin/moderation/' + encodeURIComponent(it.id) + '/preview', { credentials: 'include' });
+          if (!r.ok) throw new Error(r.status === 404 ? 'This picture isn’t available any more (it may have been decided already).' : 'The picture couldn’t be loaded (' + r.status + '). Press Refresh to try again.');
+          url = URL.createObjectURL(await r.blob());
+          previews.set(it.id, url);
+        }
+        if (photo.dataset.src !== it.id) return;   // moved on meanwhile
+        photo.onload = () => {
+          const w = photo.naturalWidth, h = photo.naturalHeight;
+          $('shape').textContent = w > h * 1.05 ? 'Landscape' : h > w * 1.05 ? 'Portrait' : 'Square';
+          $('shape').hidden = false;
+        };
+        photo.src = url;
+        photo.alt = it.fileName || 'Picture waiting for review';
+        photo.hidden = false; none.hidden = true;
+      } catch (err) {
+        if (photo.dataset.src !== it.id) return;
+        none.textContent = err.message;
+      }
+    }
+
     async function load() {
       say('');
       let user = null;
+      const toLogin = () => location.replace('index.html?login=1&next=' + encodeURIComponent('review.html' + location.search));
       try { ({ user } = await momentoApi('/api/auth/me')); } catch (err) {
-        if (err.status === 401) { gate('Log in first', 'Log in with a staff account to review pictures.', true); return; }
+        if (err.status === 401) { toLogin(); return; }
         gate('Can’t reach Momento', err.message, true); return;
       }
-      if (!user) { gate('Log in first', 'Log in with a staff account to review pictures.', true); return; }
+      // Not logged in (e.g. opened from the email): log in, then straight back here
+      if (!user) { toLogin(); return; }
       if (user.plan !== 'staff') { gate('Staff only', 'This page is for Momento staff.', true); return; }
       let data;
       try { data = await momentoApi('/api/admin/moderation'); }
@@ -425,7 +457,9 @@
       const fresh = (data.decisions || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
       const decided = items.filter((it) => it.done);
       items = decided.concat(fresh.filter((d) => !decided.some((it) => it.id === d.id)));
-      const open = items.find((it) => !it.done);
+      // Opened from the email (review.html?id=…): that picture first
+      const asked = new URLSearchParams(location.search).get('id');
+      const open = (asked && items.find((it) => it.id === asked && !it.done)) || items.find((it) => !it.done);
       index = open ? items.indexOf(open) : Math.max(0, items.length - 1);
       if (!open && items.length) say('All caught up. Press Refresh to check for new requests.');
       pending = null;
@@ -441,7 +475,7 @@
     $('next').addEventListener('click', () => move(1));
     $('onlyOpen').addEventListener('change', render);
     $('refresh').addEventListener('click', load);
-    $('photo').addEventListener('error', () => { const it = items[index]; if (it) { it.preview = false; render(); } });
+    $('photo').addEventListener('error', () => { $('photo').hidden = true; $('noPhoto').hidden = false; $('noPhoto').textContent = 'The picture couldn’t be shown. Press Refresh to try again.'; });
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea, select') || $('app').hidden) return;
       const n = Number(e.key);

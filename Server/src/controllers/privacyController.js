@@ -128,6 +128,9 @@ export async function unsubscribe(req, res) {
 // Only now does a declined picture go to staff (review.html): they're emailed the first time it's asked
 export async function requestReview(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Not found.');
+  if (await UploadCheck.exists({ _id: req.params.id, user: req.user._id, explicit: true })) {
+    throw new HttpError(400, 'Momento’s check is sure this photo contains nudity, so it can’t be sent for review.', 'explicit');
+  }
   const before = await ModerationDecision.findOneAndUpdate(
     { _id: req.params.id, user: req.user._id, status: { $in: ['final', 'review-requested'] } },
     { $set: { status: 'review-requested' } }, { returnDocument: 'before' },

@@ -1,3 +1,4 @@
+import { fixFileName } from './albumController.js';
 import mongoose from 'mongoose';
 import { User } from '../models/User.js';
 import { Photo } from '../models/Photo.js';
@@ -7,7 +8,7 @@ import { ModerationDecision } from '../models/ModerationDecision.js';
 import { UploadCheck } from '../models/UploadCheck.js';
 import { Album } from '../models/Album.js';
 import { ModerationCalibration } from '../models/ModerationCalibration.js';
-import { activeTable, starterThreshold } from '../services/uploadChecks.js';
+import { activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from '../services/uploadChecks.js';
 import { relearn, relearnHours } from '../services/stageOneLearning.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
@@ -101,7 +102,7 @@ export async function decisions(req, res) {
   res.json({ decisions: rows.map((d) => {
     const job = jobOf.get(String(d._id));
     return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, severity: d.severity ?? null, at: d.at,
-      album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName || null,
+      album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName ? fixFileName(job.originalName) : null,
       preview: !!job && ['review', 'rejected'].includes(job.state) };
   }) });
 }
@@ -138,8 +139,8 @@ async function learningStatus() {
     ModerationDecision.countDocuments({ kind: 'photo', status: { $in: ['allowed', 'upheld'] }, severity: { $in: SEVERITIES } }),
   ]);
   return {
-    enabled: true, source, starterThreshold, relearnHours,
-    ranges: (table[1]?.allow || []).map((b) => ({ min: b.min, max: b.max, confidence: b.confidence, starter: !!b.starter })),
+    enabled: true, source, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT, relearnHours,
+    ranges: (table[1]?.allow || []).map((b) => ({ min: b.min, max: b.max, confidence: b.confidence })),
     waiting, reviewed, rated,
     learned: doc ? { builtAt: doc.builtAt || null, reviewed: doc.reviewed ?? null, publishable: doc.publishable ?? null, albums: doc.albums ?? null,
       ranges: (doc.table?.[1]?.allow || []).length, lastAttemptAt: doc.lastAttemptAt || null, lastError: doc.lastError || null } : null,
@@ -157,8 +158,9 @@ export async function relearnNow(req, res) {
 export async function moderationPreview(req, res) {
   const job = await UploadCheck.findOne({ _id: id(req.params.id), state: { $in: ['review', 'rejected'] } }).select('+files');
   if (!job?.files) throw new HttpError(404, 'Review image unavailable.');
-  const stream = await openPhoto(job.files.thumbnailKey);
-  res.set('Cache-Control', 'private, no-store').type('webp');
+  const big = !!job.files.previewKey;
+  const stream = await openPhoto(big ? job.files.previewKey : job.files.thumbnailKey);
+  res.set('Cache-Control', 'private, no-store').type(big ? (job.files.previewMimeType || 'image/jpeg') : 'webp');
   stream.on('error', () => res.destroy()).pipe(res);
 }
 

@@ -24,6 +24,8 @@ const uploadLimit = rateLimit({
 });
 
 const upload = multer({
+  // File names are UTF-8 (螢幕擷取畫面.png, café.jpg), not Latin-1
+  defParamCharset: 'utf8',
   // Saved privately as it arrives; the nudity check (services/uploadChecks.js) decides what's published
   storage: quarantineStorage,
   // The ceiling is the RAW one; ordinary photos over MAX_UPLOAD_MB are skipped one by one in addPhotos,
@@ -68,6 +70,7 @@ albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
 albumRoutes.get('/:id/checks', albums.checkStatus);
+albumRoutes.delete('/:id/checks/:check', albums.removeCheck);
 albumRoutes.patch('/:id', albums.update);
 albumRoutes.delete('/:id', albums.remove);
 albumRoutes.delete('/:id/membership', albums.leave);

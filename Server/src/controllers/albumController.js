@@ -460,14 +460,32 @@ export async function join(req, res) {
 
 // ---- One album ----
 
+// File names saved before uploads were read as UTF-8 came out garbled ("è¢å¹æ“·..." for 螢幕擷取畫面): shown fixed
+export function fixFileName(name) {
+  const s = String(name || '');
+  // Only names made of Latin-1 characters that include accented ones can be a misread UTF-8 name
+  if (!/[\u0080-ÿ]/.test(s) || /[^\u0000-ÿ]/.test(s)) return s;
+  const utf8 = Buffer.from(s, 'latin1').toString('utf8');
+  return utf8.includes('�') ? s : utf8;
+}
 // Your own uploads still being checked, waiting for staff, or declined (only you see these)
 async function checksFor(album, user) {
   const rows = await UploadCheck.find({ album, user, state: { $in: ['checking', 'review', 'publish', 'rejected', 'failed'] } },
-    'originalName state').sort({ createdAt: -1 }).lean();
+    'originalName state explicit').sort({ createdAt: -1 }).lean();
   // A declined photo staff have already looked at can't be sent for review again
   const declined = rows.filter(row => row.state === 'rejected').map(row => row._id);
   const upheld = new Set(declined.length ? (await ModerationDecision.find({ _id: { $in: declined }, status: 'upheld' }, '_id').lean()).map(d => String(d._id)) : []);
-  return rows.map(row => ({ id: String(row._id), name: row.originalName, state: row.state, ...(upheld.has(String(row._id)) && { reviewed: true }) }));
+  return rows.map(row => ({ id: String(row._id), name: fixFileName(row.originalName), state: row.state,
+    ...(upheld.has(String(row._id)) && { reviewed: true }), ...(row.state === 'rejected' && row.explicit && { explicit: true }) }));
+}
+// Removes one of your own declined or unreadable uploads (it's deleted at once instead of after 30 days)
+export async function removeCheck(req, res) {
+  const member = await membershipOf(req, req.params.id);
+  if (!mongoose.isValidObjectId(req.params.check)) throw new HttpError(404, 'Not found.');
+  const filter = { _id: req.params.check, album: member.album._id, user: req.user._id, state: { $in: ['rejected', 'failed'] } };
+  if (!await UploadCheck.exists(filter)) throw new HttpError(404, 'That upload can’t be removed (it may be waiting for staff review).');
+  await discardChecks(filter);
+    res.json({ ok: true });
 }
 export async function checkStatus(req, res) {
   const member = await membershipOf(req, req.params.id);
@@ -628,11 +646,13 @@ async function acceptPhotoBatch(req, res) {
   if (banned && !checks.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
   // Up to 10 photos are checked right away, so they appear at once; bigger uploads carry on in the background
   if (checks.length && checks.length <= 10) await checkNow(checks.map(c => c.id));
-  const now = checks.length ? await UploadCheck.find({ _id: { $in: checks.map(c => c.id) } }, 'state').lean() : [];
+  const now = checks.length ? await UploadCheck.find({ _id: { $in: checks.map(c => c.id) } }, 'state explicit').lean() : [];
   const stateOf = new Map(now.map(row => [String(row._id), row.state]));
+  const explicitIds = new Set(now.filter(row => row.state === 'rejected' && row.explicit).map(row => String(row._id)));
   const published = checks.filter(c => stateOf.get(String(c.id)) === 'published').map(c => c.id);
   const photos = published.length ? await Photo.find({ _id: { $in: published } }) : [];
-  const waiting = checks.filter(c => !published.includes(c.id)).map(c => ({ ...c, state: stateOf.get(String(c.id)) || c.state }));
+  const waiting = checks.filter(c => !published.includes(c.id))
+    .map(c => ({ ...c, state: stateOf.get(String(c.id)) || c.state, ...(explicitIds.has(String(c.id)) && { explicit: true }) }));
   // photos: published now; checks: the rest (still being checked, declined, or unreadable; the album shows you
   // their status, with Request review on a declined one); skipped: already in the album (or twice in this upload)
   // banned: files removed from Momento before; tooBig: names left out for being over the size limit

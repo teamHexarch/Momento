@@ -29,27 +29,33 @@ export const MODEL_NAME = 'NSFW.js MobileNetV2';
 // How sure a score range must be before it publishes on its own (the agreed standard for one model)
 export const CONFIDENCE = 0.85;
 // The score definition (stageOneScores, below); every calibration table records the version it was built with
-export const SCORE_VERSION = 3;
+export const SCORE_VERSION = 4;
 
-// ---- Which table decides what publishes on its own ----
-// 1. A table file (NSFW_CALIBRATION), when one is set: an explicit choice. If it can't be read, nothing publishes
-//    on its own (fail closed) until it's fixed.
-// 2. Otherwise the table the server learns from staff reviews (services/stageOneLearning.js, kept in MongoDB and
-//    rebuilt every NSFW_RELEARN_HOURS), once it supports at least one score range.
-// 3. Until then, the starter rule: a "publishable" score (level 0-50: Neutral + Drawing + Sexy) at or above
-//    NSFW_STARTER_THRESHOLD (0.85 unless set; "off" declines everything until staff reviews teach it) publishes.
+// ---- The two thresholds that decide every album photo (change them with the env settings) ----
+// The photo's risk is NSFW.js's Porn + Hentai + Sexy score (0 to 1).
+//   risk below NSFW_PUBLISH_BELOW (0.25)          → published at once
+//   Porn or Hentai at NSFW_HARD_DECLINE (0.85)+   → hard decline: no Request review, no staff email
+//   anything else (0.25 and up, incl. high Sexy)  → declined with Request review (swimwear can be appealed),
+//     unless what staff decided on earlier reviews shows that score range is fine (learning, below)
+const fraction = (value, fallback) => { const n = Number(value); return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback; };
+export const PUBLISH_BELOW = fraction(process.env.NSFW_PUBLISH_BELOW, 0.25);
+export const HARD_DECLINE_AT = fraction(process.env.NSFW_HARD_DECLINE, 0.85);
+
+// ---- Learning from staff decisions ----
+// Every NSFW_RELEARN_HOURS (24) the server rebuilds a table from staff reviews (services/stageOneLearning.js): a score
+// range staff approved at least CONFIDENCE (85%) of the time, on enough reviews in both halves, publishes at once too.
+// A table file (NSFW_CALIBRATION) can be pinned instead; if it can't be read, only the thresholds apply.
 export let calibrationError = null;
 const calibration = (() => {
   if (!process.env.NSFW_CALIBRATION) return {};
   try {
     const table = JSON.parse(readFileSync(process.env.NSFW_CALIBRATION, 'utf8'));
     if (!table || typeof table !== 'object' || Array.isArray(table)) throw new Error('not a calibration table');
-    // Built with today's score definition, or not trusted at all
     if (table.scoreVersion !== SCORE_VERSION) throw new Error(`built with score version ${table.scoreVersion ?? 'none'}, not ${SCORE_VERSION}; rebuild it`);
     return table;
   } catch (error) {
     calibrationError = error.message;
-    console.error(`Calibration table ${process.env.NSFW_CALIBRATION} unusable (${error.message}): no photo publishes on its own until it's fixed.`);
+    console.error(`Calibration table ${process.env.NSFW_CALIBRATION} unusable (${error.message}): only the thresholds apply until it's fixed.`);
     return {};
   }
 })();
@@ -59,41 +65,39 @@ export function setLearnedTable(table, version) {
   learned = version === SCORE_VERSION && table && typeof table === 'object' && !Array.isArray(table) ? table : null;
 }
 const binsOf = (table) => table?.[1]?.allow?.length || 0;
-const starterSetting = process.env.NSFW_STARTER_THRESHOLD ?? '0.85';
-export const starterThreshold = starterSetting === 'off' ? null
-  : Number.isFinite(Number(starterSetting)) && Number(starterSetting) > 0 && Number(starterSetting) <= 1 ? Number(starterSetting) : .85;
 export function activeTable() {
-  if (process.env.NSFW_CALIBRATION && calibrationError) return { source: 'none', table: {} };
-  if (process.env.NSFW_CALIBRATION) return { source: 'file', table: calibration };
+  if (process.env.NSFW_CALIBRATION && !calibrationError) return { source: 'file', table: calibration };
   if (binsOf(learned)) return { source: 'learned', table: learned };
-  if (starterThreshold != null) return { source: 'starter', table: { 1: { allow: [{ min: starterThreshold, max: 1, confidence: CONFIDENCE, starter: true }] } } };
-  return { source: 'none', table: learned || {} };
+  return { source: 'thresholds', table: {} };
 }
 // How many score ranges may publish on their own
 export const calibratedBins = () => binsOf(activeTable().table);
 
-// MobileNetV2's own classes, against Momento's levels (0-50 publish, 75 staff, 100 explicit): Neutral and Drawing are
-// everyday (0), Sexy covers swimwear to clearly suggestive (15-50), Porn and Hentai are explicit (75-100).
-// The "allow" score is the chance of a publishable (0-50) photo: everything but Porn and Hentai. The estimated
-// level is kept for comparison with staff ratings.
+// MobileNetV2's own classes, against Momento's levels: Neutral and Drawing are everyday (0), Sexy covers swimwear to
+// clearly suggestive (15-50), Porn and Hentai are explicit (75-100). The "allow" score is 1 - risk (Neutral + Drawing),
+// the score the learned table works on. The estimated level is kept for comparison with staff ratings.
 const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
 export function stageOneScores(classes) {
   const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
-  const allow = Math.min(1, p('Neutral') + p('Drawing') + p('Sexy'));
+  const allow = Math.max(0, Math.min(1, 1 - (p('Porn') + p('Hentai') + p('Sexy'))));
   const top = Object.keys(CLASS_LEVEL).reduce((a, b) => (p(b) > p(a) ? b : a), 'Neutral');
   return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])), version: SCORE_VERSION };
 }
 
-// Publish only when a trusted score range covers the score; otherwise decline (the uploader can ask for a review)
+// What happens to a photo: { action: 'allow' | 'decline', explicit?, risk?, learned? }
 export function routeScore(scores, table = activeTable().table) {
-  const raw = scores?.allow;
-  if (Number.isFinite(raw) && raw >= 0 && raw <= 1) {
-    const bin = table[1]?.allow?.find(b => raw >= b.min && (raw < b.max || (raw === 1 && b.max === 1)));
-    if (bin && Number.isFinite(bin.confidence) && bin.confidence <= 1 && bin.confidence >= CONFIDENCE) {
-      return { action: 'allow', confidence: bin.confidence, ...(bin.starter && { starter: true }) };
-    }
-  }
-  return { action: 'decline' };
+  const c = scores?.classes;
+  const p = (name) => (Number.isFinite(c?.[name]) ? c[name] : NaN);
+  const porn = p('Porn'), hentai = p('Hentai'), sexy = p('Sexy');
+  if (![porn, hentai, sexy].every(Number.isFinite)) return { action: 'decline' };   // no usable scores: never publish
+  if (Math.max(porn, hentai) >= HARD_DECLINE_AT) return { action: 'decline', explicit: true };
+  const risk = porn + hentai + sexy;
+  if (risk < PUBLISH_BELOW) return { action: 'allow', risk };
+  // Learned from staff decisions: a score range they approve 85%+ of the time publishes too
+  const allow = 1 - risk;
+  const bin = table[1]?.allow?.find(x => allow >= x.min && (allow < x.max || (allow === 1 && x.max === 1)));
+  if (bin && Number.isFinite(bin.confidence) && bin.confidence <= 1 && bin.confidence >= CONFIDENCE) return { action: 'allow', risk, learned: true, confidence: bin.confidence };
+  return { action: 'decline', risk };
 }
 
 export async function queueUpload(album, user, hash, originalName, file) {
@@ -159,13 +163,14 @@ async function publish(job) {
   }
 }
 
-// Declined: private, and recorded so the uploader can ask a person to look (status 'final' until they do)
-async function decline(job, owns, { scores, reason, entry }) {
+// Declined: private, and recorded. If the check was unsure, the uploader can ask a person to look (status 'final'
+// until they do); a hard decline (Porn or Hentai at HARD_DECLINE_AT or more) has no review (explicit: true)
+async function decline(job, owns, { scores, reason, entry, explicit = false }) {
   await ModerationDecision.updateOne({ _id: job._id }, { $setOnInsert: {
-    user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: MODEL_NAME, threshold: CONFIDENCE,
+    user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: MODEL_NAME, threshold: PUBLISH_BELOW,
     ...(scores && { scores }), status: 'final', reason,
   } }, { upsert: true });
-  await UploadCheck.updateOne(owns, { $set: { state: 'rejected', attempts: 0 }, $unset: { claim: 1 },
+  await UploadCheck.updateOne(owns, { $set: { state: 'rejected', attempts: 0, explicit }, $unset: { claim: 1 },
     ...(entry && { $push: { history: entry } }) });
 }
 
@@ -200,12 +205,13 @@ export async function processCheck(step, infer = classify, table = activeTable()
       await UploadCheck.updateOne(owns, { $unset: { rawKey: 1 } });
     }
     const scores = await infer(await buffer(await openPhoto(job.files.thumbnailKey)));
-    const { action, confidence, starter } = routeScore(scores, table);
-    const entry = { stage: 1, model: MODEL_NAME, scores, confidence, action, ...(starter && { rule: 'starter' }) };
+    const { action, explicit = false, risk, learned: byLearning, confidence } = routeScore(scores, table);
+    const entry = { stage: 1, model: MODEL_NAME, scores, action, risk, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT,
+      ...(byLearning && { rule: 'learned', confidence }) };
     if (action === 'allow') {
       await UploadCheck.updateOne(owns, { $set: { state: 'publish', attempts: 0, due: new Date() }, $unset: { claim: 1 }, $push: { history: entry } });
     } else {
-      await decline(job, owns, { scores, entry, reason: 'The automatic check wasn’t sure about this photo' });
+      await decline(job, owns, { scores, entry, explicit, reason: explicit ? 'The automatic check is sure this photo contains nudity' : 'The automatic check wasn’t sure about this photo' });
     }
   } catch (error) {
     const attempts = job.attempts + 1;

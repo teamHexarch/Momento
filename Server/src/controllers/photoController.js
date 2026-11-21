@@ -54,10 +54,10 @@ export async function download(req, res) {
   stream.pipe(res);
 }
 
-// Deleting for good straight away: the album's host only (the pages use the bin, /api/trash)
+// Deleting for good straight away: the album's host, or the person who added it (the pages use the bin, /api/trash)
 export async function remove(req, res) {
   const { photo, m } = await photoFor(req);
-  if (m.role !== 'host') throw new HttpError(403, 'Only the host of an album can delete its photos.');
+  if (m.role !== 'host' && !photo.uploader?.equals(req.user._id)) throw new HttpError(403, 'You can delete the photos you added; the host can delete any photo in their album.');
   await deletePhoto(photo.storageKey);
   await photo.deleteOne();
   res.json({ ok: true });
