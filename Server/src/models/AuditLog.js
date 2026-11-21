@@ -13,11 +13,15 @@ const auditSchema = new mongoose.Schema({
   ipHash: { type: String, immutable: true },
   requestId: { type: String, immutable: true },
   meta: { type: mongoose.Schema.Types.Mixed, immutable: true },
+  // Dev Mode: which person (their access code's label) and which Dev Mode session, since everyone shares one admin account
+  reviewer: { type: String, immutable: true },
+  devSession: { type: String, immutable: true },
 }, { versionKey: false });
 
 auditSchema.index({ at: 1 }, { expireAfterSeconds: 2 * 365 * 86400 });
 auditSchema.index({ actor: 1, at: -1 });
 auditSchema.index({ event: 1, at: -1 });
+auditSchema.index({ reviewer: 1, at: -1 }, { partialFilterExpression: { reviewer: { $type: 'string' } } });
 
 const refuse = function () { throw new Error('Audit logs are append-only.'); };
 for (const op of ['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne', 'findOneAndReplace', 'deleteOne', 'deleteMany', 'findOneAndDelete']) {

@@ -13,9 +13,9 @@ import bcrypt from 'bcryptjs';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'momento-upload-checks-'));
 const mongo = await MongoMemoryServer.create();
-Object.assign(process.env, { NSFW_CALIBRATION: '', NODE_ENV: 'test', S3_BUCKET: '',
+Object.assign(process.env, { NSFW_CALIBRATION: '', NODE_ENV: 'test', S3_BUCKET: '', DEV_MODE_ADMIN_EMAIL: 'staff@example.invalid',
   MONGODB_URI: mongo.getUri(), JWT_SECRET: 'test-only-isolated', UPLOAD_DIR: dir, PUBLIC_URL: 'http://localhost:4000',
-  CLIENT_DIR: fileURLToPath(new URL('../../Client/', import.meta.url)) });
+  CLIENT_DIR: process.env.CLIENT_DIR || fileURLToPath(new URL('../../Client/', import.meta.url)) });
 await mongoose.connect(process.env.MONGODB_URI);
 const { app } = await import('../src/app.js');
 const { User } = await import('../src/models/User.js');
@@ -58,7 +58,11 @@ try {
   const user = await User.create({ name: 'Host', email: 'host@example.invalid', passwordHash: await bcrypt.hash(password, 4), emailVerified: true });
   const staffUser = await User.create({ name: 'Staff', email: 'staff@example.invalid', passwordHash: await bcrypt.hash(password, 4), emailVerified: true, plan: 'staff' });
   const login = async (u) => (await request('/api/auth/login', 200, '', 'POST', { email: u.email, password })).headers.get('set-cookie').split(';')[0];
-  const cookie = await login(user), staff = await login(staffUser);
+  const cookie = await login(user), staffLogin = await login(staffUser);
+  // Moderation needs Dev Mode: the shared admin account plus a personal access code
+  await request('/api/admin/moderation', 401, staffLogin);
+  const { withDevMode } = await import('./devModeTestKit.js');
+  const staff = await withDevMode(origin, staffLogin);
   const { album } = await (await request('/api/albums', 201, cookie, 'POST', { kind: 'album', name: 'Moderation test', date: '2026-11-21' })).json();
   const url = '/api/albums/' + album.id;
   let shade = 0;
@@ -113,9 +117,21 @@ try {
   // Who reviewed it: nobody yet
   assert.equal((await (await request('/api/admin/moderation/' + declined.id, 200, staff)).json()).waiting, true);
   await request('/api/admin/moderation/' + declined.id, 404, cookie);   // staff only
-  await request('/api/admin/moderation/' + declined.id, 404, cookie, 'POST', { allow: true, severity: 15 });   // not staff
-  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, severity: 33 });
-  assert.equal((await (await request('/api/admin/moderation/' + declined.id, 200, staff, 'POST', { allow: true, severity: 15 })).json()).severity, 15);
+  const why = ['swimwear', 'beach-sport'];
+  await request('/api/admin/moderation/' + declined.id, 404, cookie, 'POST', { allow: true, severity: 15, reasons: why });   // not staff
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, severity: 33, reasons: why });
+  // A level is always needed; keeping it private needs a reason too; only known reasons; level 100 or a possible
+  // minor never publishes
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, reasons: why });
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: false, severity: 50 });
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: false, severity: 50, reasons: [] });
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, severity: 15, reasons: ['made-up'] });
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, severity: 100, reasons: ['sexual-act'] });
+  await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, severity: 0, reasons: ['clothed', 'possible-minor'] });
+  assert.equal((await ModerationDecision.findById(declined.id)).status, 'review-requested', 'refused reviews change nothing');
+  // Publishing needs only the level
+  const reviewed = await (await request('/api/admin/moderation/' + declined.id, 200, staff, 'POST', { allow: true, severity: 15 })).json();
+  assert.deepEqual([reviewed.severity, reviewed.reasons], [15, []]);
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: declined.id }), 'approved: published');
   const decided = await (await request('/api/admin/moderation/' + declined.id, 200, staff)).json();
@@ -130,7 +146,9 @@ try {
   // ---- Staff decline: it stays private, can't be sent again, and is deleted after 30 days ----
   const no2 = (await (await request(url + '/photos', 201, cookie, 'POST', await form('explicit.jpg'))).json()).checks[0];
   await request('/api/auth/moderation/' + no2.id + '/review', 200, cookie, 'POST', {});
-  await request('/api/admin/moderation/' + no2.id, 200, staff, 'POST', { allow: false, severity: 100 });
+  // Staff may keep a low level private too: clothed, but a sexual act
+  const kept = await (await request('/api/admin/moderation/' + no2.id, 200, staff, 'POST', { allow: false, severity: 25, reasons: ['clothed', 'touching'] })).json();
+  assert.deepEqual(kept.reasons, ['clothed', 'touching'], 'the reasons for keeping it private are saved');
   assert.equal((await UploadCheck.findById(no2.id)).state, 'rejected');
   const after = (await (await request(url + '/checks', 200, cookie)).json()).checks.find(c => c.id === no2.id);
   assert.equal(after.reviewed, true, 'the album says staff declined it (no Request review button)');
@@ -267,7 +285,7 @@ try {
   const another = (await (await request(url + '/photos', 201, cookie, 'POST', await form('reviewed-in-time.jpg'))).json()).checks[0];
   await request('/api/auth/moderation/' + another.id + '/review', 200, cookie, 'POST', {});
   await ModerationDecision.updateOne({ _id: another.id }, { $set: { dueDay: '2026-11-24' } });
-  await request('/api/admin/moderation/' + another.id, 200, staff, 'POST', { allow: false, severity: 75 });
+  await request('/api/admin/moderation/' + another.id, 200, staff, 'POST', { allow: false, severity: 75, reasons: ['genitals'] });
   assert.equal((await reviewReminders(new Date('2026-11-23T01:00:00Z'))).reminded, 0, 'nothing for a reviewed photo');
   await new Promise(r => setTimeout(r, 100));
   assert.ok((await (await request('/api/notifications', 200, cookie)).json()).notifications.some(n => n.type === 'review-declined'), 'declined: the uploader hears too');

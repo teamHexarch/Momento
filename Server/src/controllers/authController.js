@@ -15,6 +15,7 @@ import { audit } from '../services/auditService.js';
 import { switches } from '../services/switches.js';
 import { recordConsent } from './privacyController.js';
 import { currentPolicies, hasAccepted } from '../middleware/authMiddleware.js';
+import { DEV_COOKIE, cookieOptions as devCookieOptions, endSession as endDevSession, findSession as findDevSession } from '../services/devModeService.js';
 
 // ---- Age check (before anything about the person is stored) ----
 // birthDate 'YYYY-MM-DD'. Under 13: refused, and nothing is kept (not the email, not the IP). 13 to 17:
@@ -133,6 +134,10 @@ export async function login(req, res) {
 
 export async function logout(req, res) {
   await endSession(req, res);
+  // Logging out of the shared admin account also ends this browser's Dev Mode session (only this one)
+  const devSlot = await findDevSession(req.cookies?.[DEV_COOKIE]);
+  if (devSlot) await endDevSession(devSlot, 'logout', req);
+  if (req.cookies?.[DEV_COOKIE]) res.clearCookie(DEV_COOKIE, devCookieOptions());
   res.json({ ok: true });
 }
 

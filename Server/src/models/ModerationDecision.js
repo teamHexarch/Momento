@@ -16,9 +16,14 @@ const decisionSchema = new mongoose.Schema({
   reason: { type: String, default: 'Looks like it contains nudity' },
   status: { type: String, enum: ['final', 'review-requested', 'allowed', 'upheld'], default: 'final' },
   reviewedBy: mongoose.Schema.Types.ObjectId,
+  // Dev Mode: the person who decided (their access code's label) and their session, as the account is shared
+  reviewer: String,
+  reviewerSession: String,
   reviewedAt: Date,
   // Staff's content level when reviewing (0/15/25/50/75/100), used by scripts/calibrateFromReviews.js
   severity: Number,
+  // Why staff chose that level: tick boxes on review.html (utils/reviewReasons.js), e.g. ['clothed', 'touching']
+  reasons: { type: [String], default: undefined },
   // When the uploader asked for a review, the day it's due (2 working days after the upload, utils/workingDays.js),
   // and the reminders staff have had about it (each sent once)
   requestedAt: Date,

@@ -14,11 +14,13 @@ const ALERT = new Set(['staff.plan-changed','staff.switches', 'staff.sessions-re
  * Appends one security event. Never throws: a logging problem must not break what the person did.
  * audit('password.changed', { req })  ·  audit('takedown', { req, target: photoId, meta: { reason } })
  */
-export async function audit(event, { req, actor, target, meta } = {}) {
+export async function audit(event, { req, actor, target, meta, reviewer, devSession } = {}) {
   try {
     await AuditLog.create({
       event, actor: actor ?? req?.user?._id, target: target == null ? undefined : String(target),
       ipHash: ipHash(req?.ip), requestId: req?.id, meta,
+      // Dev Mode: the person behind the shared admin account (req.dev, from middleware/devMode.js)
+      reviewer: reviewer ?? req?.dev?.reviewerLabel, devSession: devSession ?? req?.dev?.sessionId,
     });
   } catch (err) {
     console.error(`Audit log failed (${event}): ${err.message}`);

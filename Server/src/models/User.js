@@ -13,9 +13,9 @@ const userSchema = new mongoose.Schema({
   avatarKey: String,
   // Google vouches for the address; email/password signups start unverified
   emailVerified: { type: Boolean, default: false },
-  // Limits and powers (utils/plans.js). Every new account starts as admin (set 2026-11-10; was 'free').
+  // Limits and powers (utils/plans.js). Every new account starts as free (set 2026-11-21; was 'admin' from 2026-11-10).
   // 'staff' = admin + the staff tools. Only ever set on the server (scripts/setPlan.js), never through the API.
-  plan: { type: String, enum: PLANS, default: 'admin' },
+  plan: { type: String, enum: PLANS, default: 'free' },
   // Copyright strikes from takedowns; at 3 the account is suspended (suspendedAt)
   strikes: { type: Number, default: 0 },
   suspendedAt: Date,

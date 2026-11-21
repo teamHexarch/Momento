@@ -25,11 +25,14 @@
     "test:privacy": "node scripts/testPhotoPrivacy.js",
     "test:nsfw": "node scripts/testNsfw.js",
     "test:security": "node scripts/testSecurity.js",
+    "test:devmode": "node scripts/testDevMode.js",
+    "preview:review": "node scripts/reviewPreview.js",
+    "reviewer-codes": "node --env-file-if-exists=.env scripts/reviewerCodes.js",
     "test:attack": "node scripts/testAttack.js",
     "test:e2e": "playwright test -c tests/e2e",
     "test:e2e:watch": "playwright test -c tests/e2e --headed",
     "clean:old-data": "node --env-file=.env scripts/cleanOldData.js",
-    "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js && node scripts/testAttack.js"
+    "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js && node scripts/testDevMode.js && node scripts/testAttack.js"
   },
   "engines": {
     "node": ">=22"

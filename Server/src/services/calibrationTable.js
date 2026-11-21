@@ -17,16 +17,21 @@ export function lowerBound(correct, n) {
 }
 
 // A score range (tenths of 0-1) may publish on its own only when both the fit and the holdout rows show it's
-// right at least CONFIDENCE (85%) of the time (one-sided 95% lower bound, in both halves).
+// right at least CONFIDENCE (85%) of the time (one-sided 95% lower bound, in both halves). A row may carry a weight
+// (a photo kept private for a serious reason counts more, see utils/reviewReasons.js) and a veto (a possible minor:
+// that range never publishes on its own).
 export function buildTable(fit, holdout, stages = [1], log = console.log) {
   const table = { scoreVersion: SCORE_VERSION };
   if (!stages.includes(1)) return table;
   const bins = [];
+  const weight = row => (Number.isFinite(row.weight) && row.weight > 0 ? row.weight : 1);
+  const sum = rows => rows.reduce((total, row) => total + weight(row), 0);
   for (let i = 0; i < 10; i++) {
     const min = i / 10, max = (i + 1) / 10;
     const inBin = row => { const a = row.scores[1]?.allow; return a >= min && (a < max || (i === 9 && a === 1)); };
-    const precision = rows => lowerBound(rows.filter(row => row.truth === 'allow').length, rows.length);
+    const precision = rows => lowerBound(sum(rows.filter(row => row.truth === 'allow')), sum(rows));
     const training = fit.filter(inBin), validation = holdout.filter(inBin);
+    if ([...training, ...validation].some(row => row.veto)) { log(`Score range ${min}-${max}: never on its own (staff flagged a possible minor)`); continue; }
     const confidence = Math.min(precision(training), precision(validation));
     if (confidence >= CONFIDENCE) bins.push({ min, max, confidence, fitCount: training.length, holdoutCount: validation.length });
   }

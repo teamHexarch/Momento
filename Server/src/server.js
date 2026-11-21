@@ -10,6 +10,7 @@ import { startUploadChecks, calibratedBins, calibrationError, activeTable, PUBLI
 import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
 import { moveStaffRoleToPlan } from './services/planMigration.js';
+import { devModeEnabled, ensureSlots, sweepIdle } from './services/devModeService.js';
 
 await connectDb();
 await moveStaffRoleToPlan();
@@ -45,6 +46,12 @@ startRefusalCleanup();
   if (calibrationError) console.error('The calibration table file could not be read: only the thresholds apply until it is fixed.');
 }
 startLearning();
+// Dev Mode (photo moderation on the shared admin account): the 6 session slots, and every minute idle sessions end
+if (devModeEnabled()) {
+  await ensureSlots();
+  console.log(`Dev Mode: admin account ${config.devMode.adminEmail}, up to ${config.devMode.maxSessions} sessions, ${config.devMode.idleMinutes} min idle limit.`);
+} else console.log('Dev Mode: off (set DEV_MODE_ADMIN_EMAIL); photo moderation is unavailable until it is on.');
+setInterval(() => sweepIdle().catch((err) => console.error(`Dev Mode idle check failed: ${err.message}`)), 60000).unref();
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
 
 // ---- Stopping cleanly (an update or restart sends SIGTERM) ----

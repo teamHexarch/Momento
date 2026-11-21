@@ -9,13 +9,14 @@ import { UploadCheck } from '../models/UploadCheck.js';
 import { Album } from '../models/Album.js';
 import { ModerationCalibration } from '../models/ModerationCalibration.js';
 import { activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from '../services/uploadChecks.js';
-import { relearn, relearnHours } from '../services/stageOneLearning.js';
+import { relearn, relearnHours, relearnSoon } from '../services/stageOneLearning.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
 import { sha256 } from '../services/contentSafety.js';
 import { forgetSwitches } from '../services/switches.js';
 import { audit } from '../services/auditService.js';
 import { HttpError } from '../utils/httpError.js';
+import { REASON_KEYS, MUST_STAY_PRIVATE } from '../utils/reviewReasons.js';
 
 // Staff tools (all under /api/admin, staff only: everyone else gets 404). Every action is in the audit log.
 const STRIKES_TO_SUSPEND = 3;
@@ -101,20 +102,30 @@ export async function decisions(req, res) {
   const albumName = new Map(albums.map((a) => [String(a._id), a.name]));
   res.json({ decisions: rows.map((d) => {
     const job = jobOf.get(String(d._id));
-    return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, severity: d.severity ?? null, at: d.at,
+    return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, severity: d.severity ?? null, reasons: d.reasons || [], at: d.at,
       dueDay: d.dueDay || null, album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName ? fixFileName(job.originalName) : null,
       preview: !!job && ['review', 'rejected'].includes(job.state) };
   }) });
 }
-// POST /api/admin/moderation/:id  { allow: true|false, severity?: 0|15|25|50|75|100 }
-// Allowed: that exact file passes the check next time. The optional severity (Momento's content level) makes
-// the decision usable for calibration (scripts/calibrateFromReviews.js).
+// POST /api/admin/moderation/:id  { allow: true|false, severity: 0|15|25|50|75|100, reasons?: ['clothed', ...] }
+// Allowed: that exact file passes the check next time. The severity (Momento's content level) is always required.
+// Keeping a photo private also needs at least one reason (utils/reviewReasons.js: what is shown, what is happening,
+// the context); publishing needs none. The check learns from both (services/reviewCalibration.js). Staff may keep any
+// level private (a clothed photo of a sexual act, say), but level 100, or a possible minor, is never published.
 const SEVERITIES = [0, 15, 25, 50, 75, 100];
 export async function decide(req, res) {
   if (typeof req.body?.allow !== 'boolean') throw new HttpError(400, 'Choose approve or uphold.');
   const severity = req.body?.severity;
-  if (severity !== undefined && !SEVERITIES.includes(severity)) throw new HttpError(400, 'Severity must be 0, 15, 25, 50, 75 or 100.');
+  if (!SEVERITIES.includes(severity)) throw new HttpError(400, 'Choose a level: 0, 15, 25, 50, 75 or 100.');
   const allow = req.body?.allow === true;
+  const reasons = req.body?.reasons ?? [];
+  if (!Array.isArray(reasons) || reasons.length > REASON_KEYS.length || !reasons.every((r) => REASON_KEYS.includes(r))) {
+    throw new HttpError(400, 'Those reasons aren’t on the list.');
+  }
+  if (!allow && !reasons.length) throw new HttpError(400, 'Tick at least one reason for keeping it private.');
+  if (allow && severity === 100) throw new HttpError(400, 'Level 100 can’t be published.');
+  if (allow && reasons.some((r) => MUST_STAY_PRIVATE.includes(r))) throw new HttpError(400, 'A photo that may show someone under 18 can’t be published.');
+  const why = [...new Set(reasons)];
   const job = await UploadCheck.findById(id(req.params.id));
   if (job) {
     const result = await UploadCheck.updateOne({ _id: job._id, state: { $in: ['review', 'rejected'] } },
@@ -122,12 +133,16 @@ export async function decide(req, res) {
     if (!result.matchedCount) throw new HttpError(409, 'This upload is no longer awaiting a decision.');
   }
   const d = await ModerationDecision.findOneAndUpdate({ _id: id(req.params.id) }, { $set: { status: allow ? 'allowed' : 'upheld', reviewedBy: req.user._id, reviewedAt: new Date(),
-    ...(severity !== undefined && { severity }) } }, { returnDocument: 'after' });
+    severity, reasons: why,
+    // Dev Mode: the person (their access code's label) and session, since everyone shares the admin account
+    ...(req.dev && { reviewer: req.dev.reviewerLabel, reviewerSession: req.dev.sessionId }) } }, { returnDocument: 'after' });
   if (!d) throw new HttpError(404, 'Not found.');
-  await audit('moderation.reviewed', { req, target: d._id, meta: { allow, ...(severity !== undefined && { severity }) } });
+  await audit('moderation.reviewed', { req, target: d._id, meta: { allow, severity, reasons: why } });
+  // The automatic check learns from this rating within a minute (services/stageOneLearning.js)
+  if (d.kind === 'photo') relearnSoon();
   // The person who asked hears the answer: in their inbox and by email (only for album photos they sent for review)
   if (job && d.requestedAt) tellUploader(d, allow).catch((err) => console.error(`Review ${d.id} decided, but telling the uploader failed: ${err.message}`));
-  res.json({ id: d.id, status: d.status, severity: d.severity ?? null });
+  res.json({ id: d.id, status: d.status, severity: d.severity ?? null, reasons: d.reasons || [] });
 }
 
 async function tellUploader(d, allow) {
@@ -158,7 +173,9 @@ async function learningStatus() {
     ranges: (table[1]?.allow || []).map((b) => ({ min: b.min, max: b.max, confidence: b.confidence })),
     waiting, reviewed, rated,
     learned: doc ? { builtAt: doc.builtAt || null, reviewed: doc.reviewed ?? null, publishable: doc.publishable ?? null, albums: doc.albums ?? null,
-      ranges: (doc.table?.[1]?.allow || []).length, lastAttemptAt: doc.lastAttemptAt || null, lastError: doc.lastError || null } : null,
+      ranges: (doc.table?.[1]?.allow || []).length, lastAttemptAt: doc.lastAttemptAt || null, lastError: doc.lastError || null,
+      // Why staff keep photos private, and how often the model had thought those photos were safe
+      reasons: doc.reasons || {} } : null,
   };
 }
 export async function moderationStatus(req, res) {
@@ -183,8 +200,10 @@ export async function decisionStatus(req, res) {
   res.json({
     id: String(d._id), status: d.status, waiting: d.status === 'review-requested',
     decision: d.status === 'allowed' ? 'approved' : d.status === 'upheld' ? 'declined' : null,
-    reviewedBy: reviewer ? (String(reviewer._id) === String(req.user._id) ? 'you' : reviewer.name || reviewer.email) : null,
-    reviewedAt: d.reviewedAt || null, severity: d.severity ?? null,
+    // On the shared admin account the person is the reviewer label (Dev Mode), not the account
+    reviewedBy: d.reviewer ? (d.reviewer === req.dev?.reviewerLabel ? 'you' : d.reviewer)
+      : reviewer ? (String(reviewer._id) === String(req.user._id) ? 'you' : reviewer.name || reviewer.email) : null,
+    reviewedAt: d.reviewedAt || null, severity: d.severity ?? null, reasons: d.reasons || [],
     fileName: job?.originalName ? fixFileName(job.originalName) : null, albumName: album?.name || null,
   });
 }

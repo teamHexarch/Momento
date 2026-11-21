@@ -232,9 +232,10 @@ const PAGE = `<!doctype html>
   </aside>
 </main>
 <script>
+// Momento Content Standard (docs/content-standard.md)
 const LEVELS = [
-  [0, '完全正常', 'safe'], [15, '輕微：泳衣、運動服', 'safe'], [25, '有啲暴露但可公開', 'safe'],
-  [50, '明顯性暗示，有遮蓋', 'safe'], [75, '明確裸露，要人睇', 'review'], [100, '明顯色情，要拒絕', 'reject'],
+  [0, '一般：冇裸露、冇性內容', 'safe'], [15, '合理場合暴露：沙灘、泳池、運動', 'safe'], [25, '輕微：暴露衣著或內衣，冇性姿勢', 'safe'],
+  [50, '性暗示：有遮蓋但明顯性意圖', 'safe'], [75, '裸露：冇性行為，staff 決定', 'review'], [100, '色情：任何性行為（著衫都計）', 'reject'],
 ];
 let photos = [], index = 0, folder = '';
 const $ = id => document.getElementById(id);

@@ -12,6 +12,8 @@ const schema = new mongoose.Schema({
   albums: Number,
   fit: Number,
   holdout: Number,
+  // Per reason staff ticked when keeping photos private: { touching: { kept, blindSpots }, ... } (reviewCalibration.js)
+  reasons: mongoose.Schema.Types.Mixed,
   lastAttemptAt: Date,
   lastError: String,      // why the latest rebuild kept the previous table (e.g. not enough reviews yet)
 }, { versionKey: false });

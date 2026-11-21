@@ -32,7 +32,7 @@ const user = new mongoose.Types.ObjectId(), staff = new mongoose.Types.ObjectId(
 let n = 0;
 // Reviews as the live check stores them: the raw classes (allow is recomputed from them when learning)
 const decision = (album, allow, status, extra = {}) => ({ user, album, kind: 'photo', hash: 'h' + n++, model: 'NSFW.js MobileNetV2',
-  scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 3 }, status, reviewedBy: staff, ...extra });
+  scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 3 }, status, reviewedBy: staff, reviewedAt: new Date(), ...extra });
 try {
   // The score: allow = 1 - risk, where risk = Porn + Hentai + Sexy
   const scored = stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 });
@@ -77,7 +77,8 @@ try {
   docs.push(decision(mixed, undefined, 'allowed', { scores: undefined, reason: 'Model unavailable' }));
   docs.push(decision(mixed, .99, 'allowed', { kind: 'cover' }));
   docs.push(decision(mixed, .99, 'allowed', { reviewedBy: undefined }));
-  docs.push({ ...decision(mixed, .99, 'upheld'), hash: 'h0', at: new Date(Date.now() + 60000) });
+  // An older staff rating of the same file (h0): only the newest rating is learned from
+  docs.push({ ...decision(mixed, .99, 'upheld'), hash: 'h0', at: new Date(Date.now() + 60000), reviewedAt: new Date(0) });
   // Scored the old way (Neutral only, no raw classes): left out, so learning never mixes score definitions
   docs.push({ ...decision(mixed, .99, 'upheld'), scores: { allow: .99 } });
   await ModerationDecision.insertMany(docs);
@@ -173,6 +174,40 @@ try {
   assert.equal((await probe(path.join(dir, 'v2.json'))).source, 'thresholds');
   // No table and nothing learned: just the two thresholds
   assert.deepEqual(await probe(''), { error: null, source: 'thresholds', bins: 0 });
+  // Staff re-rate a file they approved: the newer rating (level 100) replaces the old one in what is learned
+  const before = (await reviewedRows()).filter(row => row.truth === 'allow').length;
+  await ModerationDecision.create({ ...decision(mixed, .99, 'upheld', { severity: 100 }), hash: 'h1', reviewedAt: new Date(Date.now() + 60000) });
+  const after = await reviewedRows();
+  assert.equal(after.length, 104, 'one row per file');
+  assert.equal(after.filter(row => row.truth === 'allow').length, before - 1, 'the latest staff rating wins');
+  // Kept private at a low level (clothed, but a sexual act): learned as not publishable, though level 15 alone would be
+  await ModerationDecision.create({ ...decision(mixed, .99, 'upheld', { severity: 15, reasons: ['clothed', 'touching'] }), hash: 'h2', reviewedAt: new Date(Date.now() + 60000) });
+  assert.equal((await reviewedRows()).filter(row => row.truth === 'allow').length, before - 2, 'kept private means not publishable');
+
+  // ---- The reasons are learned ----
+  const { reasonStats } = await import('../src/services/reviewCalibration.js');
+  const h2 = (await reviewedRows()).find(row => row.reasons.includes('touching'));
+  assert.deepEqual([h2.truth, h2.weight, h2.veto], ['decline', 3, false], 'a serious reason weighs 3 times');
+  // One score range (0.9-1): 40 approvals per half and 2 photos kept private in each half
+  const half = (extra) => [...Array.from({ length: 40 }, () => ({ truth: 'allow', scores: [, { allow: .95 }] })),
+    ...Array.from({ length: 2 }, () => ({ truth: 'decline', scores: [, { allow: .95 }], ...extra }))];
+  const quiet = () => {};
+  assert.equal(buildTable(half({}), half({}), [1], quiet)[1].allow.length, 1, 'ordinary reasons: the range still publishes');
+  assert.equal(buildTable(half({ weight: 3 }), half({ weight: 3 }), [1], quiet)[1].allow.length, 0, 'serious reasons: the same range no longer does');
+  assert.equal(buildTable(half({}), [...half({}).slice(0, 41), { truth: 'decline', scores: [, { allow: .95 }], veto: true }], [1], quiet)[1].allow.length, 0,
+    'one possible minor vetoes the range');
+  // Per reason: how often, and how often the model had scored those photos as safe
+  const stats = reasonStats([
+    { reasons: ['clothed', 'touching'], scores: [, { allow: .95 }] },
+    { reasons: ['touching'], scores: [, { allow: .4 }] },
+    { reasons: [], scores: [, { allow: .99 }] },
+  ]);
+  assert.deepEqual(stats, { clothed: { kept: 1, blindSpots: 1 }, touching: { kept: 2, blindSpots: 1 } });
+  // A relearn stores the reasons report, even while there are too few reviews for a table
+  await relearn();
+  const reasonReport = (await ModerationCalibration.findById('stage-one').lean()).reasons;
+  assert.equal(reasonReport.touching.kept, 1);
+  assert.equal(reasonReport.touching.blindSpots, 1, 'h2 looked safe to the model (allow .99) but staff kept it private');
   console.log('Passed: staff-decision calibration (severity, album halves, exclusions, stdout), fail-safe table loading.');
 } finally {
   await mongoose.disconnect();

@@ -88,6 +88,24 @@ Open **http://localhost:4000**. You can also run `node serve.mjs` in `Client/` a
 
 To try everything before Atlas is set up, run `npm run dev:memory`. It uses a temporary database that is wiped when it stops.
 
+## Dev Mode (photo moderation)
+
+Photo review (`review.html`, and the moderation, report and takedown APIs) needs **Dev Mode**: staff sign in with one
+shared admin account (`DEV_MODE_ADMIN_EMAIL`, a staff account with a confirmed email), then each person unlocks Dev
+Mode with their **own access code**, so every session and decision names who did it.
+
+- Codes: `npm run reviewer-codes -- add Reviewer_A "Name"` (prints the code once; only a bcrypt hash is kept),
+  `reset Reviewer_A`, `revoke Reviewer_A`, `list`. On Lightsail run `node scripts/reviewerCodes.js ...` inside the api container.
+- At most **6 sessions** at once; a 7th is refused (nobody is pushed out). **Exit Dev Mode** ends that session only.
+  A session ends after `DEV_MODE_IDLE_MINUTES` (20, within 15-30) without use; the page only keeps it alive while the
+  person is clicking or typing.
+- Wrong codes: 5 per address per 15 minutes, 20 per account per hour.
+- Audit log: `devmode.login`, `devmode.logout`, `devmode.timeout`, `devmode.code-failed`, `devmode.full` and every
+  moderation action carry `reviewer` and `devSession`. Decisions also store `reviewer` and `reviewerSession`.
+- Photos stay blurred until the reviewer presses Reveal (R). Moderation responses are `Cache-Control: no-store`.
+- Try it locally: `node scripts/reviewPreview.js` (throwaway database; test admin and reviewer codes are in that file).
+  Tests: `npm run test:devmode`.
+
 ## Settings (.env)
 
 Create `Server/.env` (it is never committed) with these settings. Only `MONGODB_URI` and `JWT_SECRET`
