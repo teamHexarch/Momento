@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import SiteFooter from '@/components/shared/SiteFooter';
 
 export default function AlbumsPage() {
   return (
@@ -73,7 +74,7 @@ export default function AlbumsPage() {
             </div>
           </section>
 
-          <footer className="site-foot" data-site-foot=""></footer>
+          <SiteFooter />
         </main>
       </div>
     </>

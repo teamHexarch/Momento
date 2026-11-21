@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import SiteFooter from '@/components/shared/SiteFooter';
 
 export default function EventsPage() {
   return (
@@ -145,7 +146,7 @@ export default function EventsPage() {
               <div className="ev-card panel" id="evCard"></div>
             </dialog>
 
-            <footer className="site-foot" data-site-foot=""></footer>
+            <SiteFooter />
           </main>
         </div>
     </>

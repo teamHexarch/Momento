@@ -47,6 +47,9 @@ Screenshots and diff images are written to the folder you name (`out/...`, git-i
   A few hundred pixels on the first screen is normal (the live QR beam, a counter).
 - **A test that fails the same way on both sites proves nothing.** If a step errors on both, fix the test.
 - **Zero is the goal**, except for the harmless, known differences below.
+- **Run one check at a time.** Two browser checks running together (or a build) slow the pages enough to give false
+  differences: a page still opening when its screenshot is taken, a toast or theme fade caught half-way. Before you
+  believe a difference, re-run that check alone, and run it original-vs-original too.
 
 ### Known, harmless differences
 - First screen of Home and Albums: 0.03 to 0.3 % (live animation, lazy-loaded avatars).
@@ -57,6 +60,13 @@ Screenshots and diff images are written to the folder you name (`out/...`, git-i
   element in `<body>`; `<nextjs-portal>` and a hidden empty `<div>` are Next.js's own, dev only.
 - The browser console shows `ERR_CONNECTION_REFUSED` when no backend runs on port 4000. The original does the same.
 - The 404 page logs "status of 404" in the console: it really is served with a 404.
+- `behave-albums.mjs`, step 7 (Social opened, then left after 1.5 s): the new site often logs `pageerror: Style is not done
+  loading.` A race in the original map code (`lightUp()` in `events-1.js` runs on a `moveend` caused by the leaving fade,
+  before the map style has loaded). The original rarely hits it; the port does, because the map script only loads after
+  hydration. Present since the wrapper port (measured on commit 72107b4), not caused by later work. Nobody sees it (the page
+  is already leaving). Fix it properly when the Social page is converted: wait for the style to load before lighting the map.
+- `behave-theme.mjs` with motion on: the moment a View Transition is caught half-way varies run to run, so judge the theme
+  on the reduced-motion runs (stable) and on end states.
 
 ## Adding a check for something you convert
 

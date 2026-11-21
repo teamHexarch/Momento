@@ -5,6 +5,9 @@ import SiteHeader from '@/components/shared/SiteHeader';
 import EventsPage from '@/components/events/EventsPage';
 import LegacyScripts, { type LegacyScript } from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
+import Toaster from '@/components/shared/Toaster';
+import ThemeProvider from '@/components/shared/ThemeProvider';
+import AccountProvider from '@/components/shared/AccountProvider';
 
 // Served at /events.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -40,12 +43,15 @@ const SCRIPTS: LegacyScript[] = [
 
 export default function EventsRoute() {
   return (
-    <>
+    <ThemeProvider>
+    <AccountProvider activity>
       <Backdrop />
       <SvgSprite />
       <SiteHeader current="social" />
       <EventsPage />
+      <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
-    </>
+    </AccountProvider>
+    </ThemeProvider>
   );
 }

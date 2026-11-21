@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { markLegacyReady } from '@/lib/legacy';
 
 /**
  * Runs the original Momento page scripts, unchanged and in the original order.
@@ -68,6 +69,8 @@ export default function LegacyScripts({ scripts }: { scripts: LegacyScript[] }) 
       const englishTitle = document.title;
       (window as unknown as { __momentoI18n?: { release(): void } }).__momentoI18n?.release();
       flush();
+      // React components that talk to the old scripts (window.Momento) start listening now: see lib/legacy.ts
+      markLegacyReady();
       // i18n.js translates the tab title once, when the page is ready. Next.js refreshes its own <title> a moment
       // later and puts the English one back, so if the title was translated, keep it that way for a few seconds.
       const translatedTitle = document.title;

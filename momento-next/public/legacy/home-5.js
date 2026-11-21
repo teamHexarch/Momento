@@ -1,76 +1,10 @@
-  // Shared by index.html and albums.html: theme, account, account menu.
+  // Shared by index.html and albums.html: account, account menu. (The theme is src/components/shared/ThemeProvider.tsx)
   (() => {
     const root = document.documentElement;
-    const KEY = 'momento-theme';
-    const mq = matchMedia('(prefers-color-scheme: dark)');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-    const TH = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
-    const themeListeners = new Set();
-    const read = () => { try { return localStorage.getItem(KEY) || 'system'; } catch (e) { return 'system'; } };
-    const resolve = (p) => (p === 'dark' || (p === 'system' && mq.matches) ? 'dark' : 'light');
-    let pref = read();
-  
-    // Applies a preference. The page cross-fades where View Transitions exist; the silk shader
-    // eases on its own from the new target
-    function apply(p, animate) {
-      pref = p;
-      const next = resolve(p);
-      const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
-      if (root.dataset.theme === next) root.dataset.themePref = p;
-      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
-        root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
-        const done = () => root.classList.remove('theming');
-        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
-        const vt = document.startViewTransition(flip);
-        vt.ready.catch(() => {});
-        vt.updateCallbackDone.catch(() => {});
-        vt.finished.then(done, done);
-      } else flip();
-      themeListeners.forEach((fn) => fn(p, next));
-    }
-    mq.addEventListener('change', () => { if (pref === 'system') apply('system', true); });
-    addEventListener('storage', (e) => { if (e.key === KEY) apply(read(), true); });
-  
     const Momento = (window.Momento = window.Momento || {});
-    Momento.theme = {
-      get pref() { return pref; },
-      get resolved() { return resolve(pref); },
-      set(p) {
-        try { localStorage.setItem(KEY, p); } catch (e) {}
-        apply(p, true);
-      },
-      onChange(fn) { themeListeners.add(fn); },
-    };
-  
-    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
-    const AKEY = 'momento-account';
-    const NOTIFY = { photos: true, closing: true, recap: false };
-    const accountListeners = new Set();
-    const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
-    let current = null;
-    const persist = () => {
-      try {
-        if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
-        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
-      } catch (e) {}
-    };
-    const emit = () => accountListeners.forEach((fn) => fn(current));
-    Momento.account = {
-      get() { return current; },
-      set(patch) {
-        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
-        persist(); emit();
-        return current;
-      },
-      clear() { current = null; persist(); emit(); },
-      onChange(fn) { accountListeners.add(fn); },
-    };
-  
-    Momento.sessionReady = momentoApi('/api/auth/me').then(({ user }) => {
-      if (user) Momento.account.set(user); else Momento.account.clear();
-      return user;
-    });
-    Momento.sessionReady.catch(() => {});
+
+    // (The account store is src/components/shared/AccountProvider.tsx: Momento.account, Momento.sessionReady)
 
     // ---- Account chip, menu and dialogs ----
     const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
@@ -227,7 +161,7 @@
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
         const notify = {};
         switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
-        if (email !== current.email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
+        if (email !== Momento.account.get().email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
         try {
           const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name, notify }));
           Momento.account.set(user);
@@ -238,7 +172,7 @@
       });
       const launch = d.launch;
       d.launch = () => {
-        const a = current || norm({});
+        const a = Momento.account.get() || Momento.account.blank();
         form.name.value = a.name; form.email.value = a.email;
         switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
         say('');
@@ -281,70 +215,6 @@
       bigCheck: svg('<path d="m5 12.5 4.2 4.2L19 7"/>', 26),
       bigBin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 22),
     };
-    const canPop = typeof HTMLElement.prototype.showPopover === 'function';
-    let toastEl = null, toastTimer = 0, toastLife = 0;
-    function hideToast() {
-      clearTimeout(toastTimer);
-      if (!toastEl) return;
-      const gone = () => { toastEl.style.visibility = 'hidden'; if (canPop && toastEl.matches(':popover-open')) toastEl.hidePopover(); };
-      if (reduced.matches) return gone();
-      toastEl.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(16px)' }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).finished.then(gone, gone);
-    }
-    const armToast = (ms) => { clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, ms); };
-    // While a window is open everything outside it is inert, so the toast lives inside the topmost open
-    // window (and its Undo stays clickable), and is re-shown so it lands on top of it
-    function placeToast() {
-      const host = [...document.querySelectorAll('dialog[open]')].pop() || document.body;
-      if (toastEl.parentElement !== host) host.append(toastEl);
-      if (canPop) { if (toastEl.matches(':popover-open')) toastEl.hidePopover(); toastEl.showPopover(); }
-    }
-    // When that window closes, the toast moves out to whatever is open underneath
-    document.addEventListener('close', (e) => {
-      if (!toastEl || !e.target.contains(toastEl) || toastEl.style.visibility === 'hidden') return;
-      requestAnimationFrame(placeToast);
-    }, true);
-    Momento.toast = (title, sub = '', opts = {}) => {
-      if (!toastEl) {
-        toastEl = document.createElement('div');
-        toastEl.className = 'm-toast glass';
-        toastEl.setAttribute('role', 'status'); toastEl.setAttribute('aria-live', 'polite');
-        if (canPop) toastEl.popover = 'manual';
-        toastEl.innerHTML = '<i class="m-toast-ic" aria-hidden="true"></i><span class="m-toast-text"><b></b><small></small></span><button class="m-toast-act" type="button" hidden></button>';
-        document.body.append(toastEl);
-        // Reading it (or reaching for Undo) holds it on screen
-        toastEl.addEventListener('pointerenter', () => clearTimeout(toastTimer));
-        toastEl.addEventListener('pointerleave', () => armToast(1800));
-        toastEl.addEventListener('focusin', () => clearTimeout(toastTimer));
-      }
-      const act = toastEl.querySelector('.m-toast-act'), a = opts.action;
-      toastEl.querySelector('.m-toast-ic').innerHTML = opts.danger ? MARK.bin : MARK.check;
-      toastEl.querySelector('b').textContent = title;
-      toastEl.querySelector('small').textContent = sub;
-      toastEl.classList.toggle('is-danger', !!opts.danger);
-      toastEl.classList.toggle('has-act', !!a);
-      act.hidden = !a; act.textContent = a ? a.label : '';
-      act.onclick = a ? () => { hideToast(); a.run(); } : null;
-      toastEl.getAnimations().forEach((x) => x.cancel());
-      toastEl.style.visibility = '';
-      placeToast();
-      if (!reduced.matches) toastEl.animate([{ opacity: 0, transform: 'translateY(22px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
-      toastLife = a ? 6000 : 3400;
-      armToast(toastLife);
-    };
-    // A toast for the next page, when the action also navigates (logging out, say)
-    const FLASH = 'momento-flash';
-    Momento.flash = (title, sub = '') => { try { sessionStorage.setItem(FLASH, JSON.stringify([title, sub])); } catch (e) {} };
-    try {
-      const f = JSON.parse(sessionStorage.getItem(FLASH) || 'null');
-      sessionStorage.removeItem(FLASH);
-      if (f) {
-        const later = () => setTimeout(() => Momento.toast(f[0], f[1]), 450);
-        if (root.classList.contains('intro-on')) document.addEventListener('momento:intro-end', later, { once: true });
-        else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later, { once: true });
-        else later();
-      }
-    } catch (e) {}
-
     // Asks before something is removed. Resolves true only for the confirm button
     let confirmD = null, confirmDone = null;
     Momento.confirm = ({ title, body = '', ok = 'Delete', danger = true, from = null }) => new Promise((resolve) => {
@@ -724,7 +594,7 @@
         return { avatars: wrap.querySelectorAll('.acct-av'), name: wrap.querySelector('.acct-name'), headName: menu.querySelector('.acct-head b'), headMail: menu.querySelector('.acct-head small') };
       }
       function render() {
-        const a = current, show = !!a || !!always;
+        const a = Momento.account.get(), show = !!a || !!always;
         host.hidden = !show;
         if (out) out.hidden = show;
         if (!show) return;
@@ -739,7 +609,7 @@
         built.headName.textContent = name || 'You';
         built.headMail.textContent = (a && a.email) || 'Your account';
       }
-      accountListeners.add(render);
+      Momento.account.onChange(render);
       render();
     }
   
@@ -963,94 +833,6 @@
       else cur.animate([{ transform: 'none' }, { transform: 'translateY(-2px) scale(1.1)', offset: .4 }, { transform: 'none' }], { duration: 380, easing: SPRING });
     };
     if (document.documentElement.dataset.page !== 'home') addEventListener('load', () => setTimeout(() => Momento.flourish(), 250), { once: true });
-  
-    // ---- Site footer: one footer for every page. A page marks it <footer class="site-foot" data-site-foot> ----
-    document.querySelectorAll('[data-site-foot]').forEach((foot) => {
-      const home = root.dataset.page === 'home', P = home ? '' : 'index.html';
-      const up = svg('<path d="M12 19V5M6 11l6-6 6 6"/>', 15), chev = svg('<path d="M6 9l6 6 6-6"/>', 16);
-      foot.innerHTML = `
-        <div class="sf-grid">
-          <div class="sf-brand">
-            <a class="sf-logo" href="${home ? '#home' : 'index.html'}" aria-label="Momento, home"><svg class="glyph" aria-hidden="true"><use href="#glyph-album"/></svg><svg class="brand-word" aria-hidden="true"><use href="#wordmark"/></svg></a>
-            <p>Every photo from your event, in one shared album.</p>
-          </div>
-          <nav class="sf-col" aria-labelledby="sfProduct">
-            <h2 id="sfProduct"><span class="sf-h-text">Product</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfProductList">Product<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
-            <ul id="sfProductList">
-              <li><a class="sf-link" href="${P}#how-it-works">How it works</a></li>
-              <li><a class="sf-link" href="${P}#features">Features</a></li>
-              <li><a class="sf-link" href="${P}#quality">Full quality</a></li>
-            </ul>
-          </nav>
-          <nav class="sf-col" aria-labelledby="sfAlbums">
-            <h2 id="sfAlbums"><span class="sf-h-text">Your albums</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfAlbumsList">Your albums<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
-            <ul id="sfAlbumsList">
-              <li><a class="sf-link" href="albums.html">My albums</a></li>
-              <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
-              <li><a class="sf-link" href="events.html#groups">Groups</a></li>
-              <li><a class="sf-link" href="${P}#how-it-works" data-create>Create an album</a></li>
-              <li><a class="sf-link" href="settings.html">Settings</a></li>
-            </ul>
-          </nav>
-          <nav class="sf-col" aria-labelledby="sfEvents">
-            <h2 id="sfEvents"><span class="sf-h-text">Events</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfEventsList">Events<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
-            <ul id="sfEventsList">
-              <li><a class="sf-link" href="events.html#events">Events near you</a></li>
-              <li><a class="sf-link" href="${P}#how-it-works" data-create data-create-kind="event">Host a public event</a></li>
-              <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
-            </ul>
-          </nav>
-          <nav class="sf-col" aria-labelledby="sfHelp">
-            <h2 id="sfHelp"><span class="sf-h-text">Help</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfHelpList">Help<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
-            <ul id="sfHelpList">
-              <li><button class="sf-link" type="button" data-foot-act="help">Help and support</button></li>
-              <li><a class="sf-link" href="support.html">Contact support</a></li>
-              <li><a class="sf-link" href="${P}#faq">FAQ</a></li>
-              <li><a class="sf-link" href="mailto:${SUPPORT}">Email support</a></li>
-              <li><a class="sf-link" href="privacy.html">Privacy policy</a></li>
-              <li><a class="sf-link" href="terms.html">Terms of Service</a></li>
-              <li data-foot-account hidden><button class="sf-link" type="button" data-foot-act="settings">Account settings</button></li>
-            </ul>
-          </nav>
-        </div>
-        <div class="sf-base">
-          <p class="sf-legal"><span>© 2026 HexArch Limited</span><span>Proof of concept. Design and features are subject to change.</span></p>
-          <div class="acct-seg" role="radiogroup" aria-label="Appearance">
-            <span class="acct-seg-pill" aria-hidden="true"></span>
-            <button type="button" role="radio" aria-checked="false" data-theme="light">${ICON.sun}Light</button>
-            <button type="button" role="radio" aria-checked="false" data-theme="dark">${ICON.moon}Dark</button>
-            <button type="button" role="radio" aria-checked="false" data-theme="system">${ICON.system}System</button>
-          </div>
-          <button class="sf-top" type="button">Back to top${up}</button>
-        </div>`;
-      wireSeg(foot.querySelector('.acct-seg'));
-      foot.querySelectorAll('[data-foot-act]').forEach((b) => b.addEventListener('click', () => {
-        if (b.dataset.footAct === 'help') Momento.openHelp(b); else Momento.openSettings(b);
-      }));
-      // Phones: each group heading folds its list (the buttons are display:none on larger screens)
-      foot.querySelectorAll('.sf-head').forEach((b) => b.addEventListener('click', () => {
-        const col = b.closest('.sf-col'), open = !col.classList.contains('is-open');
-        col.classList.toggle('is-open', open); b.setAttribute('aria-expanded', String(open));
-        if (!open) return;
-        // The footer ends the page, so a group that has just opened can sit below the screen: once it has finished growing, bring it into view
-        let t;
-        const settle = () => { clearTimeout(t); col.removeEventListener('transitionend', onEnd); col.scrollIntoView({ block: 'nearest', behavior: reduced.matches ? 'auto' : 'smooth' }); };
-        const onEnd = (e) => { if (e.target === col && e.propertyName === 'grid-template-rows') settle(); };
-        t = setTimeout(settle, 700); col.addEventListener('transitionend', onEnd);
-      }));
-      foot.querySelector('.sf-top').addEventListener('click', () => scrollTo({ top: 0, behavior: reduced.matches ? 'auto' : 'smooth' }));
-      // Account settings only makes sense once there is an account
-      const acct = foot.querySelector('[data-foot-account]');
-      const syncAcct = () => { acct.hidden = !current; };
-      accountListeners.add(syncAcct); syncAcct();
-      // On the home page its own sections are reached the way its menu does it (the album stage is pinned)
-      if (home) foot.addEventListener('click', (e) => {
-        const a = e.target.closest('a[href^="#"]');
-        if (!a || a.matches('.sf-logo')) return;
-        const item = document.querySelector(`.menu-item[href="${a.getAttribute('href')}"]`);
-        if (item) { e.preventDefault(); item.click(); }
-      });
-    });
   
     // Pages mark where the chip goes:
     //   <div data-acct-host hidden data-acct-out="authOut"></div>            (home: shown once signed in)

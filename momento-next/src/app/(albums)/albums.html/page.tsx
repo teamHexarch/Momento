@@ -9,6 +9,9 @@ import BinModal from '@/components/albums/BinModal';
 import Viewer from '@/components/albums/Viewer';
 import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
+import Toaster from '@/components/shared/Toaster';
+import ThemeProvider from '@/components/shared/ThemeProvider';
+import AccountProvider from '@/components/shared/AccountProvider';
 
 // This page is served at /albums.html on purpose: the page scripts (and the notification links that open
 // albums.html#album=...) recognise it by that address.
@@ -37,7 +40,8 @@ const SCRIPTS = [
 
 export default function AlbumsRoute() {
   return (
-    <>
+    <ThemeProvider>
+    <AccountProvider activity>
       <Backdrop />
       <SvgSprite />
       <SiteHeader current="albums" />
@@ -46,7 +50,9 @@ export default function AlbumsRoute() {
       <ActivityModal />
       <BinModal />
       <Viewer />
+      <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
-    </>
+    </AccountProvider>
+    </ThemeProvider>
   );
 }

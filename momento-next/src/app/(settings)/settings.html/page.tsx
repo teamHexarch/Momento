@@ -5,6 +5,9 @@ import SiteHeader from '@/components/shared/SiteHeader';
 import SettingsPage from '@/components/settings/SettingsPage';
 import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
+import Toaster from '@/components/shared/Toaster';
+import ThemeProvider from '@/components/shared/ThemeProvider';
+import AccountProvider from '@/components/shared/AccountProvider';
 
 // Served at /settings.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -31,12 +34,15 @@ const SCRIPTS = [
 
 export default function SettingsRoute() {
   return (
-    <>
+    <ThemeProvider>
+    <AccountProvider activity>
       <Backdrop />
       <SvgSprite />
       <SiteHeader current="settings" />
       <SettingsPage />
+      <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
-    </>
+    </AccountProvider>
+    </ThemeProvider>
   );
 }

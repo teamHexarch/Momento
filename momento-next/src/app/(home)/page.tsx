@@ -8,6 +8,10 @@ import HowItWorks from '@/components/home/HowItWorks';
 import Features from '@/components/home/Features';
 import Faq from '@/components/home/Faq';
 import LegacyScripts from '@/legacy/LegacyScripts';
+import SiteFooter from '@/components/shared/SiteFooter';
+import Toaster from '@/components/shared/Toaster';
+import ThemeProvider from '@/components/shared/ThemeProvider';
+import AccountProvider from '@/components/shared/AccountProvider';
 
 // Page behaviour (silk background, album, intro, auth, footer...) is the original code, run in the original order:
 // the five inline blocks of index.html first, then the shared scripts that were `defer`red.
@@ -29,7 +33,8 @@ const SCRIPTS = [
 
 export default function HomePage() {
   return (
-    <>
+    <ThemeProvider>
+    <AccountProvider>
       <Intro />
       <Backdrop />
       <SvgSprite />
@@ -47,10 +52,12 @@ export default function HomePage() {
           <Faq />
         </main>
 
-        <footer className="site-foot" data-site-foot=""></footer>
+        <SiteFooter home />
       </div>
 
+      <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
-    </>
+    </AccountProvider>
+    </ThemeProvider>
   );
 }

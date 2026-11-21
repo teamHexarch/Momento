@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import SiteFooter from '@/components/shared/SiteFooter';
 
 export default function SettingsPage() {
   return (
@@ -250,7 +251,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <footer className="site-foot" data-site-foot=""></footer>
+          <SiteFooter />
         </main>
       </div>
     </>
