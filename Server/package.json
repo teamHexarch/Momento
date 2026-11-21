@@ -26,6 +26,7 @@
     "test:nsfw": "node scripts/testNsfw.js",
     "test:security": "node scripts/testSecurity.js",
     "test:devmode": "node scripts/testDevMode.js",
+    "test:learning": "node scripts/testLearningEndToEnd.js",
     "preview:review": "node scripts/reviewPreview.js",
     "reviewer-codes": "node --env-file-if-exists=.env scripts/reviewerCodes.js",
     "test:attack": "node scripts/testAttack.js",

@@ -3,14 +3,14 @@
 // Publishable means staff published it at level 0-50 (kept private at any level counts as not publishable). Photos of one album stay in the same half (fit or holdout). A score range is enabled
 // only when both halves show at least 85% (one-sided 95% lower bound) publishable photos, so roughly 16+ per range
 // in each half are needed.
-// The reasons staff tick (utils/reviewReasons.js) are learned too: a photo kept private for a serious reason counts
-// SERIOUS_WEIGHT times against its score range, a possible minor vetoes the range outright, and each relearn reports
-// per reason how often it was used and how often the model had scored those photos as safe (its blind spots).
+// The reasons staff tick (utils/reviewReasons.js) come with every photo kept private, which counts as not
+// publishable for its score range; each relearn reports per reason how often it was used and how often the model
+// had scored those photos as safe (its blind spots).
 import { createHash } from 'node:crypto';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { MODEL_NAME, stageOneScores } from './uploadChecks.js';
 import { LEVELS, truthOf, buildTable, STAGE_ONE_PUBLISH_MAX } from './calibrationTable.js';
-import { REASON_KEYS, SERIOUS, SERIOUS_WEIGHT, VETO, BLIND_SPOT_ALLOW } from '../utils/reviewReasons.js';
+import { REASON_KEYS, BLIND_SPOT_ALLOW } from '../utils/reviewReasons.js';
 
 // Staff decisions on stage-one uploads, one per file, as { group, truth, scores }. The score is recomputed from the
 // model's raw classes with the same function the live check uses, so learning and checking always agree; older
@@ -32,9 +32,7 @@ export async function reviewedRows() {
       : LEVELS.includes(d.severity) ? truthOf(d.severity, STAGE_ONE_PUBLISH_MAX) : 'allow';
     // Reasons count only for photos kept private (publishing needs none)
     const reasons = truth === 'decline' ? (d.reasons || []).filter((r) => REASON_KEYS.includes(r)) : [];
-    const serious = reasons.some((r) => SERIOUS.includes(r));
-    rows.push({ group: d.album ? String(d.album) : 'no-album-' + d._id, truth, scores: [, { allow }], reasons,
-      weight: serious ? SERIOUS_WEIGHT : 1, veto: reasons.some((r) => VETO.includes(r)) });
+    rows.push({ group: d.album ? String(d.album) : 'no-album-' + d._id, truth, scores: [, { allow }], reasons });
   }
   return rows;
 }

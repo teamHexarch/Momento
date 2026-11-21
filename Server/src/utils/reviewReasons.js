@@ -16,12 +16,7 @@ export const REASON_KEYS = Object.values(REVIEW_REASONS).flat();
 // Reasons that never allow publishing, whatever level was chosen
 export const MUST_STAY_PRIVATE = ['possible-minor'];
 
-// How the automatic check learns from the reasons (services/reviewCalibration.js, calibrationTable.js):
-// a photo kept private for a serious reason weighs SERIOUS_WEIGHT times as much against its score range (the model
-// misses acts and context, so one such miss should outweigh one ordinary approval), and a score range where staff
-// ever flagged a possible minor never publishes on its own.
-export const SERIOUS = ['possible-minor', 'touching', 'sexual-act', 'sex-toys', 'sexual-gesture', 'genitals', 'full-nudity'];
-export const SERIOUS_WEIGHT = 3;
-export const VETO = ['possible-minor'];
+// How the automatic check learns from the reasons (services/reviewCalibration.js): a photo kept private counts as
+// not publishable for its score range, whatever its level, and each relearn reports per reason how often it was used.
 // A kept-private photo the model scored at least this "allow" (looked safe) is one of its blind spots
 export const BLIND_SPOT_ALLOW = 0.75;

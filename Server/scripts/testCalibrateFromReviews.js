@@ -187,15 +187,12 @@ try {
   // ---- The reasons are learned ----
   const { reasonStats } = await import('../src/services/reviewCalibration.js');
   const h2 = (await reviewedRows()).find(row => row.reasons.includes('touching'));
-  assert.deepEqual([h2.truth, h2.weight, h2.veto], ['decline', 3, false], 'a serious reason weighs 3 times');
+  assert.deepEqual([h2.truth, h2.weight, h2.veto], ['decline', undefined, undefined], 'every kept-private photo counts once, whatever the reason');
   // One score range (0.9-1): 40 approvals per half and 2 photos kept private in each half
-  const half = (extra) => [...Array.from({ length: 40 }, () => ({ truth: 'allow', scores: [, { allow: .95 }] })),
-    ...Array.from({ length: 2 }, () => ({ truth: 'decline', scores: [, { allow: .95 }], ...extra }))];
+  const half = () => [...Array.from({ length: 40 }, () => ({ truth: 'allow', scores: [, { allow: .95 }] })),
+    ...Array.from({ length: 2 }, () => ({ truth: 'decline', scores: [, { allow: .95 }] }))];
   const quiet = () => {};
-  assert.equal(buildTable(half({}), half({}), [1], quiet)[1].allow.length, 1, 'ordinary reasons: the range still publishes');
-  assert.equal(buildTable(half({ weight: 3 }), half({ weight: 3 }), [1], quiet)[1].allow.length, 0, 'serious reasons: the same range no longer does');
-  assert.equal(buildTable(half({}), [...half({}).slice(0, 41), { truth: 'decline', scores: [, { allow: .95 }], veto: true }], [1], quiet)[1].allow.length, 0,
-    'one possible minor vetoes the range');
+  assert.equal(buildTable(half(), half(), [1], quiet)[1].allow.length, 1, 'the range publishes at 85% confidence, as in V2.3');
   // Per reason: how often, and how often the model had scored those photos as safe
   const stats = reasonStats([
     { reasons: ['clothed', 'touching'], scores: [, { allow: .95 }] },
