@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="robots" content="noindex">
-  <title>Photo review · Momento</title>
+  <title>Photo review | Momento</title>
   <link rel="icon" href="favicon.ico" sizes="48x48">
   <style>[hidden] { display: none !important; }</style>
   <script>
-  // Staff only: uploads waiting for a human decision. Each photo gets a content level (0-100, Momento's standard);
-  // 0-25 publishes it, 100 declines it, and 50-75 asks staff to approve or decline after looking at the context.
-  // The levels are kept with each decision, so they can later calibrate the automatic check
-  // (Server/scripts/calibrateFromReviews.js). Model scores are not shown, so they can't sway the rating.
+  // Staff only: pictures someone asked a person to review after the automatic nudity check declined them
+  // (they press "Request review" in the album). Each gets a content level (0-100, Momento's standard): 0-50
+  // publishes it, 100 declines it, and 75 asks staff to approve or decline after looking at the context. The
+  // levels are kept with each decision, so the automatic check learns from them (Server/services/stageOneLearning.js).
+  // Model scores are not shown, so they can't sway the rating.
   (() => {
     let pref = 'system';
     try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
@@ -21,160 +22,214 @@
   })();
   </script>
   <script src="assets/api.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/glass.css">
   <style>
     :root {
-      --bg: #ECEAF0; --card: #F8F7FA; --ink: #2E2C3A; --muted: #5C596B; --faint: #8A8697; --line: #D6D2DE;
-      --accent: #6C5FC7; --accent-ink: #fff; --well: rgba(46,44,58,.06);
-      --safe: #2F7D4F; --hold: #A86A12; --stop: #9A3D3D;
-      --shadow: 0 0 0 .5px rgba(46,44,58,.06), 0 18px 40px -24px rgba(60,50,90,.35);
-      --ease: cubic-bezier(.16, 1, .3, 1);
+      --paper: #F8F7FA; --surface: #FFFFFF; --dusk: #2E2C3A; --slate: #5C596B; --stone: #8A8697; --line: #E3E0EA;
+      --well: rgba(46, 44, 58, .06); --tint: rgba(111, 152, 150, .12);
+      --safe: #2F7D4F; --hold: #A86A12; --stop: #9A3D3D; --pick: #6C5FC7;
+      --focus-ring: #2E2C3A;
+      --shadow: 0 0 0 .5px rgba(46, 44, 58, .06), 0 1px 2px rgba(46, 44, 58, .05), 0 18px 40px -24px rgba(60, 50, 90, .35);
+      --font-main: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', sans-serif;
+      --spring: cubic-bezier(.34, 1.4, .64, 1); --out: cubic-bezier(.16, 1, .3, 1);
     }
     :root[data-theme="dark"] {
-      --bg: #121119; --card: #1A1922; --ink: #ECEAF4; --muted: #B4B0C4; --faint: #8A8697; --line: #2A2834;
-      --accent: #B8AEF5; --accent-ink: #15131D; --well: rgba(255,255,255,.05);
-      --safe: #7CC79A; --hold: #E2B062; --stop: #E79A9A;
-      --shadow: 0 0 0 .5px rgba(0,0,0,.5), 0 18px 40px -24px rgba(0,0,0,.8);
+      --paper: #121119; --surface: #1C1B25; --dusk: #ECEAF4; --slate: #B4AFC8; --stone: #8A8697; --line: #2C2A38;
+      --well: rgba(255, 255, 255, .05); --tint: rgba(143, 168, 232, .12);
+      --safe: #7CC79A; --hold: #E2B062; --stop: #F0A3A3; --pick: #B8AEF5;
+      --focus-ring: #ECEAF4;
+      --shadow: 0 0 0 .5px rgba(0, 0, 0, .5), 0 18px 40px -24px rgba(0, 0, 0, .8);
     }
     * { box-sizing: border-box; }
-    html { background: var(--bg); color-scheme: light dark; }
-    :root[data-theme="light"] { color-scheme: light; }
+    html { background: var(--paper); color-scheme: light; }
     :root[data-theme="dark"] { color-scheme: dark; }
-    body { margin: 0; color: var(--ink); font: 15px/1.6 Inter, system-ui, sans-serif; min-height: 100vh; }
-    a { color: var(--accent); }
-    header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
-      padding: 12px 20px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--line); }
-    header h1 { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
-    header h1 a { color: inherit; text-decoration: none; }
-    .muted { color: var(--muted); }
-    .bar { flex: 1 1 200px; height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
-    .bar i { display: block; height: 100%; width: 0; background: var(--accent); transform-origin: left; transition: width .4s var(--ease); }
-    label.toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-    main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; max-width: 1360px; margin: 0 auto; padding: 18px 20px 40px; }
-    @media (max-width: 920px) { main { grid-template-columns: 1fr; } }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
-    .stage { padding: 14px; min-width: 0; }
-    .frame { position: relative; height: min(64vh, 860px); border-radius: 10px; background: var(--well); display: grid; place-items: center; overflow: hidden; }
-    .frame img { width: 100%; height: 100%; object-fit: contain; }
-    .frame p { margin: 0; padding: 24px; text-align: center; color: var(--muted); max-width: 46ch; }
-    .meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin: 10px 2px; word-break: break-word; }
-    .meta b { font-weight: 600; }
-    .levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-    @media (max-width: 640px) { .levels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    body { margin: 0; min-height: 100dvh; background: var(--paper); color: var(--dusk); font: 400 15px/1.6 var(--font-main); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
     button { font: inherit; color: inherit; cursor: pointer; }
-    .levels button { padding: 10px 6px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); text-align: center;
-      transition: transform .2s var(--ease), border-color .2s ease, background-color .2s ease; }
-    .levels button b { display: block; font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; }
-    .levels button small { display: block; color: var(--muted); font-size: .76rem; line-height: 1.3; }
+    :is(button, a, input):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+    /* ---- Header: the logo, the site's sections, and the way back ---- */
+    .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .75rem 1rem; flex-wrap: wrap;
+      padding: max(.75rem, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) .75rem max(16px, env(safe-area-inset-left));
+      background: color-mix(in srgb, var(--paper) 86%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--line); }
+    .brand { display: inline-flex; align-items: center; gap: .55rem; font-weight: 750; letter-spacing: -.02em; text-decoration: none; font-size: 1.05rem; }
+    .brand img { width: 2rem; height: 2rem; border-radius: 9px; }
+    .site-nav { display: flex; gap: .2rem; margin: 0 auto; padding: .3rem; border-radius: 100px; }
+    .site-nav a { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: 0 .95rem; border-radius: 100px;
+      color: var(--slate); font-size: .9rem; font-weight: 600; text-decoration: none; transition: background-color .2s ease, color .2s ease; }
+    .site-nav a:hover { color: var(--dusk); background: var(--well); }
+    .site-nav a[aria-current="page"] { color: var(--paper); background: var(--dusk); }
+    .site-nav svg { flex: none; }
+    .back { display: inline-flex; align-items: center; gap: .35rem; min-height: 2.5rem; padding: 0 1rem; border-radius: 100px; border: 1px solid var(--line);
+      background: var(--surface); font-size: .88rem; font-weight: 650; text-decoration: none; white-space: nowrap;
+      transition: transform .2s var(--spring), border-color .2s ease; }
+    .back:hover { border-color: var(--dusk); }
+    .back:active { transform: scale(.97); }
+    @media (max-width: 760px) {
+      .site-nav { order: 3; width: 100%; justify-content: space-between; margin: 0; }
+      .site-nav a { flex: 1; justify-content: center; padding: 0 .5rem; }
+      .site-nav a span { display: none; }
+      .back { margin-left: auto; }
+    }
+
+    /* ---- Page ---- */
+    .page { max-width: 1320px; margin: 0 auto; padding: 1.6rem max(16px, env(safe-area-inset-right)) max(3rem, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    .page-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: .75rem 1.5rem; margin-bottom: 1.2rem; }
+    h1 { margin: 0; font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.05; letter-spacing: -.035em; }
+    .sub { margin: .35rem 0 0; color: var(--slate); max-width: 60ch; }
+    .tools { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; padding: .55rem .6rem .55rem 1rem; border-radius: 18px; }
+    .progress { display: grid; gap: .3rem; min-width: 11rem; font-size: .85rem; color: var(--slate); font-variant-numeric: tabular-nums; }
+    .bar { height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; background: var(--pick); transition: width .4s var(--out); }
+    .toggle { display: inline-flex; align-items: center; gap: .45rem; min-height: 2.5rem; font-size: .88rem; cursor: pointer; }
+    .toggle input { width: 1.05rem; height: 1.05rem; accent-color: var(--dusk); }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 1rem; align-items: start; }
+    @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); }
+    .stage { padding: .9rem; min-width: 0; }
+    .frame { position: relative; height: min(62dvh, 820px); min-height: 16rem; border-radius: 14px; background: var(--well); display: grid; place-items: center; overflow: hidden; }
+    .frame img { width: 100%; height: 100%; object-fit: contain; }
+    .frame p { margin: 0; padding: 1.5rem; text-align: center; color: var(--slate); max-width: 46ch; }
+    .meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .25rem .75rem; margin: .75rem .2rem; word-break: break-word; }
+    .meta b { font-weight: 650; }
+    .meta .where { color: var(--slate); font-size: .88rem; }
+    .chip { display: inline-block; padding: .05rem .55rem; border-radius: 100px; font-size: .76rem; font-weight: 650; background: var(--well); vertical-align: middle; }
+    .chip.ok { color: var(--safe); } .chip.no { color: var(--stop); } .chip.gone { color: var(--stone); }
+
+    .levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem; }
+    @media (max-width: 640px) { .levels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .levels button { min-height: 4.2rem; padding: .55rem .35rem; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); text-align: center;
+      transition: transform .2s var(--spring), border-color .2s ease, background-color .2s ease; }
+    .levels button b { display: block; font-size: 1.3rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.2; }
+    .levels button small { display: block; color: var(--slate); font-size: .74rem; line-height: 1.3; }
     .levels button[data-group="safe"] b { color: var(--safe); }
     .levels button[data-group="hold"] b { color: var(--hold); }
     .levels button[data-group="stop"] b { color: var(--stop); }
-    .levels button:hover { border-color: var(--accent); }
-    .levels button:active { transform: scale(.97); }
-    .levels button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
-    .levels button:disabled { cursor: default; opacity: .55; transform: none; }
-    :is(button, a, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .confirm { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--well); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-    .confirm span { flex: 1 1 220px; }
-    .btn { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-weight: 500;
-      transition: transform .2s var(--ease), border-color .2s ease; }
-    .btn:hover { border-color: var(--accent); }
-    .btn:active { transform: scale(.97); }
-    .btn:disabled { opacity: .5; cursor: default; transform: none; }
-    a.btn { display: inline-block; text-decoration: none; }
-    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-    .btn.primary kbd { background: transparent; border-color: currentColor; color: inherit; }
-    .controls { display: contents; }
+    .levels button:hover:not(:disabled) { border-color: var(--dusk); }
+    .levels button:active:not(:disabled) { transform: scale(.97); }
+    .levels button.on { border-color: var(--pick); background: color-mix(in srgb, var(--pick) 12%, var(--surface)); }
+    .levels button:disabled { cursor: default; opacity: .5; }
+
+    .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .75rem; padding: .8rem .9rem; border-radius: 16px; background: var(--tint); }
+    .confirm span { flex: 1 1 220px; font-weight: 550; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.6rem; padding: 0 1.05rem; border-radius: 100px;
+      border: 1px solid var(--line); background: var(--surface); font-size: .9rem; font-weight: 650; text-decoration: none;
+      transition: transform .2s var(--spring), border-color .2s ease, opacity .2s ease; }
+    .btn:hover:not(:disabled) { border-color: var(--dusk); }
+    .btn:active:not(:disabled) { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: default; }
+    .btn.primary { background: var(--dusk); border-color: var(--dusk); color: var(--paper); }
     .btn.danger { color: var(--stop); }
-    .nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .status { margin: 10px 2px 0; min-height: 1.6em; }
-    .status.err { color: var(--stop); }
-    .hint { margin: 10px 2px 0; font-size: .85rem; }
-    kbd { font: 600 .75rem/1 Inter, sans-serif; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; background: var(--card); }
-    aside { display: flex; flex-direction: column; gap: 14px; }
-    aside section { padding: 14px 16px; }
-    aside h2 { margin: 0 0 6px; font-size: .95rem; font-weight: 600; }
-    aside p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .btn kbd { font: 650 .7rem/1 var(--font-main); padding: .15rem .35rem; border-radius: 5px; border: 1px solid currentColor; opacity: .7; }
+    .moves { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+    .status { margin: .7rem .2rem 0; min-height: 1.6em; }
+    .status.err { color: var(--stop); font-weight: 600; }
+    .hint { margin: .4rem .2rem 0; color: var(--slate); font-size: .84rem; }
+    kbd { font: 650 .74rem/1 var(--font-main); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: .1rem .35rem; background: var(--surface); }
+
+    aside { display: grid; gap: 1rem; }
+    aside section { padding: 1rem 1.1rem; }
+    aside h2 { margin: 0 0 .4rem; font-size: 1rem; letter-spacing: -.01em; }
+    aside p { margin: 0; color: var(--slate); font-size: .88rem; }
     table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-    td { padding: 3px 0; vertical-align: top; } td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-    td.lv { width: 2.6em; font-weight: 600; }
+    td { padding: .2rem 0; vertical-align: top; } td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    td.lv { width: 2.6em; font-weight: 700; }
     td.lv.safe { color: var(--safe); } td.lv.hold { color: var(--hold); } td.lv.stop { color: var(--stop); }
-    .guide td { padding: 5px 0; border-top: 1px solid var(--line); }
+    .guide { margin-top: .5rem; }
+    .guide td { padding: .4rem 0; border-top: 1px solid var(--line); }
     .guide tr:first-child td { border-top: 0; }
     .guide td:last-child { text-align: left; }
-    .guide b { display: block; font-weight: 600; }
-    .guide small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.35; }
-    #relearn { margin-top: 10px; }
-    .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; font-weight: 600; background: var(--well); }
-    .chip.ok { color: var(--safe); } .chip.no { color: var(--stop); } .chip.gone { color: var(--faint); }
-    .gate { max-width: 520px; margin: 12vh auto; padding: 28px; text-align: center; }
-    .gate h2 { margin: 0 0 8px; font-size: 1.3rem; letter-spacing: -.02em; }
-    .gate p { color: var(--muted); margin: 0 0 16px; }
+    .guide b { display: block; font-weight: 650; }
+    .guide small { display: block; color: var(--slate); font-size: .8rem; line-height: 1.35; }
+    #relearn { margin-top: .7rem; }
+
+    .gate { max-width: 32rem; margin: 10vh auto 0; padding: 2rem 1.6rem; text-align: center; }
+    .gate h2 { margin: 0 0 .5rem; font-size: 1.35rem; letter-spacing: -.02em; }
+    .gate p { margin: 0 0 1.2rem; color: var(--slate); }
+    .gate .gate-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
+
+    @media (pointer: coarse) { .btn, .back, .site-nav a, .toggle { min-height: 2.75rem; } }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
 </head>
 <body>
-  <header>
-    <h1><a href="index.html">Momento</a> · Photo review</h1>
-    <div class="controls" id="controls" hidden>
-      <span id="progress" class="muted"></span>
-      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
-      <label class="toggle"><input type="checkbox" id="onlyOpen" checked> Only show photos waiting</label>
-      <button class="btn" type="button" id="refresh">Refresh</button>
-    </div>
+  <header class="top">
+    <a class="brand" href="index.html" aria-label="Momento, home"><img src="assets/momento-icon.png" alt="">Momento</a>
+    <nav class="site-nav glass" aria-label="Main">
+      <a href="index.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.4 12 4l8 6.4V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
+      <a href="albums.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="6" width="17" height="14" rx="3"/><path d="M7 3.5h10"/><path d="m3.5 16 5-4.5 4 3.5 3-2.5 5 4"/></svg><span>My albums</span></a>
+      <a href="events.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.4-.3 4 1.2 4.5 3.8"/></svg><span>Social</span></a>
+      <a href="settings.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Settings</span></a>
+    </nav>
+    <a class="back" href="albums.html"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Back to My albums</a>
   </header>
 
-  <div class="card gate" id="gate" hidden>
-    <h2 id="gateTitle">Checking your account…</h2>
-    <p id="gateText"></p>
-    <a class="btn primary" id="gateLink" href="index.html" hidden>Back to Momento</a>
-  </div>
-
-  <main id="app" hidden>
-    <div class="card stage">
-      <div class="frame" id="frame"><img id="photo" alt="" hidden><p id="noPhoto" hidden></p></div>
-      <div class="meta"><span id="name"></span><span id="where" class="muted"></span></div>
-      <div class="levels" id="levels" role="group" aria-label="Content level"></div>
-      <div class="confirm" id="confirm" hidden>
-        <span id="confirmText"></span>
-        <button class="btn primary" type="button" id="approve">Approve and publish <kbd>A</kbd></button>
-        <button class="btn danger" type="button" id="decline">Decline <kbd>D</kbd></button>
+  <div class="page">
+    <div class="card gate" id="gate" hidden>
+      <h2 id="gateTitle">Checking your account…</h2>
+      <p id="gateText"></p>
+      <div class="gate-acts" id="gateLink" hidden>
+        <a class="btn primary" href="albums.html">Back to My albums</a>
+        <a class="btn" href="index.html">Home</a>
       </div>
-      <div class="nav">
-        <button class="btn" type="button" id="prev">← Previous</button>
-        <button class="btn" type="button" id="next">Next →</button>
-      </div>
-      <p class="status" id="status" role="status" aria-live="polite"></p>
-      <p class="hint muted">Keys: <kbd>1</kbd>–<kbd>6</kbd> choose a level, <kbd>A</kbd> / <kbd>D</kbd> approve or decline, <kbd>←</kbd> <kbd>→</kbd> move between photos. 0–50 publishes the photo at once, 75 asks you, and 100 declines it; decisions can’t be undone here.</p>
     </div>
-    <aside>
-      <section class="card">
-        <h2>How to rate</h2>
-        <p>Judge the photo itself, by Momento’s standard. 0–50 publish · 75 your call, in context · 100 decline.</p>
-        <table class="guide" id="guide"></table>
-      </section>
-      <section class="card">
-        <h2>Auto-publishing</h2>
-        <p id="learnText">Checking…</p>
-        <button class="btn" type="button" id="relearn" hidden>Relearn now</button>
-      </section>
-      <section class="card">
-        <h2>Rated this session</h2>
-        <table id="counts"></table>
-      </section>
-      <section class="card">
-        <h2>Decisions this session</h2>
-        <table>
-          <tr><td>Approved and published</td><td id="nApproved">0</td></tr>
-          <tr><td>Declined</td><td id="nDeclined">0</td></tr>
-          <tr><td>Still waiting</td><td id="nWaiting">0</td></tr>
-        </table>
-      </section>
-    </aside>
-  </main>
+
+    <div id="app" hidden>
+      <div class="page-head">
+        <div>
+          <h1>Photo review</h1>
+          <p class="sub">Pictures the automatic check declined, which the person who added them asked you to look at.</p>
+        </div>
+        <div class="tools card" id="controls">
+          <div class="progress"><span id="progress">Nothing yet</span><div class="bar" aria-hidden="true"><i id="bar"></i></div></div>
+          <label class="toggle"><input type="checkbox" id="onlyOpen" checked> Only waiting</label>
+          <button class="btn" type="button" id="refresh">Refresh</button>
+        </div>
+      </div>
+
+      <main class="layout">
+        <div class="card stage">
+          <div class="frame" id="frame"><img id="photo" alt="" hidden><p id="noPhoto" hidden></p></div>
+          <div class="meta"><span id="name"></span><span id="where" class="where"></span></div>
+          <div class="levels" id="levels" role="group" aria-label="Content level"></div>
+          <div class="confirm" id="confirm" hidden>
+            <span id="confirmText"></span>
+            <button class="btn primary" type="button" id="approve">Approve and publish <kbd>A</kbd></button>
+            <button class="btn danger" type="button" id="decline">Decline <kbd>D</kbd></button>
+          </div>
+          <div class="moves">
+            <button class="btn" type="button" id="prev">← Previous</button>
+            <button class="btn" type="button" id="next">Next →</button>
+          </div>
+          <p class="status" id="status" role="status" aria-live="polite"></p>
+          <p class="hint">Keys: <kbd>1</kbd>–<kbd>6</kbd> choose a level, <kbd>A</kbd> / <kbd>D</kbd> approve or decline, <kbd>←</kbd> <kbd>→</kbd> move between pictures. 0–50 publishes at once, 75 asks you, 100 declines it. Decisions can’t be undone here.</p>
+        </div>
+        <aside>
+          <section class="card">
+            <h2>How to rate</h2>
+            <p>Judge the picture itself, by Momento’s standard. 0–50 publish · 75 your call, in context · 100 decline.</p>
+            <table class="guide" id="guide"></table>
+          </section>
+          <section class="card">
+            <h2>Auto-publishing</h2>
+            <p id="learnText">Checking…</p>
+            <button class="btn" type="button" id="relearn" hidden>Relearn now</button>
+          </section>
+          <section class="card">
+            <h2>This session</h2>
+            <table>
+              <tr><td>Approved and published</td><td id="nApproved">0</td></tr>
+              <tr><td>Declined</td><td id="nDeclined">0</td></tr>
+              <tr><td>Still waiting</td><td id="nWaiting">0</td></tr>
+            </table>
+            <table id="counts" style="margin-top:.6rem"></table>
+          </section>
+        </aside>
+      </main>
+    </div>
+  </div>
 
   <script>
   (() => {
@@ -195,7 +250,6 @@
 
     function gate(title, text, link) {
       $('app').hidden = true;
-      $('controls').hidden = true;
       $('gate').hidden = false;
       $('gateTitle').textContent = title;
       $('gateText').textContent = text || '';
@@ -217,7 +271,7 @@
       $('levels').append(b);
     }
 
-    // The standard, in full, beside the photo
+    // The standard, in full, beside the picture
     for (const [value, title, text, example, group] of LEVELS) {
       const row = $('guide').insertRow();
       const lv = row.insertCell(); lv.className = 'lv ' + group; lv.textContent = value;
@@ -236,8 +290,8 @@
       const rule = s.source === 'learned' ? `Learned from your ratings: photos the model scores ${range} as level 0–50 publish at once.`
         : s.source === 'starter' ? `Starter rule: photos the model is ${pct(s.starterThreshold)}+ sure are level 0–50 publish at once. It switches to what it learns from your ratings once there are enough.`
           : s.source === 'file' ? `A fixed calibration file decides (${range || 'nothing'} publishes at once).`
-            : 'Every photo waits for staff.';
-      $('learnText').textContent = `${rule} ${pct(s.spotCheck)} of those still come here as spot checks. ${s.rated} of ${s.reviewed} reviews have a level.${learned}${why} Relearns every ${s.relearnHours} h.`;
+            : 'Nothing publishes on its own: every photo is declined until someone asks for a review.';
+      $('learnText').textContent = `${rule} The rest are declined, and come here only if the uploader asks. ${s.rated} of ${s.reviewed} reviews have a level.${learned}${why} Relearns every ${s.relearnHours} h.`;
       $('relearn').hidden = !s.enabled;
     }
     const loadLearning = () => momentoApi('/api/admin/moderation-status').then(showLearning, () => { $('learnText').textContent = 'Status unavailable.'; });
@@ -259,7 +313,7 @@
     function nextOpen() {
       const open = items.slice(index + 1).concat(items.slice(0, index)).find((it) => !it.done);
       if (open) index = items.indexOf(open);
-      else $('status').textContent += ' All caught up. Press Refresh to check for new uploads.';
+      else $('status').textContent += ' All caught up. Press Refresh to check for new requests.';
       pending = null;
       render();
     }
@@ -284,12 +338,12 @@
         it.severity = severity;
         rated.set(severity, rated.get(severity) + 1);
         if (allow) approved++; else declined++;
-        say(allow ? 'Approved: the photo is being published.' : 'Declined: the photo stays private.');
+        say(allow ? 'Approved: it’s being published.' : 'Declined: it stays private and is deleted after 30 days.');
         busy = false;
         nextOpen();
       } catch (err) {
         busy = false;
-        if (err.status === 409) { it.done = 'gone'; say('Someone already decided this photo.'); nextOpen(); return; }
+        if (err.status === 409) { it.done = 'gone'; say('Someone already decided this one.'); nextOpen(); return; }
         if (err.status === 404) { gate('Staff only', 'This page is for Momento staff.', true); return; }
         say(err.message, true);
       }
@@ -299,15 +353,15 @@
       const it = items[index];
       const waiting = items.filter((x) => !x.done).length;
       const total = items.length, done = total - waiting;
-      $('progress').textContent = total ? `${done} of ${total} decided` : '';
+      $('progress').textContent = total ? `${done} of ${total} decided` : 'Nothing waiting';
       $('bar').style.width = (total ? done / total * 100 : 0) + '%';
       $('nApproved').textContent = approved;
       $('nDeclined').textContent = declined;
       $('nWaiting').textContent = waiting;
       $('counts').innerHTML = '';
-      for (const [value, title] of LEVELS) {
+      for (const [value, title, , , group] of LEVELS) {
         const row = $('counts').insertRow();
-        const lv = row.insertCell(); lv.className = 'lv'; lv.textContent = value;
+        const lv = row.insertCell(); lv.className = 'lv ' + group; lv.textContent = value;
         row.insertCell().textContent = title;
         row.insertCell().textContent = rated.get(value);
       }
@@ -315,18 +369,18 @@
       if (!it) {
         photo.hidden = true; photo.removeAttribute('src');
         none.hidden = false;
-        none.textContent = 'Nothing is waiting for review. New uploads appear here when you press Refresh.';
+        none.textContent = 'Nothing is waiting for review. When someone presses Request review in an album, it appears here (and you get an email).';
         $('name').textContent = ''; $('where').textContent = '';
       } else {
         if (it.preview) {
           const src = window.MOMENTO_API + '/api/admin/moderation/' + it.id + '/preview';
           if (photo.dataset.src !== src) { photo.dataset.src = src; photo.src = src; }
-          photo.alt = it.fileName || 'Photo waiting for review';
+          photo.alt = it.fileName || 'Picture waiting for review';
           photo.hidden = false; none.hidden = true;
         } else {
           photo.hidden = true; photo.removeAttribute('src'); delete photo.dataset.src;
           none.hidden = false;
-          none.textContent = it.kind === 'photo' ? 'The preview isn’t available any more.' : `This ${it.kind} was refused automatically and never stored, so there is no picture. Decide from the report alone.`;
+          none.textContent = it.kind === 'photo' ? 'The preview isn’t available any more.' : `This ${it.kind} was refused automatically and never stored, so there is no picture. Decide from the details alone.`;
         }
         const name = document.createElement('b');
         name.textContent = it.fileName || (it.kind === 'photo' ? 'Photo' : it.kind[0].toUpperCase() + it.kind.slice(1));
@@ -354,14 +408,17 @@
     async function load() {
       say('');
       let user = null;
-      try { ({ user } = await momentoApi('/api/auth/me')); } catch (err) { gate('Can’t reach Momento', err.message, true); return; }
-      if (!user) { gate('Log in first', 'Log in with a staff account to review photos.', true); return; }
+      try { ({ user } = await momentoApi('/api/auth/me')); } catch (err) {
+        if (err.status === 401) { gate('Log in first', 'Log in with a staff account to review pictures.', true); return; }
+        gate('Can’t reach Momento', err.message, true); return;
+      }
+      if (!user) { gate('Log in first', 'Log in with a staff account to review pictures.', true); return; }
       if (user.plan !== 'staff') { gate('Staff only', 'This page is for Momento staff.', true); return; }
       let data;
       try { data = await momentoApi('/api/admin/moderation'); }
       catch (err) {
         if (err.status === 404) gate('Staff only', 'This page is for Momento staff. Staff accounts need a confirmed email.', true);
-        else gate('Can’t load the photos', err.message, true);
+        else gate('Can’t load the pictures', err.message, true);
         return;
       }
       // Oldest first, so nothing waits longer than it has to
@@ -370,11 +427,10 @@
       items = decided.concat(fresh.filter((d) => !decided.some((it) => it.id === d.id)));
       const open = items.find((it) => !it.done);
       index = open ? items.indexOf(open) : Math.max(0, items.length - 1);
-      if (!open && items.length) say('All caught up. Press Refresh to check for new uploads.');
+      if (!open && items.length) say('All caught up. Press Refresh to check for new requests.');
       pending = null;
       $('gate').hidden = true;
       $('app').hidden = false;
-      $('controls').hidden = false;
       render();
       loadLearning();
     }

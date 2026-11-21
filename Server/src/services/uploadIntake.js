@@ -15,6 +15,8 @@ export const quarantineStorage = {
       callback(null, chunk);
     } });
     const interrupted = () => counter.destroy(new Error('Upload interrupted'));
+    // (one listener per file: up to 30 files in an upload)
+    if (req.getMaxListeners() < 40) req.setMaxListeners(40);
     req.once('aborted', interrupted);
     const write = saveStream(rawKey, counter, 'application/octet-stream').catch(error => {
       counter.destroy(error);

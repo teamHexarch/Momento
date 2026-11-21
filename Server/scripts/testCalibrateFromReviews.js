@@ -14,7 +14,7 @@ const run = promisify(execFile);
 const serverDir = fileURLToPath(new URL('..', import.meta.url));
 const dir = await mkdtemp(path.join(os.tmpdir(), 'momento-review-calibration-'));
 const mongo = await MongoMemoryServer.create();
-const env = { NSFW_PIPELINE: 'stage-one', NSFW_CALIBRATION: '', NODE_ENV: 'test', S3_BUCKET: '', JWT_SECRET: 'test-only-isolated',
+const env = { NSFW_CALIBRATION: '', NODE_ENV: 'test', S3_BUCKET: '', JWT_SECRET: 'test-only-isolated',
   MONGODB_URI: mongo.getUri('reviews'), UPLOAD_DIR: dir };
 Object.assign(process.env, env);
 const childEnv = { ...process.env, ...env };
@@ -22,7 +22,7 @@ await mongoose.connect(process.env.MONGODB_URI);
 const { ModerationDecision } = await import('../src/models/ModerationDecision.js');
 const { reviewedRows, splitByGroup } = await import('./calibrateFromReviews.js');
 const { calibrateFromReviews } = await import('../src/services/reviewCalibration.js');
-const { routeScore, activeTable, isSpotCheck, stageOneScores, starterThreshold } = await import('../src/services/uploadChecks.js');
+const { routeScore, activeTable, stageOneScores, starterThreshold } = await import('../src/services/uploadChecks.js');
 const { relearn, loadLearned } = await import('../src/services/stageOneLearning.js');
 const { ModerationCalibration } = await import('../src/models/ModerationCalibration.js');
 
@@ -44,18 +44,12 @@ try {
   // Method B until the reviews teach it: the starter rule, 85% sure (NSFW_STARTER_THRESHOLD)
   assert.equal(starterThreshold, .85);
   assert.equal(activeTable().source, 'starter');
-  assert.equal(routeScore(1, { allow: .86 }).action, 'allow');
-  assert.equal(routeScore(1, { allow: .86 }).starter, true);
-  assert.equal(routeScore(1, { allow: .84 }).action, 'escalate');
+  assert.equal(routeScore({ allow: .86 }).action, 'allow');
+  assert.equal(routeScore({ allow: .86 }).starter, true);
+  assert.equal(routeScore({ allow: .84 }).action, 'decline');
   // One model: a range must be 85% sure
-  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .8499 }] } }).action, 'escalate');
-  assert.equal(routeScore(1, { allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .85 }] } }).action, 'allow');
-  // Spot checks: the same file always gets the same answer, about the configured share of files
-  assert.equal(isSpotCheck('a', 1), true);
-  assert.equal(isSpotCheck('a', 0), false);
-  assert.equal(isSpotCheck('abc', .1), isSpotCheck('abc', .1));
-  const sampled = Array.from({ length: 2000 }, (_, i) => isSpotCheck('job-' + i, .1)).filter(Boolean).length;
-  assert.ok(sampled > 140 && sampled < 260, 'about 10% spot-checked: ' + sampled);
+  assert.equal(routeScore({ allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .8499 }] } }).action, 'decline');
+  assert.equal(routeScore({ allow: 1 }, { 1: { allow: [{ min: .9, max: 1, confidence: .85 }] } }).action, 'allow');
   // Too few reviews: relearning keeps the starter rule and says why
   assert.equal((await relearn()).ok, false);
   assert.match((await ModerationCalibration.findById('stage-one')).lastError, /Not enough reviewed uploads/);
@@ -97,9 +91,9 @@ try {
   assert.equal(learned.ranges, 1);
   assert.equal(activeTable().source, 'learned');
   assert.deepEqual(activeTable().table, table);
-  assert.equal(routeScore(1, { allow: .93 }).action, 'allow');
-  assert.equal(routeScore(1, { allow: .93 }).starter, undefined);
-  assert.equal(routeScore(1, { allow: .87 }).action, 'escalate', 'the learned table (0.9+) replaces the 0.85 starter rule');
+  assert.equal(routeScore({ allow: .93 }).action, 'allow');
+  assert.equal(routeScore({ allow: .93 }).starter, undefined);
+  assert.equal(routeScore({ allow: .87 }).action, 'decline', 'the learned table (0.9+) replaces the 0.85 starter rule');
   const stored = await ModerationCalibration.findById('stage-one').lean();
   assert.deepEqual(stored.table, table);
   assert.equal(stored.lastError, null);
@@ -122,14 +116,14 @@ try {
   assert.equal(activeTable().source, 'learned');
   assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 3);
   assert.ok(table[1].allow[0].confidence >= .9);
-  assert.equal(routeScore(1, { allow: .95 }, table).action, 'allow');
-  assert.equal(routeScore(1, { allow: .85 }, table).action, 'escalate', 'level-75 approvals do not enable a range');
+  assert.equal(routeScore({ allow: .95 }, table).action, 'allow');
+  assert.equal(routeScore({ allow: .85 }, table).action, 'decline', 'level-75 approvals do not enable a range');
   // Level 50 is publishable with one model: the same photos rated 50 enable that range too
   const { buildTable } = await import('../src/services/calibrationTable.js');
   const { truthOf, STAGE_ONE_PUBLISH_MAX } = await import('../src/services/calibrationTable.js');
   assert.equal(truthOf(50, STAGE_ONE_PUBLISH_MAX), 'allow');
-  assert.equal(truthOf(75, STAGE_ONE_PUBLISH_MAX), 'review');
-  assert.equal(truthOf(50), 'review', 'the three-stage cascade keeps 0-25');
+  assert.equal(truthOf(75, STAGE_ONE_PUBLISH_MAX), 'decline');
+  assert.equal(truthOf(50), 'allow', 'one model: 0-50 publish');
   const fifty = n => Array.from({ length: n }, () => ({ truth: truthOf(50, STAGE_ONE_PUBLISH_MAX), scores: [, { allow: .85 }] }));
   assert.deepEqual(buildTable(fifty(16), fifty(16), [1], () => {})[1].allow.map(bin => [bin.min, bin.max]), [[.8, .9]], '16 per half reach 85%');
   assert.deepEqual(buildTable(fifty(15), fifty(15), [1], () => {})[1].allow, [], '15 per half do not');

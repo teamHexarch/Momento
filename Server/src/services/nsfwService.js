@@ -2,7 +2,8 @@ import sharp from 'sharp';
 import { HttpError } from '../utils/httpError.js';
 import { sha256 } from './contentSafety.js';
 
-// Nudity check for everything people upload: album photos, cover pictures and profile pictures.
+// The nudity check's model, for everything people upload. Album photos go through the private check queue
+// (services/uploadChecks.js, using scan); cover pictures and profile pictures are checked here (assertAllowed).
 // A free, open-source model (NSFW.js, MobileNetV2) runs right here on the server, in plain JavaScript:
 // about 120 MB of memory once it's loaded, and roughly half a second per photo. Photos are checked one
 // at a time, so a big upload can't use up the server's memory.
@@ -46,6 +47,9 @@ export function useClassifier(fn) { classifier = fn; }
 // One photo at a time
 let chain = Promise.resolve();
 const oneAtATime = (fn) => { const run = chain.then(fn, fn); chain = run.catch(() => {}); return run; };
+
+// The check is switched off (NSFW_CHECK=off), or this is a test with no stand-in model: every picture passes
+export const checkIsOff = () => !enabled || (testing && !classifier);
 
 // The scores for one photo, or null when the check is off or unavailable
 export async function scan(buffer) {

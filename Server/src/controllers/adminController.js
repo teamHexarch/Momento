@@ -7,7 +7,7 @@ import { ModerationDecision } from '../models/ModerationDecision.js';
 import { UploadCheck } from '../models/UploadCheck.js';
 import { Album } from '../models/Album.js';
 import { ModerationCalibration } from '../models/ModerationCalibration.js';
-import { activeTable, starterThreshold, spotCheckRate, stageOneOnly } from '../services/uploadChecks.js';
+import { activeTable, starterThreshold } from '../services/uploadChecks.js';
 import { relearn, relearnHours } from '../services/stageOneLearning.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
@@ -138,7 +138,7 @@ async function learningStatus() {
     ModerationDecision.countDocuments({ kind: 'photo', status: { $in: ['allowed', 'upheld'] }, severity: { $in: SEVERITIES } }),
   ]);
   return {
-    enabled: stageOneOnly, source, starterThreshold, spotCheck: spotCheckRate, relearnHours,
+    enabled: true, source, starterThreshold, relearnHours,
     ranges: (table[1]?.allow || []).map((b) => ({ min: b.min, max: b.max, confidence: b.confidence, starter: !!b.starter })),
     waiting, reviewed, rated,
     learned: doc ? { builtAt: doc.builtAt || null, reviewed: doc.reviewed ?? null, publishable: doc.publishable ?? null, albums: doc.albums ?? null,

@@ -5,7 +5,7 @@
 // in each half are needed.
 import { createHash } from 'node:crypto';
 import { ModerationDecision } from '../models/ModerationDecision.js';
-import { STAGE_MODELS, stageOneScores } from './uploadChecks.js';
+import { MODEL_NAME, stageOneScores } from './uploadChecks.js';
 import { LEVELS, truthOf, buildTable, STAGE_ONE_PUBLISH_MAX } from './calibrationTable.js';
 
 // Staff decisions on stage-one uploads, one per file, as { group, truth, scores }. The score is recomputed from the
@@ -13,7 +13,7 @@ import { LEVELS, truthOf, buildTable, STAGE_ONE_PUBLISH_MAX } from './calibratio
 // decisions without the raw classes (scored another way) are left out.
 export async function reviewedRows() {
   const docs = await ModerationDecision.find({
-    kind: 'photo', model: STAGE_MODELS[1], status: { $in: ['allowed', 'upheld'] }, reviewedBy: { $exists: true },
+    kind: 'photo', model: MODEL_NAME, status: { $in: ['allowed', 'upheld'] }, reviewedBy: { $exists: true },
     'scores.classes': { $type: 'object' },
   }, 'album hash scores status severity').sort({ at: 1 }).lean();
   const seen = new Set(), rows = [];

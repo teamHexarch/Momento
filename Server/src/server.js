@@ -6,7 +6,7 @@ import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
 import { warmUp } from './services/nsfwService.js';
-import { stageOneOnly, startUploadChecks, calibratedBins, calibrationError, activeTable, starterThreshold, spotCheckRate } from './services/uploadChecks.js';
+import { startUploadChecks, calibratedBins, calibrationError, activeTable, starterThreshold } from './services/uploadChecks.js';
 import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
 import { moveStaffRoleToPlan } from './services/planMigration.js';
@@ -31,22 +31,21 @@ setTimeout(runJobs, 2 * 60000).unref();
 setInterval(runJobs, 3600000).unref();
 // The nudity check's model loads in the background, so the first upload isn't slow
 setTimeout(warmUp, 5000).unref();
-// Stage-one moderation runs its queue here (it uses the same in-process model), unless a separate worker
-// runs it instead (NSFW_SEPARATE_WORKER=1)
-if (stageOneOnly && process.env.NSFW_SEPARATE_WORKER !== '1') {
-  await loadLearned().catch((error) => console.error('Photo check learning:', error.message));
-  startUploadChecks();
-  startRefusalCleanup();
-  const { source } = activeTable(), bins = calibratedBins(1);
-  console.log('Photo checks: stage one only (MobileNetV2). ' + (
+// The nudity check for album photos runs its queue here, with the same in-process model (services/uploadChecks.js)
+await loadLearned().catch((error) => console.error('Photo check learning:', error.message));
+startUploadChecks();
+startRefusalCleanup();
+{
+  const { source } = activeTable(), bins = calibratedBins();
+  console.log('Photo checks: NSFW.js MobileNetV2 on this server. ' + (
     source === 'file' ? `Table file ${process.env.NSFW_CALIBRATION}: ${bins} score range(s) publish at once`
       : source === 'learned' ? `Learned from staff reviews: ${bins} score range(s) publish at once`
         : source === 'starter' ? `Starter rule until staff reviews teach it: ${Math.round(starterThreshold * 100)}%+ sure of level 0-50 publishes at once`
-          : 'Every upload waits for staff review')
-    + `; ${Math.round(spotCheckRate * 100)}% of those still go to staff as spot checks; relearns every ${relearnHours} h.`);
-  if (calibrationError) console.error('The calibration table file could not be read; using the learned or starter rules instead.');
-  startLearning();
+          : 'Nothing publishes on its own')
+    + `; the rest is declined until the uploader asks for a review; relearns every ${relearnHours} h.`);
+  if (calibrationError) console.error('The calibration table file could not be read: nothing publishes on its own until it is fixed.');
 }
+startLearning();
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
 
 // ---- Stopping cleanly (an update or restart sends SIGTERM) ----

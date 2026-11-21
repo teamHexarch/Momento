@@ -27,14 +27,11 @@ const photoSchema = new mongoose.Schema({
   deletedBy: mongoose.Schema.Types.ObjectId,
   // Hidden from everyone because several people reported it, until staff decide (the host can't bring it back)
   flaggedAt: Date,
-  nextAudit: Date,
-  auditRequested: Boolean,
+  // Hidden by an automated album audit (no longer run; kept so any photo it hid stays hidden until staff decide)
   auditHidden: Boolean,
 }, { timestamps: true });
 
 photoSchema.index({ album: 1, createdAt: -1 });
-photoSchema.index({ deletedAt: 1, nextAudit: 1 });
-photoSchema.index({ auditRequested: 1, nextAudit: 1 });
 photoSchema.index({ album: 1, likeCount: -1, createdAt: -1 });
 photoSchema.index({ deletedAt: 1 }, { partialFilterExpression: { deletedAt: { $type: 'date' } } });
 photoSchema.index({ 'likeLog.user': 1 });

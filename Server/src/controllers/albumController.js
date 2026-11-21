@@ -1,6 +1,5 @@
 import { admit } from '../services/eventAdmission.js';
 import { once } from 'node:events';
-import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { ZipArchive } from 'archiver';
 import { config } from '../config/env.js';
@@ -16,15 +15,14 @@ import { sendEmail } from '../services/emailService.js';
 import { reminderHtml } from '../services/emailTemplates.js';
 import { HttpError } from '../utils/httpError.js';
 import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
-import { storePhoto, deletePhotos, openPhoto } from '../services/storageService.js';
-import { sanitizePhoto, isRawName } from '../services/imageService.js';
+import { deletePhotos, openPhoto } from '../services/storageService.js';
+import { isRawName } from '../services/imageService.js';
 import { reactionCounts, myReaction } from './photoController.js';
 import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
-import { notifyPhotos } from '../services/notifyService.js';
 import { isBig, requestZip, ZipFile } from '../services/zipService.js';
-import { judge } from '../services/nsfwService.js';
-import { cascadeEnabled, discardChecks, queueUpload } from '../services/uploadChecks.js';
+import { discardChecks, queueUpload, checkNow } from '../services/uploadChecks.js';
 import { UploadCheck } from '../models/UploadCheck.js';
+import { ModerationDecision } from '../models/ModerationDecision.js';
 import { isBanned, BANNED_MESSAGE } from '../services/contentSafety.js';
 import { sendPhoto, removeFile } from '../services/storageService.js';
 
@@ -462,11 +460,14 @@ export async function join(req, res) {
 
 // ---- One album ----
 
+// Your own uploads still being checked, waiting for staff, or declined (only you see these)
 async function checksFor(album, user) {
-  if (!cascadeEnabled) return [];
   const rows = await UploadCheck.find({ album, user, state: { $in: ['checking', 'review', 'publish', 'rejected', 'failed'] } },
     'originalName state').sort({ createdAt: -1 }).lean();
-  return rows.map(row => ({ id: row.id || String(row._id), name: row.originalName, state: row.state }));
+  // A declined photo staff have already looked at can't be sent for review again
+  const declined = rows.filter(row => row.state === 'rejected').map(row => row._id);
+  const upheld = new Set(declined.length ? (await ModerationDecision.find({ _id: { $in: declined }, status: 'upheld' }, '_id').lean()).map(d => String(d._id)) : []);
+  return rows.map(row => ({ id: String(row._id), name: row.originalName, state: row.state, ...(upheld.has(String(row._id)) && { reviewed: true }) }));
 }
 export async function checkStatus(req, res) {
   const member = await membershipOf(req, req.params.id);
@@ -594,14 +595,12 @@ async function acceptPhotoBatch(req, res) {
   const files = req.files || [];
   if (!files.length) throw new HttpError(400, 'Choose at least one photo.');
   const album = req.membership.album;
-  const saved = [];
   // The same file twice (in this upload, or already in the album and not deleted): skipped
-  const hashes = files.map((f) => f.hash || crypto.createHash('sha256').update(f.buffer).digest('hex'));
+  const hashes = files.map((f) => f.hash);
   const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
-  let skipped = 0, blocked = 0, banned = 0;
-  const decisions = [], tooBig = [], failed = [];
+  let skipped = 0, banned = 0;
+  const tooBig = [];
   const checks = [];
-  let failMessage = '';
   // One photo, start to finish. Anything wrong with it skips just that photo; the rest still go in.
   async function one(f, i) {
     const hash = hashes[i], name = f.originalname.slice(0, 200);
@@ -612,59 +611,38 @@ async function acceptPhotoBatch(req, res) {
     if (f.size > limit) { tooBig.push(name); there.delete(hash); return; }
     // Files taken down after a complaint can't come back
     if (await isBanned(hash)) { banned++; return; }
-    if (cascadeEnabled) {
-      const job = await queueUpload(album._id, req.user._id, hash, name, f);
-      checks.push({ id: job.id, name, state: job.state });
-      f.buffer = null;
-      return;
-    }
-    let clean;
-    try { clean = await sanitizePhoto(f.buffer, { name, inPlace: true }); } catch (err) {
-      failed.push(name); failMessage ||= err.message; there.delete(hash); return;
-    }
-    // Nudity isn't allowed: that photo is refused (the others in the upload still go in). The decision
-    // is recorded, and the person can ask a human to review it (decisionIds). Checked on the thumbnail.
-    const verdict = await judge(clean.thumbnail, { user: req.user._id, album: album._id, kind: 'photo', hash });
-    if (verdict.blocked) { blocked++; decisions.push(verdict.decisionId); return; }
-    const stored = await storePhoto(album.id, clean);
-    f.buffer = null; clean.buffer = null;   // the original is in storage now: let its memory go
-    let p;
-    try { p = await Photo.create({ album: album._id, uploader: req.user._id, ...stored, hash, originalName: name }); }
-    catch (err) { await deletePhotos([stored.storageKey]); throw err; }
-    saved.push({ i, photo: { id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), by: 'You', mine: true, at: p.createdAt } });
+    // Queued for the nudity check (services/uploadChecks.js): published once it passes, otherwise declined and
+    // kept private, with a "Request review" for the uploader. Unreadable files are reported there too.
+    const job = await queueUpload(album._id, req.user._id, hash, name, f);
+    checks.push({ id: job.id, name, state: job.state });
   }
-  // Two photos at a time: resizing one while the other is being stored keeps a big upload quick,
-  // without holding many big files in the server's memory at once
+  // Two at a time: each is already in private storage, so this only records it and queues the check
   let next = 0;
   const workers = await Promise.allSettled([0, 1].map(async () => { while (next < files.length) { const i = next++; await one(files[i], i); } }));
   const failure = workers.find(worker => worker.status === 'rejected');
   if (failure) throw failure.reason;
-  saved.sort((a, b) => a.i - b.i);
-  saved.splice(0, saved.length, ...saved.map((s) => s.photo));
-  // Everyone else in the album hears (one notification per person, adding up while unread)
-  if (saved.length) {
-    const [rows, group] = await Promise.all([
-      Membership.find({ album: album._id, via: { $ne: 'group' } }, 'user'),
-      album.group ? GroupMember.find({ group: album.group }, 'user') : [],
-    ]);
-    notifyPhotos({ users: [...rows, ...group].map((r) => r.user), actor: req.user._id, album: album._id, count: saved.length, photoIds: saved.map((p) => p.id) });
+  // Nothing could be added, only because of size: say why
+  if (!checks.length && !skipped && !banned && tooBig.length) {
+    throw new HttpError(413, `Photos can be up to ${Math.round(config.maxUploadBytes / 1048576)} MB each (camera RAW files can be bigger).`, 'too-big', { tooBig });
   }
-  // Nothing could be added, only because of size or an unreadable file: say why
-  if (!checks.length && !saved.length && !skipped && !blocked && !banned) {
-    if (tooBig.length && !failed.length) throw new HttpError(413, `Photos can be up to ${Math.round(config.maxUploadBytes / 1048576)} MB each (camera RAW files can be bigger).`, 'too-big', { tooBig });
-    if (failed.length) throw new HttpError(400, failMessage, 'unreadable', { failed, tooBig });
-  }
-  if (banned && !checks.length && !blocked && !saved.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
-  if (blocked && !saved.length && !skipped) {
-    throw new HttpError(422, blocked === 1
-      ? 'This photo can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.'
-      : 'These photos can’t be added: they look like they contain nudity, which isn’t allowed on Momento.', 'nsfw', { decisionIds: decisions });
-  }
-  // skipped: photos that were already in the album (or twice in this upload)
-  // blocked: photos refused because they look like they contain nudity
-  // banned: files removed from Momento before; decisionIds: the refused ones, for "ask for a review"
-  // tooBig / failed: the names of photos left out for being over the size limit, or unreadable
-  res.status(checks.length ? 202 : 201).json({ photos: saved, checks, skipped, blocked, banned, decisionIds: decisions, tooBig, failed });
+  if (banned && !checks.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
+  // Up to 10 photos are checked right away, so they appear at once; bigger uploads carry on in the background
+  if (checks.length && checks.length <= 10) await checkNow(checks.map(c => c.id));
+  const now = checks.length ? await UploadCheck.find({ _id: { $in: checks.map(c => c.id) } }, 'state').lean() : [];
+  const stateOf = new Map(now.map(row => [String(row._id), row.state]));
+  const published = checks.filter(c => stateOf.get(String(c.id)) === 'published').map(c => c.id);
+  const photos = published.length ? await Photo.find({ _id: { $in: published } }) : [];
+  const waiting = checks.filter(c => !published.includes(c.id)).map(c => ({ ...c, state: stateOf.get(String(c.id)) || c.state }));
+  // photos: published now; checks: the rest (still being checked, declined, or unreadable; the album shows you
+  // their status, with Request review on a declined one); skipped: already in the album (or twice in this upload)
+  // banned: files removed from Momento before; tooBig: names left out for being over the size limit
+  // 202 while some photos are still being checked; 201 once every photo is decided (published, declined, unreadable)
+  res.status(waiting.some(c => ['checking', 'publish'].includes(c.state)) ? 202 : 201).json({
+    photos: photos.map((p) => ({ id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), by: 'You', mine: true, at: p.createdAt })),
+    checks: waiting, skipped, banned, tooBig,
+    declined: waiting.filter(c => c.state === 'rejected').length, blocked: waiting.filter(c => c.state === 'rejected').length,
+    decisionIds: waiting.filter(c => c.state === 'rejected').map(c => c.id), failed: waiting.filter(c => c.state === 'failed').map(c => c.name),
+  });
 }
 
 export async function download(req, res) {

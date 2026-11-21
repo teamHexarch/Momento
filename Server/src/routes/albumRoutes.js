@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { quarantineStorage } from '../services/uploadIntake.js';
-import { cascadeEnabled } from '../services/uploadChecks.js';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { requireVerified } from '../middleware/authMiddleware.js';
@@ -25,7 +24,8 @@ const uploadLimit = rateLimit({
 });
 
 const upload = multer({
-  storage: cascadeEnabled ? quarantineStorage : multer.memoryStorage(),
+  // Saved privately as it arrives; the nudity check (services/uploadChecks.js) decides what's published
+  storage: quarantineStorage,
   // The ceiling is the RAW one; ordinary photos over MAX_UPLOAD_MB are skipped one by one in addPhotos,
   // so one oversized file never sinks the rest of the upload
   limits: { fileSize: Math.max(config.maxUploadBytes, config.maxRawUploadBytes), files: 30 },

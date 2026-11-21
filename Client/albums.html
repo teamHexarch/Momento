@@ -980,6 +980,33 @@
     :root[data-theme="dark"] .upload-track { background: rgba(255,255,255,.1); }
     @media (prefers-reduced-motion: reduce) { .upload-track i { transition: none; } .upload.is-processing .upload-track::after { animation: none; } }
     .album-card .note { padding: 0 1.1rem; }
+    /* Your own uploads still being checked, waiting for staff, or declined (only you see these) */
+    .checks { display: grid; gap: .4rem; max-height: 11.5rem; overflow-y: auto; margin: .7rem 1.1rem 0; padding: 0; list-style: none; overscroll-behavior: contain; }
+    .checks[hidden] { display: none; }
+    .check { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .4rem .65rem; min-height: 2.75rem;
+      padding: .45rem .5rem .45rem .7rem; border-radius: 14px; background: rgba(127, 120, 150, .1); box-shadow: inset 0 0 0 1px rgba(127, 120, 150, .14); }
+    .check-dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--slate); }
+    .check-text { display: grid; min-width: 0; }
+    .check-name { overflow: hidden; color: var(--dusk); font-size: .88rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+    .check-state { color: var(--slate); font-size: .78rem; line-height: 1.35; }
+    .check.is-checking .check-dot, .check.is-publish .check-dot { background: #6F9896; animation: check-pulse 1.4s ease-in-out infinite; }
+    .check.is-review .check-dot { background: #C8963E; }
+    .check.is-rejected .check-dot, .check.is-failed .check-dot { background: #B4503F; }
+    .check.is-rejected .check-state, .check.is-failed .check-state { color: #9A3D3D; font-weight: 600; }
+    .check-act { min-height: 2.25rem; padding: 0 .85rem; border: 0; border-radius: 100px; cursor: pointer; white-space: nowrap;
+      font: 650 .8rem var(--font-main); color: var(--paper, #F8F7FA); background: var(--dusk);
+      transition: transform .2s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), opacity .2s ease; }
+    .check-act:hover { opacity: .9; }
+    .check-act:active { transform: scale(.96); }
+    .check-act:focus-visible { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: 2px; }
+    .check-act:disabled { opacity: .55; cursor: default; }
+    @media (pointer: coarse) { .check-act { min-height: 2.75rem; } }
+    @keyframes check-pulse { 50% { opacity: .35; } }
+    :root[data-theme="dark"] .check { background: rgba(242, 239, 248, .07); box-shadow: inset 0 0 0 1px rgba(242, 239, 248, .1); }
+    :root[data-theme="dark"] .check-name { color: #F2EFF8; }
+    :root[data-theme="dark"] .check.is-rejected .check-state, :root[data-theme="dark"] .check.is-failed .check-state { color: #F0A3A3; }
+    :root[data-theme="dark"] .check-act { color: #15131D; background: #F2EFF8; }
+    @media (prefers-reduced-motion: reduce) { .check-dot { animation: none !important; } .check-act { transition: none; } }
 
     /* ---------- Album window: header, photo grid, select mode ---------- */
     :root { --pick: #8A5232; }
@@ -1591,7 +1618,7 @@
         <div class="upload-track" id="uploadTrack" role="progressbar" aria-labelledby="uploadLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="uploadFill"></i></div>
       </div>
       <p class="note" id="albumNote" role="status"></p>
-      <div class="note" id="albumChecks" role="status" hidden></div>
+      <ul class="checks" id="albumChecks" aria-label="Your photos being checked" aria-live="polite" hidden></ul>
       <footer class="ab-bar" id="abBar">
         <button class="btn btn-dark" type="button" id="albumAdd" title="Up to 50 MB a photo. Camera RAW files can be bigger.">Add photos</button>
         <button class="btn btn-light btn-icon" type="button" id="albumCamera" aria-label="Take a photo" title="Take a photo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
@@ -2627,7 +2654,7 @@
           try {
             const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => { sent[k] = sizeOf(b) * Math.min(1, p); paint(); }, headers);
             r.added += d.photos?.length || 0; r.dupes += d.skipped || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
-            r.queued += d.checks?.length || 0;
+            r.queued += (d.checks || []).filter((c) => ['checking', 'publish'].includes(c.state)).length;
             r.tooBig.push(...(d.tooBig || [])); r.failed.push(...(d.failed || []));
             sent[k] = sizeOf(b); paint();
             // The photos show up in the album while the rest are still going (not while one is open full size)
@@ -2659,7 +2686,7 @@
         if (left.length || r.tooBig.length) lines.push(bigLine([...left.map((f) => f.name), ...r.tooBig]));
         if (r.failed.length) lines.push(`${listNames(r.failed)} couldn’t be read. Try exporting ${r.failed.length === 1 ? 'it' : 'them'} as JPEG.`);
         if (r.dupes) lines.push(`${plural(r.dupes, 'photo was', 'photos were')} already in the album.`);
-        if (r.blocked) lines.push(`${plural(r.blocked, 'photo', 'photos')} couldn’t be added: ${r.blocked === 1 ? 'it looks' : 'they look'} like ${r.blocked === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
+        if (r.blocked) lines.push(`${plural(r.blocked, 'photo was', 'photos were')} declined by the automatic check and ${r.blocked === 1 ? 'is' : 'are'} only visible to you. If ${r.blocked === 1 ? 'it’s' : 'they’re'} fine, press Request review below.`);
         if (r.removed) lines.push(`${plural(r.removed, 'photo was', 'photos were')} removed from Momento before and can’t be added again.`);
         if (r.errors.length) lines.push(r.errors[0]);
         if (r.queued) setUpload('done', 1, 'Upload received. You can keep using Momento.');
@@ -4278,21 +4305,33 @@
       if (M.a && M.a.id !== a.id && albumModal.open) return;
       clearTimeout(checkTimer);
       const box = document.getElementById('albumChecks');
-      const labels = { checking: 'Checking', publish: 'Publishing', review: 'Awaiting staff review', rejected: 'Declined', failed: 'Unreadable file' };
+      // Each of your photos still on its way: "IMG_204.jpg · Declined" with Request review, and so on
+      const labels = {
+        checking: 'Checking…', publish: 'Passed: adding it to the album…', review: 'Waiting for staff review',
+        rejected: 'Declined', failed: 'Couldn’t be read: try another copy of this photo',
+      };
       box.replaceChildren(...checks.map(check => {
-        const line = document.createElement('div');
-        line.textContent = check.name + ' — ' + labels[check.state];
-        if (check.state === 'rejected') {
+        const line = document.createElement('li');
+        line.className = 'check is-' + check.state;
+        line.innerHTML = '<span class="check-dot" aria-hidden="true"></span><span class="check-text"><span class="check-name"></span><span class="check-state"></span></span>';
+        line.querySelector('.check-name').textContent = check.name;
+        line.querySelector('.check-name').title = check.name;
+        line.querySelector('.check-state').textContent = check.state === 'rejected'
+          ? (check.reviewed ? 'Declined by our team' : 'Declined: our check wasn’t sure it’s allowed')
+          : labels[check.state] || check.state;
+        if (check.state === 'rejected' && !check.reviewed) {
           const appeal = document.createElement('button');
-          appeal.type = 'button'; appeal.className = 'm-toast-act'; appeal.textContent = 'Request review';
+          appeal.type = 'button'; appeal.className = 'check-act'; appeal.textContent = 'Request review';
+          appeal.setAttribute('aria-label', 'Request review of ' + check.name);
           appeal.addEventListener('click', async () => {
-            appeal.disabled = true;
+            appeal.disabled = true; appeal.textContent = 'Sending…';
             try {
-              await momentoApi('/api/auth/moderation/' + check.id + '/review', momentoJson('POST', {}));
+              const r = await momentoApi('/api/auth/moderation/' + check.id + '/review', momentoJson('POST', {}));
+              Momento.toast('Review requested', r.message || 'A staff member will look at it.');
               await fetchAlbum(a);
-            } catch (error) { Momento.toast('Review request', error.message); appeal.disabled = false; }
+            } catch (error) { Momento.toast('Review request', error.message); appeal.disabled = false; appeal.textContent = 'Request review'; }
           });
-          line.append(' ', appeal);
+          line.append(appeal);
         }
         return line;
       }));

@@ -125,15 +125,23 @@ export async function unsubscribe(req, res) {
 }
 
 // ---- POST /api/auth/moderation/:id/review  Ask a person to look at an automatic decision ----
+// Only now does a declined picture go to staff (review.html): they're emailed the first time it's asked
 export async function requestReview(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Not found.');
-  const d = await ModerationDecision.findOneAndUpdate(
+  const before = await ModerationDecision.findOneAndUpdate(
     { _id: req.params.id, user: req.user._id, status: { $in: ['final', 'review-requested'] } },
-    { $set: { status: 'review-requested' } }, { returnDocument: 'after' },
+    { $set: { status: 'review-requested' } }, { returnDocument: 'before' },
   );
-  if (!d) throw new HttpError(404, 'That decision can’t be reviewed (it may have been reviewed already).');
+  if (!before) throw new HttpError(404, 'That decision can’t be reviewed (it may have been reviewed already).');
+  const d = { ...before.toObject(), id: before.id, status: 'review-requested' };
   const pending = await UploadCheck.updateOne({ _id: d._id, user: req.user._id, state: 'rejected' }, { $set: { state: 'review' } });
   await audit('moderation.review-requested', { req, target: d._id });
+  if (before.status === 'final') {
+    const job = await UploadCheck.findById(d._id, 'originalName').lean();
+    const { tellStaffAboutReview } = await import('../services/reviewAlerts.js');
+    tellStaffAboutReview({ decision: d, fileName: job?.originalName, user: req.user })
+      .catch((err) => console.error(`Review request ${d.id} saved but the staff email failed: ${err.message}`));
+  }
   res.json({ id: d.id, status: d.status, message: pending.modifiedCount
     ? 'A staff member will review your photo. If approved, it will appear in the album.'
     : 'Thanks. A person will look at it. If it’s allowed, you can add the same photo again.' });

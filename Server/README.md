@@ -268,7 +268,7 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | GET | `/api/auth/me/export` | Everything stored about you, as a JSON file (3 an hour) |
 | GET / POST | `/api/auth/consent` | The current Terms/Privacy versions and whether you accepted them; POST `{ tos, privacy }` (the versions shown) or `{ accept: true }` records acceptance |
 | GET / POST | `/api/auth/unsubscribe?u=&k=&s=` | **No login.** The signed one-click unsubscribe link in emails (`k`: closing, recap, photos) |
-| POST | `/api/auth/moderation/:id/review` | Ask a person to look at an upload the nudity check refused (`decisionId` from the 422) |
+| POST | `/api/auth/moderation/:id/review` | Ask a person to look at a declined upload (the album's `checks` id) or a refused cover/profile picture (`decisionId` from the 422). Emails staff |
 | POST | `/api/auth/email` | `{ email, password }`: emails a confirm link to the new address and a notice to the old one |
 | GET | `/api/auth/email/confirm?token=` | The link in that email: switches the address, then goes to `settings.html?email=changed` (or `taken` / `invalid`) |
 | GET | `/api/auth/verify-email?token=` | The link in the email: confirms the address, then goes to `/?verified=1` (or `=invalid`) |
@@ -291,7 +291,7 @@ All responses are JSON. Errors look like `{ "error": "A sentence for the person"
 | PATCH | `/api/albums/:id` | Host only: change name, date, place or zone |
 | DELETE | `/api/albums/:id` | Host only: deletes the album and its photos |
 | DELETE | `/api/albums/:id/membership` | A guest leaves the album |
-| POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF). Returns `{ photos, skipped, blocked }`: `skipped` were duplicates, `blocked` looked like nudity and were refused. If every photo is refused: 422 with `code: "nsfw"` |
+| POST | `/api/albums/:id/photos` | multipart field `photos`, up to 30 files of up to 25 MB each (JPEG, PNG, WebP, HEIC, GIF). Returns 202 `{ checks, skipped, banned, tooBig }`: each photo is saved privately and checked (`checks`: its id, name and state); it appears in the album once it passes, or shows as declined to its uploader. `skipped` were duplicates |
 | GET | `/api/albums/:id/download` | Every photo as a .zip. Albums over 300 photos or 1 GB are zipped in the background instead: the page is told (`?zip=preparing`) and an email brings the link |
 | GET | `/api/albums/:id/zip/:token` | The emailed link to a background zip (members only; 3 days) |
 | GET | `/api/notifications` | Your inbox, newest first (`?before=` for more): reactions, photos added, joins, requests to join, being let in, group invites, albums closing soon. Each has `id`, `type`, `title`, `body?`, `actor: { id, name, avatarUrl }`, `albumId`, `photoIds` (the photos it's about), `at`, `read`; plus `unread` |
@@ -334,10 +334,13 @@ Every hour (src/services/jobs.js), each job claiming its work first so nothing h
 Every 6 hours: photos more than 30 days in the Recently deleted bin are removed for good.
 
 Other things to know:
-- **Nudity check**: every album photo, cover and profile picture is checked by a free model that runs on
-  the server itself (NSFW.js, about 160 MB of memory, under a second per photo, one at a time). Explicit
-  photos are refused with a clear message (422, `code: "nsfw"`); swimwear and party photos are allowed.
-  If the model can't load, uploads still work and the problem is logged. `NSFW_CHECK=off` turns it off.
+- **Nudity check**: one free model (NSFW.js, MobileNetV2) runs on the server itself (about 160 MB of
+  memory, under a second per photo, one at a time); no GPU or other service. Album photos are saved
+  privately, checked in the background and published only when the check is confident. The rest are
+  declined: the uploader sees "Declined" with **Request review**, which puts the photo on `review.html` for
+  staff and emails `STAFF_REVIEW_EMAIL` (team@hexarch.org). Declined photos nobody asks about are deleted
+  after 30 days. Covers and profile pictures are checked as they're added (422, `code: "nsfw"` when explicit).
+  The check learns from staff ratings on the review page (services/stageOneLearning.js).
 - New photos skip duplicates (the same file twice in one album), and their originals are stored in S3
   Intelligent-Tiering (the same speed, cheaper once a photo hasn't been opened for a while).
 - 5 wrong passwords in a row lock that account for 15 minutes (resetting the password lifts it).
