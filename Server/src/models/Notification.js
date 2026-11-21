@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 // ('like' is from before likes became private bookmarks: no new ones are made and old ones aren't shown.)
 const notificationSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['like', 'reaction', 'joined', 'request', 'approved', 'photos', 'invite', 'closing'], required: true },
+  type: { type: String, enum: ['like', 'reaction', 'joined', 'request', 'approved', 'photos', 'invite', 'closing', 'review-approved', 'review-declined'], required: true },
   actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album' },
   photo: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo' },

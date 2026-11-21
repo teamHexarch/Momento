@@ -85,6 +85,47 @@ export async function weeklyRecap(now = new Date()) {
 }
 
 // ---- Tidying up ----
+// ---- Photos waiting for staff review (promised within 1-2 working days of the upload) ----
+// One email per photo to STAFF_REVIEW_EMAIL: on the working day before it's due ("1 working day left") and on
+// the day ("due today"), each once. Nothing once it's been reviewed (status is no longer 'review-requested').
+export async function reviewReminders(now = new Date()) {
+  const [{ ModerationDecision }, { UploadCheck }, { workingDaysLeft }, { fixFileName }] = await Promise.all([
+    import('../models/ModerationDecision.js'), import('../models/UploadCheck.js'), import('../utils/workingDays.js'),
+    import('../controllers/albumController.js')]);
+  const waiting = await ModerationDecision.find({ status: 'review-requested', dueDay: { $exists: true },
+    $or: [{ oneDayReminderSent: { $ne: true } }, { dueTodayReminderSent: { $ne: true } }] }).limit(200);
+  let sent = 0;
+  for (const d of waiting) {
+    const left = workingDaysLeft(d.dueDay, now);
+    const flag = left === 1 && !d.oneDayReminderSent ? 'oneDayReminderSent' : left <= 0 && !d.dueTodayReminderSent ? 'dueTodayReminderSent' : null;
+    if (!flag) continue;
+    // Claimed first, so two servers (or two runs) never send the same reminder twice
+    const claimed = await ModerationDecision.updateOne({ _id: d._id, status: 'review-requested', [flag]: { $ne: true } }, { $set: { [flag]: true } });
+    if (!claimed.modifiedCount) continue;
+    const job = await UploadCheck.findById(d._id, 'originalName createdAt').lean();
+    const album = d.album ? await Album.findById(d.album, 'name').lean() : null;
+    const link = `${config.frontendUrl}/review.html?id=${d._id}`;
+    const uploaded = new Date(job?.createdAt || d.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: process.env.REVIEW_TIMEZONE || 'Australia/Sydney' });
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const headline = flag === 'oneDayReminderSent' ? 'Reminder: You haven’t reviewed this photo yet — 1 working day left' : 'Action Required: Photo review is due today';
+    await sendEmail({
+      to: config.staffReview.inbox,
+      subject: `[Momento review] ${headline}`,
+      html: `<p><b>${esc(headline)}</b></p>
+        <table cellpadding="6" style="border-collapse:collapse;font-size:14px">
+          <tr><td style="color:#5C596B">File</td><td><b>${esc(job?.originalName ? fixFileName(job.originalName) : 'Photo')}</b></td></tr>
+          <tr><td style="color:#5C596B">Album</td><td><b>${esc(album?.name || '')}</b></td></tr>
+          <tr><td style="color:#5C596B">Uploaded</td><td><b>${esc(uploaded)}</b></td></tr>
+          <tr><td style="color:#5C596B">Due</td><td><b>${esc(d.dueDay)}</b></td></tr>
+        </table>
+        <p><a href="${esc(link)}" style="display:inline-block;padding:12px 22px;border-radius:100px;background:#2E2C3A;color:#F8F7FA;text-decoration:none;font-weight:600">Open the review page</a></p>
+        <p style="color:#5C596B;font-size:13px">${esc(link)} (staff accounts only)</p>`,
+    }).catch((err) => console.error(`Review reminder for ${d.id} failed: ${err.message}`));
+    sent++;
+  }
+  return { reminded: sent };
+}
+
 export async function tidy(now = new Date()) {
   const { deleteAccount } = await import('./accountService.js');
   // Sign-ups never confirmed after 7 days, that never made an album or added a photo
@@ -160,6 +201,7 @@ export async function runJobs() {
     } catch (err) { console.error(`Job ${name} failed: ${err.message}`); }
   };
   await step('closing-soon emails', () => closingSoon());
+  await step('review reminders', () => reviewReminders());
   await step('weekly recaps', () => weeklyRecap());
   await step('tidy', () => tidy());
   await step('backup', () => backup());

@@ -92,7 +92,7 @@ try {
 
   // ---- Request review: now it goes to staff, who are emailed with a link to the review page ----
   const asked = await (await request('/api/auth/moderation/' + declined.id + '/review', 200, cookie, 'POST', {})).json();
-  assert.match(asked.message, /staff member will review/);
+  assert.match(asked.message, /within 1–2 working days/);
   assert.equal((await UploadCheck.findById(declined.id)).state, 'review');
   await new Promise(r => setTimeout(r, 50));
   assert.equal(mails.length, 1);
@@ -115,6 +115,12 @@ try {
   assert.equal((await (await request('/api/admin/moderation/' + declined.id, 200, staff, 'POST', { allow: true, severity: 15 })).json()).severity, 15);
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: declined.id }), 'approved: published');
+  // The uploader is told: in their inbox and by email
+  await new Promise(r => setTimeout(r, 100));
+  const inbox = (await (await request('/api/notifications', 200, cookie)).json()).notifications;
+  assert.ok(inbox.some(n => n.type === 'review-approved'), 'approved: in the uploader’s inbox');
+  assert.ok(mails.some(m => m.includes('To: host@example.invalid') && m.includes('Your photo was approved')), 'and emailed');
+  assert.equal(typeof (await ModerationDecision.findById(declined.id)).dueDay, 'string', 'a due day was set when the review was asked for');
 
   // ---- Staff decline: it stays private, can't be sent again, and is deleted after 30 days ----
   const no2 = (await (await request(url + '/photos', 201, cookie, 'POST', await form('explicit.jpg'))).json()).checks[0];
@@ -202,8 +208,41 @@ try {
       assert.equal(shown.shape, 'Portrait');
       assert.match(shown.name, /portrait\.jpg/);
       console.log('Browser verified: the email link opens that photo on the review page, shown as a portrait.');
+      // Deciding the last one: it leaves the queue and, with nothing else waiting, back to the homepage
+      await page.locator('#levels button[data-value="0"]').click();
+      await page.waitForURL(/index\.html$/, { timeout: 10000 });
+      assert.equal((await ModerationDecision.findById(waitingId)).status, 'allowed');
+      console.log('Browser verified: deciding the last photo removes it and goes back to the homepage.');
     } finally { await browser.close(); }
   }
+
+  // ---- Reminders to staff: 1 working day left, then due today; each once, and none once reviewed ----
+  const { dueDay, workingDaysLeft } = await import('../src/utils/workingDays.js');
+  assert.equal(dueDay(new Date('2026-11-20T01:00:00Z')), '2026-11-24', 'Friday upload (Sydney): due Tuesday (skips the weekend)');
+  assert.equal(workingDaysLeft('2026-11-24', new Date('2026-11-23T01:00:00Z')), 1, 'Monday: 1 working day left');
+  assert.equal(workingDaysLeft('2026-11-24', new Date('2026-11-24T01:00:00Z')), 0, 'Tuesday: due today');
+  nsfw.useClassifier(async () => UNSURE);
+  const late = (await (await request(url + '/photos', 201, cookie, 'POST', await form('remind-me.jpg'))).json()).checks[0];
+  await request('/api/auth/moderation/' + late.id + '/review', 200, cookie, 'POST', {});
+  await ModerationDecision.updateOne({ _id: late.id }, { $set: { dueDay: '2026-11-24' } });
+  const { reviewReminders } = await import('../src/services/jobs.js');
+  mails.length = 0;
+  assert.equal((await reviewReminders(new Date('2026-11-23T01:00:00Z'))).reminded, 1);
+  assert.equal((await reviewReminders(new Date('2026-11-23T05:00:00Z'))).reminded, 0, 'once');
+  assert.match(mails.join(' '), /You haven’t reviewed this photo yet — 1 working day left/);
+  assert.equal((await reviewReminders(new Date('2026-11-24T01:00:00Z'))).reminded, 1);
+  assert.match(mails.join(' '), /Action Required: Photo review is due today/);
+  assert.equal((await reviewReminders(new Date('2026-11-24T05:00:00Z'))).reminded, 0, 'once');
+  const d2 = await ModerationDecision.findById(late.id);
+  assert.equal(d2.oneDayReminderSent, true); assert.equal(d2.dueTodayReminderSent, true);
+  // Reviewed: no more reminders
+  const another = (await (await request(url + '/photos', 201, cookie, 'POST', await form('reviewed-in-time.jpg'))).json()).checks[0];
+  await request('/api/auth/moderation/' + another.id + '/review', 200, cookie, 'POST', {});
+  await ModerationDecision.updateOne({ _id: another.id }, { $set: { dueDay: '2026-11-24' } });
+  await request('/api/admin/moderation/' + another.id, 200, staff, 'POST', { allow: false, severity: 75 });
+  assert.equal((await reviewReminders(new Date('2026-11-23T01:00:00Z'))).reminded, 0, 'nothing for a reviewed photo');
+  await new Promise(r => setTimeout(r, 100));
+  assert.ok((await (await request('/api/notifications', 200, cookie)).json()).notifications.some(n => n.type === 'review-declined'), 'declined: the uploader hears too');
 
   // ---- The review page and the staff status ----
   const status = await (await request('/api/admin/moderation-status', 200, staff)).json();

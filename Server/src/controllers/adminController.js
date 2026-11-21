@@ -102,7 +102,7 @@ export async function decisions(req, res) {
   res.json({ decisions: rows.map((d) => {
     const job = jobOf.get(String(d._id));
     return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, severity: d.severity ?? null, at: d.at,
-      album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName ? fixFileName(job.originalName) : null,
+      dueDay: d.dueDay || null, album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName ? fixFileName(job.originalName) : null,
       preview: !!job && ['review', 'rejected'].includes(job.state) };
   }) });
 }
@@ -125,7 +125,22 @@ export async function decide(req, res) {
     ...(severity !== undefined && { severity }) } }, { returnDocument: 'after' });
   if (!d) throw new HttpError(404, 'Not found.');
   await audit('moderation.reviewed', { req, target: d._id, meta: { allow, ...(severity !== undefined && { severity }) } });
+  // The person who asked hears the answer: in their inbox and by email (only for album photos they sent for review)
+  if (job && d.requestedAt) tellUploader(d, allow).catch((err) => console.error(`Review ${d.id} decided, but telling the uploader failed: ${err.message}`));
   res.json({ id: d.id, status: d.status, severity: d.severity ?? null });
+}
+
+async function tellUploader(d, allow) {
+  const [{ notify }, { sendEmail }, { reviewResultHtml }, { config }] = await Promise.all([
+    import('../services/notifyService.js'), import('../services/emailService.js'), import('../services/emailTemplates.js'), import('../config/env.js')]);
+  await notify({ user: d.user, type: allow ? 'review-approved' : 'review-declined', album: d.album, ...(allow && { photo: d._id }) });
+  const [user, album] = await Promise.all([User.findById(d.user, 'name email emailVerified deletingAt'), d.album ? Album.findById(d.album, 'name') : null]);
+  if (!user?.email || user.deletingAt) return;
+  await sendEmail({
+    to: user.email,
+    subject: allow ? 'Your photo was approved' : 'Your photo was declined',
+    html: reviewResultHtml(user, album?.name, allow, `${config.frontendUrl}/albums.html${d.album ? `?album=${d.album}` : ''}`),
+  });
 }
 
 // ---- What publishes on its own (stage one), and what it has learned from staff reviews ----

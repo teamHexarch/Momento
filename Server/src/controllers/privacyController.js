@@ -138,6 +138,12 @@ export async function requestReview(req, res) {
   if (!before) throw new HttpError(404, 'That decision can’t be reviewed (it may have been reviewed already).');
   const d = { ...before.toObject(), id: before.id, status: 'review-requested' };
   const pending = await UploadCheck.updateOne({ _id: d._id, user: req.user._id, state: 'rejected' }, { $set: { state: 'review' } });
+  // Reviewed within 1-2 working days of the upload (staff are reminded before it's due: services/jobs.js)
+  if (before.status === 'final') {
+    const { dueDay } = await import('../utils/workingDays.js');
+    const job = await UploadCheck.findById(d._id, 'createdAt').lean();
+    await ModerationDecision.updateOne({ _id: d._id }, { $set: { requestedAt: new Date(), dueDay: dueDay(job?.createdAt || before.at || new Date()) } });
+  }
   await audit('moderation.review-requested', { req, target: d._id });
   if (before.status === 'final') {
     const job = await UploadCheck.findById(d._id, 'originalName').lean();
@@ -146,6 +152,6 @@ export async function requestReview(req, res) {
       .catch((err) => console.error(`Review request ${d.id} saved but the staff email failed: ${err.message}`));
   }
   res.json({ id: d.id, status: d.status, message: pending.modifiedCount
-    ? 'A staff member will review your photo. If approved, it will appear in the album.'
+    ? 'Our team will review your photo within 1–2 working days. We’ll let you know by notification and email.'
     : 'Thanks. A person will look at it. If it’s allowed, you can add the same photo again.' });
 }

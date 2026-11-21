@@ -189,7 +189,6 @@
         <div class="tools card" id="controls">
           <div class="progress"><span id="progress">Nothing yet</span><div class="bar" aria-hidden="true"><i id="bar"></i></div></div>
           <label class="toggle"><input type="checkbox" id="onlyOpen" checked> Only waiting</label>
-          <button class="btn" type="button" id="refresh">Refresh</button>
         </div>
       </div>
 
@@ -317,8 +316,26 @@
     function nextOpen() {
       const open = items.slice(index + 1).concat(items.slice(0, index)).find((it) => !it.done);
       if (open) index = items.indexOf(open);
-      else $('status').textContent += ' All caught up. Press Refresh to check for new requests.';
+      else $('status').textContent += ' All caught up. New requests appear here by themselves.';
       pending = null;
+      render();
+    }
+
+    // A decided picture leaves the queue at once: the next one shows, or with nothing left, back to the homepage
+    function afterDecision(it, message) {
+      const at = items.indexOf(it);
+      items = items.filter((x) => x !== it);
+      previews.delete(it.id);
+      pending = null;
+      if (!items.some((x) => !x.done)) {
+        say(message + ' Nothing else is waiting: taking you to the homepage…');
+        render();
+        setTimeout(() => { location.href = 'index.html'; }, 1500);
+        return;
+      }
+      const rest = items.slice(Math.max(0, at)).concat(items.slice(0, Math.max(0, at)));
+      index = items.indexOf(rest.find((x) => !x.done));
+      say(message);
       render();
     }
 
@@ -338,16 +355,13 @@
       say(allow ? 'Publishing…' : 'Declining…');
       try {
         await momentoApi('/api/admin/moderation/' + it.id, momentoJson('POST', { allow, severity }));
-        it.done = allow ? 'approved' : 'declined';
-        it.severity = severity;
         rated.set(severity, rated.get(severity) + 1);
         if (allow) approved++; else declined++;
-        say(allow ? 'Approved: it’s being published.' : 'Declined: it stays private and is deleted after 30 days.');
         busy = false;
-        nextOpen();
+        afterDecision(it, allow ? 'Approved: it’s being published, and the uploader has been told.' : 'Declined: it stays private, and the uploader has been told.');
       } catch (err) {
         busy = false;
-        if (err.status === 409) { it.done = 'gone'; say('Someone already decided this one.'); nextOpen(); return; }
+        if (err.status === 409) { afterDecision(it, 'Someone already decided this one.'); return; }
         if (err.status === 404) { gate('Staff only', 'This page is for Momento staff.', true); return; }
         say(err.message, true);
       }
@@ -393,7 +407,9 @@
           $('name').append(' ', chip);
         }
         const when = it.at ? new Date(it.at).toLocaleString() : '';
-        $('where').textContent = [it.albumName && 'Album: ' + it.albumName, when, it.reason].filter(Boolean).join(' · ');
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
+        const due = it.dueDay ? (it.dueDay < today ? 'Overdue' : it.dueDay === today ? 'Due today' : 'Due ' + new Date(it.dueDay + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })) : '';
+        $('where').textContent = [it.albumName && 'Album: ' + it.albumName, when, due, it.reason].filter(Boolean).join(' · ');
       }
       for (const b of $('levels').children) {
         b.disabled = !it || !!it.done || busy;
@@ -417,7 +433,7 @@
         let url = previews.get(it.id);
         if (!url) {
           const r = await fetch(window.MOMENTO_API + '/api/admin/moderation/' + encodeURIComponent(it.id) + '/preview', { credentials: 'include' });
-          if (!r.ok) throw new Error(r.status === 404 ? 'This picture isn’t available any more (it may have been decided already).' : 'The picture couldn’t be loaded (' + r.status + '). Press Refresh to try again.');
+          if (!r.ok) throw new Error(r.status === 404 ? 'This picture isn’t available any more (it may have been decided already).' : 'The picture couldn’t be loaded (' + r.status + '). It will try again in a moment.');
           url = URL.createObjectURL(await r.blob());
           previews.set(it.id, url);
         }
@@ -462,7 +478,7 @@
       const asked = new URLSearchParams(location.search).get('id');
       const open = (asked && items.find((it) => it.id === asked && !it.done)) || items.find((it) => !it.done);
       index = open ? items.indexOf(open) : Math.max(0, items.length - 1);
-      if (!open && items.length) say('All caught up. Press Refresh to check for new requests.');
+      if (!open && items.length) say('All caught up. New requests appear here by themselves.');
       pending = null;
       $('gate').hidden = true;
       $('app').hidden = false;
@@ -475,8 +491,23 @@
     $('prev').addEventListener('click', () => move(-1));
     $('next').addEventListener('click', () => move(1));
     $('onlyOpen').addEventListener('change', render);
-    $('refresh').addEventListener('click', load);
-    $('photo').addEventListener('error', () => { $('photo').hidden = true; $('noPhoto').hidden = false; $('noPhoto').textContent = 'The picture couldn’t be shown. Press Refresh to try again.'; });
+    // New requests arrive by themselves (every 30 seconds while the page is open), added at the end of the
+    // queue without moving you off the picture you're looking at
+    setInterval(async () => {
+      if (document.hidden || busy || $('app').hidden) return;
+      try {
+        const { decisions = [] } = await momentoApi('/api/admin/moderation');
+        const known = new Set(items.map((it) => it.id));
+        const fresh = decisions.filter((d) => !known.has(d.id)).sort((a, b) => new Date(a.at) - new Date(b.at));
+        if (!fresh.length) return;
+        const wasEmpty = !items.some((it) => !it.done);
+        items = items.concat(fresh);
+        if (wasEmpty) { index = items.indexOf(fresh[0]); pending = null; }
+        say(fresh.length === 1 ? 'A new request arrived.' : `${fresh.length} new requests arrived.`);
+        render();
+      } catch { /* tried again in 30 seconds */ }
+    }, 30000);
+    $('photo').addEventListener('error', () => { $('photo').hidden = true; $('noPhoto').hidden = false; $('noPhoto').textContent = 'The picture couldn’t be shown. Reopen the page to try again.'; });
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea, select') || $('app').hidden) return;
       const n = Number(e.key);

@@ -28,12 +28,16 @@ const TEXT = {
   approved: (n) => `You’re in! ${n.albumName} is ready for your photos`,
   photos: (n) => `${n.by} added ${n.count === 1 ? 'a photo' : `${n.count} photos`} to ${n.albumName}`,
   invite: (n) => `${n.by} invited you to ${n.groupName}`,
+  'review-approved': (n) => `Your photo was approved and is now in ${n.albumName || 'the album'}`,
+  'review-declined': (n) => `Our team reviewed your photo for ${n.albumName || 'the album'} and declined it`,
   closing: (n) => (n.endsAt && new Date(n.endsAt) > Date.now()
     ? `${n.albumName} stops taking photos in ${until(n.endsAt)}`
     : `${n.albumName} has stopped taking photos`),
 };
 const BODY = {
   request: () => 'Approve or decline them here, or in the album’s settings.',
+  'review-approved': () => 'Thanks for asking. Everyone in the album can see it now.',
+  'review-declined': () => 'It stays private and is deleted after 30 days.',
   closing: (n) => (n.endsAt && new Date(n.endsAt) > Date.now() ? 'Add any last photos before it’s kept for good.' : undefined),
 };
 export const textOf = (n) => (TEXT[n.type] || (() => 'Something new on Momento'))(n);

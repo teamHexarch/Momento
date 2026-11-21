@@ -19,6 +19,12 @@ const decisionSchema = new mongoose.Schema({
   reviewedAt: Date,
   // Staff's content level when reviewing (0/15/25/50/75/100), used by scripts/calibrateFromReviews.js
   severity: Number,
+  // When the uploader asked for a review, the day it's due (2 working days after the upload, utils/workingDays.js),
+  // and the reminders staff have had about it (each sent once)
+  requestedAt: Date,
+  dueDay: String,
+  oneDayReminderSent: Boolean,
+  dueTodayReminderSent: Boolean,
   at: { type: Date, default: Date.now },
 }, { versionKey: false });
 

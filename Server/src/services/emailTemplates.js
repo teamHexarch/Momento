@@ -167,3 +167,16 @@ export function groupInviteHtml(groupName, inviterName, link) {
     footer: 'If you don’t know who sent this, you can ignore it.',
   });
 }
+
+// After staff review a photo the uploader asked about
+export function reviewResultHtml(user, albumName, approved, link) {
+  const first = firstName(user);
+  return layout({
+    heading: approved ? 'Your photo was approved' : 'Your photo was declined',
+    paragraphs: approved
+      ? [`${first ? `Hi ${first}, ` : ''}our team looked at the photo you asked us to review in ${albumName || 'your album'}, and it’s fine. It’s in the album now, for everyone there to see.`]
+      : [`${first ? `Hi ${first}, ` : ''}our team looked at the photo you asked us to review in ${albumName || 'your album'}. It doesn’t meet Momento’s rules, so it stays private (only you can see it) and is deleted after 30 days.`],
+    button: { href: link, label: 'Open the album' },
+    footer: 'You’re getting this because you asked for a photo to be reviewed.',
+  });
+}
