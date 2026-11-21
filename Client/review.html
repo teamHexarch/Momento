@@ -218,7 +218,15 @@
     .dev-exit:hover { background: #9E4535; }
     .dev-exit:active { transform: scale(.96); }
     @media (max-width: 1100px) { .hdr-right .count { display: none; } }
-    @media (max-width: 760px) { .dev-who b { max-width: 5.5rem; overflow: hidden; text-overflow: ellipsis; } .dev-exit { padding: .45rem .7rem; } }
+    @media (max-width: 760px) {
+      /* Phones: logo and the reviewer on the first row, the navigation centred on its own row underneath */
+      .header { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'brand right' 'nav nav'; row-gap: .55rem; }
+      .header .brand { grid-area: brand; }
+      .header .nav { grid-area: nav; justify-self: center; }
+      .header .hdr-right { grid-area: right; justify-self: end; }
+      .dev-who b { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+      .dev-exit { padding: .45rem .75rem; }
+    }
     .frame img.is-blurred { filter: blur(28px) saturate(.6); transform: scale(1.04); }
     .frame img { transition: opacity .35s ease, transform .5s var(--out), filter .3s ease; }
     .reveal { position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: inline-flex; align-items: center; gap: .5rem; padding: .7rem 1.2rem;
@@ -247,6 +255,18 @@
     .gate-form .btn { min-height: 3rem; justify-content: center; }
     .gate-form .btn:disabled { opacity: .5; }
     .gate-home { justify-self: center; font-size: .82rem; font-weight: 600; color: var(--slate); }
+    .code-boxes { display: flex; align-items: center; justify-content: center; gap: .3rem; min-width: 0; }
+    .code-boxes .grp { display: flex; gap: .25rem; flex: 0 1 auto; min-width: 0; }
+    .code-boxes .dash { width: .55rem; height: 2px; border-radius: 2px; background: var(--stone); opacity: .5; flex: none; }
+    .code-boxes input { flex: 0 1 1.75rem; width: 1.75rem; min-width: 0; height: 2.6rem; padding: 0; border: 0; border-radius: 10px; text-align: center; text-transform: uppercase;
+      font: 700 1.05rem var(--font-main); color: var(--dusk); caret-color: transparent;
+      background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line); transition: box-shadow .15s ease, transform .2s var(--spring); }
+    .code-boxes input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring); transform: translateY(-1px); }
+    .code-boxes input.is-filled { box-shadow: inset 0 0 0 1.5px var(--stone); }
+    .code-boxes.is-wrong input { box-shadow: inset 0 0 0 2px var(--stop); }
+    @media (prefers-reduced-motion: no-preference) { .code-boxes.is-wrong { animation: code-shake .4s ease; } }
+    @keyframes code-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    @media (max-width: 400px) { .code-boxes input { height: 2.4rem; font-size: .95rem; border-radius: 8px; } .code-boxes .grp { gap: .18rem; } .code-boxes { gap: .18rem; } .code-boxes .dash { width: .35rem; } }
 
     /* The content standard: a button among the photo's details, and its pop-up */
     .chip-btn { border: 0; cursor: pointer; transition: transform .3s var(--spring), color .2s ease; }
@@ -283,9 +303,10 @@
     .pop .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3rem; padding: 0 1.3rem; border: 0; border-radius: 100px; font: 650 .95rem var(--font-main); text-decoration: none; }
     @media (prefers-reduced-motion: no-preference) { .pop[open] { animation: pop-in .4s var(--spring); } }
     @keyframes pop-in { from { opacity: 0; transform: translateY(12px) scale(.96); } }
-    .status { position: fixed; left: 50%; bottom: max(1rem, env(safe-area-inset-bottom)); translate: -50% 0; z-index: 5; max-width: calc(100vw - 32px); margin: 0;
+    .status { position: fixed; left: 50%; top: calc(max(1.1rem, env(safe-area-inset-top)) + 4rem); translate: -50% 0; z-index: 5; max-width: calc(100vw - 32px); margin: 0; text-align: center;
       padding: .6rem 1rem; border-radius: 100px; font-size: .85rem; font-weight: 600; opacity: 0; transition: opacity .3s ease; pointer-events: none; }
     .status.is-on { opacity: 1; }
+    @media (max-width: 760px) { .status { top: calc(max(1.1rem, env(safe-area-inset-top)) + 6.7rem); } }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
   </style>
 </head>
@@ -364,14 +385,14 @@
   <dialog class="pop glass gate-pop" id="gate" aria-labelledby="gateTitle">
     <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg></div>
     <h2 id="gateTitle">Enter Dev Mode</h2>
-    <p id="gateText">Photo review shows unblurred content. Enter your personal access code to continue.</p>
+    <p id="gateText">Enter your access code.</p>
     <form id="gateForm" class="gate-form" autocomplete="off">
-      <div class="gate-acct"><span>Admin account</span><b id="gateEmail"></b><span class="gate-ok" aria-label="verified">✓</span></div>
-      <label class="gate-field"><span>Your access code</span>
-        <input id="gateCode" name="code" type="password" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="64" placeholder="XXXX-XXXX-XXXX" required>
-      </label>
+      <b id="gateEmail" hidden></b>
+      <!-- 12 characters in three groups (scripts/reviewerCodes.js); typing or pasting fills them, and a full code unlocks by itself -->
+      <div class="code-boxes" id="codeBoxes" role="group" aria-label="Access code, 12 characters"></div>
+      <input id="gateCode" name="code" type="hidden">
       <p class="gate-err" id="gateErr" role="alert" hidden></p>
-      <p class="gate-slots" id="gateSlots"></p>
+      <p class="gate-slots" id="gateSlots" hidden></p>
       <button class="btn btn-dark" type="submit" id="gateGo">Unlock Dev Mode</button>
       <a class="gate-home" href="index.html">Back to Home</a>
     </form>
@@ -606,8 +627,8 @@
       $('prev').disabled = index <= 0;
       $('next').disabled = index >= items.length - 1;
       for (const b of $('levels').children) { b.disabled = busy; b.classList.toggle('is-on', Number(b.dataset.value) === pending); }
-      // The decision row is always there (no jump when a level is chosen); its buttons wait for a level
-      $('ask').hidden = false;
+      // Keep private / Publish only for 50 and 75 (the levels that need a judgement)
+      $('ask').hidden = !(pending === 50 || pending === 75);
       $('publish').disabled = busy || pending == null || pending === 100;
       $('keep').disabled = busy || pending == null;
       $('hint').className = 'hint' + (pending === 100 ? ' is-warn' : '');
@@ -641,7 +662,10 @@
     function choose(level) {
       if (!items[index] || busy) return;
       if (pending === level) { reset(); render(); return; }
-      pending = level; render();
+      pending = level;
+      if (level <= 25) return decide(true, level);   // clearly fine: published at once
+      render();
+      if (level === 100) startKeep();                 // never published: straight to the reasons
     }
     function startKeep() {
       if (pending == null || busy) return;
@@ -746,16 +770,52 @@
       try { s = await momentoApi('/api/dev/status'); } catch { /* the form still works */ }
       $('gateEmail').textContent = s?.email || '';
       $('gateErr').hidden = !message; $('gateErr').textContent = message || '';
-      $('gateSlots').textContent = s?.activeSessions != null ? `${s.activeSessions} of ${s.maxSessions} Dev Mode sessions in use · one device per code · ends when you close this page` : '';
       $('gateCode').value = ''; $('gateGo').disabled = false;
+      clearBoxes();
       if (!$('gate').open) $('gate').showModal();
-      $('gateCode').focus();
+      boxes[0].focus();
     }
     $('gate').addEventListener('cancel', (e) => e.preventDefault());   // the code, or Back to Home
+    // ---- The code boxes: one character each, capitals only, from the codes' own alphabet; a full code unlocks ----
+    const CODE_LEN = 12, OK = /[A-Z0-9]/;
+    const boxes = [];
+    for (let g = 0; g < 3; g++) {
+      const grp = document.createElement('span'); grp.className = 'grp';
+      for (let i = 0; i < 4; i++) {
+        const b = document.createElement('input');
+        b.type = 'text'; b.inputMode = 'text'; b.maxLength = 1; b.autocomplete = 'off'; b.spellcheck = false;
+        b.setAttribute('autocapitalize', 'characters'); b.setAttribute('aria-label', `Character ${g * 4 + i + 1} of ${CODE_LEN}`);
+        boxes.push(b); grp.append(b);
+      }
+      $('codeBoxes').append(grp);
+      if (g < 2) $('codeBoxes').append(Object.assign(document.createElement('span'), { className: 'dash' }));
+    }
+    const codeNow = () => boxes.map((b) => b.value).join('');
+    const clearBoxes = () => { for (const b of boxes) { b.value = ''; b.classList.remove('is-filled'); } $('codeBoxes').classList.remove('is-wrong'); };
+    const fillFrom = (at, text) => {
+      const chars = String(text).toUpperCase().split('').filter((c) => OK.test(c));
+      let i = at;
+      for (const c of chars) { if (i >= CODE_LEN) break; boxes[i].value = c; boxes[i].classList.add('is-filled'); i++; }
+      $('codeBoxes').classList.remove('is-wrong'); $('gateErr').hidden = true;
+      boxes[Math.min(i, CODE_LEN - 1)].focus();
+      if (codeNow().length === CODE_LEN) $('gateForm').requestSubmit();
+    };
+    boxes.forEach((b, i) => {
+      b.addEventListener('input', () => { const v = b.value; b.value = ''; b.classList.remove('is-filled'); if (v) fillFrom(i, v); });
+      b.addEventListener('paste', (e) => { e.preventDefault(); fillFrom(i, e.clipboardData.getData('text')); });
+      b.addEventListener('focus', () => b.select());
+      b.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !b.value && i > 0) { e.preventDefault(); boxes[i - 1].value = ''; boxes[i - 1].classList.remove('is-filled'); boxes[i - 1].focus(); }
+        else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); boxes[i - 1].focus(); }
+        else if (e.key === 'ArrowRight' && i < CODE_LEN - 1) { e.preventDefault(); boxes[i + 1].focus(); }
+      });
+    });
     $('gateForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const code = $('gateCode').value.trim();
-      if (!code) return;
+      const raw = codeNow();
+      if (raw.length < CODE_LEN) { boxes[raw.length].focus(); return; }
+      const code = raw.replace(/(.{4})(?=.)/g, '$1-');
+      $('gateCode').value = code;
       $('gateGo').disabled = true; $('gateErr').hidden = true;
       try {
         ({ session: dev } = await momentoApi('/api/dev/enter', momentoJson('POST', { code })));
@@ -768,8 +828,10 @@
         $('gateGo').disabled = false;
         $('gateErr').hidden = false;
         $('gateErr').textContent = err.message;
-        if (err.code === 'dev-mode-full' || err.code === 'dev-mode-in-use') openGate(err.message);
-        $('gateCode').select();
+        if (err.code === 'dev-mode-full' || err.code === 'dev-mode-in-use') { openGate(err.message); return; }
+        // A wrong code: the boxes shake and empty, ready for another go
+        $('codeBoxes').classList.remove('is-wrong'); void $('codeBoxes').offsetWidth; $('codeBoxes').classList.add('is-wrong');
+        setTimeout(() => { clearBoxes(); boxes[0].focus(); }, 450);
       }
     });
     // Exit: ends this session only (the other reviewers carry on), forgets what's on screen, leaves the page
