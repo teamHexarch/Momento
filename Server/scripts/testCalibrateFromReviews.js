@@ -23,8 +23,8 @@ const { ModerationDecision } = await import('../src/models/ModerationDecision.js
 const { reviewedRows, splitByGroup } = await import('./calibrateFromReviews.js');
 const { calibrateFromReviews } = await import('../src/services/reviewCalibration.js');
 const { routeScore, activeTable, stageOneScores, PUBLISH_BELOW, HARD_DECLINE_AT } = await import('../src/services/uploadChecks.js');
-// A photo whose risk is all "Sexy" (no Porn or Hentai), with the given allow score (1 - risk)
-const rs = (allow, table) => routeScore({ classes: { Neutral: allow, Drawing: 0, Sexy: 1 - allow, Porn: 0, Hentai: 0 } }, table);
+// A photo whose risk is all "Porn" (no Sexy or Hentai), with the given allow score (1 - risk)
+const rs = (allow, table) => routeScore({ classes: { Neutral: allow, Drawing: 0, Sexy: 0, Porn: 1 - allow, Hentai: 0 } }, table);
 const { relearn, loadLearned } = await import('../src/services/stageOneLearning.js');
 const { ModerationCalibration } = await import('../src/models/ModerationCalibration.js');
 
@@ -34,29 +34,30 @@ let n = 0;
 const decision = (album, allow, status, extra = {}) => ({ user, album, kind: 'photo', hash: 'h' + n++, model: 'NSFW.js MobileNetV2',
   scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 3 }, status, reviewedBy: staff, reviewedAt: new Date(), ...extra });
 try {
-  // The score: allow = 1 - risk, where risk = Porn + Hentai + Sexy
+  // The score: allow = 1 - risk, where risk = Porn + Hentai (Sexy doesn't count)
   const scored = stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 });
-  assert.equal(scored.allow.toFixed(6), '0.800000');
+  assert.equal(scored.allow.toFixed(6), '0.950000');
   assert.equal(scored.level, 0);
-  assert.equal(scored.version, 4);
-  assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.100000', 'swimwear-like (Sexy) counts as risk');
+  assert.equal(scored.version, 5);
+  assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.950000', 'swimwear-like (Sexy) is not risk');
   assert.equal(stageOneScores({ Neutral: .2, Sexy: .7, Porn: .1 }).level, 25);
   assert.equal(stageOneScores({ Neutral: .1, Porn: .9 }).level, 100);
-  // The two thresholds: risk under 25% publishes; Porn or Hentai 85%+ is a hard decline; the rest is declined (review)
-  assert.equal(PUBLISH_BELOW, .25); assert.equal(HARD_DECLINE_AT, .85);
+  // The two thresholds: risk under 60% publishes; Porn or Hentai 85%+ is a hard decline; the rest is declined (review)
+  assert.equal(PUBLISH_BELOW, .6); assert.equal(HARD_DECLINE_AT, .85);
   assert.equal(activeTable().source, 'thresholds');
-  assert.equal(rs(.76).action, 'allow');
-  assert.equal(rs(.75).action, 'decline');
-  assert.equal(rs(.75).explicit, undefined, 'high Sexy is never a hard decline: it can be reviewed');
+  assert.equal(rs(.41).action, 'allow');
+  assert.equal(rs(.4).action, 'decline');
+  assert.equal(rs(.4).explicit, undefined, 'under 85% is never a hard decline: it can be reviewed');
+  assert.equal(routeScore({ classes: { Neutral: .01, Drawing: 0, Sexy: .99, Porn: 0, Hentai: 0 } }).action, 'allow', 'swimwear and stage outfits publish');
   assert.equal(routeScore({ classes: { Neutral: .1, Sexy: 0, Porn: .85, Hentai: .05 } }).explicit, true);
   assert.equal(routeScore({ classes: { Neutral: .1, Sexy: .1, Porn: .4, Hentai: .4 } }).explicit, undefined, 'neither class alone at 85%');
   assert.equal(routeScore({ allow: 1 }).action, 'decline', 'no class scores: never published');
   // Learning: a range staff approve 85%+ of the time publishes too (but never over a hard decline)
-  const taught = (confidence) => ({ 1: { allow: [{ min: .5, max: .6, confidence }] } });
-  assert.equal(rs(.55, taught(.8499)).action, 'decline');
-  assert.equal(rs(.55, taught(.85)).action, 'allow');
-  assert.equal(rs(.55, taught(.85)).learned, true);
-  assert.equal(rs(.45, taught(.85)).action, 'decline');
+  const taught = (confidence) => ({ 1: { allow: [{ min: .3, max: .4, confidence }] } });
+  assert.equal(rs(.35, taught(.8499)).action, 'decline');
+  assert.equal(rs(.35, taught(.85)).action, 'allow');
+  assert.equal(rs(.35, taught(.85)).learned, true);
+  assert.equal(rs(.25, taught(.85)).action, 'decline');
   assert.equal(routeScore({ classes: { Neutral: .1, Sexy: 0, Porn: .9, Hentai: 0 } }, { 1: { allow: [{ min: 0, max: 1, confidence: 1 }] } }).explicit, true);
   // Too few reviews: relearning keeps the starter rule and says why
   assert.equal((await relearn()).ok, false);
@@ -121,7 +122,7 @@ try {
   assert.equal(activeTable().source, 'thresholds', 'nor when set without one');
   await relearn();
   assert.equal(activeTable().source, 'learned');
-  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 4);
+  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 5);
   assert.ok(table[1].allow[0].confidence >= .9);
   assert.equal(rs(.95, table).action, 'allow');
   assert.ok(!table[1].allow.some((b) => b.min <= .85 && .85 < b.max), 'level-75 approvals do not enable a range');

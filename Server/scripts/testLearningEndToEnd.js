@@ -23,9 +23,9 @@ const { withDevMode } = await import('./devModeTestKit.js');
 const server = app.listen(4118);
 const BASE = 'http://localhost:4118';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-// A middle-zone photo: risk 0.35 (all "Sexy"), above the 0.25 auto-publish line, so it goes to staff review
-const photo = (allow) => ({ Neutral: allow, Drawing: 0, Sexy: 1 - allow, Porn: 0, Hentai: 0 });
-const route = () => routeScore({ classes: photo(.65) });
+// A middle-zone photo: risk 0.65 (all "Porn"), above the 0.6 auto-publish line and under the 0.85 hard decline, so it goes to staff review
+const photo = (allow) => ({ Neutral: allow, Drawing: 0, Sexy: 0, Porn: 1 - allow, Hentai: 0 });
+const route = () => routeScore({ classes: photo(.35) });
 
 try {
   await User.create({ name: 'Admin', email: 'admin@example.invalid', passwordHash: await bcrypt.hash('Correct-horse-9', 4), emailVerified: true, plan: 'staff' });
@@ -37,13 +37,13 @@ try {
   // Before: no learned table; the photo goes to review
   assert.equal(activeTable().source, 'thresholds');
   assert.equal(route().action, 'decline');
-  console.log('Before any review: score 0.65 →', route().action, '(review)');
+  console.log('Before any review: score 0.35 →', route().action, '(review)');
 
   // 60 photos in that score range waiting for review, across 6 albums
   const user = new mongoose.Types.ObjectId();
   const albums = Array.from({ length: 6 }, () => new mongoose.Types.ObjectId());
   const waiting = await ModerationDecision.insertMany(Array.from({ length: 60 }, (_, i) => ({ user, album: albums[i % 6], kind: 'photo',
-    hash: 'p' + i, model: 'NSFW.js MobileNetV2', status: 'review-requested', scores: { allow: .65, classes: photo(.64 + (i % 10) / 1000), version: 4 } })));
+    hash: 'p' + i, model: 'NSFW.js MobileNetV2', status: 'review-requested', scores: { allow: .35, classes: photo(.34 + (i % 10) / 1000), version: 5 } })));
   const review = (d, body) => fetch(BASE + '/api/admin/moderation/' + d._id, { method: 'POST',
     headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(async (r) => assert.equal(r.status, 200, await r.text()));
 
@@ -55,7 +55,7 @@ try {
   assert.equal(activeTable().source, 'learned');
   assert.equal(route().action, 'allow');
   assert.equal(route().learned, true);
-  console.log('After staff published 60: score 0.65 →', route().action, '(publishes on its own, learned)');
+  console.log('After staff published 60: score 0.35 →', route().action, '(publishes on its own, learned)');
 
   // Staff change their minds: keep 20 of them private with a reason → the newest ratings win, the range closes again
   for (const d of waiting.slice(0, 20)) await review(d, { allow: false, severity: 15, reasons: ['clothed', 'touching'] });
@@ -64,7 +64,7 @@ try {
   console.log('Relearned table:', JSON.stringify(after.table[1]), 'reasons:', JSON.stringify(after.reasons));
   assert.equal(route().action, 'decline');
   assert.equal(after.reasons.touching.kept, 20);
-  console.log('After staff kept 20 private: score 0.65 →', route().action, '(back to review)');
+  console.log('After staff kept 20 private: score 0.35 →', route().action, '(back to review)');
   console.log('\nEnd-to-end learning: all checks passed');
 } finally {
   server.close();
