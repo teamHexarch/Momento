@@ -14,6 +14,7 @@
   // publishes it, 100 declines it, and 75 asks staff to approve or decline after looking at the context. The
   // levels are kept with each decision, so the automatic check learns from them (Server/services/stageOneLearning.js).
   // Model scores are not shown, so they can't sway the rating.
+  // Opened from the staff email as review.html?id=<decision>: that picture comes first.
   (() => {
     let pref = 'system';
     try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
