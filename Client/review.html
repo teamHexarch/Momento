@@ -717,8 +717,8 @@
     const notStaff = () => { $('stage').hidden = true; pop({ title: 'Staff only', text: 'This page is for Momento staff.', icon: 'lock' }); };
 
     // ---- Dev Mode: the shared admin account, unlocked with each person's own access code ----
-    // Their name is in the header with "Exit Dev Mode". The session stays alive only while they are actually using
-    // the page (a heartbeat after recent clicks or keys), so a forgotten tab frees its slot after the idle limit.
+    // Their name is in the header with "Exit Dev Mode". One code works on one device at a time. Closing the page ends the
+    // session (coming back needs the code again); a forgotten open tab ends after the idle limit.
     let dev = null, lastInput = Date.now();
     const ACTIVE_MS = 2 * 60000;
     const recentlyActive = () => !document.hidden && Date.now() - lastInput < ACTIVE_MS;
@@ -746,7 +746,7 @@
       try { s = await momentoApi('/api/dev/status'); } catch { /* the form still works */ }
       $('gateEmail').textContent = s?.email || '';
       $('gateErr').hidden = !message; $('gateErr').textContent = message || '';
-      $('gateSlots').textContent = s?.activeSessions != null ? `${s.activeSessions} of ${s.maxSessions} Dev Mode sessions in use · ends after ${s.idleMinutes} min without use` : '';
+      $('gateSlots').textContent = s?.activeSessions != null ? `${s.activeSessions} of ${s.maxSessions} Dev Mode sessions in use · one device per code · ends when you close this page` : '';
       $('gateCode').value = ''; $('gateGo').disabled = false;
       if (!$('gate').open) $('gate').showModal();
       $('gateCode').focus();
@@ -768,7 +768,7 @@
         $('gateGo').disabled = false;
         $('gateErr').hidden = false;
         $('gateErr').textContent = err.message;
-        if (err.code === 'dev-mode-full') openGate(err.message);
+        if (err.code === 'dev-mode-full' || err.code === 'dev-mode-in-use') openGate(err.message);
         $('gateCode').select();
       }
     });
@@ -779,10 +779,18 @@
       dev = null; clearReview();
       location.replace('index.html');
     });
+    // "Still open" every 30 seconds, saying whether the reviewer has been working: a page that stops saying it (closed,
+    // crashed, phone switched off) loses its session within 3 minutes, and an unused one after the idle limit
     setInterval(async () => {
-      if (!dev || !recentlyActive()) return;
-      try { await momentoApi('/api/dev/heartbeat', momentoJson('POST', {})); } catch (err) { if (isDevEnd(err)) lockOut(err.message); }
-    }, 60000);
+      if (!dev) return;
+      try { await momentoApi('/api/dev/heartbeat', momentoJson('POST', { active: recentlyActive() })); } catch (err) { if (isDevEnd(err)) lockOut(err.message); }
+    }, 30000);
+    // Closing (or leaving, or reloading) the page ends this Dev Mode session at once: coming back needs the code again
+    addEventListener('pagehide', () => {
+      if (!dev) return;
+      dev = null;
+      try { navigator.sendBeacon((window.MOMENTO_API || '') + '/api/dev/exit?reason=closed'); } catch { /* the 3-minute check frees it */ }
+    });
 
     // ---- Loading ----
     async function load() {

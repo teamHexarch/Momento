@@ -1,7 +1,7 @@
 // Personal Dev Mode access codes for the shared admin account (DEV_MODE_ADMIN_EMAIL). Run on the server, never
 // through the website. A new code is printed once: give it to that person privately; only its bcrypt hash is kept.
 //   node --env-file=.env scripts/reviewerCodes.js add Reviewer_A "Chelsea"     a new reviewer and their code
-//   node --env-file=.env scripts/reviewerCodes.js reset Reviewer_A             a new code (the old one stops working)
+//   node --env-file=.env scripts/reviewerCodes.js reset Reviewer_A ["Name"]    a new code (the old one stops working)
 //   node --env-file=.env scripts/reviewerCodes.js revoke Reviewer_A            no more Dev Mode (ends their session)
 //   node --env-file=.env scripts/reviewerCodes.js list                         reviewers, and the sessions in use
 // On the Lightsail server:
@@ -27,7 +27,7 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from(crypto.randomBytes(12), (b) => ALPHABET[b % ALPHABET.length]).join('').replace(/(.{4})(?=.)/g, '$1-');
 const show = (code, who) => console.log(`\nAccess code for ${who}:\n\n    ${code}\n\nGive it to them privately. It is not stored and can't be shown again.\n`);
 const endTheirSessions = async (reviewer) => {
-  for (const slot of await DevSlot.find({ reviewer: reviewer._id, sessionId: { $ne: null } }).lean()) await endSession(slot, 'logout');
+  for (const slot of await DevSlot.find({ reviewer: reviewer._id, sessionId: { $ne: null } }).lean()) await endSession(slot, 'logout', null, command === 'revoke' ? 'revoked' : 'code reset');
 };
 
 try {
@@ -52,9 +52,10 @@ try {
     if (!reviewer) { console.log(`No reviewer called ${label}.`); process.exit(1); }
     await endTheirSessions(reviewer);
     if (command === 'reset') {
+      // reset Reviewer_B "New name": a new code, and (optionally) the person it now belongs to
       const code = newCode();
-      await Reviewer.updateOne({ _id: reviewer._id }, { $set: { codeHash: await hashCode(code), active: true }, $unset: { revokedAt: 1 } });
-      await audit('devmode.code-reset', { reviewer: label, meta: { by: 'server script' } });
+      await Reviewer.updateOne({ _id: reviewer._id }, { $set: { codeHash: await hashCode(code), active: true, ...(name && { name }) }, $unset: { revokedAt: 1 } });
+      await audit('devmode.code-reset', { reviewer: label, meta: { by: 'server script', ...(name && { name }) } });
       show(code, label);
     } else {
       await Reviewer.updateOne({ _id: reviewer._id }, { $set: { active: false, revokedAt: new Date() } });

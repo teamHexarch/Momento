@@ -13,9 +13,12 @@ const slotSchema = new mongoose.Schema({
   reviewer: mongoose.Schema.Types.ObjectId,
   reviewerLabel: String,
   createdAt: Date,
-  lastActiveAt: Date,
+  lastActiveAt: Date,     // the reviewer last used the page (idle limit)
+  lastSeenAt: Date,       // the page last said it is still open (closed pages end their session)
 }, { versionKey: false });
 
 slotSchema.index({ tokenHash: 1 });
+// One code, one device: a reviewer can hold only one slot at a time (free slots have reviewer null)
+slotSchema.index({ reviewer: 1 }, { unique: true, partialFilterExpression: { reviewer: { $type: 'objectId' } } });
 
 export const DevSlot = mongoose.model('DevSlot', slotSchema);

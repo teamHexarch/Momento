@@ -136,7 +136,7 @@ export async function logout(req, res) {
   await endSession(req, res);
   // Logging out of the shared admin account also ends this browser's Dev Mode session (only this one)
   const devSlot = await findDevSession(req.cookies?.[DEV_COOKIE]);
-  if (devSlot) await endDevSession(devSlot, 'logout', req);
+  if (devSlot) await endDevSession(devSlot, 'logout', req, 'account logout');
   if (req.cookies?.[DEV_COOKIE]) res.clearCookie(DEV_COOKIE, devCookieOptions());
   res.json({ ok: true });
 }
