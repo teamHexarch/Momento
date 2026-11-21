@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
-import AlbumsHeader from '@/components/albums/AlbumsHeader';
+import SiteHeader from '@/components/shared/SiteHeader';
 import AlbumsPage from '@/components/albums/AlbumsPage';
 import AlbumModal from '@/components/albums/AlbumModal';
 import ActivityModal from '@/components/albums/ActivityModal';
@@ -40,7 +40,7 @@ export default function AlbumsRoute() {
     <>
       <Backdrop />
       <SvgSprite />
-      <AlbumsHeader />
+      <SiteHeader current="albums" />
       <AlbumsPage />
       <AlbumModal />
       <ActivityModal />

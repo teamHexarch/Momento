@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
-import SettingsHeader from '@/components/settings/SettingsHeader';
+import SiteHeader from '@/components/shared/SiteHeader';
 import SettingsPage from '@/components/settings/SettingsPage';
 import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
@@ -34,7 +34,7 @@ export default function SettingsRoute() {
     <>
       <Backdrop />
       <SvgSprite />
-      <SettingsHeader />
+      <SiteHeader current="settings" />
       <SettingsPage />
       <LegacyScripts scripts={SCRIPTS} />
     </>

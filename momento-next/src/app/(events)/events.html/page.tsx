@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
-import EventsHeader from '@/components/events/EventsHeader';
+import SiteHeader from '@/components/shared/SiteHeader';
 import EventsPage from '@/components/events/EventsPage';
 import LegacyScripts, { type LegacyScript } from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
@@ -43,7 +43,7 @@ export default function EventsRoute() {
     <>
       <Backdrop />
       <SvgSprite />
-      <EventsHeader />
+      <SiteHeader current="social" />
       <EventsPage />
       <LegacyScripts scripts={SCRIPTS} />
     </>

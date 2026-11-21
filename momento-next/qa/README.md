@@ -20,6 +20,10 @@ cd reference-site && node serve.mjs       # original      http://localhost:3000
 cd ../..          && npm run dev          # Next.js       http://localhost:3001   (or: npm run build && npm run start)
 ```
 
+**Running the checks from Git Bash?** Put `export MSYS_NO_PATHCONV=1` first. Otherwise Git Bash rewrites any argument that
+looks like a path before Node sees it (`/albums.html` becomes `C:/Program Files/Git/albums.html`), and `compare.mjs` fails with
+"Cannot navigate to invalid URL". PowerShell and cmd don't do this.
+
 Keep the original on **:3000** (A) and the new site on **:3001** (B). Test the **production build** before calling anything
 done: dev mode adds an overlay element and is slower.
 

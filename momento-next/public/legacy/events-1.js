@@ -216,30 +216,6 @@
     }
     document.querySelectorAll('.btn').forEach(rollButton);
 
-    // ---- Nav: Home goes to the home page; the arrow (or hovering) opens its sections ----
-    (() => {
-      const wrap = document.getElementById('navWrap');
-      const split = wrap.querySelector('.nav-split');
-      const caret = wrap.querySelector('.nav-caret');
-      const menu = document.getElementById('navMenu');
-      let open = false, timer;
-      const setOpen = (v) => {
-        clearTimeout(timer);
-        if (v === open) return;
-        open = v;
-        menu.classList.toggle('is-open', v);
-        caret.setAttribute('aria-expanded', v);
-      };
-      // A click just after hovering opened it keeps it open (instead of closing it straight away)
-      caret.addEventListener('click', () => { if (open && performance.now() - (caret._hoverAt || 0) < 500) return; setOpen(!open); });
-      if (finePointer) for (const zone of [split, menu]) {
-        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { if (!open) caret._hoverAt = performance.now(); setOpen(true); } });
-        zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') timer = setTimeout(() => setOpen(false), 260); });
-      }
-      document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
-      addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { setOpen(false); caret.focus(); } });
-    })();
-
     // ---- Events near you ----
     // Public albums (the host picked "Public") around a point: your location, or a place you searched.
     // They show on the map as round prints with a ring for their zone, and in the list beside it. Joining

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
-import SupportHeader from '@/components/support/SupportHeader';
+import SiteHeader from '@/components/shared/SiteHeader';
 import SupportPage from '@/components/support/SupportPage';
 import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
@@ -33,7 +33,7 @@ export default function SupportRoute() {
     <>
       <Backdrop />
       <SvgSprite />
-      <SupportHeader />
+      <SiteHeader current={null} />
       <SupportPage />
       <LegacyScripts scripts={SCRIPTS} />
     </>
