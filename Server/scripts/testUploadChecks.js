@@ -110,11 +110,16 @@ try {
   assert.equal(waiting.fileName, 'unsure.jpg');
   assert.equal(waiting.preview, true);
   await request('/api/admin/moderation/' + declined.id + '/preview', 200, staff);
+  // Who reviewed it: nobody yet
+  assert.equal((await (await request('/api/admin/moderation/' + declined.id, 200, staff)).json()).waiting, true);
+  await request('/api/admin/moderation/' + declined.id, 404, cookie);   // staff only
   await request('/api/admin/moderation/' + declined.id, 404, cookie, 'POST', { allow: true, severity: 15 });   // not staff
   await request('/api/admin/moderation/' + declined.id, 400, staff, 'POST', { allow: true, severity: 33 });
   assert.equal((await (await request('/api/admin/moderation/' + declined.id, 200, staff, 'POST', { allow: true, severity: 15 })).json()).severity, 15);
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: declined.id }), 'approved: published');
+  const decided = await (await request('/api/admin/moderation/' + declined.id, 200, staff)).json();
+  assert.deepEqual([decided.waiting, decided.decision, decided.reviewedBy, decided.severity], [false, 'approved', 'you', 15]);
   // The uploader is told: in their inbox and by email
   await new Promise(r => setTimeout(r, 100));
   const inbox = (await (await request('/api/notifications', 200, cookie)).json()).notifications;
@@ -202,17 +207,40 @@ try {
         await route.fulfill({ response });
       });
       await page.goto('http://localhost:4000/' + link);
-      await page.locator('#photo:not([hidden])').waitFor();
-      const shown = await page.evaluate(() => { const i = document.getElementById('photo'); return { w: i.naturalWidth, h: i.naturalHeight, shape: document.getElementById('shape').textContent, name: document.getElementById('name').textContent }; });
+      await page.locator('#stage:not([hidden])').waitFor();
+      await page.waitForFunction(() => document.getElementById('photo').naturalWidth > 0);
+      const shown = await page.evaluate(() => { const i = document.getElementById('photo'); const r = i.getBoundingClientRect(), f = i.parentElement.getBoundingClientRect();
+        return { w: i.naturalWidth, h: i.naturalHeight, name: document.getElementById('name').textContent, inside: r.bottom <= f.bottom + 1 && r.right <= f.right + 1,
+          scroll: document.documentElement.scrollHeight - innerHeight, scrollX: document.documentElement.scrollWidth - innerWidth,
+          levels: [...document.querySelectorAll('#levels .lv')].map((x) => x.dataset.value).join(','), levelsOnScreen: document.getElementById('levels').getBoundingClientRect().bottom <= innerHeight }; });
       assert.ok(shown.w > 0 && shown.h > shown.w, 'the picture shows, taller than wide: ' + JSON.stringify(shown));
-      assert.equal(shown.shape, 'Portrait');
+      assert.ok(shown.inside, 'the picture fits inside its frame');
+      assert.equal(shown.scroll, 0, 'one screen: no vertical scrolling');
+      assert.equal(shown.scrollX, 0, 'no sideways scrolling');
+      assert.equal(shown.levels, '0,15,25,50,75,100', 'the six levels, so the check learns from each rating');
+      assert.ok(shown.levelsOnScreen, 'the levels are on screen without scrolling');
       assert.match(shown.name, /portrait\.jpg/);
-      console.log('Browser verified: the email link opens that photo on the review page, shown as a portrait.');
-      // Deciding the last one: it leaves the queue and, with nothing else waiting, back to the homepage
-      await page.locator('#levels button[data-value="0"]').click();
-      await page.waitForURL(/index\.html$/, { timeout: 10000 });
+      console.log('Browser verified: the email link opens that photo, on one screen with no scrolling, with the six levels.');
+      if (process.env.REVIEW_SHOT) { await page.setViewportSize({ width: 1366, height: 768 }); await page.waitForTimeout(400); await page.screenshot({ path: process.env.REVIEW_SHOT }); await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400); await page.screenshot({ path: process.env.REVIEW_SHOT.replace('.png', '-phone.png') }); await page.setViewportSize({ width: 1280, height: 720 }); }
+      // Rating the last one: it leaves the queue, and the empty-queue pop-up offers the way home
+      await page.locator('#levels .lv[data-value="0"]').click();
+      const empty = page.locator('#pop[open]');
+      await empty.waitFor();
+      assert.match(await empty.innerText(), /No photos to review/);
       assert.equal((await ModerationDecision.findById(waitingId)).status, 'allowed');
-      console.log('Browser verified: deciding the last photo removes it and goes back to the homepage.');
+      assert.equal((await ModerationDecision.findById(waitingId)).severity, 0, 'the level is kept, for learning');
+      await page.getByRole('link', { name: 'Go Back to Home Page' }).click();
+      await page.waitForURL(/index\.html$/, { timeout: 10000 });
+      console.log('Browser verified: rating the last photo shows "No photos to review" and Go Back to Home Page.');
+      // The email's link again, now that it has been decided: a pop-up says who reviewed it (not an empty page)
+      await page.goto('http://localhost:4000/' + link);
+      const popup = page.locator('#pop[open]');
+      await popup.waitFor();
+      const said = await popup.innerText();
+      assert.match(said, /Already reviewed/);
+      assert.match(said, /This has been reviewed by you on .+: approved \(level 0\)/);
+      assert.match(said, /portrait\.jpg/);
+      console.log('Browser verified: an already-reviewed photo says who reviewed it, when, and the outcome.');
     } finally { await browser.close(); }
   }
 
@@ -253,8 +281,8 @@ try {
   assert.equal(typeof relearned.result.ok, 'boolean');
   const page = await (await request('/review.html', 200)).text();
   assert.match(page, /Photo review/);
-  assert.match(page, /href="albums\.html"[^>]*>[\s\S]*?Back to My albums/, 'a way back to the albums');
-  for (const link of ['index.html', 'albums.html', 'events.html', 'settings.html']) assert.match(page, new RegExp(`class="site-nav[\\s\\S]*href="${link}"`), link);
+  assert.match(page, /Go Back to Home Page/, 'a way back home when nothing is waiting');
+  for (const link of ['index.html', 'albums.html', 'events.html']) assert.match(page, new RegExp(`class="nav glass[\\s\\S]*href="${link}"`), link);
   for (const p of ['index.html', 'albums.html', 'events.html', 'settings.html', 'support.html']) {
     const html = await (await request('/' + p, 200)).text();
     assert.match(html, /data-act="review" hidden>\$\{ICON\.review\}Photo review/, p);

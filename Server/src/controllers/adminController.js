@@ -170,6 +170,25 @@ export async function relearnNow(req, res) {
   res.json({ result, status: await learningStatus() });
 }
 
+// GET /api/admin/moderation/:id  One request: still waiting, or who reviewed it, when, and what they decided
+// (the review page shows this when a staff email's link points to a photo a teammate already reviewed)
+export async function decisionStatus(req, res) {
+  const d = await ModerationDecision.findById(id(req.params.id)).lean();
+  if (!d) throw new HttpError(404, 'Not found.');
+  const [reviewer, job, album] = await Promise.all([
+    d.reviewedBy ? User.findById(d.reviewedBy, 'name email').lean() : null,
+    UploadCheck.findById(d._id, 'originalName').lean(),
+    d.album ? Album.findById(d.album, 'name').lean() : null,
+  ]);
+  res.json({
+    id: String(d._id), status: d.status, waiting: d.status === 'review-requested',
+    decision: d.status === 'allowed' ? 'approved' : d.status === 'upheld' ? 'declined' : null,
+    reviewedBy: reviewer ? (String(reviewer._id) === String(req.user._id) ? 'you' : reviewer.name || reviewer.email) : null,
+    reviewedAt: d.reviewedAt || null, severity: d.severity ?? null,
+    fileName: job?.originalName ? fixFileName(job.originalName) : null, albumName: album?.name || null,
+  });
+}
+
 export async function moderationPreview(req, res) {
   const job = await UploadCheck.findOne({ _id: id(req.params.id), state: { $in: ['review', 'rejected'] } }).select('+files');
   if (!job?.files) throw new HttpError(404, 'Review image unavailable.');
