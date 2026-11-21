@@ -1,0 +1,1300 @@
+/* Momento glass: the one shared stylesheet for the glass system (tokens, surfaces, sheets, popovers,
+   buttons, segmented controls, inputs, rows, switches) plus the theme and the parts every page shares.
+   Linked from index, albums, events, settings and support (inside each page's @shared:css block).
+
+   Materials follow the brand kit (Momento_Brand_Kit/05_Design_Language, "Liquid glass"): subtle ≈ 35%,
+   regular ≈ 62%, strong ≈ 85%, HUD = dark 48%; blur 24px with 180% saturation; a 1px white top
+   highlight and a fine inner rim. Colours stay the site's own (fog, dusk, lavender, copper).
+
+   One blur per stack: only the outermost floating layer (an open sheet, a toast, a single control over a
+   photo or video) blurs what is behind it. Page surfaces never blur: behind them the silk background
+   redraws every frame, so they are frosted by tint instead. Anything inside a sheet relies on the sheet. */
+
+/* ---------- Tokens ----------
+   Light values are set on :root and again on the "daylight objects" (the QR card, book, phone, map,
+   prints…), so glass inside an object stays daylight glass at night. Dark values are set on the dark
+   root only. Tokens here are literal values; anything that refers to another token is resolved on the
+   element that uses it. */
+:root,
+:is(.qr-card, .phone, .zone-map, .qc, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
+  /* Geometry: capsule buttons, 28px cards and sheets, 22px menus, 16px groups, small chips and thumbnails */
+  --r-pill: 999px; --r-card: 28px; --r-pop: 22px; --r-group: 16px; --r-chip: 10px; --r-thumb: 6px;
+  /* Motion */
+  --t-fast: .15s; --t-med: .25s; --t-slow: .3s; --press: .97;
+
+  /* Blur, used only by the outermost floating layer */
+  --g-blur: blur(24px) saturate(180%);
+  --g-blur-hud: blur(12px) saturate(160%);
+
+  /* Fills, lit from above */
+  --g-subtle: linear-gradient(180deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.26) 100%);
+  --g-regular: linear-gradient(135deg, rgba(255,255,255,.76) 0%, rgba(255,255,255,.5) 46%, rgba(244,242,252,.64) 100%);
+  --g-strong: linear-gradient(135deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,.8) 46%, rgba(246,244,252,.86) 100%);
+  --g-menu: linear-gradient(180deg, rgba(255,255,255,.985), rgba(249,248,252,.975));
+  --g-hud: linear-gradient(180deg, rgba(46,44,58,.62), rgba(24,22,32,.54));   /* ≥ 3:1 for white icons even over a white photo */
+  --g-reading: linear-gradient(135deg, rgba(255,255,255,.88) 0%, rgba(255,255,255,.78) 50%, rgba(246,244,252,.84) 100%);
+
+  /* Edges: a rim that catches the light (bright top-left and bottom-right, lavender through the middle) */
+  --g-rim: linear-gradient(140deg, #fff 0%, rgba(255,255,255,.3) 32%, rgba(203,194,240,.6) 64%, rgba(255,255,255,.95) 100%);
+  --g-rim-menu: linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(203,194,240,.5) 70%, rgba(255,255,255,.8));
+  --g-rim-hud: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 50%, rgba(255,255,255,.28));
+
+  /* Depth: surfaces on the page, pills on the page, floating sheets, popovers, HUD controls */
+  --g-sh-surface: inset 0 1px 1px rgba(255,255,255,.95), inset 0 -12px 26px -16px rgba(255,255,255,.75), inset 0 0 32px rgba(255,255,255,.22), 0 0 0 .5px rgba(46,44,58,.05), 0 0 44px -8px rgba(188,178,236,.55), 0 26px 60px -30px rgba(60,50,90,.35);
+  --g-sh-pill: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 18px rgba(255,255,255,.25), 0 0 26px -6px rgba(188,178,236,.55), 0 12px 30px -14px rgba(60,50,90,.3);
+  --g-sh-well: inset 0 1px 1px rgba(255,255,255,.95), inset 0 0 24px rgba(255,255,255,.25), 0 0 30px -10px rgba(188,178,236,.5), 0 14px 30px -20px rgba(60,50,90,.3);
+  --g-sh-float: inset 0 1px 1px rgba(255,255,255,.95), inset 0 -12px 26px -16px rgba(255,255,255,.75), inset 0 0 32px rgba(255,255,255,.22), 0 0 0 .5px rgba(46,44,58,.05), 0 0 44px -8px rgba(188,178,236,.55), 0 26px 60px -30px rgba(60,50,90,.35);
+  --g-sh-pop: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.08), 0 2px 6px rgba(46,44,58,.06), 0 18px 40px -14px rgba(46,44,58,.32);
+  --g-sh-hud: inset 0 1px 0 rgba(255,255,255,.24), 0 0 0 .5px rgba(0,0,0,.25), 0 6px 18px -8px rgba(0,0,0,.5);
+
+  /* Buttons. Each tier is a sheen (top lip, soft horizon, faint bounce at the bottom), a tint and a rim */
+  --gb-clear-sheen: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.3) 100%);
+  --gb-clear-fill: linear-gradient(rgba(255,255,255,.26), rgba(255,255,255,.26));
+  --gb-clear-rim: linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.35) 60%, rgba(255,255,255,.85));
+  --gb-clear-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.45), 0 0 0 .5px rgba(46,44,58,.12), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(46,44,58,.35);
+  --gb-clear-lift: rgba(255,255,255,.07);
+  --gb-thick-fill: linear-gradient(rgba(255,255,255,.86), rgba(255,255,255,.86));
+  --gb-smoke-sheen: linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.07) 100%);
+  --gb-smoke-fill: linear-gradient(rgba(40,38,52,.88), rgba(40,38,52,.88));
+  --gb-smoke-rim: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.14) 45%, rgba(255,255,255,.08) 60%, rgba(255,255,255,.3));
+  --gb-smoke-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(20,18,30,.5);
+  --gb-smoke-lift: rgba(255,255,255,.07);
+  --gb-pearl-sheen: linear-gradient(180deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.18) 100%);
+  --gb-pearl-fill: linear-gradient(120deg, rgba(214,205,236,.9) 0%, rgba(235,211,220,.86) 52%, rgba(198,222,218,.9) 100%);
+  --gb-pearl-rim: linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.85));
+  --gb-pearl-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 1px 2px rgba(46,44,58,.1), 0 10px 22px -12px rgba(60,50,90,.4);
+  --gb-danger-fill: linear-gradient(rgba(150,56,56,.88), rgba(150,56,56,.88));
+  --gb-danger-rim: linear-gradient(180deg, rgba(255,225,225,.7), rgba(255,255,255,.15) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.35));
+  --gb-danger-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.1), 0 1px 2px rgba(20,18,30,.18), 0 10px 22px -12px rgba(90,30,30,.5);
+  --gb-danger-ink: #fff;
+  --gb-danger-clear-rim: linear-gradient(180deg, #fff, rgba(232,170,170,.55) 45%, rgba(214,120,120,.45) 60%, rgba(255,255,255,.85));
+  --danger-ink: #9A3D3D;
+
+  /* The selected pill in a segmented control or tab bar: a brighter pane of the same glass */
+  --g-sel: linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.25) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.35) 100%) padding-box, linear-gradient(rgba(255,255,255,.78), rgba(255,255,255,.78)) padding-box, linear-gradient(180deg, #fff, rgba(255,255,255,.55) 45%, rgba(255,255,255,.45) 60%, rgba(255,255,255,.9)) border-box;
+  --g-sel-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(46,44,58,.1), 0 2px 8px -2px rgba(46,44,58,.22);
+  --g-track: rgba(46,44,58,.07);
+
+  /* Rows and ghost buttons: a wash under the pointer */
+  --g-wash: rgba(46,44,58,.06);
+  --g-wash-press: rgba(46,44,58,.11);
+
+  /* Inputs: a recessed well */
+  --g-input: rgba(255,255,255,.55);
+  --g-input-rim: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.14);
+  --g-input-rim-hover: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.32);
+  --g-input-glow: rgba(188,178,236,.45);
+
+  /* States */
+  --focus-ring: #2E2C3A;
+  --focus-halo: rgba(255,255,255,.85);
+  --g-disabled: rgba(46,44,58,.06);
+  --g-disabled-edge: rgba(46,44,58,.28);
+  --g-disabled-ink: #8A8697;
+
+  /* One dim behind every popup */
+  --g-backdrop: rgba(46,44,58,.32);
+}
+
+:root[data-theme="dark"] {
+  --g-subtle: linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.04) 100%);
+  --g-regular: linear-gradient(135deg, rgba(58,52,88,.5) 0%, rgba(24,22,34,.7) 46%, rgba(16,15,24,.8) 100%);
+  --g-strong: linear-gradient(135deg, rgba(58,52,88,.7) 0%, rgba(30,28,42,.84) 46%, rgba(20,19,28,.9) 100%);
+  --g-menu: linear-gradient(180deg, rgba(36,33,50,.985), rgba(24,22,34,.98));
+  --g-reading: linear-gradient(135deg, rgba(48,44,70,.82) 0%, rgba(26,24,36,.9) 50%, rgba(18,17,26,.92) 100%);
+  --g-rim: linear-gradient(140deg, rgba(200,192,240,.5) 0%, rgba(150,142,196,.1) 32%, rgba(120,110,176,.28) 64%, rgba(200,192,240,.45) 100%);
+  --g-rim-menu: linear-gradient(180deg, rgba(200,192,240,.5), rgba(150,142,196,.12) 45%, rgba(120,110,176,.2) 70%, rgba(200,192,240,.35));
+  --g-sh-surface: inset 0 1px 1px rgba(255,255,255,.13), inset 0 0 26px rgba(150,140,210,.05), 0 0 0 .5px rgba(0,0,0,.4), 0 0 40px -12px rgba(120,100,190,.25), 0 26px 60px -30px rgba(0,0,0,.75);
+  --g-sh-pill: inset 0 1px 1px rgba(255,255,255,.15), inset 0 0 16px rgba(150,140,210,.06), 0 0 24px -8px rgba(120,100,190,.3), 0 12px 30px -14px rgba(0,0,0,.7);
+  --g-sh-well: inset 0 1px 1px rgba(255,255,255,.12), inset 0 0 24px rgba(150,140,210,.05), 0 14px 30px -20px rgba(0,0,0,.7);
+  --g-sh-float: inset 0 1px 1px rgba(255,255,255,.13), inset 0 0 26px rgba(150,140,210,.05), 0 0 0 .5px rgba(0,0,0,.4), 0 0 40px -12px rgba(120,100,190,.25), 0 26px 60px -30px rgba(0,0,0,.75);
+  --g-sh-pop: inset 0 1px 0 rgba(255,255,255,.1), 0 0 0 .5px rgba(0,0,0,.5), 0 18px 40px -14px rgba(0,0,0,.7);
+
+  --gb-clear-sheen: linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.06) 100%);
+  --gb-clear-fill: linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.08));
+  --gb-clear-rim: linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.1) 45%, rgba(255,255,255,.06) 60%, rgba(255,255,255,.2));
+  --gb-clear-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+  --gb-clear-lift: rgba(255,255,255,.05);
+  --gb-thick-fill: linear-gradient(rgba(36,33,50,.86), rgba(36,33,50,.86));
+  /* Deep smoke turns to frosted pale glass with dark text at night */
+  --gb-smoke-sheen: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.25) 100%);
+  --gb-smoke-fill: linear-gradient(rgba(238,236,246,.88), rgba(238,236,246,.88));
+  --gb-smoke-rim: linear-gradient(180deg, #fff, rgba(255,255,255,.45) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.75));
+  --gb-smoke-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.4), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+  --gb-smoke-lift: rgba(255,255,255,.05);
+  --gb-pearl-sheen: linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%);
+  --gb-pearl-fill: linear-gradient(120deg, rgba(63,56,128,.85) 0%, rgba(90,77,176,.8) 52%, rgba(58,81,153,.85) 100%);
+  --gb-pearl-rim: linear-gradient(180deg, rgba(220,212,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,.08) 60%, rgba(220,212,255,.4));
+  --gb-pearl-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+  --gb-danger-fill: linear-gradient(rgba(240,163,163,.88), rgba(240,163,163,.88));
+  --gb-danger-rim: linear-gradient(180deg, #fff, rgba(255,255,255,.4) 45%, rgba(255,255,255,.3) 60%, rgba(255,255,255,.7));
+  --gb-danger-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(0,0,0,.3), 0 10px 22px -12px rgba(0,0,0,.6);
+  --gb-danger-ink: #2A1416;
+  --gb-danger-clear-rim: linear-gradient(180deg, rgba(255,200,200,.5), rgba(240,163,163,.2) 45%, rgba(240,163,163,.14) 60%, rgba(255,200,200,.3));
+  --danger-ink: #F0A3A3;
+
+  --g-sel: linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 52%, rgba(255,255,255,.08) 100%) padding-box, linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.16)) padding-box, linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.14) 45%, rgba(255,255,255,.1) 60%, rgba(255,255,255,.28)) border-box;
+  --g-sel-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 8px -2px rgba(0,0,0,.5);
+  --g-track: rgba(255,255,255,.07);
+
+  --g-wash: rgba(255,255,255,.08);
+  --g-wash-press: rgba(255,255,255,.14);
+
+  --g-input: rgba(255,255,255,.06);
+  --g-input-rim: inset 0 0 0 1px rgba(255,255,255,.16);
+  --g-input-rim-hover: inset 0 0 0 1px rgba(255,255,255,.34);
+  --g-input-glow: rgba(140,120,220,.4);
+
+  --focus-ring: #D8D2FB;
+  --focus-halo: rgba(15,14,20,.85);
+  --g-disabled: rgba(255,255,255,.05);
+  --g-disabled-edge: rgba(255,255,255,.22);
+  --g-disabled-ink: #8C88A0;
+
+  --g-backdrop: rgba(6,5,10,.62);
+}
+
+/* Browsers without backdrop blur: everything that would have blurred gets a fuller fill instead */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root, :is(.qr-card, .phone, .zone-map, .qc, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
+    --g-strong: linear-gradient(135deg, rgba(255,255,255,.96) 0%, rgba(250,249,253,.9) 50%, rgba(244,242,252,.94) 100%);
+    --g-hud: linear-gradient(180deg, rgba(46,44,58,.86), rgba(24,22,32,.8));
+  }
+  :root[data-theme="dark"] {
+    --g-strong: linear-gradient(135deg, rgba(48,44,66,.98) 0%, rgba(34,31,46,.97) 50%, rgba(28,26,38,.98) 100%);
+  }
+}
+
+/* Reduced transparency: every pane becomes a near-solid frosted fill and nothing blurs */
+@media (prefers-reduced-transparency: reduce) {
+  :root, :is(.qr-card, .phone, .zone-map, .qc, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
+    --g-blur: none; --g-blur-hud: none;
+    --g-subtle: linear-gradient(rgba(255,255,255,.82), rgba(255,255,255,.82));
+    --g-regular: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,247,252,.94));
+    --g-strong: linear-gradient(180deg, #fff, #F8F7FC);
+    --g-reading: linear-gradient(180deg, #fff, #F8F7FC);
+    --g-hud: linear-gradient(rgba(30,28,40,.94), rgba(30,28,40,.94));
+    --gb-clear-fill: linear-gradient(rgba(255,255,255,.9), rgba(255,255,255,.9));
+    --g-input: #fff;
+    --g-backdrop: rgba(46,44,58,.55);
+  }
+  :root[data-theme="dark"] {
+    --g-subtle: linear-gradient(rgba(40,37,54,.94), rgba(40,37,54,.94));
+    --g-regular: linear-gradient(180deg, rgba(36,33,50,.98), rgba(24,22,34,.98));
+    --g-strong: linear-gradient(180deg, #24212F, #1A1924);
+    --g-reading: linear-gradient(180deg, #24212F, #1A1924);
+    --gb-clear-fill: linear-gradient(rgba(48,45,64,.95), rgba(48,45,64,.95));
+    --g-input: #22202D;
+    --g-backdrop: rgba(6,5,10,.8);
+  }
+}
+
+/* More contrast: solid rims and darker secondary text. The rim is painted on the border box under the
+   fill, so every fill becomes opaque here, or a solid rim would tint the whole pane. */
+@media (prefers-contrast: more) {
+  :root, :is(.qr-card, .phone, .zone-map, .qc, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
+    --g-rim: linear-gradient(#2E2C3A, #2E2C3A); --g-rim-menu: linear-gradient(#2E2C3A, #2E2C3A);
+    --g-subtle: linear-gradient(#fff, #fff); --g-regular: linear-gradient(#fff, #FAF9FC); --g-strong: linear-gradient(#fff, #FAF9FC);
+    --g-reading: linear-gradient(#fff, #FAF9FC); --g-menu: linear-gradient(#fff, #fff);
+    --gb-clear-rim: linear-gradient(#2E2C3A, #2E2C3A); --gb-clear-fill: linear-gradient(#fff, #fff); --gb-thick-fill: linear-gradient(#fff, #fff);
+    --gb-danger-clear-rim: linear-gradient(#9A3D3D, #9A3D3D);
+    --g-input: #fff; --g-input-rim: inset 0 0 0 1.5px #2E2C3A; --g-input-rim-hover: inset 0 0 0 2px #2E2C3A;
+    --stone: #5C596B;
+  }
+  :root[data-theme="dark"] {
+    --g-rim: linear-gradient(#ECEAF4, #ECEAF4); --g-rim-menu: linear-gradient(#ECEAF4, #ECEAF4);
+    --g-subtle: linear-gradient(#22202D, #22202D); --g-regular: linear-gradient(#1C1A26, #17161F); --g-strong: linear-gradient(#22202D, #1C1A26);
+    --g-reading: linear-gradient(#22202D, #1C1A26); --g-menu: linear-gradient(#22202D, #22202D);
+    --gb-clear-rim: linear-gradient(#ECEAF4, #ECEAF4); --gb-clear-fill: linear-gradient(#22202D, #22202D); --gb-thick-fill: linear-gradient(#22202D, #22202D);
+    --gb-danger-clear-rim: linear-gradient(#F0A3A3, #F0A3A3);
+    --g-input: #17161F; --g-input-rim: inset 0 0 0 1.5px #ECEAF4; --g-input-rim-hover: inset 0 0 0 2px #ECEAF4;
+    --stone: #B4AFC8;
+  }
+}
+
+/* ---------- Dark mode ----------
+   The same silk by moonlight: near-black ground, lavender for every accent and glint.
+   The tokens flip here (--copper becomes the lavender accent); the book, QR card, phone, map
+   and photo prints stay light on purpose, like real objects in a dim room, with a deeper
+   lavender accent of their own. */
+/* No visible scrollbars anywhere: the page and every list still scroll by wheel, trackpad, touch and keys */
+* { scrollbar-width: none !important; }
+*::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+:root { color-scheme: light; --veil: 236 236 243; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --veil: 18 17 25;   /* the top of the dark page ground: the header veil is more page, not a grey slab */
+  --fog: #0F0E14;
+  --paper: #1A1922;
+  --dusk: #ECEAF4;
+  --slate: #B4AFC8;
+  --stone: #8C88A0;
+  --copper: #B8AEF5;
+  --copper-soft: #D8D2FB;
+  --blush: #2F2A48;
+  --lavender: #3A3460;
+  --tide: #8FA8E8;
+  --line: #2A2834;
+  --surface: #24222F;
+  --glass: rgba(26, 25, 34, .78);
+}
+html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(120, 100, 200, .16), transparent 55%), linear-gradient(160deg, #121119, #08070C) fixed; }
+/* A solid base under those gradients, matched to the backdrop canvas's fog colour. iOS paints the root's
+   background colour into the rubber-band area past the footer (the fixed canvas moves with the bounce),
+   and with none set it showed flat black there. Doubled :root outranks each page's own `html { background }`. */
+:root:root { background-color: #E7EAF4; }
+:root:root[data-theme="dark"] { background-color: #0C0B12; }
+:root[data-theme="dark"] .grain { opacity: .14; }
+
+/* The soft veil behind the fixed header (each page decides when it shows; this is only its colour).
+   Eased over five stops so it melts into the page with no visible bottom edge, in both themes. */
+.header::before {
+  background: linear-gradient(to bottom,
+    rgb(var(--veil) / .95) 0%, rgb(var(--veil) / .92) 52%, rgb(var(--veil) / .62) 72%,
+    rgb(var(--veil) / .25) 88%, rgb(var(--veil) / 0) 100%);
+}
+/* The glow that lifts the logo off the panels: page-coloured in dark mode, never white */
+:root[data-theme="dark"] .header .brand::before {
+  background: radial-gradient(closest-side, rgb(var(--veil) / .92), rgb(var(--veil) / .65) 55%, rgb(var(--veil) / 0));
+}
+
+/* Things that are objects, not interface, keep their daylight colours */
+.qr-card, .phone, .zone-map, .qc, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host {
+  --fog: #ECEAF0; --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #8A8697; --copper: #9A603D; --copper-soft: #C08A66;
+  --blush: #E6CDD6; --lavender: #D9D0EA; --tide: #6F9896; --line: #D6D2DE; --surface: #FFFFFF; --glass: rgba(248, 247, 250, .8);
+  color: var(--dusk);
+}
+/* In dark their accent is a deeper lavender, so no copper is left anywhere at night */
+:root[data-theme="dark"] :is(.qr-card, .phone, .zone-map, .qc, .win, .stage .album, .ib-book, .photo-frame, .tag, .live-pill, .faces i, .burst-av, .role.host) {
+  --copper: #6C5FC7; --copper-soft: #9A8FE0;
+}
+
+
+/* Headings: the light rising from below turns violet under moonlight */
+:root[data-theme="dark"] .ink { -webkit-text-stroke: 0; text-shadow: 0 -1px 0 rgba(0, 0, 0, .6), 0 1.5px 0 rgba(255, 255, 255, .12), 0 0 .16em rgba(140, 118, 240, .3), 0 .04em .36em rgba(120, 96, 236, .2); }
+:root[data-theme="dark"] .ink::before { --fill: linear-gradient(to bottom, var(--dusk) 0%, var(--dusk) 26%, #D9D2F7 40%, #B9ACF3 54%, #A08FEF 66%, #9A89EE 72%, #BCAFF6 78%, #F7F4FF 83%, #CCC2F8 87%, #A190EF 93%, #9584EB 100%); }
+:root[data-theme="dark"] .ink::after { --fill: linear-gradient(to bottom, var(--dusk) 0%, #E2DCF8 14%, #C6BAF5 30%, #AC9BF1 46%, #9C8AEE 58%, #B8AAF6 68%, #FFFFFF 76%, #E2DBFF 82%, #B2A4F4 90%, #9886EB 100%); }
+
+/* Strokes, rails and tints that were ink on paper */
+:root[data-theme="dark"] .steps::before { background: rgba(255, 255, 255, .12); }
+:root[data-theme="dark"] .step-body b { color: rgba(236, 234, 240, .66); }
+:root[data-theme="dark"] .step.is-on .step-body b, :root[data-theme="dark"] .step button:hover .step-body b { color: var(--dusk); }
+:root[data-theme="dark"] .step-no { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
+:root[data-theme="dark"] .host-controls li + li, :root[data-theme="dark"] .qa + .qa, :root[data-theme="dark"] .feat-item + .feat-item { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .auth-tabs { background: rgba(255, 255, 255, .07); }
+:root[data-theme="dark"] .auth-or::before, :root[data-theme="dark"] .auth-or::after { background: rgba(255, 255, 255, .14); }
+:root[data-theme="dark"] .auth-scan { color: #A8D4D0; background: rgba(127, 176, 173, .16); }
+:root[data-theme="dark"] .auth-error { color: #F0A3A3; }
+:root[data-theme="dark"] .auth-done i { color: var(--fog); }
+
+/* Copper tints written as plain colours (not through the token) become lavender at night */
+:root[data-theme="dark"] .step.is-on .step-no { box-shadow: 0 0 0 5px rgba(184, 174, 245, .2); }
+:root[data-theme="dark"] .app-zone { background: radial-gradient(circle, rgba(108, 95, 199, .25), rgba(108, 95, 199, .1) 70%); }
+:root[data-theme="dark"] .app-radar .sweep { background: conic-gradient(from 0deg, transparent 0 290deg, rgba(108, 95, 199, .45) 360deg); }
+:root[data-theme="dark"] .zone-ring { background: radial-gradient(circle, rgba(108, 95, 199, .25), rgba(108, 95, 199, .08) 72%); }
+:root[data-theme="dark"] .zone-ping { box-shadow: inset 0 0 0 2px rgba(108, 95, 199, .5); }
+:root[data-theme="dark"] :is(.divider-line, .rule) { background: linear-gradient(to right, var(--copper), rgba(184, 174, 245, .1)); }
+:root[data-theme="dark"] .tag.soon { box-shadow: inset 0 0 0 1px rgba(108, 95, 199, .4); }
+@keyframes live-lav { from { box-shadow: 0 0 0 0 rgba(184, 174, 245, .6); } to { box-shadow: 0 0 0 8px rgba(184, 174, 245, 0); } }
+:root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation-name: live-lav; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="dark"] :is(.live-pill i, .tag.live i, .burst-time i, .todo-row[data-kind="live"] .todo-pic::after) { animation: none; }
+}
+
+/* ---------- Main nav: names on wide screens. On phones every tab is an icon, and only the page you're on
+   shows its name beside its icon ---------- */
+:is(.nav-home, .nav-albums, .nav-social, .nav-settings) { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+:is(.nav-home, .nav-albums, .nav-social, .nav-settings) svg { display: none; flex: none; }
+@media (max-width: 600px) {
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings) svg { display: block; }
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) .nav-label { display: none; }
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) { padding-left: .6rem !important; padding-right: .6rem !important; }
+  .nav-home[aria-current="page"], .nav > .nav-item[aria-current="page"] { padding-left: .8rem !important; padding-right: .9rem !important; }
+  .nav-split:has(> .nav-home[aria-current="page"]) > .nav-home { padding-right: .25rem !important; }
+  /* The sections arrow belongs to Home: only shown while you're on the home page */
+  .nav-split:not(:has(> .nav-home[aria-current="page"])) > .nav-caret { display: none; }
+  .nav { gap: .15rem !important; }
+}
+@media (max-width: 360px) {
+  :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) { padding-left: .5rem !important; padding-right: .5rem !important; }
+  .nav-home[aria-current="page"], .nav > .nav-item[aria-current="page"] { padding-left: .6rem !important; padding-right: .7rem !important; gap: .3rem; }
+  .nav { gap: 0 !important; }
+  .nav-split > .nav-caret { display: none; }   /* no room for Home's sections arrow; the page scrolls to them */
+  .nav-split:has(> .nav-home[aria-current="page"]) > .nav-home { padding-right: .7rem !important; }
+}
+/* Every top-level nav pill is the same box whether or not it is the current page (the current one gets a
+   1px border from the active-segment rule, which used to make it 2px taller than its neighbours), and each
+   centres its own label, so "My albums" no longer rides above Social and Settings */
+.nav > :is(.nav-item, .nav-split) { box-sizing: border-box; border: 1px solid transparent; }
+.nav > .nav-item { display: inline-flex; align-items: center; justify-content: center; }
+.nav .nav-split > .nav-item { border-width: 0; }   /* Home inside the split: the split carries the border */
+/* The narrowest phones (iPhone SE and the like): everything in the header tightens a little so the
+   logo, the menu and your account button all fit on one line */
+@media (max-width: 400px) {
+  .header { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
+  .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
+  .nav { gap: 0 !important; padding: .22rem !important; }
+  .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
+  .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
+  :is(.nav-social, .nav-settings) { padding-left: .46rem !important; padding-right: .46rem !important; }
+  :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
+}
+@media (max-width: 340px) {
+  .nav-item { padding: .45rem .42rem !important; }
+  :is(.nav-social, .nav-settings) { padding-left: .45rem !important; padding-right: .45rem !important; }
+}
+
+/* ---------- The thread ----------
+   A hairline string draws itself down the page as you scroll, behind the content. Small
+   see-through prints hang along it and come into view as the string reaches them. */
+.trail { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; overflow-x: clip; }
+.trail-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.trail-line { fill: none; stroke: rgba(154, 96, 61, .24); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+:root[data-theme="dark"] .trail-line { stroke: rgba(184, 174, 245, .2); }
+.tp {
+  position: absolute; left: var(--x); top: var(--y); width: var(--w); box-sizing: border-box; padding: 3px 3px 9px;
+  background: rgba(255, 255, 255, .5); border-radius: 2px;
+  box-shadow: 0 0 0 .5px rgba(46, 44, 58, .08), 0 6px 14px -8px rgba(60, 50, 90, .25);
+  transform-origin: 50% 0; opacity: 0; scale: .6; rotate: calc(var(--r) - 9deg);
+  transition: opacity .45s ease, scale .6s var(--spring), rotate .8s var(--spring);
+}
+.tp::before {
+  content: ""; position: absolute; left: 50%; top: -2px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+  background: rgba(154, 96, 61, .4);
+}
+.tp img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; opacity: .45; filter: saturate(.7); }
+.tp.is-on { opacity: .85; scale: 1; rotate: var(--r); }
+:root[data-theme="dark"] .tp { background: rgba(236, 234, 244, .12); box-shadow: 0 0 0 .5px rgba(255, 255, 255, .08), 0 8px 16px -8px rgba(0, 0, 0, .6); }
+:root[data-theme="dark"] .tp::before { background: rgba(184, 174, 245, .5); }
+@media (prefers-reduced-motion: reduce) { .tp { transition: opacity .4s ease; scale: 1; rotate: var(--r); } }
+/* ---------- Page intros ----------
+   A veil over the page while a short sequence plays (see Momento.intro). Its parts are hidden
+   here and brought in by the script, so nothing shows before it starts. Reduced motion never
+   turns the veil on. */
+#intro { position: fixed; inset: 0; z-index: 150; display: none; overflow: hidden; }
+html.intro-on #intro { display: block; }
+.intro-bg { position: absolute; inset: 0; background: var(--fog); }
+
+/* Home: the logo writes itself. The glyph, then the sunset "o" rises and slides along, and the
+   letters of the name appear behind it */
+#introLock { position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6em; font-size: min(3.6rem, 9.4vw); color: var(--dusk); opacity: 0; }
+.il-glyph { width: 1.9em; height: 1.9em; flex: none; transform-origin: 0 0; }
+.il-word { height: 1.3em; aspect-ratio: 9217 / 1726; overflow: visible; transform-origin: 0 0; }
+.il-word .ltr { opacity: 0; }
+
+/* My albums: the photo book. The same pearl cover, linen boards, heavy cards and spiral as the home
+   page's book, built by the page's intro script. It is an object, so it keeps its daylight colours. */
+.ib-stage { position: absolute; inset: 0; perspective: 2200px; --pw: min(340px, 46vw, calc((100svh - 200px) / 1.28)); --ph: calc(var(--pw) * 1.28); }
+.ib-book { --leaves: 1; position: absolute; left: 50%; top: 50%; width: var(--pw); height: var(--ph); margin-top: calc(var(--ph) / -2); transform-style: preserve-3d; opacity: 0; }
+.ib-leaf, .ib-last, .ib-board { position: absolute; inset: 0; transform-origin: 0 50%; transform-style: preserve-3d; }
+.ib-leaf.ib-cover, .ib-board { inset: -10px -12px -10px 0; }
+.ib-face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; container-type: size; }
+.ib-face, .ib-board, .ib-edge, .ib-thick, .ib-ring { outline: 1px solid transparent; }
+.ib-face.ib-back { transform: rotateY(180deg); }
+.ib-thick {
+  position: absolute; top: 8px; bottom: 8px; right: 0; width: calc((var(--leaves) + 1) * 2px);
+  transform-origin: 100% 50%; transform: rotateY(-90deg); border-radius: 3px; backface-visibility: hidden;
+  background: linear-gradient(to bottom, #E2E3EA, #B4B6C3 50%, #9698A6);
+}
+.ib-edge {
+  position: absolute; top: 1px; bottom: 1px; left: 100%; width: calc(var(--leaves) * 2px + 2px);
+  transform-origin: 0 50%; transform: translateZ(-1.5px) rotateY(90deg);
+  background: repeating-linear-gradient(to right, #F8F6F2 0 1.5px, #DDD8E2 1.5px 2px);
+}
+/* The turning cover darkens and lightens as it goes over (driven by the script) */
+.ib-leaf .ib-face::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to right, rgba(46,44,58,.28), rgba(46,44,58,.06)); opacity: var(--shade-front, 0); }
+.ib-leaf .ib-face.ib-back::after { background: linear-gradient(to left, rgba(46,44,58,.28), rgba(46,44,58,.06)); opacity: var(--shade-back, 0); }
+.ib-paper {
+  background-color: #F8F6F2; color: var(--dusk);
+  background-image:
+    radial-gradient(130% 100% at 25% 0%, rgba(255,255,255,.6), rgba(255,255,255,0) 60%),
+    linear-gradient(to bottom, rgba(46,44,58,0) 75%, rgba(46,44,58,.04)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .18 0 0 0 0 .25 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+}
+.ib-face.ib-front.ib-paper { border-radius: 2px 10px 10px 2px; box-shadow: inset 14px 0 18px -12px rgba(46,44,58,.28); }
+.ib-board, .ib-cover-back {
+  background-color: #C7C8D1;
+  background-image:
+    linear-gradient(to bottom, rgba(255,255,255,.35), rgba(255,255,255,0) 30%, rgba(60,60,80,.12)),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.18) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(60,60,80,.06) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(60,60,80,.18), inset 0 -3px 6px rgba(60,60,80,.15);
+}
+.ib-board { border-radius: 4px 16px 16px 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(60,60,80,.18), inset 0 -3px 6px rgba(60,60,80,.15), 0 2px 4px rgba(46,44,58,.18), 0 24px 50px -10px rgba(46,44,58,.38); }
+.ib-cover-front {
+  border-radius: 4px 16px 16px 4px;
+  background:
+    linear-gradient(to right, rgba(60,60,80,.22), rgba(60,60,80,0) 6.5%, rgba(255,255,255,.6) 7.5%, rgba(255,255,255,0) 9.5%),
+    linear-gradient(118deg, rgba(255,255,255,.75) 0%, rgba(255,255,255,.15) 30%, rgba(255,255,255,0) 46%, rgba(255,255,255,.35) 62%, rgba(255,255,255,0) 78%),
+    repeating-linear-gradient(95deg, rgba(255,255,255,.08) 0 2px, rgba(150,152,170,.05) 2px 4px),
+    radial-gradient(70% 50% at 85% 12%, rgba(214,210,236,.45), transparent 65%),
+    linear-gradient(165deg, #FAFAFC 0%, #E3E4EA 42%, #C8CAD5 74%, #EDEEF3 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), inset 0 1.5px 0 #fff, inset 0 -4px 10px rgba(60,60,80,.16), inset -3px 0 6px rgba(60,60,80,.1);
+}
+.ib-cover-art { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16cqh 0 10cqh; box-sizing: border-box; }
+.ib-cover-plate {
+  display: grid; place-items: center; width: 44cqw; aspect-ratio: 1; border-radius: 22%; color: var(--dusk);
+  background: linear-gradient(to bottom, rgba(255,255,255,.4), rgba(255,255,255,0) 45%, rgba(255,255,255,0) 65%, rgba(255,255,255,.22)), rgba(255,255,255,.42);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255,255,255,.6), 0 12px 30px rgba(46,44,58,.2);
+}
+.ib-cover-plate svg { width: 64%; height: auto; aspect-ratio: 1; }
+.ib-cover-word { display: block; width: 62cqw; aspect-ratio: 9217 / 1726; margin: 0 auto; color: var(--dusk); }
+.ib-cover-back { border-radius: 16px 4px 4px 16px; }
+.ib-cover-back .ib-paper {
+  position: absolute; inset: 10px 0 10px 12px; border-radius: 10px 2px 2px 10px; container-type: size;
+  box-shadow: inset -14px 0 18px -12px rgba(46,44,58,.28), -1px 1px 0 #E2DEE6, -2px 2px 0 #F8F6F2, -3px 3px 0 #E2DEE6, -4px 3px 0 #F8F6F2, -5px 4px 0 #D9D4DF, -6px 5px 6px rgba(46,44,58,.25);
+}
+.ib-last.ib-face.ib-paper { box-shadow: inset 14px 0 18px -12px rgba(46,44,58,.28), 1px 1px 0 #E2DEE6, 2px 2px 0 #F8F6F2, 3px 3px 0 #E2DEE6, 4px 3px 0 #F8F6F2, 5px 4px 0 #D9D4DF, 6px 5px 6px rgba(46,44,58,.25); }
+.ib-rings { position: absolute; top: 5%; bottom: 5%; left: 0; width: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.ib-ring {
+  position: relative; width: calc(var(--pw) * .085); height: calc(var(--pw) * .03); margin-left: calc(var(--pw) * -.0425); border-radius: 100px;
+  background: linear-gradient(to bottom, #FDFCFA 0%, #D9D5DE 30%, #8A8697 52%, #CFCBD6 72%, #F4F2F6 100%);
+  box-shadow: 0 1.5px 2px rgba(46,44,58,.45), 0 3px 6px rgba(46,44,58,.2), inset 0 0 0 .5px rgba(46,44,58,.35);
+}
+.ib-ring::after { content: ""; position: absolute; inset: 30% 18%; border-radius: 100px; background: rgba(46,44,58,.62); }
+.ib-holes { position: absolute; top: 5%; bottom: 5%; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.ib-holes.ib-l { left: 1.8cqw; }
+.ib-holes.ib-r { right: 1.8cqw; }
+.ib-holes span { width: 3cqw; height: 3cqw; border-radius: 50%; background: rgba(46,44,58,.5); box-shadow: inset 0 1px 1.5px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.7); }
+/* What is on the pages. Each item is brought in by the script once the cover has opened */
+.ib-page { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 11cqw 10cqw 9cqw; box-sizing: border-box; }
+.ib-page .ib-no { font-size: 3.6cqw; font-weight: 600; color: var(--stone); font-variant-numeric: tabular-nums; }
+.ib-page h2 { margin: 2.5cqw 0 0; font-size: 11cqw; line-height: 1.02; font-weight: 700; letter-spacing: -.035em; color: var(--dusk); }
+.ib-page p { margin: 4cqw 0 0; font-size: 4.3cqw; line-height: 1.55; color: var(--slate); }
+.ib-page .ib-no, .ib-page h2, .ib-page p, .ib-photo figcaption { text-shadow: 0 -.5px 0 rgba(46,44,58,.2), 0 1px 0 rgba(255,255,255,.85); }
+.ib-collage { position: absolute; inset: 0; pointer-events: none; }
+.ib-photo { position: absolute; margin: 0; rotate: var(--rot, 0deg); }
+.ib-photo-frame { position: relative; padding: 1.6cqw; background: #fff; box-shadow: 0 1px 2px rgba(46,44,58,.14), 0 8px 18px rgba(46,44,58,.12); }
+.ib-photo img { display: block; width: 100%; aspect-ratio: var(--ratio); object-fit: cover; background: #ECEAF0; filter: saturate(.85) contrast(1.02); }
+.ib-photo figcaption { margin-top: 2cqw; font-size: 3.2cqw; line-height: 1.25; color: var(--slate); text-align: center; }
+.ib-photo.ib-polaroid .ib-photo-frame { padding: 2.6cqw 2.6cqw 0; }
+.ib-photo.ib-polaroid figcaption { margin: 0; padding: 2.4cqw 0 3cqw; }
+.ib-photo.ib-tape .ib-photo-frame::before { content: ""; position: absolute; top: -2.8cqw; left: 50%; z-index: 1; width: 40%; height: 6cqw; translate: -50% 0; rotate: -4deg; background: rgba(217,208,234,.85); box-shadow: 0 1px 2px rgba(46,44,58,.1); }
+.ib-photo.ib-corners .ib-photo-frame::after {
+  --c: var(--dusk); --m: 5.4cqw; content: ""; position: absolute; inset: -1cqw; pointer-events: none;
+  background:
+    linear-gradient(135deg, var(--c) 50%, transparent 50%) top left / var(--m) var(--m) no-repeat,
+    linear-gradient(225deg, var(--c) 50%, transparent 50%) top right / var(--m) var(--m) no-repeat,
+    linear-gradient(45deg, var(--c) 50%, transparent 50%) bottom left / var(--m) var(--m) no-repeat,
+    linear-gradient(315deg, var(--c) 50%, transparent 50%) bottom right / var(--m) var(--m) no-repeat;
+}
+.ib-rev { opacity: 0; }
+
+/* Settings: two knobs set to their places, then the dial becomes the nav icon */
+.intro-dial { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 150px; height: 150px; overflow: visible; color: var(--dusk); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: 0; transform-origin: 0 0; }
+.intro-dial circle { fill: var(--fog); }
+
+/* Support: a chat bubble pops up, its dots bounce, and it carries on into the message form */
+.intro-chat {
+  position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: flex; align-items: center; gap: .6rem; padding: 1.5rem 2rem;
+  border: 1.5px solid transparent; border-radius: 34px 34px 34px 10px; opacity: 0; transform-origin: 50% 50%;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .78) 50%, rgba(244, 242, 252, .86) 100%) padding-box,
+    linear-gradient(140deg, #fff 0%, rgba(255, 255, 255, .3) 32%, rgba(203, 194, 240, .6) 64%, rgba(255, 255, 255, .95) 100%) border-box;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .95), 0 0 44px -8px rgba(188, 178, 236, .55), 0 24px 44px -20px rgba(60, 50, 90, .5);
+}
+.intro-chat i { width: .95rem; height: .95rem; border-radius: 50%; background: #6C5FC7; }
+:root[data-theme="dark"] .intro-chat {
+  background:
+    linear-gradient(135deg, rgba(58, 52, 88, .75) 0%, rgba(28, 26, 40, .85) 100%) padding-box,
+    linear-gradient(140deg, rgba(200, 192, 240, .55) 0%, rgba(150, 142, 196, .12) 40%, rgba(200, 192, 240, .5) 100%) border-box;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .13), 0 0 40px -12px rgba(120, 100, 190, .3), 0 24px 44px -20px rgba(0, 0, 0, .7);
+}
+:root[data-theme="dark"] .intro-chat i { background: #B8AEF5; }
+
+/* ---------- Site footer ----------
+   The same on every page: the brand, four short columns of links, and a base row with the small print, the
+   theme switch and a way back to the top. It is one card of reading glass (it joins GlassSurface above, so the
+   rim, fill and shadow come from there). Desktop and tablet show every link; phones fold the four groups into
+   rows that open on tap. */
+.site-foot {
+  --sf-pad: clamp(1.5rem, 3.4vw, 2.6rem);
+  --sf-ease: cubic-bezier(.4, 0, .15, 1); --sf-dur: .55s; --sf-stag: 30ms; --sf-lift: 6px;   /* the phone accordion's motion: calm, no overshoot */
+  width: min(1180px, 100% - 3rem); margin: 5rem auto 2.5rem; padding: var(--sf-pad) var(--sf-pad) calc(var(--sf-pad) * .75);
+  box-sizing: border-box; color: var(--slate); font-size: .92rem; text-align: left;
+}
+.sf-grid { display: grid; grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr)); gap: 2.5rem 2rem; }
+.sf-logo { display: inline-flex; align-items: center; gap: .6rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
+.sf-logo svg.glyph { width: 1.8rem; height: 1.8rem; transition: transform .35s var(--spring); }
+.sf-logo:hover svg.glyph { transform: scale(1.08) rotate(-4deg); }
+.sf-logo:active svg.glyph { transform: scale(.94); }
+.sf-logo .brand-word { display: block; height: 1.25rem; }   /* the pages hide the wordmark in the header at phone width; the footer keeps it */
+.sf-logo:focus-visible { outline: 2px solid var(--dusk); outline-offset: 4px; }
+.sf-brand p { max-width: 15.5rem; margin: 1rem 0 0; line-height: 1.6; text-wrap: balance; }
+.sf-col h2 { margin: .5rem 0 1.05rem; color: var(--dusk); font-size: .74rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.sf-head { display: none; }   /* the phone version of each heading (a button); desktop and tablet use the plain text */
+.sf-col ul { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
+.sf-link {
+  position: relative; display: inline-block; padding: 0; border: none; background: none; border-radius: 4px;
+  color: var(--slate); font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: color .25s ease;
+}
+.sf-link::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px; background: currentColor;
+  scale: 0 1; transform-origin: left; transition: scale .35s var(--out);
+}
+.sf-link:hover { color: var(--dusk); }
+.sf-link:hover::after { scale: 1 1; }
+.sf-link:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+.sf-link:active { opacity: .7; }
+/* Base row: small print left, theme switch in the true centre, back to top right */
+.sf-base {
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-template-areas: "legal seg top"; align-items: center; gap: 1rem 2rem;
+  margin-top: 2.4rem; padding-top: 1.6rem; border-top: 1px solid var(--line); font-size: .85rem;
+}
+.sf-legal { grid-area: legal; display: grid; gap: .2rem; margin: 0; line-height: 1.5; }
+.sf-legal span:first-child { color: var(--dusk); }
+.sf-legal span:last-child { font-size: .8rem; text-wrap: balance; }
+.site-foot .acct-seg { grid-area: seg; justify-self: center; width: 15.5rem; margin: 0; }
+/* Back to top is clear glass (it joins the Button lists below) */
+.sf-top { grid-area: top; justify-self: end; display: inline-flex; align-items: center; gap: .45rem; padding: .5rem 1rem; border-radius: var(--r-pill); font: inherit; font-weight: 550; cursor: pointer; }
+.sf-top svg { transition: translate .35s var(--spring); }
+.sf-top:hover svg { translate: 0 -2px; }
+.sf-chev { display: inline-flex; transition: rotate var(--sf-dur) var(--sf-ease); }
+
+/* Tablet and small laptops (to 1100px): the brand sits on one row (logo, then its line), the four columns stay open
+   and the base is two rows. Below 1100px five columns would squeeze the longer links onto two lines. */
+@media (max-width: 1100px) {
+  .site-foot { margin-top: 3.5rem; }
+  .sf-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2.2rem 1.5rem; }
+  .sf-brand { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: .8rem 2rem; padding-bottom: 1.8rem; border-bottom: 1px solid var(--line); }
+  .sf-brand p { max-width: 24rem; margin: 0; }
+  .sf-base { grid-template-columns: 1fr auto; grid-template-areas: "seg top" "legal legal"; margin-top: 2.2rem; }
+  .site-foot .acct-seg { justify-self: start; }
+  .sf-legal { display: flex; flex-wrap: wrap; gap: .2rem 1.2rem; }
+}
+
+/* Phone and small tablets (to 760px): one full-width row per group, folded until tapped. Four open columns need about 760px
+   before "Host a public event" stops wrapping.
+   Each group is a two-row grid: the heading, then the list. Opening animates the list's row from 0fr to 1fr, so the card
+   edge, the groups below and their hairlines all glide together (the one place the footer animates height). The list is
+   clipped while closed and hidden from keyboard and screen readers once it has finished closing. */
+@media (max-width: 760px) {
+  .site-foot { width: calc(100% - 1.5rem); margin: 3rem auto calc(1rem + env(safe-area-inset-bottom, 0px)); padding: 1.6rem 1.25rem 1.3rem; }
+  .sf-grid { grid-template-columns: 1fr; gap: 0; }
+  .sf-brand { display: block; padding-bottom: 1.5rem; }
+  .sf-brand p { max-width: 20rem; margin-top: .8rem; }
+  .sf-col { display: grid; grid-template-rows: auto 0fr; border-bottom: 1px solid var(--line); transition: grid-template-rows var(--sf-dur) var(--sf-ease); }
+  .sf-col.is-open { grid-template-rows: auto 1fr; }
+  .sf-col h2 { margin: 0; font-size: 1rem; letter-spacing: -.005em; text-transform: none; }
+  .sf-h-text { display: none; }
+  .sf-head {
+    display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 3.25rem; padding: 0; border: none; border-radius: 12px;
+    background: none; color: var(--dusk); font: inherit; font-weight: 600; text-align: left; cursor: pointer; transition: opacity .2s ease;
+  }
+  .sf-head:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+  .sf-head:active { opacity: .7; }
+  .sf-col.is-open .sf-chev { rotate: 180deg; }
+  /* The list: clipped while closed (the side room keeps link focus rings from being cut off), then hidden once closed */
+  .sf-col ul { gap: .3rem; min-height: 0; overflow: hidden; margin-inline: -6px; padding-inline: 6px; visibility: hidden; transition: visibility 0s linear var(--sf-dur); }
+  .sf-col.is-open ul { visibility: visible; transition-delay: 0s; }
+  .sf-col li:first-child { margin-top: 2px; }   /* room for the focus ring above the first link (the list clips) */
+  .sf-col .sf-link:focus-visible { outline-offset: 0; }
+  .sf-col ul::after { content: ""; height: .6rem; }   /* room under the last link (not padding, which a closed list would keep) */
+  /* The links fade in and drop into place one after another; closing is quick and together */
+  .sf-col li { opacity: 0; translate: 0 calc(var(--sf-lift) * -1); transition: opacity .2s ease, translate .3s var(--sf-ease); }
+  .sf-col.is-open li {
+    opacity: 1; translate: none;
+    transition: opacity calc(var(--sf-dur) * .7) ease calc(var(--i, 0) * var(--sf-stag) + 60ms), translate var(--sf-dur) var(--sf-ease) calc(var(--i, 0) * var(--sf-stag));
+  }
+  .sf-col li:nth-child(2) { --i: 1; } .sf-col li:nth-child(3) { --i: 2; } .sf-col li:nth-child(4) { --i: 3; }
+  .sf-col li:nth-child(5) { --i: 4; } .sf-col li:nth-child(6) { --i: 5; }
+  /* The last group's line does the dividing, so the base row has none of its own (every line is one row apart) */
+  .sf-base { grid-template-columns: 1fr; grid-template-areas: "seg" "legal" "top"; justify-items: stretch; gap: 1.1rem; margin-top: 0; padding-top: 1.4rem; border-top: none; }
+  .site-foot .acct-seg { width: 100%; justify-self: stretch; }
+  .sf-legal { display: grid; justify-items: center; text-align: center; }
+  .sf-top { justify-self: center; }
+}
+/* Reduced motion: the accordion still eases open, just briefly, with no travel, bounce or stagger (an instant jump is jarring too) */
+@media (prefers-reduced-motion: reduce) {
+  .site-foot { --sf-dur: .18s; --sf-ease: ease; --sf-stag: 0ms; --sf-lift: 0px; }
+  .sf-link::after, .sf-top svg, .sf-logo svg.glyph { transition: none; }
+}
+
+/* The settings page */
+:root[data-theme="dark"] .s-row + .s-row::before { background: rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .s-row:hover { background: rgba(255, 255, 255, .05); }
+:root[data-theme="dark"] .s-row:active { background: rgba(255, 255, 255, .09); }
+:root[data-theme="dark"] .s-bar { background: rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] :is(.s-note.is-error, .s-row.is-danger .s-text b) { color: #F0A3A3; }
+
+/* The albums page: lists, chips and rows that were ink on paper */
+:root[data-theme="dark"] :is(.todo-row + .todo-row, .burst + .burst) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .pulse .todo-row { --ring-bg: #231F30; }
+:root[data-theme="dark"] .todo-end { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .role:not(.host) { background: rgba(255, 255, 255, .09); }
+:root[data-theme="dark"] .burst-album { text-decoration-color: rgba(184, 174, 245, .55); }
+:root[data-theme="dark"] .search { background: rgba(255, 255, 255, .06); }
+:root[data-theme="dark"] .search:hover { background: rgba(255, 255, 255, .1); }
+:root[data-theme="dark"] .tools { background: linear-gradient(135deg, rgba(40, 36, 56, .94), rgba(28, 26, 38, .92)) padding-box, linear-gradient(140deg, rgba(200, 192, 240, .5) 0%, rgba(150, 142, 196, .1) 32%, rgba(120, 110, 176, .28) 64%, rgba(200, 192, 240, .45) 100%) border-box; }
+
+/* ---------- Account chip, menu and dialogs (built by the script below) ---------- */
+.acct { position: relative; display: inline-block; text-align: left; }
+.acct-btn {
+  --radius: 100px; display: inline-flex; align-items: center; gap: .55rem; padding: .3rem .8rem .3rem .3rem;
+  border-radius: var(--radius); color: var(--dusk); font: 600 .88rem var(--font-main); white-space: nowrap; cursor: pointer;
+  transition: scale .3s var(--spring);
+}
+.acct-btn:hover { scale: 1.04; }
+.acct-btn:active { scale: .97; }
+.acct-btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+.acct-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.acct-av {
+  display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; overflow: hidden;
+  background: linear-gradient(135deg, #C9C0E2, #E6CDD6 55%, #A9CCC8); color: #2E2C3A; font-style: normal; font-weight: 700;
+}
+.acct-chev { flex: none; margin-left: -.1rem; transition: transform .45s var(--spring); }
+.acct-btn[aria-expanded="true"] .acct-chev { transform: rotate(180deg); }
+.acct-menu {
+  position: absolute; top: calc(100% + .6rem); right: 0; z-index: 5; width: 17.5rem; box-sizing: border-box; padding: .45rem;
+  border-radius: var(--radius); transform-origin: calc(100% - 2.5rem) top;
+  opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden;
+  transition: opacity .25s ease, transform .5s var(--spring), visibility 0s .5s;
+}
+.acct-menu.is-open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity .25s ease, transform .5s var(--spring); }
+.acct-head { display: flex; align-items: center; gap: .75rem; padding: .65rem .65rem .8rem; }
+.acct-head .acct-av { width: 2.6rem; height: 2.6rem; font-size: 1.05rem; }
+.acct-head b { display: block; font-size: .95rem; letter-spacing: -.01em; color: var(--dusk); }
+.acct-head small { display: block; max-width: 11.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--slate); font-size: .8rem; }
+.acct-item {
+  display: flex; align-items: center; gap: .7rem; width: 100%; box-sizing: border-box; padding: .7rem .75rem; border: none; border-radius: var(--r-group);
+  background: none; color: var(--slate); font: 600 .92rem var(--font-main); text-align: left; cursor: pointer;
+}
+.acct-item svg { flex: none; }
+.acct-item:hover, .acct-item:focus-visible { color: var(--dusk); }
+.acct-label { padding: .55rem .75rem .3rem; color: var(--stone); font-size: .75rem; font-weight: 600; }
+.acct-sep { height: 1px; margin: .35rem .5rem; border: none; background: rgba(46, 44, 58, .1); }
+.acct-seg { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 .25rem .2rem; padding: .25rem; border-radius: var(--r-pill); }
+.acct-seg-pill {
+  position: absolute; top: .25rem; bottom: .25rem; left: .25rem; width: calc((100% - .5rem) / 3); border-radius: var(--r-pill);
+  translate: calc(var(--i, 0) * 100%) 0; transition: translate .5s var(--out);
+}
+.acct-seg button {
+  position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: .35rem; padding: .5rem .2rem; border: none; border-radius: 100px;
+  background: none; color: var(--slate); font: 600 .8rem var(--font-main); cursor: pointer; transition: color .25s ease;
+}
+.acct-seg button:hover, .acct-seg button[aria-checked="true"] { color: var(--dusk); }
+.acct-seg svg { overflow: visible; }
+/* The icons answer the choice: sun rays open and turn, the moon tips, the screen lights up */
+.acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot { transform-box: view-box; transform-origin: 12px 12px; transition: scale .5s var(--spring), rotate .7s var(--out), opacity .3s ease; }
+.acct-seg .rays { opacity: .55; scale: .7; }
+.acct-seg [aria-checked="true"] .rays { opacity: 1; scale: 1; rotate: 90deg; }
+.acct-seg .moon { opacity: .75; }
+.acct-seg [aria-checked="true"] .moon { opacity: 1; rotate: -16deg; scale: 1.08; }
+.acct-seg .scr-dot { opacity: 0; scale: .4; }
+.acct-seg [aria-checked="true"] .scr-dot { opacity: 1; scale: 1; }
+
+/* ---------- Text stays inside its box ----------
+   Names people type ("123123123123…", a long email) can be one unbroken word. Everywhere: such a word
+   breaks rather than running out of its card; headings may break anywhere so they can shrink with their
+   box. (Pills and one-line labels cut off with "…" instead, where they're styled.) */
+body { overflow-wrap: break-word; }
+:is(h1, h2, h3, h4, h5, h6) { overflow-wrap: anywhere; }
+
+.acct-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
+/* Create album is long: the whole screen scrolls it, not just the card. A scroll or swipe anywhere (over
+   the dim too) moves the form, and the glass card (with its blur) isn't itself a scroller, which iOS
+   Safari won't scroll reliably. The card stays centred while it fits and starts at the top when it doesn't. */
+#mCreate[open] {
+  position: fixed; inset: 0; display: flex; flex-direction: column; width: 100%; height: 100%; max-height: none; margin: 0;
+  padding: 16px 0; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
+#mCreate > .acct-card { flex: none; margin: auto; max-height: none; overflow: visible; }
+.acct-card {
+  position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: 0;
+  padding: 2rem 1.9rem 1.5rem; border-radius: var(--r-card); color: var(--dusk); font-family: var(--font-main);
+}
+.acct-card h2 { margin: 0; padding-right: 2rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+.acct-sub { margin: .45rem 0 1.3rem; color: var(--slate); font-size: .95rem; line-height: 1.5; }
+.acct-x {
+  position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border: none; border-radius: 50%;
+  cursor: pointer;
+}
+.acct-field { display: block; min-width: 0; margin-bottom: .75rem; }   /* min-width: a date field can't widen its column */
+/* A pair of fields side by side: when one of them is hidden (Create album's Place, set by the venue instead),
+   the other takes the whole row rather than half of it */
+.m-row2:has(> .acct-field[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.acct-field span { display: block; margin-bottom: .3rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
+.acct-field input, .acct-field textarea {
+  width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 1rem;
+  font: 500 1rem var(--font-main);
+}
+.acct-field textarea { display: block; height: auto; min-height: 8.5rem; padding: .8rem 1rem; line-height: 1.5; resize: vertical; }
+.acct-field input::placeholder, .acct-field textarea::placeholder { color: var(--stone); opacity: 1; }
+.acct-group { margin: 1.1rem 0 .4rem; }
+.acct-field[hidden] { display: none; }
+.acct-field select {
+  width: 100%; box-sizing: border-box; height: 2.9rem; padding: 0 2.6rem 0 1rem; -webkit-appearance: none; appearance: none; cursor: pointer;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A869A' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 1rem center / 14px;
+  font: 500 1rem var(--font-main);
+}
+.acct-group > b { display: block; margin-bottom: .1rem; font-size: .82rem; color: var(--slate); }
+.acct-row { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; padding: .8rem 0; }
+.acct-row + .acct-row { box-shadow: inset 0 1px 0 rgba(46, 44, 58, .08); }
+.acct-row span { display: flex; flex-direction: column; gap: .1rem; }
+.acct-row span b { font-weight: 650; font-size: .95rem; }
+.acct-row small { color: var(--slate); font-size: .85rem; }
+.acct-sw { position: relative; flex: none; width: 3.1rem; height: 1.85rem; padding: 0; border-radius: var(--r-pill); cursor: pointer; }
+.acct-sw::after { content: ""; position: absolute; top: .18rem; left: .18rem; width: 1.5rem; height: 1.5rem; border-radius: 50%; transition: translate .4s var(--spring); }
+.acct-sw[aria-checked="true"]::after { translate: 1.25rem 0; }
+.acct-status { min-height: 1.2rem; margin: .5rem 0 .6rem; color: var(--slate); font-size: .85rem; font-weight: 500; }
+.acct-status.is-error { color: #9A3D3D; }
+.acct-actions { display: flex; gap: .5rem; }
+.acct-actions button { flex: 1; min-height: 3rem; border-radius: var(--r-pill); font: 650 .95rem var(--font-main); cursor: pointer; }
+.acct-help details { box-shadow: inset 0 1px 0 rgba(46, 44, 58, .08); }
+.acct-help summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; font-weight: 650; cursor: pointer; list-style: none; }
+.acct-help summary::-webkit-details-marker { display: none; }
+.acct-help summary::after { content: "+"; flex: none; font-size: 1.3rem; font-weight: 500; color: var(--slate); transition: rotate .4s var(--spring); }
+.acct-help details[open] summary::after { rotate: 45deg; }
+.acct-help summary:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; border-radius: 8px; }
+.acct-help p { margin: 0 0 1rem; color: var(--slate); line-height: 1.6; }
+.acct-links { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+.acct-links a { padding: .6rem 1rem; border-radius: var(--r-pill); font-weight: 600; font-size: .9rem; text-decoration: none; }
+@media (max-width: 900px) { .acct-name, .acct-chev { display: none; } .acct-btn { padding-right: .3rem; } }
+/* The link from the account dialog to the full settings page */
+.acct-adv {
+  display: flex; align-items: center; gap: .8rem; margin: .6rem 0 .2rem; padding: .75rem .85rem; border-radius: var(--r-group);
+  background: rgba(46, 44, 58, .05); color: var(--dusk); text-decoration: none; transition: transform .35s var(--spring);
+}
+.acct-adv[hidden] { display: none; }
+.acct-adv:hover { transform: translateY(-1px); }
+.acct-adv:active { transform: scale(.985); }
+.acct-adv:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+.acct-adv-ic { display: grid; place-items: center; flex: none; width: 2.3rem; height: 2.3rem; border-radius: 12px; background: var(--lavender); }
+.acct-adv > span:nth-child(2) { display: flex; flex: 1; flex-direction: column; gap: .1rem; min-width: 0; }
+.acct-adv b { font-size: .92rem; font-weight: 650; }
+.acct-adv small { color: var(--slate); font-size: .8rem; }
+:root[data-theme="dark"] .acct-adv { background: rgba(255, 255, 255, .06); }
+
+@media (prefers-reduced-motion: reduce) {
+  .acct-seg-pill, .acct-seg .rays, .acct-seg .moon, .acct-seg .scr-dot, .acct-menu, .acct-chev, .acct-sw::after { transition: none; }
+}
+
+:root[data-theme="dark"] .acct-sep { background: rgba(255, 255, 255, .1); }
+:root[data-theme="dark"] :is(.acct-row + .acct-row, .acct-help details) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .acct-status.is-error { color: #F0A3A3; }
+
+/* Switching: the page cross-fades (opacity only) while the silk eases underneath */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .6s; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+
+/* ---------- Moving between pages ----------
+   Browsers that can cross-fade between two documents (Chrome, Edge, Safari 18.2+) hold the old
+   page until the new one is ready. The header stays where it is, the highlighted tab glides from
+   the old tab to the new one, and the rest of the page sinks away and the next one rises in.
+   When the next page opens with its own intro, its veil is the new picture, and the header and tab
+   are left out so nothing sits above that veil. (A theme switch marks the page "theming", so these
+   motions only apply to navigation.) */
+@view-transition { navigation: auto; }
+:root:not(.intro-on) .header { view-transition-name: site-header; }
+:root:not(.intro-on) .nav-split.active, :root:not(.intro-on) .nav > .nav-item[aria-current="page"] { view-transition-name: nav-current; }
+:root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current) { animation-duration: .5s; animation-timing-function: cubic-bezier(.34, 1.2, .64, 1); }
+:root:not(.theming)::view-transition-old(root) { animation: pt-out .26s cubic-bezier(.5, 0, 1, 1) both; }
+:root:not(.theming)::view-transition-new(root) { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) .06s both; }
+@keyframes pt-out { to { opacity: 0; transform: translateY(-14px) scale(.985); } }
+@keyframes pt-in { from { opacity: 0; transform: translateY(18px); } }
+/* The page rises in as a whole, so its title (.rise on each page) is already in place: one rise, not two */
+:root.vt-in .rise { translate: 0 0; transition: none; }
+/* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
+html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
+html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
+/* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
+html.pt-file.is-leaving .header { opacity: 1; }
+html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+/* Phones: one motion only. The header and the nav are simply there on the next page (the current tab
+   swaps straight to its new place, without gliding or resizing across), and the page swaps with a
+   single short fade instead of sinking away and rising in */
+@media (max-width: 600px) {
+  :root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current),
+  :root:not(.theming)::view-transition-old(site-header), :root:not(.theming)::view-transition-new(site-header),
+  :root:not(.theming)::view-transition-old(nav-current), :root:not(.theming)::view-transition-new(nav-current) { animation: none; }
+  :root:not(.theming)::view-transition-old(nav-current) { display: none; }
+  :root:not(.theming)::view-transition-old(root) { animation: pt-fade-out .14s linear both; }
+  :root:not(.theming)::view-transition-new(root) { animation: pt-fade-in .2s linear both; }
+  html.is-leaving .page-wrap { animation: pt-fade-out .14s linear both; }
+  html.is-leaving .header { opacity: 1; transition: none; }
+  html.is-arriving .page-wrap { animation: pt-fade-in .2s linear both; }
+  .rise { translate: 0 0 !important; transition: none !important; }   /* the title doesn't rise in on top of the fade */
+}
+@keyframes pt-fade-out { to { opacity: 0; } }
+@keyframes pt-fade-in { from { opacity: 0; } }
+
+/* ============================================================================================
+   Glass primitives. Every glass element on the site joins one of these groups by its existing
+   class, so the markup stays as it was and each look is defined once.
+   ============================================================================================ */
+
+/* ---------- GlassSurface: panels, cards and bars on the page (regular, no blur) ----------
+   The base is written at zero specificity. This sheet loads after the pages' own styles, so a plain .glass or
+   .panel rule here would override every component that tunes its surface (the nav dropdowns' absolute position,
+   the album filter bar's fuller fill, a card's own radius). With :where() those page rules keep winning, as they
+   did when the recipe lived at the top of each page. */
+:where(.glass, .panel, .zone-ctrl, .qc-files, .site-foot) {
+  position: relative;
+  border: 1.5px solid transparent;
+  background: var(--g-regular) padding-box, var(--g-rim) border-box;
+  box-shadow: var(--g-sh-surface);
+}
+:where(.glass) { --radius: var(--r-pill); border-radius: var(--radius); box-shadow: var(--g-sh-pill); }
+:where(.panel, .site-foot) { --radius: var(--r-card); border-radius: var(--radius); }
+:where(.zone-ctrl, .qc-files) { box-shadow: var(--g-sh-well); }
+/* Light follows the pointer across the rim (the page script sets --mx, --my and --shine) */
+:where(.glass, .panel) { --mx: 50%; --my: 0px; --shine: 0; }
+:where(.glass, .panel)::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; padding: 1.5px;
+  opacity: var(--shine); transition: opacity .4s ease;
+  background: radial-gradient(150px circle at var(--mx) var(--my), #fff, rgba(255,255,255,.72) 34%, transparent 75%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+}
+:root[data-theme="dark"] :where(.glass, .panel)::after { background: radial-gradient(150px circle at var(--mx) var(--my), rgba(220,212,255,.75), rgba(200,192,240,.3) 35%, transparent 75%); }
+/* Reading surfaces: long text over the moving silk gets a fuller fill */
+:is(.panel.is-reading, .sp-faq.panel, .sp-card.panel, .faq-panel.panel, .site-foot) { background: var(--g-reading) padding-box, var(--g-rim) border-box; }
+
+/* ---------- GlassSheet: dialogs, modals and drawers (strong + the one real blur) ---------- */
+:where(.auth-card, .modal-card, .acct-card, .vgate-card) { position: relative; }   /* zero specificity: fixed sheets keep their own */
+.auth-card, .modal-card, .acct-card, .vgate-card, dialog.ev-ask, .mq-ask {
+  --mx: 50%; --my: 0px; --shine: 0;
+  border: 1.5px solid transparent;
+  background: var(--g-strong) padding-box, var(--g-rim) border-box;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  box-shadow: var(--g-sh-float);
+}
+.auth-card::after, .modal-card::after, .acct-card::after, .vgate-card::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; padding: 1.5px;
+  opacity: var(--shine); transition: opacity .4s ease;
+  background: radial-gradient(160px circle at var(--mx) var(--my), #fff, rgba(255,255,255,.7) 35%, transparent 75%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+}
+:root[data-theme="dark"] :is(.auth-card, .modal-card, .acct-card, .vgate-card)::after {
+  background: radial-gradient(160px circle at var(--mx) var(--my), rgba(220,212,255,.75), rgba(200,192,240,.3) 35%, transparent 75%);
+}
+/* One dim for every popup */
+:is(.auth-dialog, .acct-dialog, .modal, .vgate, .ev-ask)::backdrop { background: var(--g-backdrop); }
+
+/* ---------- GlassPopover: menus, pickers and suggestion lists (near-solid frost, no blur) ----------
+   They open inside the header (which isolates its backdrop for page transitions) or on top of a sheet,
+   so a blur would either do nothing or stack on the sheet's. A fuller fill and a floating shadow keep
+   them distinct from the layer underneath. */
+.nav-menu, .acct-menu, .ab-menu, .ab-pulse, .inbox-pop, .mp, .ms-menu, .ev-suggest, .rx-picker:not(.vw-picker), .rx-who:not(.viewer *) {
+  --radius: var(--r-pop);
+  border: 1px solid transparent; border-radius: var(--r-pop);
+  background: var(--g-menu) padding-box, var(--g-rim-menu) border-box;
+  box-shadow: var(--g-sh-pop);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:root[data-theme="dark"] :is(.nav-menu, .acct-menu, .ab-menu, .ab-pulse, .inbox-pop, .mp, .ms-menu, .ev-suggest, .rx-picker:not(.vw-picker), .rx-who:not(.viewer *)) {
+  background: var(--g-menu) padding-box, var(--g-rim-menu) border-box;
+  box-shadow: var(--g-sh-pop);
+}
+
+/* ---------- GlassToast (strong + blur on the page; inside an open dialog it leans on the dialog) ---------- */
+.m-toast {
+  border: 1px solid transparent;
+  background: var(--g-strong) padding-box, var(--g-rim) border-box;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  box-shadow: var(--g-sh-pop);
+}
+dialog .m-toast { background: var(--g-menu) padding-box, var(--g-rim-menu) border-box; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* ---------- GlassButton ----------
+   One glass for every button: a bright top edge, a soft horizon across the middle, a faint bounce of
+   light at the bottom and a thin rim. Variants only choose the tint (custom properties set below);
+   this one rule paints them all. On the page they never blur (the silk moves under them every frame);
+   inside a sheet the sheet's blur is behind them already. */
+:is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login,
+    .acct-x, .qa i, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret,
+    .s-change, .s-cancel, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done,
+    .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .join-scan,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn,
+    .vw-btn, .vw-nav, .sf-top) {
+  box-sizing: border-box; border: 1px solid transparent;
+  background: var(--gb-sheen, none) padding-box, var(--gb-fill, none) padding-box, var(--gb-rim, none) border-box;
+  box-shadow: var(--gb-shadow, none);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+/* Label colour comes with the tint (ghost buttons keep their own) */
+:is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close,
+    .acct-x, .qa i, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn,
+    .s-change, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done, .ab-tool.is-danger,
+    .ab-btn, .ab-icon, .ab-act, .rx-undo, .bookmark, .lk-heart,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x,
+    .vw-btn, .vw-nav, .sf-top) { color: var(--gb-ink, var(--dusk)); }
+/* Variants (zero specificity, so the last one that matches wins) */
+:where(.btn-light, .todo-act.is-light, .m-copy, .m-toast-act, .auth-alt, .auth-close, .acct-x, .qa i, .acct-actions .acct-ghost,
+    .vgate-actions .vgate-ghost, .album-code button, .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn,
+    .s-change, .as-ghost, .as-mini, .ab-btn, .ab-icon, .ab-act, .rx-undo, .gd-x, .ea-chip, .ev-link, .ev-follow,
+    .mq-btn.is-light, .m-del, .s-delete-btn, .sf-top) {
+  --gb-sheen: var(--gb-clear-sheen); --gb-fill: var(--gb-clear-fill); --gb-rim: var(--gb-clear-rim);
+  --gb-shadow: var(--gb-clear-shadow); --gb-ink: var(--dusk); --gb-lift: var(--gb-clear-lift);
+}
+/* Over photos: the same clear glass, filled thicker so it reads on any picture (no blur: there are many) */
+:where(.bookmark, .lk-heart, .ev-follow) {
+  --gb-sheen: var(--gb-clear-sheen); --gb-fill: var(--gb-thick-fill); --gb-rim: var(--gb-clear-rim);
+  --gb-shadow: var(--gb-clear-shadow); --gb-ink: var(--dusk); --gb-lift: rgba(255,255,255,.12);
+}
+/* Ghost: no pane until the pointer is over it */
+:where(.auth-skip, .auth-login, .s-cancel, .ab-tool, .tool-icon, .pw-eye, .nav-caret, .mq-tile-btn, .join-scan) {
+  --gb-sheen: none; --gb-fill: none; --gb-rim: none; --gb-shadow: none; --gb-ink: var(--slate); --gb-lift: var(--g-wash);
+}
+/* Deep smoke: the main action */
+:where(.btn-dark, .todo-act:not(.is-light), .acct-actions .acct-primary, .vgate-actions .vgate-primary, .as-save, .mp-done,
+    .ab-act.is-primary, .mq-btn:not(.is-light), .s-change[aria-expanded="true"], .as-mini.is-dark, .bookmark[aria-pressed="true"]) {
+  --gb-sheen: var(--gb-smoke-sheen); --gb-fill: var(--gb-smoke-fill); --gb-rim: var(--gb-smoke-rim);
+  --gb-shadow: var(--gb-smoke-shadow); --gb-ink: var(--paper); --gb-lift: var(--gb-smoke-lift);
+}
+/* Pearl keeps its pastel colours inside the same glass */
+:where(.btn-pearl) {
+  --gb-sheen: var(--gb-pearl-sheen); --gb-fill: var(--gb-pearl-fill); --gb-rim: var(--gb-pearl-rim);
+  --gb-shadow: var(--gb-pearl-shadow); --gb-ink: var(--dusk); --gb-lift: rgba(255,255,255,.07);
+}
+/* Danger, clear: a destructive trigger in a row or bar (red label, red-tinted rim) */
+:where(.m-del, .s-change.is-danger, .s-part .s-change, .s-delete-btn, .ab-act.is-danger, .ab-tool.is-danger,
+    .acct-photo-btn.is-danger, .as-mini[data-approve="0"], .as-ghost[data-cover-remove], .vw-btn.vw-danger) {
+  --gb-sheen: var(--gb-clear-sheen); --gb-fill: var(--gb-clear-fill); --gb-rim: var(--gb-danger-clear-rim);
+  --gb-shadow: var(--gb-clear-shadow); --gb-ink: var(--danger-ink); --gb-lift: rgba(200,80,80,.07);
+}
+/* Danger, solid: the final confirmation */
+:where(.acct-actions .acct-primary.is-danger, .ab-act.is-solid) {
+  --gb-sheen: var(--gb-smoke-sheen); --gb-fill: var(--gb-danger-fill); --gb-rim: var(--gb-danger-rim);
+  --gb-shadow: var(--gb-danger-shadow); --gb-ink: var(--gb-danger-ink); --gb-lift: rgba(255,255,255,.06);
+}
+/* HUD: controls over photos and the camera, always dark glass. The viewer and the camera are opaque
+   full-screen layers, so these are the outermost glass there and may blur what is under them. */
+:where(.vw-btn, .vw-nav, .ev-x, .mq-scan .mq-btn, .ev-cam .mq-btn, .mq-x, .ev-cover-btn) {
+  --gb-sheen: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 50%); --gb-fill: var(--g-hud);
+  --gb-rim: var(--g-rim-hud); --gb-shadow: var(--g-sh-hud); --gb-ink: #fff; --gb-lift: rgba(255,255,255,.12);
+}
+:where(.vw-btn.vw-danger) { --gb-ink: #FFB4B4; --gb-rim: linear-gradient(180deg, rgba(255,190,190,.6), rgba(255,255,255,.12) 50%, rgba(255,190,190,.3)); }
+:root :is(.vw-btn, .vw-nav, .ev-x, .mq-scan .mq-btn, .ev-cam .mq-btn, .mq-x) { -webkit-backdrop-filter: var(--g-blur-hud); backdrop-filter: var(--g-blur-hud); }
+/* The camera's main button stays a solid white disc */
+:where(.mq-scan .mq-btn.is-main, .ev-cam .mq-btn.is-main) { --gb-sheen: none; --gb-fill: linear-gradient(#fff, #fff); --gb-rim: linear-gradient(#fff, #fff); --gb-ink: #2E2C3A; --gb-lift: rgba(46,44,58,.06); }
+
+/* States: hover brightens the pane, press sinks it, focus draws a ring with a halo that shows on any glass,
+   disabled is a flat dashed outline (clearly not just a fainter button) */
+:is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login,
+    .acct-x, .qa i, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret,
+    .s-change, .s-cancel, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done,
+    .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .join-scan,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn,
+    .vw-btn, .vw-nav, .sf-top):hover:not(:disabled, [aria-disabled="true"]) {
+  box-shadow: var(--gb-shadow, 0 0 #0000), inset 0 0 0 999px var(--gb-lift, rgba(255,255,255,.07));
+}
+:is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login,
+    .acct-x, .qa i, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret,
+    .s-change, .s-cancel, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done,
+    .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .join-scan,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn,
+    .vw-btn, .vw-nav, .sf-top):focus-visible {
+  outline: 2px solid var(--focus-ring); outline-offset: 3px;
+  box-shadow: var(--gb-shadow, 0 0 #0000), 0 0 0 6px var(--focus-halo);
+}
+:is(.btn-dark, .btn-light, .btn-pearl, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login,
+    .acct-x, .qa i, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret,
+    .s-change, .s-cancel, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done,
+    .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .join-scan,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn,
+    .vw-btn, .vw-nav, .sf-top):is(:disabled, [aria-disabled="true"]) {
+  background: linear-gradient(var(--g-disabled), var(--g-disabled)) padding-box;
+  border: 1px dashed var(--g-disabled-edge); box-shadow: none; color: var(--g-disabled-ink);
+  opacity: 1; cursor: not-allowed;
+}
+/* Press and lift move the pane, never its paint (transform only). The big .btn has its own magnetic
+   transform and press, so it keeps those. */
+:is(.todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login,
+    .acct-x, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret,
+    .s-change, .s-cancel, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done,
+    .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .join-scan,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn,
+    .vw-btn, .vw-nav, .sf-top) {
+  transition: transform var(--t-slow) var(--spring), scale var(--t-med) var(--spring), translate var(--t-slow) var(--spring), rotate var(--t-slow) var(--spring), opacity var(--t-med) ease;
+}
+:is(.todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login,
+    .acct-x, .acct-actions button, .vgate-actions .vgate-primary, .vgate-actions .vgate-ghost, .album-code button,
+    .modal-card:not(.album-card) .close, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret,
+    .s-change, .s-cancel, .s-delete-btn, .as-save, .as-ghost, .as-mini, .mp-done,
+    .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .join-scan,
+    .gd-x, .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn,
+    .vw-btn, .vw-nav, .sf-top):active:not(:disabled, [aria-disabled="true"]) { scale: var(--press); }
+.qa i { transition: transform .45s var(--spring); }
+.btn { transition: transform .5s var(--out); }
+.btn:is(:disabled, [aria-disabled="true"]) { cursor: not-allowed; --press: 1; }
+.btn:is(:disabled, [aria-disabled="true"]) .btn-fill { display: none; }
+.btn:is(:disabled, [aria-disabled="true"]):hover .roll { transform: none; }
+/* The colour that floods in on hover is glass too */
+.btn-dark { --fill: color-mix(in srgb, var(--copper) 70%, transparent); }
+/* Pearl and clear glass both answer with the pearl itself, deeper: lavender, blush and sea-glass, with the
+   label staying dusk (the dark flood is dark mode's job only). */
+:root { --pearl-hover: linear-gradient(120deg, #B9A9E8 0%, #E6B0C6 52%, #9FCFC6 100%);
+        --pearl-hover-soft: linear-gradient(120deg, #CFC3F0 0%, #EEC6D6 52%, #B4DBD3 100%); }
+.btn-pearl { --fill: var(--pearl-hover); }
+.btn-light { --fill: var(--pearl-hover-soft); }
+:root[data-theme="dark"] .btn-pearl { --fill: rgba(236,234,244,.85); }
+:root[data-theme="dark"] .btn-light { --fill: rgba(236,234,244,.85); }
+:root:not([data-theme="dark"]) :is(.btn-pearl, .btn-light):hover { color: var(--dusk); }
+/* Dark mode: the pale flood needs the dark label, but only while the flood is actually there
+   (touch has sticky :hover and reduced motion hides the flood, so there the label keeps its own colour).
+   The page's own `.btn-pearl:hover {color: paper}` loses to the shared colour rule above (its :is() list carries
+   a 0,3,0 selector), so the flip has to be stated here. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :root[data-theme="dark"] :is(.btn-pearl, .btn-light):hover:not(:disabled, [aria-disabled="true"]) { color: var(--paper); }
+}
+/* Waiting-on-you "is-light" action: solid copper under dusk text was ~2.7:1; use the same pearl instead */
+@media (hover: hover) { :root:not([data-theme="dark"]) .todo-act.is-light:hover:not(:disabled) { background: var(--pearl-hover-soft); color: var(--dusk); } }
+:root[data-theme="dark"] .btn-dark:not(.qr-card *) { --fill: color-mix(in srgb, var(--copper) 80%, transparent); }
+/* Lavender fills need dark text, not the white the daylight rules use */
+:root[data-theme="dark"] :is(.todo-act:hover, .btn-dark:hover) { color: var(--fog); }
+
+/* ---------- GlassSlider: range inputs (the sharing zone, the event reach) ----------
+   A thick track filled in the accent (copper by day, lavender at night), a white knob ringed in that
+   accent, and the value beside it in the same accent. The page sets --fill (0-100%) as the slider moves. */
+:is(.zone-ctrl, .ev-range) { --sl-lo: #C08A66; --sl-hi: #9A603D; --sl-track: rgba(46,44,58,.16); --sl-lift: rgba(46,44,58,.3); }
+:root[data-theme="dark"] :is(.zone-ctrl, .ev-range) { --sl-lo: #8E80F2; --sl-hi: #B9AEFF; --sl-track: rgba(255,255,255,.18); --sl-lift: rgba(0,0,0,.45); }
+.zone-ctrl input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 10px; border-radius: 5px; cursor: pointer;
+  background: linear-gradient(to right, var(--sl-lo), var(--sl-hi) var(--fill), var(--sl-track) var(--fill));
+}
+.ev-range { -webkit-appearance: none; appearance: none; cursor: pointer; }
+.ev-range::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: linear-gradient(to right, var(--sl-lo), var(--sl-hi) var(--fill), var(--sl-track) var(--fill)); }
+.ev-range::-moz-range-track { height: 10px; border-radius: 5px; background: var(--sl-track); }
+.ev-range::-moz-range-progress { height: 10px; border-radius: 5px; background: linear-gradient(to right, var(--sl-lo), var(--sl-hi)); }
+:is(.zone-ctrl input[type="range"], .ev-range)::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 0 4px var(--sl-hi), 0 4px 14px var(--sl-lift); transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1));
+}
+:is(.zone-ctrl input[type="range"], .ev-range)::-moz-range-thumb {
+  width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 0 4px var(--sl-hi), 0 4px 14px var(--sl-lift); transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1));
+}
+.ev-range::-webkit-slider-thumb { margin-top: -9px; }   /* centres the 28px knob on the 10px track */
+:is(.zone-ctrl input[type="range"], .ev-range):hover::-webkit-slider-thumb { transform: scale(1.08); }
+:is(.zone-ctrl input[type="range"], .ev-range):active::-webkit-slider-thumb { transform: scale(.95); }
+:is(.zone-ctrl input[type="range"], .ev-range):hover::-moz-range-thumb { transform: scale(1.08); }
+:is(.zone-ctrl input[type="range"], .ev-range):active::-moz-range-thumb { transform: scale(.95); }
+:is(.zone-ctrl input[type="range"], .ev-range):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 6px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.zone-ctrl input[type="range"], .ev-range)::-webkit-slider-thumb, :is(.zone-ctrl input[type="range"], .ev-range)::-moz-range-thumb { transition: none; }
+}
+
+/* ---------- GlassSegment: tab bars and segmented controls ----------
+   The track is a faint recess; the selected option is a brighter pane of the same glass. */
+:is(.auth-tabs .auth-tab-pill, .acct-seg .acct-seg-pill, .tabs .tab-pill, .ev-reach .ev-reach-pill, .menu-pill,
+    .nav-item.active, .nav-item[aria-current="page"], .nav-split.active,
+    .bin-seg button[aria-selected="true"], .rx-who-tab[aria-pressed="true"], .rx-who-tab[aria-selected="true"]) {
+  box-sizing: border-box; border: 1px solid transparent;
+  background: var(--g-sel); box-shadow: var(--g-sel-shadow); color: var(--dusk);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+/* Home sits inside its own highlighted pill: only the outer pill gets the pane, not both */
+.nav-split .nav-item:is(*, [aria-current], .active) { background: none; box-shadow: none; border-color: transparent; }
+/* Home and its arrow are one pill: the pointer wash fills the whole pill, not just the Home half (the arrow
+   sat outside it and the wash looked cut short). Home never washes on its own inside the split. */
+.nav-split .nav-item:is(:hover, :active):not(:disabled) { background-color: transparent; }
+.nav-split:not(.active):hover { background-color: var(--g-wash); }
+.nav-split:not(.active):has(.nav-home:active) { background-color: var(--g-wash-press); }
+:is(.auth-tabs, .acct-seg) { background: var(--g-track); }
+
+/* ---------- GlassRow: list, menu and nav items. A wash under the pointer, nothing animated but motion ---------- */
+:is(.nav-item, .menu-item, .acct-item, .ab-item, .s-row, .acct-adv, .acct-help summary, .qa button, .mp-btn) {
+  transition-property: transform, translate, scale, opacity;
+}
+:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .mp-btn):hover:not(:disabled) { background-color: var(--g-wash); }
+:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .mp-btn):active:not(:disabled) { background-color: var(--g-wash-press); }
+:is(.nav-item, .menu-item, .acct-item, .ab-item, .acct-adv, .qa button, .acct-help summary):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.acct-help summary:hover { color: var(--dusk); }
+
+/* ---------- GlassInput: a recessed well ---------- */
+:is(.auth-field input, .acct-field input, .acct-field textarea, .acct-field select, .s-code,
+    .ev-lead select, .ev-venue-search input, .as-row input) {
+  border: none; border-radius: var(--r-group);
+  background-color: var(--g-input); box-shadow: var(--g-input-rim);
+  color: var(--dusk); transition: none;
+}
+:is(.auth-field input, .acct-field input, .acct-field textarea, .acct-field select, .s-code,
+    .ev-lead select, .ev-venue-search input, .as-row input):hover { box-shadow: var(--g-input-rim-hover); }
+:is(.auth-field input, .acct-field input, .acct-field textarea, .acct-field select, .s-code,
+    .ev-lead select, .ev-venue-search input, .as-row input):focus {
+  outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow);
+}
+:is(.auth-field input, .acct-field input, .acct-field textarea, .acct-field select, .s-code,
+    .ev-lead select, .ev-venue-search input, .as-row input):disabled {
+  background-color: var(--g-disabled); box-shadow: inset 0 0 0 1px var(--g-disabled-edge); color: var(--g-disabled-ink); cursor: not-allowed;
+}
+:root[data-theme="dark"] :is(.acct-field select, .ev-lead select) { color-scheme: dark; }
+
+/* Album dropdowns use the same recessed fields and floating glass as the date/time pickers. */
+:is(#mCreate, dialog.ev-ask) .ms-select {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  width: 100%; min-width: 0; min-height: 2.9rem; box-sizing: border-box; padding: .65rem 1rem;
+  border: none; border-radius: var(--r-group); background: var(--g-input); box-shadow: var(--g-input-rim);
+  color: var(--dusk); font: 500 1rem var(--font-main); text-align: left; cursor: pointer;
+}
+:is(#mCreate, dialog.ev-ask) .ms-select .ms-value { display: block; min-width: 0; margin: 0; overflow: hidden; color: inherit; font: inherit; white-space: nowrap; text-overflow: ellipsis; }
+:is(#mCreate, dialog.ev-ask) .ms-select > svg { flex: none; width: 16px; height: 16px; color: var(--slate); transition: transform var(--t-med) var(--out); }
+:is(#mCreate, dialog.ev-ask) .ms-select[aria-expanded="true"] > svg { transform: rotate(180deg); }
+@media (hover: hover) { :is(#mCreate, dialog.ev-ask) .ms-select:hover:not(:disabled) { box-shadow: var(--g-input-rim-hover); } }
+:is(#mCreate, dialog.ev-ask) .ms-select:active:not(:disabled) { background-color: var(--g-wash-press); }
+:is(#mCreate, dialog.ev-ask) .ms-select:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+:is(#mCreate, dialog.ev-ask) .ms-select:disabled { color: var(--g-disabled-ink); background: var(--g-disabled); cursor: not-allowed; }
+.ms-menu {
+  position: fixed; inset: auto; z-index: 2147483000; margin: 0; padding: .35rem;
+  box-sizing: border-box; max-width: calc(100vw - 16px); overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior: contain; color: var(--dusk); font: 500 .95rem var(--font-main); scrollbar-width: thin;
+}
+.ms-option { display: flex; align-items: center; gap: .75rem; min-height: 44px; box-sizing: border-box; padding: .65rem .8rem; border-radius: var(--r-group); cursor: pointer; }
+.ms-option > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ms-option > svg { flex: none; width: 17px; height: 17px; visibility: hidden; }
+.ms-option[aria-selected="true"] { background: var(--g-wash); font-weight: 650; }
+.ms-option[aria-selected="true"] > svg { visibility: visible; }
+.ms-option.is-active { outline: 1px solid var(--focus-ring); outline-offset: -1px; background-color: var(--g-wash); }
+@media (hover: hover) { .ms-option:hover:not([aria-disabled="true"]) { background-color: var(--g-wash); } }
+.ms-option:active:not([aria-disabled="true"]) { background-color: var(--g-wash-press); }
+.ms-option[aria-disabled="true"] { color: var(--g-disabled-ink); cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { :is(#mCreate, dialog.ev-ask) .ms-select > svg { transition: none; } }
+@media (forced-colors: active) { :is(#mCreate, dialog.ev-ask) .ms-select, .ms-menu { border: 1px solid CanvasText; } .ms-option[aria-selected="true"] { outline: 1px solid Highlight; outline-offset: -2px; } }
+
+/* Choice cards (one of several, like who can join or which device to sign out) */
+:is(.ev-who label, .device-choice, dialog .m-kind label) {
+  border-radius: var(--r-group); background-color: var(--g-input); box-shadow: var(--g-input-rim); transition: none;
+}
+:is(.ev-who label, .device-choice, dialog .m-kind label):hover { box-shadow: var(--g-input-rim-hover); }
+:is(.ev-who label, .device-choice, dialog .m-kind label):has(input:checked) { box-shadow: inset 0 0 0 2px var(--focus-ring); }
+:is(.ev-who label, .device-choice, dialog .m-kind label):has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+
+/* ---------- Glass switches ----------
+   The track is a recessed pane of glass; switched on it fills with tinted light. The knob is a
+   glass bead with a bright top and a soft shadow underneath. Never blurred. */
+:is(.sw, .s-sw, .acct-sw)[role="switch"] {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, rgba(46,44,58,.1) 0%, rgba(46,44,58,.04) 100%) padding-box,
+    linear-gradient(140deg, rgba(46,44,58,.18) 0%, rgba(255,255,255,.6) 60%, #fff 100%) border-box;
+  box-shadow: inset 0 1px 3px rgba(46,44,58,.22), 0 1px 0 rgba(255,255,255,.7);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  transition: none;
+}
+:is(.sw, .s-sw, .acct-sw)[role="switch"]:hover:not(:disabled) { box-shadow: inset 0 1px 3px rgba(46,44,58,.22), 0 1px 0 rgba(255,255,255,.7), 0 0 0 3px var(--g-wash); }
+:is(.sw, .s-sw, .acct-sw)[role="switch"]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+:is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 60%) padding-box,
+    linear-gradient(135deg, color-mix(in srgb, var(--copper) 85%, transparent), color-mix(in srgb, var(--copper) 70%, transparent)) padding-box,
+    linear-gradient(140deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.6) 100%) border-box;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.18), 0 0 14px -4px color-mix(in srgb, var(--copper) 70%, transparent);
+}
+:is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+  top: calc(.18rem - 1px); left: calc(.18rem - 1px);
+  background: radial-gradient(circle at 35% 28%, #fff 0%, rgba(255,255,255,.92) 45%, rgba(236,233,246,.85) 100%);
+  box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.12), 0 0 0 .5px rgba(46,44,58,.14), 0 2px 6px rgba(46,44,58,.28);
+}
+:is(.sw, .s-sw, .acct-sw)[role="switch"]:is(:disabled, [aria-disabled="true"]) {
+  background: linear-gradient(var(--g-disabled), var(--g-disabled)) padding-box; border: 1px dashed var(--g-disabled-edge);
+  box-shadow: none; cursor: not-allowed;
+}
+:is(.sw, .s-sw, .acct-sw)[role="switch"]:is(:disabled, [aria-disabled="true"])::after { box-shadow: 0 0 0 .5px var(--g-disabled-edge); background: var(--g-disabled-ink); opacity: .5; }
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"] {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.03) 100%) padding-box,
+    linear-gradient(140deg, rgba(0,0,0,.4) 0%, rgba(200,192,240,.25) 60%, rgba(200,192,240,.4) 100%) border-box;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06);
+}
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"]:hover:not(:disabled, [aria-checked="true"]) { box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.06), 0 0 0 3px var(--g-wash); }
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"]:hover:not(:disabled) { box-shadow: inset 0 1px 2px rgba(0,0,0,.3), 0 0 16px -4px color-mix(in srgb, var(--copper) 75%, transparent), 0 0 0 3px var(--g-wash); }
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 60%) padding-box,
+    linear-gradient(135deg, color-mix(in srgb, var(--copper) 88%, transparent), color-mix(in srgb, var(--copper) 72%, transparent)) padding-box,
+    linear-gradient(140deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.5) 100%) border-box;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.3), 0 0 16px -4px color-mix(in srgb, var(--copper) 75%, transparent);
+}
+:root[data-theme="dark"] :is(.sw, .s-sw, .acct-sw)[role="switch"]::after {
+  box-shadow: inset 0 1px 1px #fff, inset 0 -2px 4px rgba(46,44,58,.18), 0 2px 8px rgba(0,0,0,.55);
+}
+
+/* ---------- Forced colours (Windows high contrast): keep every pane and control outlined ---------- */
+@media (forced-colors: active) {
+  :is(.glass, .panel, .zone-ctrl, .qc-files, .site-foot, .auth-card, .modal-card, .acct-card, .vgate-card, .nav-menu, .acct-menu, .ab-menu, .ab-pulse, .inbox-pop, .mp, .ev-suggest, .m-toast) { border: 1px solid CanvasText; }
+  :is(.btn, .todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .acct-x, .acct-actions button, .album-code button, .s-change,
+      .as-save, .as-ghost, .as-mini, .ab-btn, .ab-icon, .ab-act, .gd-x, .ea-chip, .ev-link, .vw-btn, .vw-nav, .mq-btn, .mq-x,
+      .auth-tab-pill, .acct-seg-pill, .tab-pill, .ev-reach-pill, .menu-pill, .sw, .s-sw, .acct-sw) { border: 1px solid ButtonText; }
+  :is(.nav-item[aria-current="page"], .nav-item.active, .nav-split.active) { outline: 2px solid Highlight; }
+  /* Switches: the system strips the glass, so draw the knob and the on state in system colours */
+  :is(.sw, .s-sw, .acct-sw)[role="switch"]::after { forced-color-adjust: none; background: ButtonText; }
+  :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"] { forced-color-adjust: none; background: Highlight; border-color: Highlight; }
+  :is(.sw, .s-sw, .acct-sw)[role="switch"][aria-checked="true"]::after { background: HighlightText; }
+}
+
+/* ---------- Reduced motion: glass still answers, it just doesn't travel ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .btn .roll, .btn-fill, .nav-menu, .acct-menu, .menu-pill, .tab-pill, .ev-reach-pill, .auth-tab-pill, .acct-seg-pill,
+  :is(.sw, .s-sw, .acct-sw)::after, .qa i, .qa i::before, .qa i::after, .acct-help summary::after, .nav-caret svg, .acct-chev { transition: none !important; }
+  .btn:hover .roll { transform: none; }
+  .btn-fill { display: none; }
+  :is(.todo-act, .m-copy, .m-toast-act, .m-del, .auth-alt, .auth-close, .auth-skip, .auth-login, .acct-x, .acct-actions button,
+      .album-code button, .acct-links a, .acct-photo-btn, .pw-eye, .nav-caret, .s-change, .s-cancel, .s-delete-btn, .as-save,
+      .as-ghost, .as-mini, .mp-done, .ab-btn, .ab-icon, .ab-act, .ab-tool, .tool-icon, .rx-undo, .bookmark, .lk-heart, .gd-x,
+      .ea-chip, .ev-link, .ev-follow, .ev-x, .ev-cover-btn, .mq-btn, .mq-x, .mq-tile-btn, .vw-btn, .vw-nav, .sf-top):active { scale: none; }
+}
+
+/* Touch screens: grow the tap area of small controls to about 44px without changing how they look */
+@media (pointer: coarse) {
+  .tab, .todo-act, .nav-caret { position: relative; }
+  :is(.nav-item, .nav-caret, .tab, .acct-seg button, .todo-act)::before { content: ""; position: absolute; inset: -6px 0; }
+  :is(.sw, .s-sw, .acct-sw)[role="switch"]::before { content: ""; position: absolute; inset: -8px -4px; }
+}
+
+/* ---------- An open window holds the page still behind it ----------
+   On every device (a mouse wheel over the dark backdrop used to scroll the page on desktop). The scrollbar's
+   space is kept, so nothing shifts sideways when the window opens. On phones the notifications panel covers
+   the screen too, so it holds the page the same way */
+html:has(dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
+@media (max-width: 600px) { html:has(.inbox-pop.is-open) { overflow: hidden; } }
+
+/* ---------- Keyboard focus on the search boxes and the Social map pins ----------
+   The field itself draws no outline (its pill is the field), so the pill takes the ring, with a halo that
+   shows on any glass. Map pins are round photos: the ring follows their circle */
+:is(.search, .ev-search):has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 5px var(--focus-halo) !important; }
+.ev-pin:focus-visible { outline: 3px solid var(--focus-ring) !important; outline-offset: 3px; }
+
+/* ---------- Notched phones (viewport-fit=cover on every page) ----------
+   The page may now run under the notch and the home bar, so anything pinned to an edge keeps clear of
+   them. In Safari held upright the insets are 0 and nothing moves; they matter held sideways (the notch is
+   at a side) and when Momento runs from the home screen. The page's own side margins stay as designed,
+   with the inset added only where it is bigger */
+html body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+html .header { top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); width: auto; }
+
+/* ---------- Very wide screens ----------
+   Past 1700px the type grows gently with the window (16px → 18px at 2560px) and the content column widens
+   with it (about 1320px at 1920, 1440px at 2560), so a big monitor isn't mostly empty margin around small text.
+   Everything sized in rem follows; nothing changes below 1700px */
+@media (min-width: 1700px) {
+  html { font-size: calc(12.05px + .2326vw); }
+  html body .page { width: min(80rem, 92%); }
+  html body .site-foot { width: min(78.5rem, 100% - 3rem); }
+  html body :is(.hiw-head, .hiw-steps, .divider, .feat-list, .zone-panel, .quality-panel) { width: min(78.5rem, 100%); }
+}
+
+/* ---------- Phones: windows fit the part of the screen above the keyboard ----------
+   assets/pickers.js keeps --vv-top / --vv-bottom up to date (0 when there's no keyboard). Create album's
+   screen-filling scroller ends at the keyboard's top edge, so every field can be scrolled into view and
+   the window moves with the page when the phone shifts it; smaller windows stay centred in that space. */
+@media (pointer: coarse) {
+  #mCreate[open] { top: var(--vv-top, 0px); bottom: var(--vv-bottom, 0px); height: auto; }
+  :is(.acct-dialog:not(#mCreate), dialog.ev-ask)[open] { top: var(--vv-top, 0px); bottom: var(--vv-bottom, 0px); }
+  .acct-dialog:not(#mCreate) > .acct-card { max-height: calc(100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px) - 32px); }
+  dialog.ev-ask { max-height: calc(100dvh - var(--vv-top, 0px) - var(--vv-bottom, 0px) - 32px); }
+}
+
+/* ---------- The notifications bell's place, held while the page loads ----------
+   assets/api.js sets .bell-ready when the bell sat beside the account chip earlier in this tab. Until
+   assets/inbox.js puts the bell in (.has-inbox), an empty space the bell's size keeps the chip where it will be */
+:root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden]) { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
+:root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden])::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }

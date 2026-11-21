@@ -1,0 +1,80 @@
+/* Momento touch: fingers, not cursors.
+   Linked last on index, albums, events, settings and support, after assets/glass.css, so it wins ties by order.
+   Every rule here sits behind (pointer: coarse) or (hover: none): a desktop with a mouse never sees any of it.
+
+   Breakpoints (the whole site uses these; plain CSS can't put them in custom properties, so they live here):
+     ≥ 901px   desktop composition (tablets in landscape get it too, and it fits)
+     ≤ 900px   tablet: header condenses, wordmark hides, split layouts stack
+     ≤ 700px   two album cards across instead of three
+     ≤ 600px   phone: dialogs go full screen or sheet
+     ≤ 760px   footer groups fold into tap-to-open rows (≤ 1100px: brand on its own row, four columns)
+     ≤ 520px   Social and Settings become icons in the nav
+     ≤ 480px / 420 / 400 / 340   narrow-phone fine tuning */
+
+@media (pointer: coarse) {
+  /* ---------- Header: 44px hit areas without moving a pixel ----------
+     The visible pill stays as designed; an invisible box at least 44px tall sits behind each item */
+  .nav :is(.nav-item, .nav-caret)::before { inset: auto 0; top: 50%; height: max(100%, 44px); translate: 0 -50%; }
+  .nav .nav-caret::before { left: -6px; right: -6px; z-index: 2; }   /* 32px wide on tablets: reach 44 */
+  .nav .nav-split { position: relative; z-index: 2; }
+  /* The caret's reach sits above the current page's item (z 1). On the home page the Home+caret pair is the
+     current item and a stacking context of its own (view-transition-name), so the whole pair is lifted too */
+  .header .brand { position: relative; }   /* only index sets this; the hit area below must hang off the logo, not the header */
+  .header .brand::after { content: ""; position: absolute; top: 0; bottom: 0; left: -8px; right: -9px; z-index: 2; }
+
+  /* ---------- Footer: full-height rows for thumbs ---------- */
+  .sf-col ul { gap: 0; }
+  .sf-link { padding-block: 13.5px; }
+  .sf-top { min-height: 44px; }
+
+  /* ---------- Small round buttons ---------- */
+  .bookmark::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
+  .s-delete-btn { min-height: 44px; }
+  /* Close and show-password buttons are 35–40px: an invisible ring takes their reach to 44+ without moving them */
+  .ab-icon { position: relative; }   /* .acct-x and .pw-eye are already positioned (absolute) */
+  :is(.acct-x, .pw-eye, .ab-icon)::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
+  /* Text buttons and inbox actions: a full 44px row for a thumb */
+  :is(.s-change, .s-cancel, .gri-acts .btn, .inbox-act, .inbox-link) { min-height: 44px; }
+  .vw-film { gap: 4px; padding-inline: calc(50% - 1rem); }
+  .vw-film button { width: 2rem; height: 2.75rem; }   /* the viewer's strip pictures */
+  .auth-forgot { min-height: 44px; box-sizing: border-box; padding-block: 12px; margin-block: -12px calc(.4rem - 12px); }
+  #evMap .leaflet-bar a { width: 2.75rem; height: 2.75rem; line-height: 2.75rem; }
+
+  /* ---------- Text fields at 16px, so iOS doesn't zoom the page when one is tapped ---------- */
+  #search, #evSearch { font-size: 16px; }
+
+}
+
+/* Icon-only nav on phones: Social and Settings are ~31px wide, so their hit areas reach into the room
+   beside them. Social only borrows from My albums on the My albums page, where that item is the wide current
+   pill with room to spare; everywhere else My albums is a 38px icon and keeps all of its own width */
+@media (pointer: coarse) and (max-width: 520px) {
+  .nav .nav-caret::before { left: -13px; right: -3px; }   /* reaches into Home (its own pair), not into My albums */
+  .nav .nav-social::before { left: 0; z-index: 1; }
+  .nav:has(.nav-albums[aria-current="page"]) .nav-social::before { left: -13px; }
+  .nav .nav-settings::before { right: -13px; z-index: 1; }
+}
+
+/* Phones: the create-album button stays in reach while the form scrolls */
+@media (pointer: coarse) and (max-width: 600px) {
+  #mCreate [data-view="form"] > .acct-actions {
+    position: sticky; bottom: -16px; z-index: 3;   /* the screen scrolls the form (assets/glass.css): pinned to its foot */
+    margin: 0 -1.9rem -1.5rem; padding: .9rem 1.9rem 1.5rem; border-radius: 0 0 var(--r-card, 28px) var(--r-card, 28px);   /* the card's corners */
+    background: linear-gradient(to bottom, rgba(248, 247, 250, 0), rgb(248, 247, 250) .9rem);
+  }
+  :root[data-theme="dark"] #mCreate [data-view="form"] > .acct-actions {
+    background: linear-gradient(to bottom, rgba(26, 25, 34, 0), rgb(26, 25, 34) .9rem);
+  }
+}
+
+/* No hover on touch screens: a tap mustn't leave things lifted, scaled or underlined.
+   (Rules in the page styles are wrapped in @media (hover: hover) where they're written; these live in shared sheets) */
+@media (hover: none) {
+  .sf-logo:hover svg.glyph, .acct-adv:hover { transform: none; }
+  .sf-link:hover::after { scale: 0 1; }
+  .sf-top:hover svg { translate: none; }
+  .acct-btn:hover { scale: none; }
+  /* The event cards had no pressed state of their own */
+  .evc:active { transform: scale(.98); }
+  .eh:active { transform: scale(.99); }
+}

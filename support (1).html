@@ -1,0 +1,2076 @@
+<!doctype html>
+<html lang="en" data-page="support">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no, email=no, address=no">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <style>[hidden] { display: none !important; }</style>
+  <script>
+    /* Language: English needs nothing more, so assets/i18n.js (73 KB) only loads, before the page draws, when
+       another language is chosen. (Settings always loads it: its language menu is built from it) */
+    window.Momento ||= {};   // (i18n.js used to be the first to make this; the page scripts expect it)
+    (() => { let l = 'en'; try { l = localStorage.getItem('momento-lang') || 'en'; } catch (e) {} l = new URLSearchParams(location.search).get('lang') || l; if (l !== 'en') document.write('<script src="assets/i18n.js"><\/script>'); })();
+  </script>
+  <script src="assets/api.js"></script>
+  <script src="assets/extras.js" defer></script>
+  <script src="assets/crop.js" defer></script>
+  <script src="assets/inbox.js" defer></script>
+  <script src="assets/pickers.js" defer></script>
+  <script src="assets/nearby.js" defer></script>
+  <script src="assets/guard.js"></script>
+  <script src="assets/qr.js" defer></script>
+  <script src="assets/album-settings.js" defer></script>
+  <script src="assets/event.js" defer></script>
+  <!-- @shared:boot (generated block; the same in index.html and albums.html) -->
+  <script>
+  // Runs before first paint, so the page never flashes the wrong theme
+  (() => {
+    const root = document.documentElement;
+    let pref = 'system';
+    try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
+    const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    root.dataset.theme = dark ? 'dark' : 'light';
+    root.dataset.themePref = pref;
+    window.__theme = { target: +dark, a: +dark, b: +dark };   // read by the silk shader
+
+    // Pages opened straight from the folder (file://) can't cross-fade into each other, so the page
+    // that was left marks it, and this one rises in instead (see "Leaving a page")
+    try {
+      if (sessionStorage.getItem('momento-pt') === '1') {
+        sessionStorage.removeItem('momento-pt');
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          root.classList.add('is-arriving');
+          setTimeout(() => root.classList.remove('is-arriving'), 900);
+        }
+      }
+    } catch (e) {}
+  
+    // The page intro plays once per tab session (and on ?intro). It is skipped for reduced motion, for
+    // links into a section (#faq) and when the page is reopened part-way down. Until it ends, a
+    // veil (#intro) covers the page; if the script that runs it never loads, the veil is lifted anyway
+    try {
+      const page = root.dataset.page, seen = sessionStorage.getItem('momento-intro-' + page);
+      if (page === 'home' && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\b/.test(location.search) || (!seen && !location.hash))) {
+        root.classList.add('intro-on');
+        setTimeout(() => {
+          if (!root.classList.contains('intro-on')) return;
+          root.classList.remove('intro-on');
+          document.dispatchEvent(new Event('momento:intro-reveal')); document.dispatchEvent(new Event('momento:intro-end'));
+        }, 10000);
+      }
+    } catch (e) {}
+  })();
+  </script>
+  <script>
+  // Albums you create, join or remove, kept in this browser (localStorage) so every page agrees.
+  // Pages hear about changes through a `momento:albums` event on document.
+  window.MomentoStore = (() => {
+    const MINE = 'momento-my-albums', GONE = 'momento-removed';
+    const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
+    const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+    const tell = (detail) => document.dispatchEvent(new CustomEvent('momento:albums', { detail }));
+    const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I to misread
+    return {
+      created: () => read(MINE, []),
+      removed: () => read(GONE, []),
+      find: (id) => read(MINE, []).find((a) => a.id === id) || null,
+      findCode: (code) => read(MINE, []).find((a) => a.code.replace('-', '') === code.replace('-', '')) || null,
+      add(a) { write(MINE, [a, ...read(MINE, []).filter((x) => x.id !== a.id)]); tell({ type: 'add', album: a }); },
+      // Albums made here are dropped; the sample albums are remembered as removed
+      remove(id) {
+        const list = read(MINE, []), hit = list.find((x) => x.id === id) || null;
+        if (hit) write(MINE, list.filter((x) => x.id !== id));
+        else write(GONE, [...new Set([...read(GONE, []), id])]);
+        tell({ type: 'remove', id });
+        return hit;
+      },
+      restore(id, saved) {
+        if (saved) write(MINE, [saved, ...read(MINE, []).filter((x) => x.id !== id)]);
+        else write(GONE, read(GONE, []).filter((x) => x !== id));
+        tell({ type: 'restore', id, album: saved });
+      },
+      code() {
+        const pick = () => CHARS[Math.floor(Math.random() * CHARS.length)];
+        return `${pick()}${pick()}${pick()}-${pick()}${pick()}${pick()}${pick()}`;
+      },
+    };
+  })();
+  </script>
+  <!-- /@shared:boot -->
+  <title>Support | Momento</title>
+  <meta name="description" content="Quick answers, and a way to contact the Momento team.">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <link rel="canonical" href="https://hexarch.org/support.html">
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Support | Momento">
+  <meta property="og:description" content="Quick answers, and a way to contact the Momento team.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta property="og:url" content="https://hexarch.org/support.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Support | Momento">
+  <meta name="twitter:description" content="Quick answers, and a way to contact the Momento team.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Same palette, type, glass, cursor and silk as the landing page (index.html) */
+    :root {
+      --fog: #ECEAF0;
+      --paper: #F8F7FA;
+      --dusk: #2E2C3A;
+      --slate: #5C596B;
+      --stone: #6F6B7D;
+      --copper: #9A603D;
+      --blush: #E6CDD6;
+      --lavender: #D9D0EA;
+      --tide: #6F9896;
+      --line: #D6D2DE;
+      --surface: #FFFFFF;
+      --font-main: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
+      --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+      --out: cubic-bezier(0.16, 1, 0.3, 1);
+      /* Spacing tokens */
+      --s1: .5rem; --s2: 1rem; --s3: 1.5rem; --s4: 2.5rem; --s5: 4rem; --s6: 6.5rem;
+    }
+
+    html { background: radial-gradient(120% 80% at 20% 10%, #FFF8EC, transparent 55%), linear-gradient(160deg, #EDECF2, #C9D0E4) fixed; }
+    body { margin: 0; overflow-x: hidden; font-family: var(--font-main); color: var(--dusk); -webkit-font-smoothing: antialiased; }
+
+    /* ---------- Background ---------- */
+    .bg { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
+    .grain {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .3;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .48 0 0 0 0 .55 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ---------- Cursor: droplet, with a thin ring over anything clickable ---------- */
+    /* (Never while a popup is open: the dot is drawn under it, so the normal pointer shows instead) */
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])), .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) * { cursor: none !important; }
+    .cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: transform; }
+    .has-cursor.cursor-seen:not(.cursor-off):not(:has(dialog[open])) .cursor { opacity: 1; }
+    .cursor span {
+      position: absolute; left: 0; top: 0; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%;
+      background: var(--dusk);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.5), 0 0 7px 1px rgba(188,178,236,.4);
+      transition: width .4s var(--spring), height .4s var(--spring), box-shadow .3s ease;
+    }
+    .cursor::before {
+      content: ""; position: absolute; left: 0; top: 0; width: 28px; height: 28px; translate: -50% -50%; border-radius: 50%;
+      box-shadow: 0 0 0 1.5px rgba(255,255,255,.9), inset 0 0 0 1.5px #2E2C3A, 0 0 8px rgba(188,178,236,.55);
+      opacity: 0; scale: .4;
+      transition: opacity .2s ease, scale .4s var(--spring);
+    }
+    .cursor-hover .cursor::before, .cursor-drag .cursor::before { opacity: 1; scale: 1; }
+    .cursor-drag .cursor::before { scale: 1.4; }
+    .cursor-hover .cursor span, .cursor-drag .cursor span { width: 6px; height: 6px; }
+    .cursor-down .cursor span { width: 8px; height: 8px; }
+    .cursor-hover.cursor-down .cursor::before, .cursor-drag.cursor-down .cursor::before { scale: .78; }
+
+    /* (The glass recipe for .glass and .panel lives in assets/glass.css) */
+
+    /* ---------- Header ---------- */
+    .header {
+      position: fixed; top: 0; z-index: 100; width: 100%; box-sizing: border-box;
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;
+      padding: 1.6rem 4%; pointer-events: none;
+    }
+    .header > * { pointer-events: auto; }
+    .header::before {
+      content: ""; position: absolute; inset: 0 0 -2.5rem; z-index: -1; pointer-events: none;
+      opacity: 0; transition: opacity .4s ease;
+    }
+    .header.is-veiled::before { opacity: 1; }
+    .brand { justify-self: start; display: flex; align-items: center; gap: .6rem; height: 2.95rem; color: var(--dusk); text-decoration: none; border-radius: 10px; }
+    .brand svg.glyph { width: 1.9rem; height: 1.9rem; transition: transform .35s var(--spring); }
+    @media (hover: hover) { .brand:hover svg.glyph { transform: scale(1.08) rotate(-4deg); } }
+    .brand:active svg.glyph { transform: scale(.94); }
+    .brand-word { display: block; height: 1.3rem; aspect-ratio: 9217 / 1726; color: var(--dusk); }
+    .brand:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .nav { display: flex; gap: .25rem; padding: .35rem; }
+    .nav-item {
+      position: relative; z-index: 1; color: var(--slate); text-decoration: none;
+      font-size: .88rem; font-weight: 600; padding: .6rem 1.15rem; border-radius: 100px; white-space: nowrap;
+      transition: background-color .3s ease, color .3s ease;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.45); color: var(--dusk); }
+    .nav-item:active { background: rgba(255,255,255,.7); }
+    .nav-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .nav-item[aria-current="page"] { color: var(--dusk); background: var(--surface); box-shadow: inset 0 0 0 .5px #fff, 0 1px 2px rgba(46,44,58,.08), 0 4px 12px rgba(46,44,58,.1); }
+    /* Home is a link back to the home page; the small arrow beside it opens its sections */
+    .nav-wrap { position: relative; }
+    .nav-split { display: inline-flex; align-items: center; border-radius: 100px; }
+    .nav-split .nav-item { padding-right: .3rem; }
+    .nav-caret { display: grid; place-items: center; width: 2rem; height: 2rem; margin-right: .3rem; padding: 0; border-radius: 50%; color: var(--slate); cursor: pointer; }
+    .nav-caret:hover { color: var(--dusk); }
+
+
+    .nav-caret svg { transition: transform .45s var(--spring); }
+    .nav-caret[aria-expanded="true"] svg { transform: rotate(180deg); }
+    .nav-menu { position: absolute; top: calc(100% + .6rem); left: 0; z-index: 2; min-width: 15rem;
+      display: grid; padding: .4rem; --radius: 24px; transform-origin: 2.5rem top;
+      opacity: 0; transform: translateY(-8px) scale(.94); pointer-events: none; visibility: hidden; transition: opacity .25s ease, transform .5s var(--spring); }
+    .nav-menu.is-open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity .25s ease, transform .5s var(--spring); }
+    .menu-item {
+      position: relative; z-index: 1; padding: .75rem 1rem; border-radius: 16px; color: var(--slate); text-decoration: none;
+      font-size: .92rem; font-weight: 600; transition: color .25s ease, background-color .25s ease;
+    }
+    .menu-item:hover { color: var(--dusk); background: rgba(255,255,255,.6); }
+    .menu-item:active { background: #fff; }
+    .menu-item:focus-visible { outline: 2px solid var(--dusk); outline-offset: -2px; }
+    .me-slot { justify-self: end; }
+
+    /* ---------- Buttons: colour floods in from the cursor, label rolls ---------- */
+    .btn {
+      position: relative; overflow: hidden; isolation: isolate;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 3rem; padding: 0 1.4rem; border: none; border-radius: 100px;
+      font: 650 .95rem var(--font-main); text-decoration: none; cursor: pointer;
+      transform: translate(var(--bx, 0px), var(--by, 0px)) scale(var(--press, 1));
+      transition: transform .5s var(--out), color .35s ease, box-shadow .25s ease;
+    }
+    .btn:active { --press: .96; }
+    .btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 3px; }
+    .btn-fill {
+      position: absolute; z-index: -1; left: var(--fx, 50%); top: var(--fy, 50%);
+      width: 260%; aspect-ratio: 1; border-radius: 50%; background: var(--fill);
+      transform: translate(-50%, -50%) scale(0); transition: transform .6s var(--out);
+    }
+    @media (hover: hover) { .btn:hover .btn-fill { transform: translate(-50%, -50%) scale(1); } }
+    .btn-label { display: inline-flex; align-items: flex-start; height: 1.3em; overflow: hidden; }
+    .roll { display: flex; flex-direction: column; flex: none; transition: transform .55s var(--out); }
+    .roll > span { display: inline-flex; flex: none; align-items: center; gap: .5rem; height: 1.3em; white-space: nowrap; }
+    @media (hover: hover) { .btn:hover .roll { transform: translateY(-50%); } }
+    .btn-dark { color: var(--paper); --fill: var(--copper); }
+    .btn-pearl { color: var(--dusk); --fill: var(--dusk); }
+    .btn-pearl:hover, .btn-light:hover { color: var(--paper); }
+    .btn-light { color: var(--dusk); --fill: var(--dusk); }
+
+    /* ---------- Page ---------- */
+    .page-wrap { position: relative; z-index: 1; }
+    .page { position: relative; z-index: 1; width: min(1200px, 92%); margin: 0 auto; }
+
+    /* Opening: the headline rises out of a mask, then the rest follows in order */
+    .intro { opacity: 0; translate: 0 18px; transition: opacity .8s ease var(--d, 0s), translate 1s var(--out) var(--d, 0s); }
+    .is-ready .intro { opacity: 1; translate: 0 0; }
+    /* Sized like the title (so em = the title's size). Clips only above and below, for the rise;
+       never the sides, so the glow behind the letters fades out softly */
+    .mask { display: block; overflow: visible; clip-path: inset(0 -100vw); padding: .45em 0 .5em; margin: -.45em 0 -.5em; }
+    .rise { display: block; translate: 0 calc(100% + 1.1em); transition: translate 1.2s var(--out) var(--d, .05s); }
+    .is-ready .rise, .is-in .rise { translate: 0 0; }
+
+    /* Ink: lavender light rising from the bottom of every line, inside the letters.
+       ::before carries the fill, ::after a brighter copy that fades in on hover.
+       Each line gets its own gradient tile, shifted down .08em (--o) so the seam falls in the gap
+       between one line's descenders and the next line's cap tops, letting the light reach the base.
+       A brighter glint just above the base gives the lit part its shine (white in dark mode).
+       Light mode: the pressed-ink palette (dusk into slate-lavender into a soft silver-lavender glint)
+       under a light emboss; the glint sits just above the base and fades softly into the descenders. */
+    .ink { position: relative; color: transparent; text-shadow: 0 -1px 0 rgba(30,24,40,.35), 0 1px 0 rgba(255,255,255,.5), 0 2px 8px rgba(130,140,200,.22); }
+    .ink::before, .ink::after {
+      content: attr(data-text); position: absolute; top: -.5em; bottom: -.5em; left: 0; right: 0; padding-top: .5em;
+      white-space: pre-line; text-shadow: none; color: transparent; -webkit-text-stroke: 0; pointer-events: none;
+      background: var(--fill) 0 calc(.5em + var(--o, .08em)) / 100% var(--lh, 1em) repeat-y;
+      -webkit-background-clip: text; background-clip: text;
+    }
+    .ink::before { --fill: linear-gradient(to bottom, var(--dusk) 0%, var(--dusk) 40%, #383A55 50%, #4C4F72 58%, #6670A6 66%, #8C97C8 72%, #B4BCE2 77%, #C9CFEC 80%, #B4BCE2 84%, #9AA4D0 89%, #8A95C4 95%, #7D88BA 100%); }
+    .ink::after {
+      --fill: linear-gradient(to bottom, var(--dusk) 0%, var(--dusk) 26%, #383A55 36%, #4C4F72 46%, #6670A6 56%, #8C97C8 64%, #B4BCE2 71%, #CDD3EE 76%, #B8C0E3 81%, #9AA4D0 88%, #8A95C4 95%, #7D88BA 100%);
+      opacity: 0; transition: opacity .6s ease;
+    }
+    .ink:hover::after { opacity: 1; }
+
+    /* ---------- Support ----------
+       A short head, the quick answers in the site's accordion, then a message form beside a few other
+       ways to reach us. Groups and rows are the settings page's, so the two pages feel like one. */
+    .sp-head { padding: 8.2rem 0 var(--s4); }
+    .mask, .sp-title { font-size: clamp(3rem, 6.4vw, 5.4rem); }
+    .sp-title { --lh: .98em; margin: 0; line-height: .98; font-weight: 700; letter-spacing: -.05em; }
+    .sp-lede { max-width: 32rem; margin: var(--s3) 0 0; color: var(--slate); font-size: 1.12rem; line-height: 1.6; }
+    .sp-cols { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--s4) var(--s3); align-items: start; margin: var(--s4) 0 var(--s5); }
+
+    /* Each group rises in as the page opens */
+    .s-group { --d: .2s; opacity: 0; translate: 0 22px; transition: opacity .7s ease var(--d), translate .9s var(--out) var(--d); }
+    .is-ready .s-group { opacity: 1; translate: 0 0; }
+    .s-group > h2 { margin: 0 0 .65rem; padding: 0 .55rem; color: var(--slate); font-size: .88rem; font-weight: 650; letter-spacing: -.005em; }
+    .s-list { --radius: 28px; display: grid; margin: 0; padding: .3rem 0; border-radius: var(--radius); }
+
+    .s-row {
+      position: relative; display: flex; align-items: center; gap: .95rem; width: 100%; box-sizing: border-box; min-height: 3.7rem; padding: .8rem 1.2rem;
+      border: none; background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; border-radius: 22px;
+      transition: background-color .25s ease;
+    }
+    .s-row + .s-row::before { content: ""; position: absolute; top: 0; left: 4.3rem; right: 1.2rem; height: 1px; background: rgba(46, 44, 58, .09); }
+    .s-row:hover { background: rgba(46, 44, 58, .04); }
+    .s-row:active { background: rgba(46, 44, 58, .07); }
+    .s-row:focus-visible { outline: 2px solid var(--dusk); outline-offset: -3px; }
+    .s-row.is-plain { cursor: default; }
+    .s-row.is-plain:hover, .s-row.is-plain:active { background: none; }
+    .s-chip {
+      display: grid; place-items: center; flex: none; width: 2.15rem; height: 2.15rem; border-radius: 11px; background: var(--c, #C9C0E2); color: #2A2B48;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 3px 8px -4px rgba(60, 50, 90, .35);
+    }
+    .s-text { display: grid; flex: 1; gap: .12rem; min-width: 0; }
+    .s-text b { font-size: .97rem; font-weight: 650; letter-spacing: -.012em; }
+    .s-text small { color: var(--slate); font-size: .85rem; line-height: 1.4; }
+    .s-go { flex: none; color: var(--stone); transition: translate .35s var(--spring), color .25s ease; }
+    @media (hover: hover) { .s-row:hover .s-go { translate: 3px 0; color: var(--dusk); } }
+    .btn-sm { min-height: 2.5rem; padding: 0 1.15rem; font-size: .88rem; }
+
+    /* Quick answers: the home page's accordion */
+    .sp-faq::after { display: none; }   /* no pointer-following light on the FAQ */
+    .sp-faq { padding: .6rem clamp(1.2rem, 3vw, 2.2rem); border-radius: var(--r-card); }
+    .qa + .qa { box-shadow: inset 0 1px 0 rgba(46,44,58,.08); }
+    .qa button { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; padding: 1.1rem 0; border: none; background: none; color: var(--dusk); font: 650 1.04rem var(--font-main); letter-spacing: -.01em; text-align: left; cursor: pointer; }
+    .qa button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; border-radius: 8px; }
+    .qa i { position: relative; flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; }
+    .qa i::before, .qa i::after { content: ""; position: absolute; left: 50%; top: 50%; width: .75rem; height: 2px; margin: -1px 0 0 -.375rem; border-radius: 1px; background: var(--dusk); transition: rotate .4s var(--spring); }
+    .qa i::after { rotate: 90deg; }
+    .qa button[aria-expanded="true"] i::after { rotate: 0deg; }
+    .qa-a { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .5s cubic-bezier(.2,.8,.2,1); }
+    .qa-a p { overflow: hidden; margin: 0; max-width: 42rem; line-height: 1.6; color: var(--slate); }
+    .qa.is-open .qa-a { grid-template-rows: 1fr; }
+    .qa.is-open .qa-a p { padding-bottom: 1.2rem; }
+
+    /* The message form, and what replaces it once it is sent */
+    .sp-card { gap: 0; padding: 1.4rem 1.4rem 1.3rem; }
+    .sp-card form { transition: opacity .25s ease, translate .25s ease; }
+    .sp-card form.is-out { opacity: 0; translate: 0 -8px; }
+    .sp-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .8rem; }
+    .sp-label { display: block; margin: .1rem 0 .4rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
+    .sp-seg { margin: 0 0 .9rem; }
+    .sp-seg button { padding: .55rem .4rem; }
+    .sp-note { min-height: 1.2rem; margin: .1rem 0 .6rem; color: var(--slate); font-size: .85rem; font-weight: 500; }
+    .sp-note.is-error { color: #9A3D3D; }
+    .sp-done { display: grid; justify-items: start; gap: .55rem; padding: .5rem .1rem .3rem; }
+    .sp-done[hidden] { display: none; }
+    .sp-done-ic { display: grid; place-items: center; width: 3.1rem; height: 3.1rem; border-radius: 50%; background: var(--copper); color: #fff; scale: .4; opacity: 0; transition: scale .6s var(--spring), opacity .3s ease; }
+    .sp-done.is-in .sp-done-ic { scale: 1; opacity: 1; }
+    .sp-done h3 { margin: .5rem 0 0; font-size: 1.55rem; line-height: 1.15; letter-spacing: -.03em; outline: none; }
+    .sp-done p { margin: 0; max-width: 28rem; color: var(--slate); line-height: 1.55; }
+    .sp-done .btn { margin-top: .7rem; }
+    :root[data-theme="dark"] .sp-done-ic { color: var(--fog); }
+    :root[data-theme="dark"] .sp-note.is-error { color: #F0A3A3; }
+    /* The field the message is about gets a red ring until it is edited */
+    .acct-field :is(input, textarea)[aria-invalid="true"], .acct-field :is(input, textarea)[aria-invalid="true"]:hover { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
+    .acct-field :is(input, textarea)[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 2px #9A3D3D, 0 0 0 4px rgba(154, 61, 61, .18); }
+    :root[data-theme="dark"] .acct-field :is(input, textarea)[aria-invalid="true"], :root[data-theme="dark"] .acct-field :is(input, textarea)[aria-invalid="true"]:hover { box-shadow: inset 0 0 0 1.5px #F0A3A3; }
+    :root[data-theme="dark"] .acct-field :is(input, textarea)[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 2px #F0A3A3, 0 0 0 4px rgba(240, 163, 163, .18); }
+
+    @media (max-width: 900px) {
+      /* The header at phone width: the wordmark goes, the nav tightens (same as the other pages) */
+      .brand-word { display: none; }
+      .header { display: flex; justify-content: space-between; padding: 1rem 3%; gap: .5rem; }
+      .nav-item { padding: .55rem .85rem; font-size: .82rem; }
+      .sp-cols { grid-template-columns: 1fr; }
+      .sp-head { padding-top: 6.5rem; }
+    }
+    @media (max-width: 600px) {
+      .s-row { padding: .75rem 1rem; gap: .8rem; }
+      .s-row + .s-row::before { left: 3.8rem; right: 1rem; }
+      .sp-card { padding: 1.1rem; }
+      .sp-pair { grid-template-columns: 1fr; }
+      .qa button { font-size: .98rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .s-group { opacity: 1; translate: none; transition: none; }
+      .qa i::before, .qa i::after, .qa-a, .s-go, .sp-card form { transition: none; }
+      .sp-done-ic { scale: 1; opacity: 1; transition: none; }
+    }
+
+    /* ---------- Phones: keep it simple and keep things apart ----------
+       The background thread is dropped (it crossed text on a narrow screen), and the header
+       always gets its soft veil so content never scrolls up underneath the nav */
+    @media (max-width: 700px) {
+      .trail { display: none; }
+      .header::before { opacity: 1; }
+    }
+    @media (max-width: 420px) {
+      .header { gap: .3rem; padding-left: 12px; padding-right: 12px; }
+      .nav { gap: .1rem; padding: .25rem; }
+      .nav-item { padding: .5rem .7rem; }
+      .brand svg.glyph { width: 1.6rem; height: 1.6rem; }
+    }
+
+    /* ---------- Confirmations ----------
+       A toast answers every action (with Undo where something was removed), a short dialog asks
+       before anything is deleted, and creating an album ends on its own "created" screen */
+    .m-toast {
+      position: fixed; inset: auto auto 1.6rem 50%; z-index: 130; margin: 0; border: 1.5px solid transparent; overflow: visible;
+      -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
+      display: flex; align-items: center; gap: .75rem; width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+      padding: .55rem .55rem .55rem .6rem; border-radius: 100px; color: var(--dusk); font: 500 .92rem var(--font-main);
+      translate: -50% 0;
+    }
+    .m-toast:not(.has-act) { padding-right: 1.25rem; }
+    .m-toast:popover-open { display: flex; }
+    .m-toast-ic { display: grid; place-items: center; flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
+    .m-toast.is-danger .m-toast-ic { background: #9A3D3D; color: #fff; }
+    .m-toast-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+    .m-toast-text b { font-weight: 650; }
+    .m-toast-text small { color: var(--slate); font-size: .82rem; line-height: 1.35; overflow-wrap: break-word; }   /* wraps: a cut-off message can't be read */
+    .m-toast-text small:empty { display: none; }
+    .m-toast-act { flex: none; margin-left: .35rem; padding: .6rem 1.05rem; border-radius: 100px;
+      color: var(--dusk); font: 650 .86rem var(--font-main); cursor: pointer; transition: transform .3s var(--spring); }
+    .m-toast-act[hidden] { display: none; }
+
+
+
+
+    .m-view[hidden] { display: none; }
+    .m-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .75rem; }
+    .m-row2 .acct-field span i { font-style: normal; font-weight: 500; color: var(--stone); }
+    .acct-primary.is-danger { background: #9A3D3D; color: #fff; }
+    .acct-primary.is-danger:hover { background: #85302F; }
+    .acct-primary:disabled { opacity: .5; cursor: default; transform: none; }
+    .m-warn-ic { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: 1.1rem; border-radius: 50%; background: rgba(154, 61, 61, .1); color: #9A3D3D; }
+    .m-warn-ic[hidden] { display: none; }
+    .m-done { display: grid; justify-items: center; text-align: center; padding-top: .4rem; }
+    .m-done h2 { padding-right: 0; outline: none; }
+    .m-done .acct-sub { max-width: 22rem; }
+    .m-done-ic { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; margin-bottom: 1rem; border-radius: 50%; background: var(--dusk); color: var(--paper); }
+    .m-done .acct-actions { width: 100%; }
+    .m-done .m-showqr { width: 100%; margin: .2rem 0 .6rem; }
+    .m-code {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; box-sizing: border-box;
+      margin: 0 0 1.2rem; padding: .75rem .75rem .75rem 1.1rem; border-radius: 18px; background: rgba(46, 44, 58, .06); text-align: left;
+    }
+    .m-code span { display: flex; flex-direction: column; gap: .1rem; }
+    .m-code small { color: var(--slate); font-size: .78rem; font-weight: 600; }
+    .m-code b { font-size: 1.4rem; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+    .m-code .m-link { font-style: normal; font-size: .82rem; color: var(--slate); word-break: break-all; }
+    .m-copy { flex: none; padding: .6rem 1rem; border-radius: 100px; color: var(--dusk);
+      font: 650 .86rem var(--font-main); cursor: pointer; transition: transform .3s var(--spring); }
+
+
+
+    .m-del { margin-top: .9rem; padding: .55rem 1rem; border-radius: 100px; color: #9A3D3D;
+      font: 600 .88rem var(--font-main); cursor: pointer; }
+
+
+
+    :root[data-theme="dark"] .m-toast-act, :root[data-theme="dark"] .m-code { background: rgba(255, 255, 255, .08); }
+
+
+    :root[data-theme="dark"] .m-del { color: #F0A3A3; }
+    :root[data-theme="dark"] .m-toast.is-danger .m-toast-ic { background: rgba(240, 163, 163, .18); color: #F0A3A3; }
+    :root[data-theme="dark"] .acct-primary.is-danger { background: #F0A3A3; color: #2A1416; }
+    :root[data-theme="dark"] .acct-primary.is-danger:hover { background: #F5B8B8; }
+
+    :root[data-theme="dark"] .m-warn-ic { background: rgba(240, 163, 163, .12); color: #F0A3A3; }
+    :root[data-theme="dark"] .acct-field input[type="date"] { color-scheme: dark; }
+    @media (max-width: 480px) {
+      .m-row2 { grid-template-columns: 1fr; }
+      .m-toast { bottom: 1rem; }
+    }
+  </style>
+  <!-- @shared:css (shared stylesheet: assets/glass.css) -->
+  <link rel="stylesheet" href="assets/glass.css">
+  <link rel="stylesheet" href="assets/touch.css">
+  <!-- /@shared:css -->
+</head>
+<body>
+  <canvas class="bg" id="bg" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="cursor" id="cursor" aria-hidden="true"><span></span></div>
+
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+    <symbol id="glyph-album" viewBox="165.5 161.5 700 700">
+      <g fill="currentColor" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+        <g fill="none" stroke-width="22">
+          <rect x="197" y="328" width="130" height="40" rx="20" />
+          <rect x="197" y="432" width="130" height="40" rx="20" />
+          <rect x="197" y="536" width="130" height="40" rx="20" />
+          <rect x="197" y="640" width="130" height="40" rx="20" />
+        </g>
+        <rect x="262" y="232" width="560" height="559" rx="88" fill="none" stroke-width="44" />
+        <polygon points="428,331 658,331 543,468" stroke-width="20" />
+        <circle cx="542" cy="524" r="27" stroke="none" />
+        <polygon points="361,691 457,557 542,616 627,557 726,691" stroke-width="20" />
+      </g>
+    </symbol>
+    <symbol id="wordmark" viewBox="-81.92 -1601.72 9217 1726">
+      <g transform="scale(1 -1)">
+        <defs>
+          <linearGradient id="wm-sky" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#EED8D2"/><stop offset="1" stop-color="#B98AA8"/></linearGradient>
+          <clipPath id="wm-up"><rect x="7842.7" y="586.7" width="1164.0" height="582.0"/></clipPath>
+          <clipPath id="wm-dn"><rect x="7842.7" y="-27.0" width="1164.0" height="550.3"/></clipPath>
+        </defs>
+        <circle cx="8424.7" cy="555.0" r="577.0" fill="url(#wm-sky)" clip-path="url(#wm-up)"/>
+        <circle cx="8424.7" cy="555.0" r="577.0" fill="#6F9896" clip-path="url(#wm-dn)"/>
+        <g fill="currentColor">
+          <path d="M135 0H438V703C438 815 430 1034 427 1215C480 1015 540 806 575 703L826 0H1083L1330 703C1365 809 1428 1026 1478 1227C1475 1039 1467 815 1467 703V0H1774V1490H1304L1066 806C1036 711 990 512 956 351C921 513 875 712 845 806L603 1490H135Z"/>
+          <path transform="translate(1815.8 0)" d="M628 -22C964 -22 1175 210 1175 554C1175 900 964 1132 628 1132C291 1132 81 900 81 554C81 210 291 -22 628 -22ZM628 214C468 214 387 360 387 555C387 753 468 896 628 896C788 896 870 752 870 555C870 360 788 214 628 214Z"/>
+          <path transform="translate(2979.7 0)" d="M128 0H428V676C428 810 509 884 615 884C717 884 789 814 789 705V0H1079V688C1079 805 1149 884 1263 884C1364 884 1440 823 1440 697V0H1741V754C1741 997 1589 1135 1384 1135C1230 1135 1088 1056 1025 884C973 1054 880 1135 737 1135C603 1135 478 1064 418 901L406 1118H128Z"/>
+          <path transform="translate(4756.5 0)" d="M633 -22C893 -22 1071 99 1126 285L854 336C822 250 743 204 638 204C487 204 385 298 378 481H1143V565C1143 947 910 1132 618 1132C291 1132 81 898 81 553C81 200 291 -22 633 -22ZM380 669C392 807 478 906 621 906C760 906 839 815 854 669Z"/>
+          <path transform="translate(5884.4 0)" d="M428 647C428 795 517 881 645 881C771 881 847 798 847 659V0H1147V711C1147 973 995 1132 763 1132C591 1132 478 1043 415 887L411 1118H128V0H428Z"/>
+          <path transform="translate(7067.2 0)" d="M683 1118H474V1384H174V1118H20V889H174V301C174 96 296 -16 520 -16C580 -16 647 -9 714 11L671 236C649 230 599 223 576 223C503 223 474 256 474 327V889H683Z"/>
+        </g>
+      </g>
+    </symbol>
+  </svg>
+
+  <header class="header" id="header">
+    <a href="index.html" class="brand" aria-label="Momento, home">
+      <svg class="glyph" aria-hidden="true"><use href="#glyph-album" /></svg>
+      <svg class="brand-word" aria-hidden="true"><use href="#wordmark" /></svg>
+    </a>
+    <div class="nav-wrap" id="navWrap">
+      <nav class="nav glass" aria-label="Main">
+        <span class="nav-split">
+          <a href="index.html" class="nav-item nav-home" aria-label="Home"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.4 12 4l8 6.4V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.2H9v5.2H5.5A1.5 1.5 0 0 1 4 19Z"/></svg><span class="nav-label">Home</span></a>
+          <button class="nav-caret" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Show the sections of the home page"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        </span>
+        <a href="albums.html" class="nav-item nav-albums" aria-label="My albums"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="13.5" height="13" rx="2.2"/><path d="M7.5 3.8h10.3a2.7 2.7 0 0 1 2.7 2.7V16"/><path d="m3.8 17 3.7-3.7 3 3 1.8-1.8 4.4 4.4"/></svg><span class="nav-label">My albums</span></a>
+        <a href="events.html" class="nav-item nav-social" aria-label="Social"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.5" r="2.5"/><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4"/></svg><span class="nav-label">Social</span></a>
+        <a href="settings.html" class="nav-item nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-label">Settings</span></a>
+      </nav>
+      <div class="nav-menu glass" id="navMenu" aria-label="Home page sections">
+        <a href="index.html#how-it-works" class="menu-item">How it works</a>
+        <a href="index.html#features" class="menu-item">Features</a>
+        <a href="index.html#quality" class="menu-item">Full quality</a>
+        <a href="index.html#faq" class="menu-item">FAQ</a>
+      </div>
+    </div>
+    <!-- The account chip and its menu are built here by the shared script -->
+    <div class="me-slot" data-acct-host data-acct-always data-acct-logout="index.html"></div>
+  </header>
+
+  <div class="page-wrap" id="pageWrap">
+    <div class="trail" id="trail" data-trail data-pad="10" data-avoid=".sp-head > *, .panel, .site-foot" aria-hidden="true"></div>
+    <main class="page">
+
+      <section class="sp-head">
+        <span class="mask"><h1 class="sp-title ink rise" data-text="How can we help?">How can we help?</h1></span>
+        <p class="sp-lede intro" style="--d: .3s">Quick answers first. If you’re still stuck, send us a message and a person will reply within a day.</p>
+      </section>
+
+      <section class="s-group" style="--d: .25s" aria-labelledby="g-faq">
+        <h2 id="g-faq">Quick answers</h2>
+        <div class="panel sp-faq">
+          <div class="qa">
+            <button type="button" aria-expanded="false"><span>How do guests join an album?</span><i></i></button>
+            <div class="qa-a"><p>They point their phone camera at the host’s QR code and the album opens. Signing up lets them add their own photos.</p></div>
+          </div>
+          <div class="qa">
+            <button type="button" aria-expanded="false"><span>Who can see the photos?</span><i></i></button>
+            <div class="qa-a"><p>Only the people who joined the album. The host decides whether guests can see the gallery while the event is on.</p></div>
+          </div>
+          <div class="qa">
+            <button type="button" aria-expanded="false"><span>How long does an album stay open?</span><i></i></button>
+            <div class="qa-a"><p>Uploads and downloads stay open for a while after the event, then the album is kept as an archive. Download your photos before it closes.</p></div>
+          </div>
+          <div class="qa">
+            <button type="button" aria-expanded="false"><span>Does it work with real cameras?</span><i></i></button>
+            <div class="qa-a"><p>Yes. Sony ARW, Canon CR3, iPhone HEIC and ProRAW files upload as untouched originals, and camera files go first.</p></div>
+          </div>
+          <div class="qa">
+            <button type="button" aria-expanded="false"><span>Can I remove a photo I added?</span><i></i></button>
+            <div class="qa-a"><p>Yes. Open the album, choose your photo and pick Delete. You can only remove the photos you added yourself.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="sp-cols">
+        <section class="s-group" style="--d: .31s" aria-labelledby="g-msg" id="msgCard">
+          <h2 id="g-msg">Send us a message</h2>
+          <div class="panel s-list sp-card">
+            <form id="supportForm" novalidate>
+              <div class="sp-pair">
+                <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name" placeholder="For example Priya Shah"></label>
+                <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com"></label>
+              </div>
+              <span class="sp-label" id="topicLabel">What is it about?</span>
+              <div class="acct-seg sp-seg" id="topicSeg" role="radiogroup" aria-labelledby="topicLabel">
+                <span class="acct-seg-pill" aria-hidden="true"></span>
+                <button type="button" role="radio" aria-checked="true" data-topic="Joining an album">Joining</button>
+                <button type="button" role="radio" aria-checked="false" data-topic="Uploads">Uploads</button>
+                <button type="button" role="radio" aria-checked="false" data-topic="Something else">Other</button>
+              </div>
+              <label class="acct-field"><span>Your message</span><textarea name="message" placeholder="Tell us what happened and what you expected."></textarea></label>
+              <p class="sp-note" id="formNote" role="status"></p>
+              <button class="btn btn-dark btn-sm" type="submit">Send message</button>
+            </form>
+            <div class="sp-done" id="formDone" hidden>
+              <span class="sp-done-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span>
+              <h3 id="doneTitle" tabindex="-1">Message sent</h3>
+              <p>We’ll reply to <b id="doneMail"></b> within a day. Check your spam folder if you don’t see it.</p>
+              <button class="btn btn-light btn-sm" type="button" id="sendAnother">Send another</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="s-group" style="--d: .37s" aria-labelledby="g-ways">
+          <h2 id="g-ways">Other ways to reach us</h2>
+          <div class="panel s-list">
+            <a class="s-row" href="mailto:support@hexarch.org"><span class="s-chip" style="--c:#C6DEDA"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></svg></span><span class="s-text"><b>Email support</b><small>support@hexarch.org</small></span><svg class="s-go" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+            <button class="s-row" type="button" id="openHelp"><span class="s-chip" style="--c:#C9C0E2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/></svg></span><span class="s-text"><b>Help and support</b><small>Open the help window</small></span><svg class="s-go" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+            <a class="s-row" href="settings.html"><span class="s-chip" style="--c:#EBDCCB"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></span><span class="s-text"><b>Your settings</b><small>Uploads, privacy and notifications</small></span><svg class="s-go" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+            <div class="s-row is-plain"><span class="s-chip" style="--c:#E6CDD6"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="s-text"><b>Reply time</b><small>Within a day, Monday to Friday</small></span></div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="site-foot" data-site-foot></footer>
+    </main>
+  </div>
+
+  <script>
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const finePointer = matchMedia('(pointer: fine)').matches;
+    const root = document.documentElement;
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+    const easeOut = (v) => 1 - Math.pow(1 - v, 3);
+    const OUT = 'cubic-bezier(.16, 1, .3, 1)';
+
+    // ---- Shared pointer state and cursor ----
+    const pointer = { x: innerWidth / 2, y: innerHeight / 2, active: false, ix: 0, iy: 0 };
+    let vw = innerWidth, vh = innerHeight;
+    addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
+    const cursorEl = document.getElementById('cursor');
+    const useCursor = finePointer && !still;
+    // The dot starts where the mouse was on the last page (clicking a link doesn't move the mouse),
+    // not in the middle of the screen. Until the mouse has been seen, the dot stays hidden and the
+    // normal pointer shows
+    try {
+      const at = JSON.parse(sessionStorage.getItem('momento-pointer') || 'null');
+      if (at && Date.now() - at.t < 15000 && at.x <= innerWidth && at.y <= innerHeight) {
+        pointer.x = at.x; pointer.y = at.y;
+        document.documentElement.classList.add('cursor-seen');
+      }
+    } catch (e) {}
+    addEventListener('pagehide', () => {
+      try { if (document.documentElement.classList.contains('cursor-seen')) sessionStorage.setItem('momento-pointer', JSON.stringify({ x: pointer.x, y: pointer.y, t: Date.now() })); } catch (e) {}
+    });
+    let rx = pointer.x, ry = pointer.y;
+    if (useCursor) root.classList.add('has-cursor');
+    // Touch, a pen, or Chrome's mobile preview (switched on without a reload) send no mouse moves
+    // between taps, so the bead would sit stuck beside the real touch point. Hide it and give the
+    // normal pointer back until a mouse moves again.
+    {
+      const fineMq = matchMedia('(pointer: fine)'), rootCl = document.documentElement.classList;
+      const sync = (e) => {
+        rootCl.toggle('cursor-off', !fineMq.matches || (!!e && e.pointerType !== 'mouse'));
+        if (e && e.pointerType === 'mouse') rootCl.add('cursor-seen');
+      };
+      addEventListener('pointermove', sync, { passive: true, capture: true });
+      addEventListener('pointerdown', sync, { passive: true, capture: true });
+      fineMq.addEventListener('change', () => sync());
+    }
+    addEventListener('pointermove', (e) => {
+      if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
+      else { rx = e.clientX; ry = e.clientY; }
+      pointer.x = e.clientX; pointer.y = e.clientY;
+      pointer.active = true;
+      if (useCursor) {
+        const el = e.target instanceof Element ? e.target : null;
+        root.classList.toggle('cursor-hover', !!el?.closest('a, button, input, textarea, .live-media'));
+      }
+    }, { passive: true });
+    root.addEventListener('pointerleave', () => { pointer.active = false; });
+    addEventListener('pointerdown', () => root.classList.add('cursor-down'));
+    addEventListener('pointerup', () => root.classList.remove('cursor-down'));
+
+    // ---- Living background: the same silk shader as the landing page ----
+    const canvas = document.getElementById('bg');
+    const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
+    // The silk is soft, so it is drawn into a modest buffer (about 300k pixels on any screen, at most half
+    // the screen size) that the browser scales up smoothly. The drift is slow, so redrawing about 30 times
+    // a second looks fluid. The background never moves with the scroll: it is fixed to the screen.
+    const LOW_POWER_SILK = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || !!navigator.connection?.saveData;
+    const SILK_PIXELS = LOW_POWER_SILK ? 90000 : 300000;
+    const flow = { t: 0, dirty: true, acc: 0 };
+    let renderFluid = () => {};
+    if (gl) {
+      const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
+      const frag = `
+        #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+        #else
+        precision mediump float;
+        #endif
+        uniform vec2 res;
+        uniform float t;
+        uniform vec3 c0, c1, c2, c3;   // the palette: fog, folds, sea glass, glints (eased between light and dark)
+        // Stable hash (no sin), so the noise doesn't break into blocks at lower precision
+        float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        float fbm(vec2 p) {
+          float s = 0.0, a = 0.5;
+          for (int i = 0; i < 3; i++) { s += a * noise(p); p = p * 2.02 + vec2(1.7, 9.2); a *= 0.5; }
+          return s;
+        }
+        void main() {
+          vec2 uv = gl_FragCoord.xy / res;
+          float asp = res.x / res.y;
+          vec2 p = vec2(uv.x * asp, 1.0 - uv.y);
+          p *= 1.25;
+          // Domain warping folds the noise into large soft ridges, like draped silk
+          vec2 q = vec2(fbm(p + vec2(0.0, t * 0.05)), fbm(p + vec2(5.2, 1.3) - t * 0.04));
+          vec2 r = vec2(fbm(p + 3.4 * q + vec2(1.7, 9.2) + t * 0.06), fbm(p + 3.4 * q + vec2(8.3, 2.8) - t * 0.05));
+          float f = fbm(p + 3.2 * r);
+          vec3 col = mix(c0, c1, smoothstep(0.46, 0.74, f));
+          col = mix(col, c2, smoothstep(0.62, 0.95, q.y) * 0.3);
+          // Soft cream light where the folds turn over
+          float edge = exp(-pow((f - 0.44) * 9.0, 2.0)) + 0.7 * exp(-pow((r.x - 0.6) * 8.0, 2.0)) + 0.5 * exp(-pow((f - 0.6) * 10.0, 2.0));
+          col = mix(col, c3, clamp(edge * 0.4 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
+          // A whisper of noise (about one colour step) stops the smooth fog from banding
+          col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+          gl_FragColor = vec4(col, 1.0);
+        }`;
+      const prog = gl.createProgram();
+      for (const [type, src] of [[gl.VERTEX_SHADER, vert], [gl.FRAGMENT_SHADER, frag]]) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        gl.attachShader(prog, s);
+      }
+      gl.bindAttribLocation(prog, 0, 'a');
+      gl.linkProgram(prog);
+      if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        const u = {};
+        for (const name of ['res', 't', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
+        // Pale blue fog, lavender-blue folds, sea glass and cream edges by day; by night the same
+        // silk goes near-black, with the glints turning to moonlit lavender
+        const PAL = {
+          light: [[.905, .918, .955], [.740, .775, .880], [.790, .865, .870], [1, .975, .925]],
+          dark:  [[.046, .042, .072], [.020, .018, .034], [.052, .062, .108], [.175, .152, .280]],
+        };
+        // The folds and fog darken first; the glints warm up a beat later, like lamps coming on
+        const THEME = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
+        const mixPal = (i, m) => PAL.light[i].map((v, c) => v + (PAL.dark[i][c] - v) * m);
+        const sizeCanvas = () => {
+          const s = Math.min(.5, Math.sqrt(SILK_PIXELS / Math.max(1, innerWidth * innerHeight)));
+          canvas.width = Math.max(1, Math.round(innerWidth * s));
+          canvas.height = Math.max(1, Math.round(innerHeight * s));
+          gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.uniform2f(u.res, canvas.width, canvas.height);
+          flow.dirty = true;
+        };
+        sizeCanvas();
+        // Resizing reallocates the buffer, so it waits until the window has settled. A small height-only
+        // change (a phone's address bar sliding away as you scroll) is ignored: the canvas just stretches
+        let sizedW = innerWidth, sizedH = innerHeight, resizeTimer = 0;
+        addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            if (innerWidth === sizedW && Math.abs(innerHeight - sizedH) < sizedH * .25) return;
+            sizedW = innerWidth; sizedH = innerHeight;
+            sizeCanvas();
+          }, 150);
+        });
+        renderFluid = (dt) => {
+          const k = (rate) => 1 - Math.exp(-dt * rate);
+          if (!still) flow.t += dt * 0.6;
+          // Ease toward the chosen theme (instantly with reduced motion)
+          const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
+          const settling = Math.abs(THEME.target - THEME.a) > .002 || Math.abs(THEME.target - THEME.b) > .002;
+          if (settling) {
+            THEME.a += (THEME.target - THEME.a) * fade; THEME.b += (THEME.target - THEME.b) * glow;
+            if (Math.abs(THEME.target - THEME.a) <= .002) THEME.a = THEME.target;
+            if (Math.abs(THEME.target - THEME.b) <= .002) THEME.b = THEME.target;
+            flow.dirty = true;
+          }
+          if (still && !flow.dirty) return;
+          // The drift is slow, so about 30 draws a second look fluid (fewer on low-power devices)
+          flow.acc += dt;
+          if (!flow.dirty && flow.acc < 1 / (LOW_POWER_SILK ? 24 : 30)) return;
+          flow.acc = 0; flow.dirty = false;
+          gl.uniform1f(u.t, flow.t);
+          gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
+          gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        };
+      }
+    }
+
+    // ---- Glass rim light follows the pointer ----
+    function lightUp(glass) {
+      glass.dataset.lit = '1';
+      glass.addEventListener('pointerenter', () => glass.style.setProperty('--shine', 1));
+      glass.addEventListener('pointerleave', () => glass.style.setProperty('--shine', 0));
+      glass.addEventListener('pointermove', (e) => {
+        const r = glass.getBoundingClientRect();
+        glass.style.setProperty('--mx', `${e.clientX - r.left}px`);
+        glass.style.setProperty('--my', `${e.clientY - r.top}px`);
+      });
+    }
+    document.querySelectorAll('.glass, .panel').forEach((g) => { if (!g.closest('.album')) lightUp(g); });
+
+    // Glass a script makes later (the account chip and menu, toasts, new cards) lights up the first time the pointer reaches it
+    document.addEventListener('pointerover', (e) => {
+      const g = e.target.closest?.('.glass, .panel');
+      if (!g || g.dataset.lit || g.closest('.album')) return;
+      lightUp(g); g.style.setProperty('--shine', 1);
+    }, { passive: true });
+
+    // ---- Buttons: fill floods in from where the cursor enters, label rolls, slight pull ----
+    function rollButton(btn) {
+      if (btn.querySelector('.btn-fill')) return;
+      const inner = btn.innerHTML.trim();
+      btn.innerHTML = `<span class="btn-fill" aria-hidden="true"></span><span class="btn-label"><span class="roll"><span>${inner}</span><span aria-hidden="true">${inner}</span></span></span>`;
+      const origin = (e) => {
+        const r = btn.getBoundingClientRect();
+        btn.style.setProperty('--fx', `${e.clientX - r.left}px`);
+        btn.style.setProperty('--fy', `${e.clientY - r.top}px`);
+      };
+      btn.addEventListener('pointerenter', origin);
+      btn.addEventListener('pointerleave', (e) => { origin(e); btn.style.setProperty('--bx', '0px'); btn.style.setProperty('--by', '0px'); });
+      if (useCursor) btn.addEventListener('pointermove', (e) => {
+        const r = btn.getBoundingClientRect();
+        btn.style.setProperty('--bx', `${(e.clientX - r.left - r.width / 2) * .18}px`);
+        btn.style.setProperty('--by', `${(e.clientY - r.top - r.height / 2) * .3}px`);
+      });
+    }
+    document.querySelectorAll('.btn').forEach(rollButton);
+
+    // ---- Nav: Home goes to the home page; the arrow (or hovering) opens its sections ----
+    (() => {
+      const wrap = document.getElementById('navWrap');
+      const split = wrap.querySelector('.nav-split');
+      const caret = wrap.querySelector('.nav-caret');
+      const menu = document.getElementById('navMenu');
+      let open = false, timer;
+      const setOpen = (v) => {
+        clearTimeout(timer);
+        if (v === open) return;
+        open = v;
+        menu.classList.toggle('is-open', v);
+        caret.setAttribute('aria-expanded', v);
+      };
+      // A click just after hovering opened it keeps it open (instead of closing it straight away)
+      caret.addEventListener('click', () => { if (open && performance.now() - (caret._hoverAt || 0) < 500) return; setOpen(!open); });
+      if (finePointer) for (const zone of [split, menu]) {
+        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { if (!open) caret._hoverAt = performance.now(); setOpen(true); } });
+        zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') timer = setTimeout(() => setOpen(false), 260); });
+      }
+      document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
+      addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { setOpen(false); caret.focus(); } });
+    })();
+
+    // ---- Support: the accordion, the topic picker and the message form (a preview: nothing is sent) ----
+    // The shared script (theme, account) runs after this one, so everything that needs it waits
+    addEventListener('DOMContentLoaded', () => {
+      const M = window.Momento;
+
+      // Quick answers: one open at a time
+      const qas = [...document.querySelectorAll('.qa')];
+      for (const qa of qas) qa.querySelector('button').addEventListener('click', () => {
+        const opening = !qa.classList.contains('is-open');
+        for (const other of qas) {
+          other.classList.toggle('is-open', other === qa && opening);
+          other.querySelector('button').setAttribute('aria-expanded', other === qa && opening);
+        }
+      });
+
+      document.getElementById('openHelp').addEventListener('click', (e) => M.openHelp(e.currentTarget));
+
+      // Topic: a segment with a sliding pill
+      const seg = document.getElementById('topicSeg'), topics = [...seg.querySelectorAll('button')];
+      let topic = topics[0].dataset.topic;
+      const pick = (b) => {
+        topic = b.dataset.topic;
+        topics.forEach((x, i) => { const on = x === b; x.setAttribute('aria-checked', on); if (on) seg.style.setProperty('--i', i); });
+      };
+      topics.forEach((b) => b.addEventListener('click', () => pick(b)));
+      pick(topics[0]);
+
+      // The form. Name and email come from the account when there is one
+      const form = document.getElementById('supportForm'), note = document.getElementById('formNote');
+      const done = document.getElementById('formDone'), doneMail = document.getElementById('doneMail');
+      const fill = () => {
+        const a = M.account.get();
+        if (!a) return;
+        if (!form.name.value) form.name.value = a.name;
+        if (!form.email.value) form.email.value = a.email;
+      };
+      fill();
+      M.account.onChange(fill);
+      const fail = (msg, field) => {
+        note.textContent = msg; note.classList.add('is-error');
+        for (const f of [form.name, form.email, form.message]) f.removeAttribute('aria-invalid');
+        field.setAttribute('aria-invalid', 'true'); field.focus();
+      };
+      form.addEventListener('input', (e) => { note.textContent = ''; note.classList.remove('is-error'); if (e.target.removeAttribute) e.target.removeAttribute('aria-invalid'); });
+      const sendBtn = form.querySelector('[type="submit"]');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (form.dataset.busy) return;
+        const name = form.name.value.trim(), email = form.email.value.trim(), message = form.message.value.trim();
+        if (!name) return fail('Enter your name so we know who to reply to.', form.name);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter an email address like name@example.com.', form.email);
+        if (message.length < 10) return fail('Tell us a little more. A sentence or two is plenty.', form.message);
+        // Sent to the team (POST /api/support); "Message sent" only once the server has it
+        const topic = document.querySelector('#topicSeg [aria-checked="true"]')?.dataset.topic || 'Something else';
+        form.dataset.busy = 'true'; sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+        note.textContent = ''; note.classList.remove('is-error');
+        try {
+          await momentoApi('/api/support', momentoJson('POST', { topic, name, email, message }));
+        } catch (err) {
+          note.textContent = err.message || 'Your message didn’t send. Check your connection and try again.';
+          note.classList.add('is-error');
+          return;
+        } finally { delete form.dataset.busy; sendBtn.disabled = false; sendBtn.textContent = 'Send message'; }
+        doneMail.textContent = email;
+        form.classList.add('is-out');
+        setTimeout(() => {
+          form.hidden = true; done.hidden = false;
+          requestAnimationFrame(() => { done.classList.add('is-in'); document.getElementById('doneTitle').focus({ preventScroll: true }); });
+        }, still ? 0 : 240);
+      });
+      document.getElementById('sendAnother').addEventListener('click', () => {
+        form.message.value = ''; note.textContent = '';
+        done.classList.remove('is-in'); done.hidden = true;
+        form.hidden = false;
+        requestAnimationFrame(() => { form.classList.remove('is-out'); form.message.focus(); });
+      });
+    });
+
+    // ---- The header gains a veil once scrolled, and the page opens ----
+    const header = document.getElementById('header');
+    const veil = () => header.classList.toggle('is-veiled', scrollY > 40);
+    addEventListener('scroll', veil, { passive: true });
+    veil();
+    // (after the page intro, when there is one: it lifts the veil by announcing momento:intro-reveal)
+    const open = () => requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('is-ready')));
+    if (root.classList.contains('intro-on')) document.addEventListener('momento:intro-reveal', open, { once: true });
+    else open();
+
+    // ---- One loop for everything that moves ----
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(Math.max((now - last) / 1000, 0), .1);
+      last = now;
+      if (!document.hidden) {
+        renderFluid(dt);
+        if (useCursor) {
+          rx = lerp(rx, pointer.x, .35); ry = lerp(ry, pointer.y, .35);
+          if (Math.abs(pointer.x - rx) < .05 && Math.abs(pointer.y - ry) < .05) { rx = pointer.x; ry = pointer.y; }
+          const lx = pointer.x - rx, ly = pointer.y - ry;
+          const lens = root.classList.contains('cursor-hover') || root.classList.contains('cursor-drag');
+          const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
+          const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+          if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+  <!-- @shared:js (generated block; the same in index.html and albums.html) -->
+  <script>
+  // Shared by index.html and albums.html: theme, account, account menu.
+  (() => {
+    const root = document.documentElement;
+    const KEY = 'momento-theme';
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    const TH = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
+    const themeListeners = new Set();
+    const read = () => { try { return localStorage.getItem(KEY) || 'system'; } catch (e) { return 'system'; } };
+    const resolve = (p) => (p === 'dark' || (p === 'system' && mq.matches) ? 'dark' : 'light');
+    let pref = read();
+  
+    // Applies a preference. The page cross-fades where View Transitions exist; the silk shader
+    // eases on its own from the new target
+    function apply(p, animate) {
+      pref = p;
+      const next = resolve(p);
+      const flip = () => { root.dataset.theme = next; root.dataset.themePref = p; TH.target = next === 'dark' ? 1 : 0; };
+      if (root.dataset.theme === next) root.dataset.themePref = p;
+      else if (animate && document.startViewTransition && !reduced.matches && document.readyState === "complete" && !document.hidden) {
+        root.classList.add('theming');   // so the page-to-page motion doesn't also play on a theme switch
+        const done = () => root.classList.remove('theming');
+        // An aborted transition (page still revealing, tab hidden) rejects ready: the theme still flips, so it is ignored
+        const vt = document.startViewTransition(flip);
+        vt.ready.catch(() => {});
+        vt.updateCallbackDone.catch(() => {});
+        vt.finished.then(done, done);
+      } else flip();
+      themeListeners.forEach((fn) => fn(p, next));
+    }
+    mq.addEventListener('change', () => { if (pref === 'system') apply('system', true); });
+    addEventListener('storage', (e) => { if (e.key === KEY) apply(read(), true); });
+  
+    const Momento = (window.Momento = window.Momento || {});
+    Momento.theme = {
+      get pref() { return pref; },
+      get resolved() { return resolve(pref); },
+      set(p) {
+        try { localStorage.setItem(KEY, p); } catch (e) {}
+        apply(p, true);
+      },
+      onChange(fn) { themeListeners.add(fn); },
+    };
+  
+    // ---- Account: kept for the tab (sessionStorage), shared by every page ----
+    const AKEY = 'momento-account';
+    const NOTIFY = { photos: true, closing: true, recap: false };
+    const accountListeners = new Set();
+    const norm = (a) => a && { name: '', email: '', ...a, notify: { ...NOTIFY, ...(a.notify || {}) } };
+    let current = null;
+    const persist = () => {
+      try {
+        if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
+        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
+      } catch (e) {}
+    };
+    const emit = () => accountListeners.forEach((fn) => fn(current));
+    Momento.account = {
+      get() { return current; },
+      set(patch) {
+        current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } });
+        persist(); emit();
+        return current;
+      },
+      clear() { current = null; persist(); emit(); },
+      onChange(fn) { accountListeners.add(fn); },
+    };
+  
+    Momento.sessionReady = momentoApi('/api/auth/me').then(({ user }) => {
+      if (user) Momento.account.set(user); else Momento.account.clear();
+      return user;
+    });
+    Momento.sessionReady.catch(() => {});
+
+    // ---- Account chip, menu and dialogs ----
+    const svg = (inner, size = 18) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+    const ICON = {
+      chev: svg('<path d="m6 9 6 6 6-6"/>', 14),
+      close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+      settings: svg('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
+      help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/>'),
+      logout: svg('<path d="M9 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3M15 8l4 4-4 4M19 12H9"/>'),
+      sun: svg('<circle cx="12" cy="12" r="3.6"/><g class="rays"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></g>', 16),
+      moon: svg('<path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>', 16),
+      system: svg('<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/><circle class="scr-dot" cx="12" cy="10.5" r="1.8" fill="currentColor" stroke="none"/>', 16),
+    };
+    const first = (n) => (n || '').trim().split(/\s+/)[0] || '';
+    const SUPPORT = 'support@hexarch.org';   // placeholder address
+  
+    // The custom cursor can't draw above a modal, so the normal cursor comes back while one is open
+    let cursorWas = false;
+    // The card grows out of the account chip when it opens and shrinks back into it when it closes:
+    // the chip's box and the card's box, as a move and a (non-uniform) scale
+    const morph = (from, card) => {
+      const f = from.getBoundingClientRect(), c = card.getBoundingClientRect();
+      if (!f.width || !c.width) return null;
+      const dx = f.left + f.width / 2 - (c.left + c.width / 2), dy = f.top + f.height / 2 - (c.top + c.height / 2);
+      return `translate(${dx}px, ${dy}px) scale(${Math.max(.08, f.width / c.width)}, ${Math.max(.05, f.height / c.height)})`;
+    };
+    const phoneStill = () => matchMedia('(max-width: 600px)').matches;
+    function dialog(id, html, getReturn) {
+      const d = document.createElement('dialog');
+      d.className = 'acct-dialog'; d.id = id; d.setAttribute('aria-labelledby', `${id}Title`);
+      d.innerHTML = html;
+      document.body.append(d);
+      const card = () => d.querySelector('.acct-card');
+      let closing = false;
+      d.dismiss = async () => {
+        if (closing || !d.open) return;
+        closing = true;
+        const c = card(), from = getReturn(), shape = from && c && morph(from, c);
+        if (!reduced.matches && !phoneStill() && c) {   // phones: it simply goes
+          const out = shape ? [{ transform: 'none', opacity: 1 }, { transform: shape, opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }];
+          try { await c.animate(out, { duration: shape ? 340 : 200, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished; } catch (e) {}
+        }
+        d.close();
+        if (c) c.getAnimations().forEach((a) => a.cancel());
+        closing = false;
+      };
+      d.addEventListener('pointerdown', (e) => { d._downOutside = e.target === d; }); d.addEventListener('click', (e) => { if (e.target === d && d._downOutside) d.dismiss(); });
+      d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => d.dismiss()));
+      d.addEventListener('cancel', (e) => { e.preventDefault(); d.dismiss(); });
+      d.addEventListener('close', () => {
+        if (cursorWas && !document.querySelector('dialog[open]')) root.classList.add('has-cursor');
+        const back = getReturn(); if (back) back.focus();
+      });
+      d.launch = () => {
+        if (!document.querySelector('dialog[open]')) cursorWas = root.classList.contains('has-cursor');
+        root.classList.remove('has-cursor', 'cursor-hover', 'cursor-drag');
+        d.showModal();
+        // Opening focuses the first control; on a short phone that could leave the window scrolled past its
+        // title. It always starts at the top, title and close button in view
+        const top = () => { d.scrollTop = 0; const c0 = card(); if (c0) c0.scrollTop = 0; };
+        top(); requestAnimationFrame(top);
+        if (reduced.matches || phoneStill()) return;   // phones: the window is simply there, no morph and no rows rising in
+        const c = card(), from = getReturn(), shape = from && morph(from, c);
+        c.animate(shape
+          ? [{ transform: shape, opacity: 0 }, { opacity: 1, offset: .22 }, { transform: 'none', opacity: 1 }]
+          : [{ opacity: 0, transform: 'translateY(12px) scale(.96)' }, { opacity: 1, transform: 'none' }],
+        { duration: shape ? 620 : 380, easing: 'cubic-bezier(.34, 1.25, .64, 1)' });
+        // Its rows rise in one after another once the card has opened out
+        [...c.children].filter((el) => !el.matches('.acct-x')).forEach((el, i) => el.animate(
+          [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+          { duration: 460, delay: 200 + i * 45, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' }));
+        try { d.animate({ opacity: [0, 1] }, { duration: 300, pseudoElement: '::backdrop' }); } catch (e) {}
+      };
+      return d;
+    }
+  
+    function settingsDialog(getReturn) {
+      const d = dialog('acctSettings', `
+        <form class="acct-card" novalidate>
+          <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+          <h2 id="acctSettingsTitle">Account settings</h2>
+          <p class="acct-sub">Update your photo, name and email notification preferences.</p>
+          <div class="acct-photo">
+            <span class="acct-photo-av" aria-hidden="true"></span>
+            <span class="acct-photo-text"><b>Profile photo</b><small>Shown in groups and albums</small></span>
+            <span class="acct-photo-acts"><button class="acct-photo-btn" type="button" data-photo-pick>Add photo</button><button class="acct-photo-btn is-danger" type="button" data-photo-rm hidden>Remove</button></span>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" hidden data-photo-file>
+          </div>
+          <label class="acct-field"><span>Your name</span><input name="name" autocomplete="name"></label>
+          <label class="acct-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email"></label>
+          <div class="acct-group" role="group" aria-label="Email me when">
+            <b>Email me when</b>
+            <div class="acct-row"><span><b>Someone adds photos</b><small>to an album I’m in</small></span><button class="acct-sw" type="button" role="switch" aria-label="Someone adds photos to an album I’m in" aria-checked="true" data-key="photos"></button></div>
+            <div class="acct-row"><span><b>An album is about to close</b><small>so I can download my photos in time</small></span><button class="acct-sw" type="button" role="switch" aria-label="An album is about to close" aria-checked="true" data-key="closing"></button></div>
+            <div class="acct-row"><span><b>Weekly recap</b><small>the best new photos from my albums</small></span><button class="acct-sw" type="button" role="switch" aria-label="Weekly recap" aria-checked="false" data-key="recap"></button></div>
+          </div>
+          <a class="acct-adv" href="settings.html"><span class="acct-adv-ic">${ICON.settings}</span><span><b>Advanced settings</b><small>Password, permissions, notifications and storage</small></span>${ICON.chev}</a>
+          <p class="acct-status" role="status"></p>
+          <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit">Save changes</button></div>
+        </form>`, getReturn);
+      if (/settings\.html$/.test(location.pathname)) d.querySelector('.acct-adv').hidden = true;   // already here
+      const form = d.querySelector('form'), status = d.querySelector('.acct-status');
+      const switches = [...d.querySelectorAll('.acct-sw')];
+      // Profile photo: saved straight away (not with Save changes), like on the Settings page
+      const photoAv = d.querySelector('.acct-photo-av'), photoPick = d.querySelector('[data-photo-pick]'), photoRm = d.querySelector('[data-photo-rm]'), photoFile = d.querySelector('[data-photo-file]');
+      const showPhoto = (a) => {
+        const name = (a && (a.name || a.email)) || 'You';
+        photoAv.replaceChildren();
+        if (a && a.avatarUrl) {
+          const img = document.createElement('img');
+          img.src = a.avatarUrl; img.alt = ''; img.referrerPolicy = 'no-referrer';
+          img.onerror = () => { img.remove(); photoAv.textContent = name[0].toUpperCase(); };
+          photoAv.append(img);
+        } else photoAv.textContent = name[0].toUpperCase();
+        photoPick.textContent = a && a.avatarUrl ? 'Change' : 'Add photo';
+        photoRm.hidden = !(a && a.avatarUrl);
+      };
+      Momento.account.onChange(showPhoto);
+      showPhoto(Momento.account.get());
+      photoPick.addEventListener('click', () => photoFile.click());
+      photoFile.addEventListener('change', async () => {
+        const f = photoFile.files[0];
+        photoFile.value = '';
+        if (!f) return;
+        if (f.size > 10 * 1024 * 1024) { say('Choose a photo under 10 MB.', true); return; }
+        // Crop it to a square first (Cancel keeps the current photo)
+        const pic = Momento.cropAvatar ? await Momento.cropAvatar(f) : f;
+        if (!pic) return;
+        const fd = new FormData();
+        fd.append('avatar', pic, pic === f ? (f.name || 'photo.jpg') : 'avatar.jpg');
+        photoAv.classList.add('is-busy'); photoPick.disabled = photoRm.disabled = true; say('Uploading your photo…');
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'POST', body: fd });
+          Momento.account.set(user);
+          say('Photo updated. Friends see it in groups and albums.');
+        } catch (err) { say(err.message, true); }
+        finally { photoAv.classList.remove('is-busy'); photoPick.disabled = photoRm.disabled = false; }
+      });
+      photoRm.addEventListener('click', async () => {
+        photoPick.disabled = photoRm.disabled = true;
+        try {
+          const { user } = await momentoApi('/api/auth/avatar', { method: 'DELETE' });
+          Momento.account.set(user);
+          say('Photo removed. Your initials show instead.');
+        } catch (err) { say(err.message, true); }
+        finally { photoPick.disabled = photoRm.disabled = false; }
+      });
+      switches.forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
+      const say = (msg, bad) => { status.textContent = msg; status.classList.toggle('is-error', !!bad); };
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = form.name.value.trim(), email = form.email.value.trim();
+        if (!name) { say('Enter your name so guests know who added each photo.', true); form.name.focus(); return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Enter an email address like name@example.com.', true); form.email.focus(); return; }
+        const notify = {};
+        switches.forEach((s) => { notify[s.dataset.key] = s.getAttribute('aria-checked') === 'true'; });
+        if (email !== current.email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
+        try {
+          const { user } = await momentoApi('/api/auth/me', momentoJson('PATCH', { name, notify }));
+          Momento.account.set(user);
+        } catch (err) { say(err.message, true); return; }
+        say('Saved');
+        Momento.toast('Account settings saved', email || name);
+        setTimeout(() => d.dismiss(), reduced.matches ? 0 : 700);
+      });
+      const launch = d.launch;
+      d.launch = () => {
+        const a = current || norm({});
+        form.name.value = a.name; form.email.value = a.email;
+        switches.forEach((s) => s.setAttribute('aria-checked', a.notify[s.dataset.key]));
+        say('');
+        launch();
+      };
+      return d;
+    }
+  
+    function helpDialog(getReturn) {
+      const d = dialog('acctHelp', `
+        <div class="acct-card acct-help">
+          <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+          <h2 id="acctHelpTitle">Help and support</h2>
+          <p class="acct-sub">Quick answers. If you’re still stuck, email us.</p>
+          <details><summary>How do guests join an album?</summary><p>They point their phone camera at the host’s QR code and the album opens. Signing up lets them add their own photos.</p></details>
+          <details><summary>Who can see the photos?</summary><p>Only the people who joined the album. The host decides whether guests can see the gallery while the event is on.</p></details>
+          <details><summary>How long does an album stay open?</summary><p>Uploads and downloads stay open for a while after the event, then the album is kept as an archive. Download your photos before it closes.</p></details>
+          <div class="acct-links">
+            <a href="support.html">Contact us</a>
+            <a href="index.html#how-it-works">How it works</a>
+            <a href="index.html#faq">FAQ</a>
+            <a href="mailto:${SUPPORT}">Email support</a>
+          </div>
+        </div>`, getReturn);
+      if (/support\.html$/.test(location.pathname)) d.querySelector('.acct-links [href="support.html"]').hidden = true;   // already here
+      return d;
+    }
+  
+    // One of each dialog per page. Whatever opened it (the chip, a footer link) is where it grows
+    // out of and where focus returns
+    let returnTo = null, settingsD = null, helpD = null;
+    Momento.openSettings = (from) => { returnTo = from; (settingsD ||= settingsDialog(() => returnTo)).launch(); };
+    Momento.openHelp = (from) => { returnTo = from; (helpD ||= helpDialog(() => returnTo)).launch(); };
+
+    // ---- Confirmations: every action answers with a toast; anything that removes something asks first
+    // and can be undone from the toast. The toast is a popover so it shows above open dialogs too ----
+    const MARK = {
+      check: svg('<path d="m5 12.5 4.2 4.2L19 7"/>', 15),
+      bin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 15),
+      bigCheck: svg('<path d="m5 12.5 4.2 4.2L19 7"/>', 26),
+      bigBin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 22),
+    };
+    const canPop = typeof HTMLElement.prototype.showPopover === 'function';
+    let toastEl = null, toastTimer = 0, toastLife = 0;
+    function hideToast() {
+      clearTimeout(toastTimer);
+      if (!toastEl) return;
+      const gone = () => { toastEl.style.visibility = 'hidden'; if (canPop && toastEl.matches(':popover-open')) toastEl.hidePopover(); };
+      if (reduced.matches) return gone();
+      toastEl.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(16px)' }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).finished.then(gone, gone);
+    }
+    const armToast = (ms) => { clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, ms); };
+    // While a window is open everything outside it is inert, so the toast lives inside the topmost open
+    // window (and its Undo stays clickable), and is re-shown so it lands on top of it
+    function placeToast() {
+      const host = [...document.querySelectorAll('dialog[open]')].pop() || document.body;
+      if (toastEl.parentElement !== host) host.append(toastEl);
+      if (canPop) { if (toastEl.matches(':popover-open')) toastEl.hidePopover(); toastEl.showPopover(); }
+    }
+    // When that window closes, the toast moves out to whatever is open underneath
+    document.addEventListener('close', (e) => {
+      if (!toastEl || !e.target.contains(toastEl) || toastEl.style.visibility === 'hidden') return;
+      requestAnimationFrame(placeToast);
+    }, true);
+    Momento.toast = (title, sub = '', opts = {}) => {
+      if (!toastEl) {
+        toastEl = document.createElement('div');
+        toastEl.className = 'm-toast glass';
+        toastEl.setAttribute('role', 'status'); toastEl.setAttribute('aria-live', 'polite');
+        if (canPop) toastEl.popover = 'manual';
+        toastEl.innerHTML = '<i class="m-toast-ic" aria-hidden="true"></i><span class="m-toast-text"><b></b><small></small></span><button class="m-toast-act" type="button" hidden></button>';
+        document.body.append(toastEl);
+        // Reading it (or reaching for Undo) holds it on screen
+        toastEl.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+        toastEl.addEventListener('pointerleave', () => armToast(1800));
+        toastEl.addEventListener('focusin', () => clearTimeout(toastTimer));
+      }
+      const act = toastEl.querySelector('.m-toast-act'), a = opts.action;
+      toastEl.querySelector('.m-toast-ic').innerHTML = opts.danger ? MARK.bin : MARK.check;
+      toastEl.querySelector('b').textContent = title;
+      toastEl.querySelector('small').textContent = sub;
+      toastEl.classList.toggle('is-danger', !!opts.danger);
+      toastEl.classList.toggle('has-act', !!a);
+      act.hidden = !a; act.textContent = a ? a.label : '';
+      act.onclick = a ? () => { hideToast(); a.run(); } : null;
+      toastEl.getAnimations().forEach((x) => x.cancel());
+      toastEl.style.visibility = '';
+      placeToast();
+      if (!reduced.matches) toastEl.animate([{ opacity: 0, transform: 'translateY(22px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
+      toastLife = a ? 6000 : 3400;
+      armToast(toastLife);
+    };
+    // A toast for the next page, when the action also navigates (logging out, say)
+    const FLASH = 'momento-flash';
+    Momento.flash = (title, sub = '') => { try { sessionStorage.setItem(FLASH, JSON.stringify([title, sub])); } catch (e) {} };
+    try {
+      const f = JSON.parse(sessionStorage.getItem(FLASH) || 'null');
+      sessionStorage.removeItem(FLASH);
+      if (f) {
+        const later = () => setTimeout(() => Momento.toast(f[0], f[1]), 450);
+        if (root.classList.contains('intro-on')) document.addEventListener('momento:intro-end', later, { once: true });
+        else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later, { once: true });
+        else later();
+      }
+    } catch (e) {}
+
+    // Asks before something is removed. Resolves true only for the confirm button
+    let confirmD = null, confirmDone = null;
+    Momento.confirm = ({ title, body = '', ok = 'Delete', danger = true, from = null }) => new Promise((resolve) => {
+      if (!confirmD) {
+        confirmD = dialog('mConfirm', `
+          <div class="acct-card">
+            <i class="m-warn-ic" aria-hidden="true">${MARK.bigBin}</i>
+            <h2 id="mConfirmTitle"></h2>
+            <p class="acct-sub"></p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="button" data-ok></button></div>
+          </div>`, () => returnTo);
+        confirmD.querySelector('[data-ok]').addEventListener('click', () => { const r = confirmDone; confirmDone = null; confirmD.dismiss(); if (r) r(true); });
+        confirmD.addEventListener('close', () => { const r = confirmDone; confirmDone = null; if (r) r(false); });
+      }
+      returnTo = from;
+      confirmD.querySelector('h2').textContent = title;
+      confirmD.querySelector('.acct-sub').textContent = body;
+      confirmD.querySelector('.m-warn-ic').hidden = !danger;
+      const okBtn = confirmD.querySelector('[data-ok]');
+      okBtn.textContent = ok; okBtn.classList.toggle('is-danger', danger);
+      confirmDone = resolve;
+      confirmD.launch();
+      confirmD.querySelector('.acct-ghost').focus();   // the safe choice has focus
+    });
+
+    // Asks for one value (an email address, say). Resolves the value, or null if cancelled
+    let askD = null, askDone = null;
+    Momento.ask = ({ title, body = '', label, type = 'text', value = '', placeholder = '', ok = 'Continue', check, from = null }) => new Promise((resolve) => {
+      if (!askD) {
+        askD = dialog('mAsk', `
+          <form class="acct-card" novalidate>
+            <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+            <h2 id="mAskTitle"></h2>
+            <p class="acct-sub"></p>
+            <label class="acct-field"><span></span><input name="v" autocomplete="email"></label>
+            <p class="acct-status" role="status"></p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Cancel</button><button class="acct-primary" type="submit"></button></div>
+          </form>`, () => returnTo);
+        askD.addEventListener('close', () => { const r = askDone; askDone = null; if (r) r(null); });
+      }
+      returnTo = from;
+      const form = askD.querySelector('form'), input = form.v, status = askD.querySelector('.acct-status');
+      askD.querySelector('h2').textContent = title;
+      askD.querySelector('.acct-sub').textContent = body;
+      askD.querySelector('.acct-field span').textContent = label;
+      Object.assign(input, { type, value, placeholder });
+      askD.querySelector('[type="submit"]').textContent = ok;
+      status.textContent = ''; status.classList.remove('is-error');
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const v = input.value.trim(), problem = check ? check(v) : (v ? '' : `Enter ${label.toLowerCase()}.`);
+        if (problem) { status.textContent = problem; status.classList.add('is-error'); input.focus(); return; }
+        const r = askDone; askDone = null; askD.dismiss(); r(v);
+      };
+      askDone = resolve;
+      askD.launch();
+      input.focus();
+    });
+
+    // ---- Albums: create one (ending on a "created" screen with its guest code), and remove one ----
+    const isoToday = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+    const onAlbums = /albums\.html$/.test(location.pathname);
+    const viewAlbum = (id) => {
+      if (onAlbums) document.dispatchEvent(new CustomEvent('momento:open-album', { detail: id }));
+      else location.href = `albums.html#album=${encodeURIComponent(id)}`;
+    };
+
+    // Removes an album after asking. `a` needs id, name and role; photos/mine make the message exact
+    // The link a host sends guests: opening it asks them to log in or sign up first, then offers to join
+    Momento.inviteLink = (code) => 'https://api.hexarch.org/s/' + encodeURIComponent(code);
+    Momento.shareInvite = async (album, btn, label = 'Share link') => {
+      const url = Momento.inviteLink(album.code);
+      if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+        try { await navigator.share({ title: album.name, text: `Add your photos to ${album.name} on Momento`, url }); return; }
+        catch (err) { if (err.name === 'AbortError') return; }
+      }
+      try { await navigator.clipboard.writeText(url); btn.textContent = 'Link copied'; } catch (err) { btn.textContent = 'Copy failed'; Momento.toast('Copy this link', url); }
+      setTimeout(() => { btn.textContent = label; }, 1800);
+    };
+    Momento.removeAlbum = async (a, from) => {
+      const host = a.role !== 'guest';
+      const n = a.photos || 0;
+      const ok = await Momento.confirm({
+        from,
+        title: host ? `Delete “${a.name}”?` : `Leave “${a.name}”?`,
+        body: host
+          ? (n ? `All ${n.toLocaleString('en-GB')} photos and the guest code go with it, for everyone who joined.` : 'It has no photos yet, so only the album and its guest code are removed.')
+          : `It’s taken off your albums. ${a.mine ? `Your ${a.mine} photos stay` : 'Photos stay'} in the album for the host and other guests.`,
+        ok: host ? 'Delete album' : 'Leave album',
+      });
+      if (!ok) return false;
+      try {
+        await momentoApi('/api/albums/' + encodeURIComponent(a.id) + (host ? '' : '/membership'), { method: 'DELETE' });
+      } catch (err) { Momento.toast('Could not remove album', err.message); return false; }
+      document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'remove', id: a.id } }));
+      Momento.toast(host ? 'Album deleted' : 'You left the album', a.name);
+      return true;
+    };
+
+    let createD = null;
+    function createDialog(getReturn) {
+      const d = dialog('mCreate', `
+        <form class="acct-card" novalidate>
+          <button class="acct-x" type="button" aria-label="Close" data-close>${ICON.close}</button>
+          <div class="m-view" data-view="form">
+            <h2 id="mCreateTitle" tabindex="-1">Create an album</h2>
+            <p class="m-progress" data-create-progress>Step 1 of 2</p>
+            <div data-create-step="details">
+              <label class="acct-field m-first"><span data-name-label>Album name</span><input name="name" maxlength="60" placeholder="Enter album name" autocomplete="off"></label>
+              <label class="acct-field m-date"><span>Date</span><input name="date" type="date" placeholder="Enter a date"></label>
+              <div class="m-kind" role="radiogroup" aria-labelledby="mKindTitle">
+                <span class="m-kind-title" id="mKindTitle">What is it?</span>
+                <label><input type="radio" name="kind" value="album" checked><b>Album</b><small>Photos together, any time. Join with the code or link</small></label>
+                <label><input type="radio" name="kind" value="event"><b>Event</b><small>A time and a place, with a sharing zone</small></label>
+              </div>
+              <input name="place" type="hidden">
+              <label class="acct-field m-group m-share" hidden><span>Share with</span><select name="group"></select></label>
+            </div>
+            <div data-create-step="event" hidden></div>
+            <p class="acct-status" role="status"></p>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-create-back>Cancel</button><button class="acct-primary" type="submit">Next</button></div>
+          </div>
+          <div class="m-view m-done" data-view="done" hidden>
+            <i class="m-done-ic" aria-hidden="true">${MARK.bigCheck}</i>
+            <h2 tabindex="-1">Album created</h2>
+            <p class="acct-sub"></p>
+            <div class="m-code"><span><small>Guest code</small><b></b></span><button class="m-copy" type="button">Copy code</button></div>
+            <div class="m-code"><span><small>Invite link</small><em class="m-link"></em></span><button class="m-copy" type="button" data-copy-link>Copy link</button></div>
+            <div class="acct-actions m-showqr"><button class="acct-primary" type="button" data-show-qr>Show QR code</button></div>
+            <div class="acct-actions"><button class="acct-ghost" type="button" data-close>Done</button><button class="acct-primary" type="button" data-view-album>View album</button></div>
+            <button class="m-del" type="button" data-delete>Delete this album</button>
+          </div>
+        </form>`, getReturn);
+      const form = d.querySelector('form'), status = d.querySelector('.acct-status');
+      const views = [...d.querySelectorAll('.m-view')];
+      const showView = (v) => views.forEach((x) => { x.hidden = x.dataset.view !== v; });
+      const submit = form.querySelector('[type="submit"]'), back = form.querySelector('[data-create-back]');
+      const title = d.querySelector('#mCreateTitle'), progress = d.querySelector('[data-create-progress]');
+      const steps = [...d.querySelectorAll('[data-create-step]')];
+      const kindField = d.querySelector('.m-kind');
+      // Only an event asks for times and a venue; an album (and a friend-group album) is just its name and date
+      const isEvent = () => !form.group?.value && form.kind?.value === 'event';
+      let step = 'details', made = null;
+      const say = (msg, field) => {
+        form.querySelectorAll('.m-field-error').forEach((el) => el.remove());
+        form.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
+          el.removeAttribute('aria-invalid');
+          const ids = (el.getAttribute('aria-describedby') || '').split(' ').filter((id) => id && id !== 'mCreateError');
+          if (ids.length) el.setAttribute('aria-describedby', ids.join(' ')); else el.removeAttribute('aria-describedby');
+        });
+        status.textContent = field ? '' : msg;
+        status.classList.toggle('is-error', !!msg && !field);
+        if (msg && field) {
+          const error = document.createElement('small');
+          error.className = 'm-field-error'; error.id = 'mCreateError'; error.setAttribute('role', 'alert'); error.textContent = msg;
+          (field.closest('.acct-field, .ev-sec') || field.parentElement).append(error);
+          field.setAttribute('aria-invalid', 'true');
+          field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
+          field.focus();
+        }
+      };
+      const showStep = (next, focus = false) => {
+        const grouped = !!form.group?.value, event = isEvent();
+        step = event ? next : 'details';
+        steps.forEach((panel) => { panel.hidden = panel.dataset.createStep !== step; });
+        if (kindField) kindField.hidden = grouped;
+        // An event's date and time are on step two (Starts and Ends), so step one has no date
+        form.querySelector('.m-date').hidden = event;
+        form.querySelector('[data-name-label]').textContent = event ? 'Event name' : 'Album name';
+        form.name.placeholder = event ? 'Enter event name' : 'Enter album name';
+        title.textContent = step === 'event' ? 'Event details' : event ? 'Create an event' : 'Create an album';
+        progress.hidden = !event;
+        progress.textContent = step === 'event' ? 'Step 2 of 2' : 'Step 1 of 2';
+        submit.textContent = event ? (step === 'event' ? 'Create event' : 'Next') : 'Create album';
+        const first = form.group?.options?.[0];
+        if (first && !first.value) first.textContent = event ? 'Guests at the event' : 'Anyone with the code or link';
+        back.textContent = step === 'event' ? 'Back' : 'Cancel';
+        if (step === 'event') Momento.event?.activate(form);
+        d.scrollTop = 0;
+        if (focus) title.focus({ preventScroll: true });
+      };
+      back.addEventListener('click', () => {
+        if (form.dataset.busy) return;
+        if (step === 'event') { say(''); showStep('details', true); } else d.dismiss();
+      });
+      form.addEventListener('input', (e) => { if (e.target.getAttribute('aria-invalid') === 'true') say(''); });
+      form.addEventListener('change', (e) => { if (e.target.name === 'kind') { say(''); showStep('details'); } });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (form.dataset.busy || made) return;
+        const name = form.name.value.trim();
+        let date = form.date.value;
+        let place = form.place.value.trim();
+        if (!name) { showStep('details'); say(isEvent() ? 'Enter an event name.' : 'Enter an album name.', form.name); return; }
+        if (!date && !isEvent()) { showStep('details'); say('Choose a date.', form.date); return; }
+        // Group albums finish here. Event albums collect times and a venue on the next screen.
+        const groupId = shareList.value || '', groupName = groupId ? shareList.selectedOptions[0]?.textContent || '' : '';
+        const event = isEvent();
+        if ((event || groupId) && !Momento.event) { say('Event details couldn’t load. Refresh the page and try again.'); return; }
+        if (event && step === 'details') { say(''); showStep('event', true); return; }
+        // An event: its times and venue. A group album: what the group needs. An album: nothing more
+        const ev = event || groupId ? Momento.event.read(form) : { fields: { place: '' } };
+        if (ev.error) { say(ev.error, ev.focus); return; }
+        if (ev.fields.place !== undefined) place = ev.fields.place;
+        if (ev.fields.date) date = ev.fields.date;
+        say('');
+        form.dataset.busy = 'true';
+        submit.disabled = back.disabled = true;
+        try {
+          ({ album: made } = await momentoApi('/api/albums', momentoJson('POST', { name, date, place, ...ev.fields, ...(groupId && { groupId }) })));
+          document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
+        } catch (err) { say(err.message); return; }
+        finally { delete form.dataset.busy; submit.disabled = back.disabled = false; }
+        const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        d.querySelector('.m-done .acct-sub').textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
+        d.querySelector('.m-code b').textContent = made.code;
+        d.querySelector('.m-copy').textContent = 'Copy code';
+        d.querySelector('.m-link').textContent = Momento.inviteLink(made.code);
+        d.querySelector('[data-copy-link]').textContent = 'Copy link';
+        showView('done');
+        if (!reduced.matches) [...d.querySelector('.m-done').children].forEach((el, i) => el.animate(
+          [{ opacity: 0, transform: i ? 'translateY(10px)' : 'scale(.4)' }, { opacity: 1, transform: 'none' }],
+          { duration: i ? 460 : 620, delay: i * 55, easing: i ? 'cubic-bezier(.16, 1, .3, 1)' : 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+        d.querySelector('.m-done h2').focus();
+      });
+      d.querySelector('.m-copy').addEventListener('click', async (e) => {
+        const b = e.currentTarget;
+        try { await navigator.clipboard.writeText(made.code); b.textContent = 'Copied'; } catch (err) { b.textContent = 'Select and copy'; }
+        setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
+      });
+      d.querySelector('[data-copy-link]').addEventListener('click', (e) => Momento.shareInvite(made, e.currentTarget, 'Copy link'));
+      d.querySelector('[data-view-album]').addEventListener('click', async () => { const id = made.id; await d.dismiss(); viewAlbum(id); });
+      d.querySelector('[data-show-qr]').addEventListener('click', (e) => { if (made) Momento.qr?.show(made, e.currentTarget); });
+      d.querySelector('[data-delete]').addEventListener('click', async (e) => {
+        if (await Momento.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) d.dismiss();
+      });
+      const launch = d.launch;
+      // The friend groups to offer, fetched each time the form opens (a group may be new or gone)
+      const groupField = d.querySelector('.m-group');
+      // "Share with": an event's guests (they join with the code), or one of your friend groups (everyone in
+      // it sees the album). A dropdown, shown only when you have groups
+      const shareList = groupField.querySelector('select');
+      const shareOption = (value, title) => { const o = document.createElement('option'); o.value = value; o.textContent = title; return o; };
+      shareList.addEventListener('change', () => { say(''); showStep('details'); });
+      let groupsAsked = 0;
+      async function loadGroups(groupId, groupName) {
+        const ask = ++groupsAsked;
+        if (groupId) {
+          shareList.replaceChildren(shareOption(groupId, groupName || 'This group'));
+          shareList.value = groupId;
+          groupField.hidden = false;
+          return;
+        }
+        // Your groups as remembered for this tab (assets/event.js, Momento.myGroups): the field is there as the
+        // form opens, not a moment later. The fresh list follows and only changes what's different
+        const fill = (groups) => {
+          const keep = shareList.value;
+          shareList.replaceChildren(shareOption('', 'Guests at the event'), ...groups.map((g) => shareOption(g.id, g.name)));
+          if (groups.some((g) => g.id === keep)) shareList.value = keep;
+          groupField.hidden = !groups.length;
+          shareList.options[0].textContent = isEvent() ? 'Guests at the event' : 'Anyone with the code or link';   // (as showStep words it)
+        };
+        const known = Momento.myGroups?.cached();
+        fill(known || []);
+        let groups;
+        try { groups = Momento.myGroups ? await Momento.myGroups.refresh() : (await momentoApi('/api/groups')).groups; } catch { return; }
+        if (ask !== groupsAsked) return;
+        if (JSON.stringify(groups.map((g) => [String(g.id), g.name])) !== JSON.stringify((known || []).map((g) => [g.id, g.name]))) fill(groups);
+      }
+      d.launch = (opts = {}) => {
+        form.reset(); made = null; say('');
+        loadGroups(opts.groupId, opts.groupName);
+        // (the date starts empty: the field says "Enter a date" and its calendar opens on today)
+        // "Create an event" opens with Event chosen, "Create an album" with Album
+        const kind = form.querySelector(`input[name="kind"][value="${opts.kind === 'event' ? 'event' : 'album'}"]`);
+        if (kind) kind.checked = true;
+        Momento.event?.mount(form, { fromGroup: Boolean(opts.groupId) });
+        showStep('details');
+        showView('form');
+        launch();
+        form.name.focus();
+      };
+      return d;
+    }
+    // opts.groupId: restrict sharing to the group that opened the form
+    Momento.createAlbum = (from, opts) => { returnTo = from; (createD ||= createDialog(() => returnTo)).launch(opts); };
+    // Any "Create an album" control on any page: <a|button data-create>
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-create]');
+      if (!t) return;
+      e.preventDefault();
+      Momento.createAlbum(t, { groupId: t.dataset.createGroup, groupName: t.dataset.createGroupName, kind: t.dataset.createKind });
+    });
+  
+    // A Light / Dark / System segment bound to the theme (the account menu and the footer both use it)
+    function wireSeg(seg) {
+      const btns = [...seg.querySelectorAll('button')];
+      seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) Momento.theme.set(b.dataset.theme); });
+      const sync = () => btns.forEach((b, i) => {
+        const on = b.dataset.theme === Momento.theme.pref;
+        b.setAttribute('aria-checked', on);
+        if (on) seg.style.setProperty('--i', i);
+      });
+      Momento.theme.onChange(sync);
+      sync();
+    }
+  
+    // Fills one host element with the chip and its menu. `out` (optional) is the signed-out UI,
+    // shown instead of the chip when there is no account. `always` shows the chip regardless.
+    function mountAccount({ host, out, always, onLogout }) {
+      let built = null;
+      function build() {
+        const wrap = document.createElement('div');
+        wrap.className = 'acct';
+        wrap.innerHTML = `
+          <button class="acct-btn glass" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="acctMenu" aria-label="Account menu"><i class="acct-av"></i><span class="acct-name"></span>${ICON.chev.replace('<svg', '<svg class="acct-chev"')}</button>
+          <div class="acct-menu glass" id="acctMenu" role="menu" aria-label="Account">
+            <div class="acct-head"><i class="acct-av"></i><span><b></b><small></small></span></div>
+            <button class="acct-item" type="button" role="menuitem" data-act="settings">${ICON.settings}Account settings</button>
+            <div class="acct-label" id="acctThemeLabel">Appearance</div>
+            <div class="acct-seg" role="radiogroup" aria-labelledby="acctThemeLabel">
+              <span class="acct-seg-pill" aria-hidden="true"></span>
+              <button type="button" role="radio" aria-checked="false" data-theme="light">${ICON.sun}Light</button>
+              <button type="button" role="radio" aria-checked="false" data-theme="dark">${ICON.moon}Dark</button>
+              <button type="button" role="radio" aria-checked="false" data-theme="system">${ICON.system}System</button>
+            </div>
+            <button class="acct-item" type="button" role="menuitem" data-act="help">${ICON.help}Help and support</button>
+            <hr class="acct-sep">
+            <button class="acct-item" type="button" role="menuitem" data-act="logout">${ICON.logout}Log out</button>
+          </div>`;
+        host.append(wrap);
+  
+        const btn = wrap.querySelector('.acct-btn'), menu = wrap.querySelector('.acct-menu'), seg = wrap.querySelector('.acct-seg');
+        const segBtns = [...seg.querySelectorAll('button')];
+        const items = () => [...menu.querySelectorAll('.acct-item, .acct-seg button')];
+        let open = false;
+  
+        function setOpen(v, focusFirst) {
+          if (v === open) return;
+          open = v;
+          menu.classList.toggle('is-open', v);
+          btn.setAttribute('aria-expanded', v);
+          if (v && focusFirst) items()[0].focus();
+        }
+        btn.addEventListener('click', (e) => setOpen(!open, e.detail === 0));
+        document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
+        wrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && open) { setOpen(false); btn.focus(); return; }
+          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+          e.preventDefault();
+          if (!open) { setOpen(true, true); return; }
+          const list = items(), i = list.indexOf(document.activeElement);
+          const next = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
+          list[next].focus();
+        });
+        menu.addEventListener('click', async (e) => {
+          const choice = e.target.closest('.acct-seg button');
+          if (choice) { Momento.theme.set(choice.dataset.theme); return; }   // stays open so the change can be seen
+          const item = e.target.closest('.acct-item');
+          if (!item) return;
+          setOpen(false);
+          const act = item.dataset.act;
+          if (act === 'settings') Momento.openSettings(btn);
+          else if (act === 'help') Momento.openHelp(btn);
+          else { try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (err) { Momento.toast('Could not log out', err.message); return; } Momento.account.clear(); if (onLogout) { Momento.flash('You’re logged out', 'Log back in any time'); onLogout(); } else Momento.toast('You’re logged out', 'Log back in any time'); }
+        });
+  
+        const syncSeg = () => {
+          segBtns.forEach((b, i) => {
+            const on = b.dataset.theme === Momento.theme.pref;
+            b.setAttribute('aria-checked', on);
+            if (on) seg.style.setProperty('--i', i);
+          });
+        };
+        Momento.theme.onChange(syncSeg);
+        syncSeg();
+        return { avatars: wrap.querySelectorAll('.acct-av'), name: wrap.querySelector('.acct-name'), headName: menu.querySelector('.acct-head b'), headMail: menu.querySelector('.acct-head small') };
+      }
+      function render() {
+        const a = current, show = !!a || !!always;
+        host.hidden = !show;
+        if (out) out.hidden = show;
+        if (!show) return;
+        built ||= build();
+        const name = (a && a.name) || '';
+        built.avatars.forEach((el) => {
+          const pic = a && a.avatarUrl;
+          el.textContent = pic ? '' : (name || 'You')[0].toUpperCase();
+          if (pic) { const img = document.createElement('img'); img.src = pic; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => { img.remove(); el.textContent = (name || 'You')[0].toUpperCase(); }; el.append(img); }
+        });
+        built.name.textContent = first(name) || 'You';
+        built.headName.textContent = name || 'You';
+        built.headMail.textContent = (a && a.email) || 'Your account';
+      }
+      accountListeners.add(render);
+      render();
+    }
+  
+    // ---- The thread: a faint string draws itself down the page as you scroll, with small see-through
+    // polaroids hung along it. A page marks the container:
+    //   <div class="trail" data-trail data-avoid="selectors of content to keep clear" data-pad="26">
+    // The string runs behind everything; a print is only hung where its box clears the avoided content ----
+    (function trail() {
+      const host = document.querySelector('[data-trail]');
+      if (!host) return;
+      const wrap = host.parentElement;
+      const IDS = [1062, 1011, 1027, 64, 1047, 1012, 177, 1025, 91, 1040, 1015, 1035, 1005, 1043, 1050, 1054, 1058, 1060, 1068, 1074];
+      const TILT = [-9, 6, -5, 10, -12, 4, -7, 8, -3, 12, -10, 5];
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      const path = document.createElementNS(NS, 'path');
+      svg.setAttribute('class', 'trail-svg'); path.setAttribute('class', 'trail-line'); svg.append(path);
+      const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+      let prints = [], lut = [], len = 0, target = 0, drawn = 0, raf = 0, timer = 0;
+  
+      function build() {
+        host.replaceChildren(svg); prints = []; lut = [];
+        const wr = wrap.getBoundingClientRect(), W = wrap.offsetWidth, H = wrap.offsetHeight;
+        const small = innerWidth < 700, pad = +host.dataset.pad || 26;
+        svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  
+        // A vertical trochoid: when the loop radius d outgrows the step r, the string curls
+        const y0 = innerHeight * .85, y1 = H - 40;
+        const r = clamp(W * .05, 46, 80) * (small ? .7 : 1), swing = small ? .26 : .36;
+        const pts = [];
+        for (let t = 0; ; t += .11) {
+          const d = r * (.55 + .95 * Math.max(0, Math.sin(t * .23 + 1)));
+          const y = y0 + r * t - d * Math.sin(t);
+          if (y > y1) break;
+          pts.push(`${(W / 2 + W * swing * Math.sin(t * .11) + W * .07 * Math.sin(t * .37) + d * Math.cos(t)).toFixed(1)},${y.toFixed(1)}`);
+        }
+        path.setAttribute('d', 'M' + pts.join(' L'));
+        len = path.getTotalLength();
+        path.style.strokeDasharray = len;
+        // Length against the furthest point reached so far, so the loops don't confuse the search
+        let maxY = -Infinity;
+        for (let i = 0; i <= 600; i++) {
+          const l = len * i / 600;
+          maxY = Math.max(maxY, path.getPointAtLength(l).y);
+          lut.push([l, maxY]);
+        }
+  
+        // The content to keep clear of, measured once, relative to the page: whole blocks the page names
+        // (data-avoid), plus every line of text, picture and control, so a print can hang in the empty
+        // parts of a glass panel but never under what you read
+        const blocks = [];
+        const keep = (b, p) => { if (b.width > 1 && b.height > 1) blocks.push({ l: b.left - wr.left - p, t: b.top - wr.top - p, r: b.right - wr.left + p, b: b.bottom - wr.top + p }); };
+        const sel = host.dataset.avoid || '';
+        if (sel) wrap.querySelectorAll(sel).forEach((el) => keep(el.getBoundingClientRect(), pad));
+        wrap.querySelectorAll('img, svg, video, canvas, input, textarea, select, button, .btn').forEach((el) => {
+          if (!host.contains(el) && (el.tagName !== 'svg' || !el.parentElement.closest('svg'))) keep(el.getBoundingClientRect(), 8);
+        });
+        const range = document.createRange();
+        const words = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
+        for (let n; (n = words.nextNode());) {
+          if (!n.nodeValue.trim() || host.contains(n) || /^(SCRIPT|STYLE|NOSCRIPT)$/.test(n.parentElement.tagName)) continue;
+          range.selectNodeContents(n);
+          for (const q of range.getClientRects()) keep(q, 10);
+        }
+        const hits = (x, y, w, h) => blocks.some((b) => x + w > b.l && x < b.r && y + h > b.t && y < b.b);
+  
+        // Hang a print every so often along the string, wherever there is room for it
+        const gap = small ? 80 : 90, kept = [];
+        let k = 0;
+        for (let l = 140; l < len - 40; l += gap) {
+          const p = path.getPointAtLength(l), q = path.getPointAtLength(l + 4);
+          const pw = (small ? 30 : 36) + (k % 3) * 4, ph = pw + 9;
+          const x = p.x - pw / 2, y = p.y - 2;
+          if (x < 8 || x + pw > W - 8 || y < 80 || y + ph > H - 40 || hits(x, y, pw, ph)) continue;
+          // Not too near the last one: prints are an accent on the string, not a row of photos
+          if (kept.some((o) => Math.hypot(o.x - x, o.y - y) < 150)) continue;
+          kept.push({ x, y });
+          // It hangs under the string, leaning a little with the string's direction
+          const dev = ((Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI - 90 + 540) % 360) - 180;
+          const el = document.createElement('span');
+          el.className = 'tp';
+          el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * .25, -14, 14) + TILT[k % TILT.length] * .5).toFixed(1)}deg`;
+          el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
+          host.append(el);
+          prints.push({ el, l, on: false });
+          k++;
+        }
+        drawn = reduced.matches ? len : Math.min(drawn, len);
+        target = reduced.matches ? len : aim();
+        write();
+        if (drawn !== target) kick();
+      }
+  
+      // How far along the string the reading line (a little above the bottom of the screen) has got
+      function aim() {
+        if (!lut.length) return 0;
+        const y = scrollY + innerHeight * .7;
+        let lo = 0, hi = lut.length - 1;
+        while (lo < hi) { const mid = (lo + hi) >> 1; lut[mid][1] < y ? lo = mid + 1 : hi = mid; }
+        return lut[lo][0];
+      }
+      function write() {
+        path.style.strokeDashoffset = (len - drawn).toFixed(1);
+        for (const p of prints) {
+          const on = p.l <= drawn;
+          if (on !== p.on) { p.on = on; p.el.classList.toggle('is-on', on); }
+        }
+      }
+      // The string eases toward the reading line; the loop stops as soon as it gets there
+      function tick() {
+        raf = 0;
+        const d = target - drawn;
+        drawn = Math.abs(d) < .5 ? target : drawn + d * .2;
+        write();
+        if (drawn !== target) raf = requestAnimationFrame(tick);
+      }
+      function kick() { if (!raf) raf = requestAnimationFrame(tick); }
+  
+      if (!reduced.matches) addEventListener('scroll', () => { target = aim(); kick(); }, { passive: true });
+      new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(build, 250); }).observe(wrap);
+      // Text that is still rising into place when the page first measures is measured again once it has settled
+      const later = (ms) => () => { clearTimeout(timer); timer = setTimeout(build, ms); };
+      addEventListener('load', later(1800));
+      document.addEventListener('momento:intro-end', later(1600));
+    })();
+  
+    // ---- Leaving a page, in browsers that can't cross-fade between pages themselves: the page fades and
+    // lifts away (CSS .is-leaving), then the next one loads ----
+    // (Also for pages opened straight from the folder: browsers only cross-fade pages served from an address)
+    const ptFile = location.protocol === 'file:';
+    if ((!('CSSViewTransitionRule' in window) || ptFile) && !reduced.matches) {
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a[href]');
+        if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute('download')) return;
+        const url = new URL(a.href, location.href);
+        if (url.origin !== location.origin || url.pathname === location.pathname) return;   // other sites, mailto:, same-page anchors
+        e.preventDefault();
+        root.classList.add('is-leaving');
+        if (ptFile) { root.classList.add('pt-file'); try { sessionStorage.setItem('momento-pt', '1'); } catch (err) {} }
+        setTimeout(() => { location.href = url.href; }, 240);
+      });
+      addEventListener('pageshow', (e) => { if (e.persisted) root.classList.remove('is-leaving'); });   // back from the page cache
+    }
+  
+    // ---- Page intros ----
+    // A page puts a veil (#intro) over itself and plays a short sequence once per tab session, ending by
+    // handing off to real elements (the header logo, an album cover, a nav icon). Momento.intro(run) gives
+    // `run` a small kit. A press, key, wheel or touch skips straight to the finished page.
+    Momento.intro = (run) => {
+      const veil = document.getElementById('intro');
+      if (!root.classList.contains('intro-on')) { if (veil) veil.remove(); return; }
+      const anims = [], undo = [];
+      let done = false, revealed = false;
+      // The moment the page's own entrance (groups rising in, headings) may begin
+      const reveal = () => { if (!revealed) { revealed = true; document.dispatchEvent(new Event('momento:intro-reveal')); } };
+      const EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+      const skip = () => finish(true);
+      function finish(skipped) {
+        if (done) return;
+        done = true;
+        EVENTS.forEach((t) => removeEventListener(t, skip, true));
+        root.classList.remove('intro-on');
+        anims.forEach((a) => a.cancel());
+        undo.forEach((fn) => fn());
+        try { sessionStorage.setItem('momento-intro-' + root.dataset.page, '1'); } catch (e) {}
+        reveal();
+        document.dispatchEvent(new Event('momento:intro-end'));
+        if (!veil) return;
+        if (!skipped) { veil.remove(); return; }
+        // Skipped: the veil keeps catching the press for a moment, then fades off the finished page
+        veil.style.display = 'block';
+        veil.animate({ opacity: [1, 0] }, { duration: 260, easing: 'ease-out' }).finished.then(() => veil.remove(), () => veil.remove());
+      }
+      // Once the intro has finished (or been skipped) nothing in the sequence may carry on: its promises
+      // simply never settle, so the code after an `await` never runs against elements that are gone
+      const never = new Promise(() => {});
+      const kit = {
+        get done() { return done; },
+        reveal, finish,
+        undo: (fn) => undo.push(fn),
+        // Plays an animation that holds its end state until the intro finishes; resolves when it ends
+        play(el, frames, opts = {}) {
+          if (done || !el) return never;
+          const a = el.animate(frames, { fill: 'both', ...opts });
+          anims.push(a);
+          return a.finished.then(() => {}, () => never);
+        },
+        // Keeps a real element invisible until its turn
+        hold: (el) => kit.play(el, [{ opacity: 0 }, { opacity: 0 }], { duration: 1 }),
+        wait: (ms) => new Promise((r) => setTimeout(() => { if (!done) r(); }, ms)),
+        // Calls fn(progress 0..1) every frame for `ms`
+        tween: (ms, fn) => new Promise((res) => {
+          const t0 = performance.now();
+          const step = (t) => { if (done) return; const p = Math.min(1, (t - t0) / ms); fn(p); if (p < 1) requestAnimationFrame(step); else res(); };
+          requestAnimationFrame(step);
+        }),
+        // Where `el` would have to move and scale (about its top left) to cover `to`
+        flip(el, to) {
+          const a = el.getBoundingClientRect();
+          return `translate(${to.left - a.left}px, ${to.top - a.top}px) scale(${to.width / a.width}, ${to.height / a.height})`;
+        },
+      };
+      if (scrollY > 40) { finish(); return; }   // reopened part-way down: no intro
+      EVENTS.forEach((t) => addEventListener(t, skip, { capture: true, passive: true }));
+      setTimeout(() => finish(), 9000);
+      Promise.resolve().then(() => run(kit)).then(() => finish(), (e) => { console.error(e); finish(true); });
+    };
+
+    // ---- Nav flourish: only home has a page intro. On the other pages the current nav item gives a short
+    // nudge once per tab (the Settings knobs slide into place). Transform only; skipped for reduced motion ----
+    Momento.flourish = () => {
+      const page = document.documentElement.dataset.page;
+      const cur = document.querySelector('.nav > .nav-item[aria-current="page"]');
+      if (!cur || !cur.animate || page === 'home' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      try { if (sessionStorage.getItem('momento-flourish-' + page)) return; sessionStorage.setItem('momento-flourish-' + page, '1'); } catch (e) {}
+      const SPRING = 'cubic-bezier(.34, 1.4, .64, 1)';
+      const knobs = cur.classList.contains('nav-settings') ? [...cur.querySelectorAll('svg circle')] : [];
+      if (knobs.length) knobs.forEach((k, i) => k.animate([{ transform: `translateX(${i ? 3 : -3}px)` }, { transform: 'none' }], { duration: 480, delay: i * 90, easing: SPRING }));
+      else cur.animate([{ transform: 'none' }, { transform: 'translateY(-2px) scale(1.1)', offset: .4 }, { transform: 'none' }], { duration: 380, easing: SPRING });
+    };
+    if (document.documentElement.dataset.page !== 'home') addEventListener('load', () => setTimeout(() => Momento.flourish(), 250), { once: true });
+  
+    // ---- Site footer: one footer for every page. A page marks it <footer class="site-foot" data-site-foot> ----
+    document.querySelectorAll('[data-site-foot]').forEach((foot) => {
+      const home = root.dataset.page === 'home', P = home ? '' : 'index.html';
+      const up = svg('<path d="M12 19V5M6 11l6-6 6 6"/>', 15), chev = svg('<path d="M6 9l6 6 6-6"/>', 16);
+      foot.innerHTML = `
+        <div class="sf-grid">
+          <div class="sf-brand">
+            <a class="sf-logo" href="${home ? '#home' : 'index.html'}" aria-label="Momento, home"><svg class="glyph" aria-hidden="true"><use href="#glyph-album"/></svg><svg class="brand-word" aria-hidden="true"><use href="#wordmark"/></svg></a>
+            <p>Every photo from your event, in one shared album.</p>
+          </div>
+          <nav class="sf-col" aria-labelledby="sfProduct">
+            <h2 id="sfProduct"><span class="sf-h-text">Product</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfProductList">Product<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
+            <ul id="sfProductList">
+              <li><a class="sf-link" href="${P}#how-it-works">How it works</a></li>
+              <li><a class="sf-link" href="${P}#features">Features</a></li>
+              <li><a class="sf-link" href="${P}#quality">Full quality</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfAlbums">
+            <h2 id="sfAlbums"><span class="sf-h-text">Your albums</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfAlbumsList">Your albums<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
+            <ul id="sfAlbumsList">
+              <li><a class="sf-link" href="albums.html">My albums</a></li>
+              <li><a class="sf-link" href="events.html#join">Join with a code</a></li>
+              <li><a class="sf-link" href="events.html#groups">Groups</a></li>
+              <li><a class="sf-link" href="${P}#how-it-works" data-create>Create an album</a></li>
+              <li><a class="sf-link" href="settings.html">Settings</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfEvents">
+            <h2 id="sfEvents"><span class="sf-h-text">Events</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfEventsList">Events<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
+            <ul id="sfEventsList">
+              <li><a class="sf-link" href="events.html#events">Events near you</a></li>
+              <li><a class="sf-link" href="${P}#how-it-works" data-create data-create-kind="event">Host a public event</a></li>
+              <li><a class="sf-link" href="events.html#alerts">Event alerts</a></li>
+            </ul>
+          </nav>
+          <nav class="sf-col" aria-labelledby="sfHelp">
+            <h2 id="sfHelp"><span class="sf-h-text">Help</span><button class="sf-head" type="button" aria-expanded="false" aria-controls="sfHelpList">Help<span class="sf-chev" aria-hidden="true">${chev}</span></button></h2>
+            <ul id="sfHelpList">
+              <li><button class="sf-link" type="button" data-foot-act="help">Help and support</button></li>
+              <li><a class="sf-link" href="support.html">Contact support</a></li>
+              <li><a class="sf-link" href="${P}#faq">FAQ</a></li>
+              <li><a class="sf-link" href="mailto:${SUPPORT}">Email support</a></li>
+              <li><a class="sf-link" href="privacy.html">Privacy policy</a></li>
+              <li><a class="sf-link" href="terms.html">Terms of Service</a></li>
+              <li data-foot-account hidden><button class="sf-link" type="button" data-foot-act="settings">Account settings</button></li>
+            </ul>
+          </nav>
+        </div>
+        <div class="sf-base">
+          <p class="sf-legal"><span>© 2026 HexArch Limited</span><span>Proof of concept. Design and features are subject to change.</span></p>
+          <div class="acct-seg" role="radiogroup" aria-label="Appearance">
+            <span class="acct-seg-pill" aria-hidden="true"></span>
+            <button type="button" role="radio" aria-checked="false" data-theme="light">${ICON.sun}Light</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="dark">${ICON.moon}Dark</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="system">${ICON.system}System</button>
+          </div>
+          <button class="sf-top" type="button">Back to top${up}</button>
+        </div>`;
+      wireSeg(foot.querySelector('.acct-seg'));
+      foot.querySelectorAll('[data-foot-act]').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.footAct === 'help') Momento.openHelp(b); else Momento.openSettings(b);
+      }));
+      // Phones: each group heading folds its list (the buttons are display:none on larger screens)
+      foot.querySelectorAll('.sf-head').forEach((b) => b.addEventListener('click', () => {
+        const col = b.closest('.sf-col'), open = !col.classList.contains('is-open');
+        col.classList.toggle('is-open', open); b.setAttribute('aria-expanded', String(open));
+        if (!open) return;
+        // The footer ends the page, so a group that has just opened can sit below the screen: once it has finished growing, bring it into view
+        let t;
+        const settle = () => { clearTimeout(t); col.removeEventListener('transitionend', onEnd); col.scrollIntoView({ block: 'nearest', behavior: reduced.matches ? 'auto' : 'smooth' }); };
+        const onEnd = (e) => { if (e.target === col && e.propertyName === 'grid-template-rows') settle(); };
+        t = setTimeout(settle, 700); col.addEventListener('transitionend', onEnd);
+      }));
+      foot.querySelector('.sf-top').addEventListener('click', () => scrollTo({ top: 0, behavior: reduced.matches ? 'auto' : 'smooth' }));
+      // Account settings only makes sense once there is an account
+      const acct = foot.querySelector('[data-foot-account]');
+      const syncAcct = () => { acct.hidden = !current; };
+      accountListeners.add(syncAcct); syncAcct();
+      // On the home page its own sections are reached the way its menu does it (the album stage is pinned)
+      if (home) foot.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href^="#"]');
+        if (!a || a.matches('.sf-logo')) return;
+        const item = document.querySelector(`.menu-item[href="${a.getAttribute('href')}"]`);
+        if (item) { e.preventDefault(); item.click(); }
+      });
+    });
+  
+    // Pages mark where the chip goes:
+    //   <div data-acct-host hidden data-acct-out="authOut"></div>            (home: shown once signed in)
+    //   <div data-acct-host data-acct-always data-acct-logout="index.html">   (albums: always there)
+    document.querySelectorAll('[data-acct-host]').forEach((host) => {
+      const to = host.dataset.acctLogout;
+      mountAccount({
+        host,
+        out: host.dataset.acctOut ? document.getElementById(host.dataset.acctOut) : null,
+        always: host.hasAttribute('data-acct-always'),
+        onLogout: to ? () => { location.href = to; } : null,
+      });
+    });
+  })();
+
+  // ---- Popup cards catch the pointer light too (they're created later, so listen on the page) ----
+  (() => {
+    const SEL = '.auth-card, .modal-card, .acct-card, .vgate-card';
+    let el = null, x = 0, y = 0, queued = false;
+    addEventListener('pointermove', (e) => {
+      const card = e.target.closest ? e.target.closest(SEL) : null;
+      if (card !== el) { if (el) el.style.setProperty('--shine', 0); el = card; if (el) el.style.setProperty('--shine', 1); }
+      if (!el) return;
+      x = e.clientX; y = e.clientY;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--mx', `${x - r.left}px`);
+        el.style.setProperty('--my', `${y - r.top}px`);
+      });
+    }, { passive: true });
+  })();
+    </script>
+  <!-- /@shared:js -->
+</body>
+</html>

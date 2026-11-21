@@ -1,0 +1,118 @@
+    .join-scan { display: block; margin: .9rem auto 0; padding: .45rem .8rem; border-radius: 100px; color: var(--slate); font: 600 .9rem var(--font-main); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+    .join-scan:hover { color: var(--dusk); }   /* a ghost GlassButton (assets/glass.css) */
+    .note { min-height: 1.2rem; margin: .9rem 0 0; color: var(--slate); font-size: .85rem; }
+    .field span { display: block; margin-bottom: .3rem; font-size: .82rem; font-weight: 600; color: var(--slate); }
+    .field input {
+      width: 100%; box-sizing: border-box; height: 3rem; padding: 0 1rem; border: none; border-radius: 14px;
+      background: rgba(255,255,255,.55); color: var(--dusk); font: 600 1.05rem var(--font-main); letter-spacing: .06em; text-transform: uppercase;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 0 0 1px rgba(46,44,58,.12); transition: box-shadow .2s ease;
+    }
+    .field input::placeholder { letter-spacing: .02em; text-transform: none; font-weight: 500; color: var(--stone); }
+    .field input:hover { box-shadow: inset 0 0 0 1px rgba(46,44,58,.3); }
+    .field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--dusk), 0 0 0 4px rgba(188,178,236,.45); }
+    .error { color: #9A3D3D; }
+
+    /* Join code: one box per character, like a verification code (K7Q-48DM) */
+    .otp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto repeat(4, minmax(0, 1fr)); align-items: center; gap: .4rem; }
+    .otp input {
+      width: 100%; min-width: 0; box-sizing: border-box; height: 3.4rem; padding: 0; border: none; border-radius: var(--r-group, 16px);
+      background: var(--g-input); color: var(--dusk); text-align: center; caret-color: transparent;
+      font: 700 1.35rem/1 ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; text-transform: uppercase;
+      box-shadow: var(--g-input-rim);
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+    }
+    .otp input:hover { box-shadow: var(--g-input-rim-hover); }
+    .otp input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); transform: translateY(-2px); }
+    .otp input.is-filled { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--dusk) 38%, transparent); }
+    .otp input.is-filled:focus { box-shadow: inset 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--g-input-glow); }
+    .otp input::placeholder { color: color-mix(in srgb, var(--dusk) 18%, transparent); }
+    .otp-dash { width: .7rem; height: 2px; border-radius: 2px; background: var(--stone, #A9A5B4); }
+    .otp.is-error input { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
+    .otp.is-shake { animation: otpShake .42s cubic-bezier(.36,.07,.19,.97); }
+    @keyframes otpShake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    @media (prefers-reduced-motion: reduce) { .otp.is-shake { animation: none; } .otp input:focus { transform: none; } }
+    @media (max-width: 380px) { .otp { gap: .28rem; } .otp input { height: 3rem; font-size: 1.15rem; border-radius: 11px; } }
+    :root[data-theme="dark"] .error { color: #F0A3A3; }
+    :root[data-theme="dark"] .otp.is-error input { box-shadow: inset 0 0 0 1.5px #F0A3A3; }
+/* The dialog is only a frame; the form inside is the glass sheet (GlassSheet in assets/glass.css), and the dim
+   behind it is the shared one */
+#joinModal { padding: 0; border: 0; width: min(420px,calc(100vw - 32px)); max-width: none; background: none; overflow: visible; color: var(--dusk); }
+#joinForm { position: relative; padding: 1.6rem; border-radius: var(--r-card, 28px); }
+#joinForm h2 { margin: 0; }
+#joinForm .close { position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; cursor: pointer; }
+#joinForm .modal-sub { color: var(--slate); }
+#joinForm .otp input { padding: 0; }
+#joinForm .otp-dash { margin: 0; }
+
+/* ---------- Ways in: join with a code, scan a QR code, or make an album ---------- */
+.ev-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: var(--s3); }
+
+/* ---------- Your join requests: stubs waiting at the door ---------- */
+.ea-requests { margin: 0 0 var(--s3); }
+.ea-requests ul { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.ea-req.glass { display: inline-flex; align-items: center; gap: .6rem; padding: .55rem 1rem .55rem .85rem; font-size: .9rem; }
+.ea-req i { width: 8px; height: 8px; border-radius: 50%; background: var(--copper); animation: ea-pulse 1.8s ease-out infinite; }
+.ea-req b { font-weight: 650; }
+#eaInvites .ea-req.glass { padding: .4rem .4rem .4rem 1.1rem; }
+#eaInvites .ea-mini { margin-left: .2rem; }
+.ea-req span { color: var(--slate); }
+.ea-req.is-declined i { background: #9A3D3D; animation: none; }
+@keyframes ea-pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--copper) 55%, transparent); } to { box-shadow: 0 0 0 7px transparent; } }
+
+/* ---------- Events you host ---------- */
+.ea-total { display: inline-grid; place-items: center; margin-left: .4rem; vertical-align: .3em; min-width: 1.7rem; height: 1.7rem; padding: 0 .45rem; box-sizing: border-box; border-radius: 100px; background: rgba(46,44,58,.08); font-size: .8rem; font-weight: 650; letter-spacing: 0; }
+.ea-total:empty { display: none; }
+:root[data-theme="dark"] .ea-total { background: rgba(255,255,255,.1); }
+
+/* Hosting: how joining is set up, then Settings */
+.ea-policy { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
+.ea-policy span { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .6rem; border-radius: 100px; background: rgba(111,152,150,.14); color: #3F6664; font-size: .74rem; font-weight: 600; }
+.ea-policy span.off { background: rgba(154,96,61,.12); color: #8A5233; }
+:root[data-theme="dark"] .ea-policy span { background: rgba(160,205,200,.14); color: #BFE0DC; }
+:root[data-theme="dark"] .ea-policy span.off { background: rgba(240,180,150,.12); color: #F0C4A8; }
+.ea-chip { display: inline-flex; align-items: center; gap: .45rem; min-height: 2.4rem; padding: 0 1rem; border-radius: 100px; font: 650 .85rem var(--font-main); cursor: pointer; transition: transform .35s var(--spring); }   /* clear GlassButton (assets/glass.css) */
+a.ea-chip { text-decoration: none; }
+@media (hover: hover) { .ea-chip:hover { transform: translateY(-2px); } }
+.ea-chip svg { flex: none; }
+.ea-badge { display: inline-grid; place-items: center; min-width: 1.25rem; height: 1.25rem; padding: 0 .3rem; box-sizing: border-box; border-radius: 100px; background: var(--copper); color: var(--paper); font-size: .7rem; font-weight: 700; }
+
+/* One event you host: its photo, where it stands, how joining is set up, and the way to its settings */
+.eh-list { display: grid; gap: .8rem; }
+.eh { --radius: 28px; position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: .8rem 1rem .8rem .8rem; transition: transform .4s var(--spring); }
+@media (hover: hover) { .eh:hover { transform: translateY(-2px); } }
+.eh-pic { display: grid; place-items: center; width: 4.8rem; height: 4.8rem; overflow: hidden; border-radius: 20px; color: #2E2C3A; font-size: 1.7rem; font-weight: 700;
+  background: radial-gradient(90% 80% at 15% 10%, #EBD3DC, transparent 60%), radial-gradient(80% 80% at 95% 95%, #C6DEDA, transparent 60%), linear-gradient(135deg, #D6CDEC, #E9E2F3); }
+.eh-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.eh-text { display: grid; gap: .3rem; min-width: 0; }
+.eh-text h3 { margin: 0; overflow: hidden; font-size: 1.15rem; font-weight: 650; letter-spacing: -.025em; white-space: nowrap; text-overflow: ellipsis; }
+.eh-open { color: inherit; text-decoration: none; }
+/* The whole row opens the album; the Settings button sits above that */
+.eh-open::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: 28px; }
+.eh-open:focus-visible { outline: none; }
+.eh:has(.eh-open:focus-visible) { outline: 2px solid var(--dusk); outline-offset: 3px; }
+.eh-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .8rem; color: var(--slate); font-size: .86rem; }
+.eh-state { display: inline-flex; align-items: center; gap: .4rem; color: var(--dusk); font-weight: 650; }
+.eh-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--copper); }
+.eh-state.is-live i { background: #3E9B6E; animation: ea-pulse 1.8s ease-out infinite; }
+.eh-state.is-kept i { background: #6F9896; }
+.eh .ea-policy { margin-top: .1rem; }
+.eh > .ea-chip { position: relative; z-index: 2; }
+@media (max-width: 600px) {
+  .eh { grid-template-columns: auto minmax(0, 1fr); }
+  .eh > .ea-chip { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* ---------- An album opened on this page (the My albums window, loaded over it) ---------- */
+#eaViewer { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; overflow: hidden; }
+#eaViewer::backdrop { background: var(--g-backdrop); }
+#eaViewer.is-ready::backdrop { background: transparent; }
+#eaViewer iframe { display: block; width: 100%; height: 100%; border: 0; background: transparent; color-scheme: normal; opacity: 0; transition: opacity .25s ease; }
+#eaViewer.is-ready iframe { opacity: 1; }
+.ea-viewer-wait { position: absolute; left: 50%; top: 50%; margin: 0; padding: .6rem 1.1rem; translate: -50% -50%; border: 1px solid transparent; border-radius: 100px; background: var(--g-menu) padding-box, var(--g-rim-menu) border-box; color: var(--dusk); font-size: .9rem; font-weight: 600; box-shadow: var(--g-sh-pop); transition: opacity .2s ease; }
+#eaViewer.is-ready .ea-viewer-wait { opacity: 0; }
+:root[data-theme="dark"] #eaViewer iframe { color-scheme: dark; }
+
+@media (prefers-reduced-motion: reduce) {
+  .eh, .ea-chip, .ea-mini { transition: none; }
+  .ea-req i, .eh-state.is-live i { animation: none; }
+}

@@ -1,0 +1,21 @@
+# dependencies and build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# environment files (keys and secrets never go in git)
+.env
+.env.*
+!.env.example
+
+# the QA toolbox: its packages, its copy of the original site, and the screenshots it writes
+qa/node_modules/
+qa/reference-site/
+qa/out/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.log

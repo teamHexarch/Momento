@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no, email=no, address=no">
+  <title>Groups | Momento</title>
+  <meta name="description" content="Your friend groups on Momento.">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+  <!-- Home-screen icon, installable app, browser bar colour (kept in step with the chosen theme) -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ECECF3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121119" media="(prefers-color-scheme: dark)">
+  <script>(() => { const r = document.documentElement, m = document.querySelectorAll('meta[name="theme-color"]'), sync = () => { if (!r.dataset.theme) return; const c = r.dataset.theme === 'dark' ? '#121119' : '#ECECF3'; m.forEach((x) => { x.content = c; }); }; sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); })();</script>
+  <!-- Link previews (WhatsApp, iMessage, Slack, Instagram, X) -->
+  <meta property="og:site_name" content="Momento">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Groups | Momento">
+  <meta property="og:description" content="Your friend groups on Momento.">
+  <meta property="og:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Momento: three photo prints from one shared event album">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Groups | Momento">
+  <meta name="twitter:description" content="Your friend groups on Momento.">
+  <meta name="twitter:image" content="https://hexarch.org/assets/og-momento.jpg">
+  <meta name="robots" content="noindex">
+  <!-- Groups now live on the Social page (events.html), above the events -->
+  <script>location.replace('events.html' + location.search + '#groups');</script>
+  <meta http-equiv="refresh" content="0; url=events.html#groups">
+</head>
+<body>
+  <p><a href="events.html#groups">Groups have moved to the Social page.</a></p>
+</body>
+</html>
