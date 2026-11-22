@@ -184,11 +184,16 @@ async function recordSample(job, image, scores, action, explicit) {
   try {
     const floats = await features(image);
     if (!floats) return;
+    // Never for an account being deleted, nor for an upload this check no longer owns
+    const live = async () => await User.exists({ _id: job.user, deletingAt: null }) && await UploadCheck.exists({ _id: job._id });
+    if (!await live()) return;
     await TrainingSample.updateOne({ _id: job._id }, { $set: {
       user: job.user, album: job.album, hash: job.hash, layer: FEATURE_LAYER, scoreVersion: SCORE_VERSION,
       features: packFeatures(floats), classes: scores?.classes, auto: action, explicit,
       expires: new Date(Date.now() + UNLABELLED_DAYS * 86400000), at: new Date(),
     } }, { upsert: true });
+    // The account deletion may have run meanwhile: then this sample goes too
+    if (!await live()) await TrainingSample.deleteOne({ _id: job._id });
   } catch (error) { console.error('Photo training sample not saved: %s', error.message); }
 }
 
