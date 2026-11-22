@@ -242,6 +242,34 @@
     .ev-flash { position: absolute; inset: 0; z-index: 1; background: #fff; opacity: 0; pointer-events: none; }
     .ev-flash.is-on { animation: ev-flash .35s ease-out; }
     @keyframes ev-flash { from { opacity: .85; } to { opacity: 0; } }
+    /* The camera's tools: zoom (chips + slider), flash, timer, grid lines, brightness */
+    .ev-cam video { touch-action: none; transition: transform .18s ease-out; }
+    .ev-cam-tools { position: absolute; right: max(14px, env(safe-area-inset-right)); top: 50%; z-index: 2; display: flex; flex-direction: column; gap: .55rem; translate: 0 -50%; }
+    .ev-cam-tools .mq-btn[aria-pressed="true"], .ev-cam .ev-zchip[aria-pressed="true"] { background: #fff; color: #2E2C3A; }
+    .ev-timer { position: relative; }
+    .ev-timer span { position: absolute; right: -.2rem; bottom: -.2rem; min-width: 1.15rem; padding: .05rem .25rem; border-radius: 100px; background: #fff; color: #2E2C3A; font-size: .64rem; font-weight: 800; line-height: 1.3; }
+    .ev-timer span:empty { display: none; }
+    .ev-zoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.2rem); z-index: 2; display: grid; justify-items: center; gap: .55rem; translate: -50% 0; }
+    .ev-zoom[hidden], .ev-bright[hidden] { display: none; }
+    .ev-zoom-chips { display: flex; gap: .3rem; padding: .25rem; border-radius: 100px; background: rgba(12, 11, 18, .45); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    .ev-zchip { min-width: 2.5rem; height: 2.1rem; padding: 0 .55rem; border: 0; border-radius: 100px; background: transparent; color: #fff; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-zchip:hover { background: rgba(255, 255, 255, .16); }
+    .ev-zchip:active { transform: scale(.9); }
+    .ev-zchip:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 2px; }
+    .ev-zoom-range, .ev-bright input { width: min(14rem, 60vw); accent-color: #fff; cursor: pointer; }
+    .ev-zoom-range:focus-visible, .ev-bright input:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 4px; border-radius: 4px; }
+    .ev-bright { position: absolute; left: max(16px, env(safe-area-inset-left)); top: 50%; z-index: 2; display: grid; gap: .35rem; translate: 0 -50%; color: rgba(255, 255, 255, .85); font-size: .78rem; font-weight: 600; }
+    .ev-bright input { width: 8.5rem; }
+    /* Grid lines: the rule of thirds */
+    .ev-grid { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .25s ease;
+      background: linear-gradient(to right, transparent calc(33.333% - .5px), rgba(255, 255, 255, .45) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .45) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)),
+        linear-gradient(to bottom, transparent calc(33.333% - .5px), rgba(255, 255, 255, .45) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .45) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)); }
+    .ev-cam.has-grid .ev-grid { opacity: 1; }
+    /* The self-timer's countdown */
+    .ev-count { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: #fff; font-size: clamp(6rem, 24vw, 11rem); font-weight: 800; letter-spacing: -.05em; text-shadow: 0 4px 30px rgba(0, 0, 0, .45); pointer-events: none; }
+    .ev-cam.is-counting .ev-shutter { background: rgba(255, 120, 100, .55); }
+    @media (max-width: 600px) { .ev-bright { top: auto; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 10.4rem); translate: 0 0; } }
+    @media (prefers-reduced-motion: reduce) { .ev-cam video, .ev-grid, .ev-zchip { transition: none; } }
 
     /* Asking before an upload */
     .ev-ask { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 32px)); height: fit-content; max-height: calc(100dvh - 32px); box-sizing: border-box; padding: 1.4rem; border-radius: var(--r-card, 28px); overflow: auto;
@@ -840,51 +868,171 @@
   }
 
   // ---- Momento's camera: photos go into the upload, never into the device's gallery ----
+  // Zoom (the lens's own zoom where the browser offers it, otherwise a digital zoom that crops the photo to match what
+  // you see): the slider, the 1× 2× 3× chips (0.5× on phones with a wide lens), a pinch, the mouse wheel or + and -.
+  // Also: switch camera, flash (where the camera has a light), a 3 or 10 second timer, grid lines, and brightness
+  // (where the camera lets the page set it). The timer and grid choices are remembered on this device.
+  const CAM_ICON = {
+    torch: svgIcon('<path d="M13 2 5 13h6l-1 9 8-11h-6l1-9Z"/>', 18),
+    timer: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/>', 18),
+    grid: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/>', 18),
+  };
+  const CAM_KEY = 'momento-camera';
   function camera() {
     return new Promise((resolve) => {
+      let prefs = { timer: 0, grid: false };
+      try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(CAM_KEY) || '{}') }; } catch (e) {}
+      const savePrefs = () => { try { localStorage.setItem(CAM_KEY, JSON.stringify(prefs)); } catch (e) {} };
       const d = document.createElement('dialog');
       d.className = 'mq-dlg ev-cam';
       d.innerHTML = `
         <video playsinline muted autoplay></video>
+        <span class="ev-grid" aria-hidden="true"></span>
         <span class="ev-flash" aria-hidden="true"></span>
+        <span class="ev-count" aria-hidden="true"></span>
         <div class="ev-cam-top"><h2>Take a photo</h2><p role="status" aria-live="polite">Starting the camera…</p></div>
         <button class="mq-x" type="button" aria-label="Close the camera" data-close>${ICON.close}</button>
+        <div class="ev-cam-tools" role="group" aria-label="Camera settings">
+          <button class="mq-btn" type="button" data-torch hidden aria-pressed="false" aria-label="Flash" title="Flash">${CAM_ICON.torch}</button>
+          <button class="mq-btn ev-timer" type="button" data-timer title="Self-timer">${CAM_ICON.timer}<span></span></button>
+          <button class="mq-btn" type="button" data-grid aria-pressed="false" aria-label="Grid lines" title="Grid lines">${CAM_ICON.grid}</button>
+        </div>
+        <div class="ev-zoom" hidden>
+          <div class="ev-zoom-chips" role="group" aria-label="Zoom"></div>
+          <input class="ev-zoom-range" type="range" aria-label="Zoom" step="0.1">
+        </div>
+        <label class="ev-bright" hidden><span>Brightness</span><input type="range" aria-label="Brightness"></label>
         <div class="ev-cam-bar">
           <div class="ev-shots" aria-live="polite"></div>
           <button class="ev-shutter" type="button" aria-label="Take photo" disabled></button>
           <div class="ev-cam-right">
-            <button class="mq-btn" type="button" data-flip hidden aria-label="Switch camera">${ICON.flip}</button>
+            <button class="mq-btn" type="button" data-flip hidden aria-label="Switch camera" title="Switch camera">${ICON.flip}</button>
             <button class="mq-btn is-main" type="button" data-use hidden>Use photos</button>
           </div>
         </div>`;
       document.body.append(d);
-      const video = d.querySelector('video'), status = d.querySelector('.ev-cam-top p'), shutter = d.querySelector('.ev-shutter');
-      const shotsEl = d.querySelector('.ev-shots'), use = d.querySelector('[data-use]'), flip = d.querySelector('[data-flip]');
+      const $ = (s) => d.querySelector(s);
+      const video = $('video'), status = $('.ev-cam-top p'), shutter = $('.ev-shutter');
+      const shotsEl = $('.ev-shots'), use = $('[data-use]'), flip = $('[data-flip]');
+      const torchBtn = $('[data-torch]'), timerBtn = $('[data-timer]'), gridBtn = $('[data-grid]');
+      const zoomBox = $('.ev-zoom'), chips = $('.ev-zoom-chips'), range = $('.ev-zoom-range');
+      const bright = $('.ev-bright'), brightRange = bright.querySelector('input'), countEl = $('.ev-count');
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const shots = [], urls = [];
-      let stream = null, facing = 'environment', settled = false;
+      let stream = null, track = null, facing = 'environment', settled = false, front = false;
+      // zoom: lens = the camera does it; otherwise digital (the preview scales and the photo is cropped to match)
+      let zoom = 1, zMin = 1, zMax = 1, lens = false, torch = false;
+      let countdown = null; // { timer, left }
       const say = (m, bad) => { status.textContent = m; status.classList.toggle('is-error', !!bad); };
-      const stop = () => { stream?.getTracks().forEach((t) => t.stop()); stream = null; video.srcObject = null; };
+      const stop = () => { stream?.getTracks().forEach((t) => t.stop()); stream = null; track = null; video.srcObject = null; };
       const finish = (files) => {
         if (settled) return; settled = true;
-        stop(); urls.forEach(URL.revokeObjectURL);
+        cancelCountdown(); stop(); urls.forEach(URL.revokeObjectURL);
+        removeEventListener('keydown', onKey);
         if (d.open) d.close();
         d.remove();
         resolve(files);
       };
+      const ready = () => say(shots.length ? `${shots.length} taken. Take more, or use them.` : 'Photos taken here go straight to the album, not to your gallery.');
+
+      // ---- zoom ----
+      const fmt = (z) => (Math.round(z * 10) / 10).toString().replace(/\.0$/, '') + '×';
+      function paintZoom() {
+        range.value = String(zoom);
+        range.setAttribute('aria-valuetext', fmt(zoom));
+        chips.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(+b.dataset.z - zoom) < 0.05)));
+        video.style.transform = `${front ? 'scaleX(-1) ' : ''}${!lens && zoom > 1 ? `scale(${zoom})` : ''}`.trim();
+      }
+      function setZoom(z) {
+        zoom = Math.min(zMax, Math.max(zMin, Math.round(z * 10) / 10));
+        if (lens && track) track.applyConstraints({ advanced: [{ zoom }] }).catch(() => {});
+        paintZoom();
+      }
+      function setUpControls() {
+        const caps = track?.getCapabilities?.() || {}, settings = track?.getSettings?.() || {};
+        lens = !!(caps.zoom && caps.zoom.max > caps.zoom.min);
+        zMin = lens ? caps.zoom.min : 1;
+        zMax = lens ? Math.min(caps.zoom.max, 10) : 5;
+        zoom = lens ? Math.min(zMax, Math.max(zMin, settings.zoom || 1)) : 1;
+        range.min = String(zMin); range.max = String(zMax);
+        const presets = [zMin < 0.95 ? Math.round(zMin * 10) / 10 : null, 1, 2, 3].filter((z) => z !== null && z >= zMin - 0.01 && z <= zMax + 0.01);
+        chips.innerHTML = presets.map((z) => `<button type="button" class="ev-zchip" data-z="${z}" aria-pressed="false" aria-label="Zoom ${fmt(z)}">${fmt(z)}</button>`).join('');
+        zoomBox.hidden = zMax <= 1;
+        // Flash: only cameras with a light (most phones' back cameras)
+        torch = false;
+        torchBtn.hidden = !caps.torch;
+        torchBtn.setAttribute('aria-pressed', 'false');
+        // Brightness: where the camera lets the page set its exposure
+        const ex = caps.exposureCompensation;
+        bright.hidden = !(ex && ex.max > ex.min);
+        if (!bright.hidden) {
+          brightRange.min = String(ex.min); brightRange.max = String(ex.max); brightRange.step = String(ex.step || 0.1);
+          brightRange.value = String(settings.exposureCompensation ?? 0);
+        }
+        paintZoom();
+      }
+      chips.addEventListener('click', (e) => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.dataset.z); });
+      range.addEventListener('input', () => setZoom(+range.value));
+      brightRange.addEventListener('input', () => { track?.applyConstraints({ advanced: [{ exposureCompensation: +brightRange.value }] }).catch(() => {}); });
+      // A pinch on the picture
+      const fingers = new Map();
+      let pinch = null;
+      video.addEventListener('pointerdown', (e) => {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size === 2) { const [a, b] = [...fingers.values()]; pinch = { d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoom }; }
+      });
+      video.addEventListener('pointermove', (e) => {
+        if (!fingers.has(e.pointerId)) return;
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (!pinch || fingers.size < 2) return;
+        const [a, b] = [...fingers.values()];
+        setZoom(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0);
+      });
+      const lift = (e) => { fingers.delete(e.pointerId); if (fingers.size < 2) pinch = null; };
+      video.addEventListener('pointerup', lift); video.addEventListener('pointercancel', lift);
+      // The mouse wheel (or a trackpad pinch)
+      d.addEventListener('wheel', (e) => { if (zoomBox.hidden || e.target.closest('.ev-cam-bar, .ev-cam-tools')) return; e.preventDefault(); setZoom(zoom * Math.exp(-e.deltaY * 0.0025)); }, { passive: false });
+      function onKey(e) {
+        if (!d.open || e.target.matches?.('input')) return;
+        if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zoom + 0.5); }
+        else if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoom(zoom - 0.5); }
+      }
+      addEventListener('keydown', onKey);
+
+      // ---- flash, timer, grid ----
+      torchBtn.addEventListener('click', () => {
+        torch = !torch;
+        track?.applyConstraints({ advanced: [{ torch }] }).catch(() => { torch = false; torchBtn.setAttribute('aria-pressed', 'false'); });
+        torchBtn.setAttribute('aria-pressed', String(torch));
+      });
+      const TIMERS = [0, 3, 10];
+      const paintTimer = () => {
+        timerBtn.querySelector('span').textContent = prefs.timer ? `${prefs.timer}s` : '';
+        timerBtn.setAttribute('aria-label', prefs.timer ? `Self-timer: ${prefs.timer} seconds` : 'Self-timer: off');
+        timerBtn.setAttribute('aria-pressed', String(!!prefs.timer));
+      };
+      timerBtn.addEventListener('click', () => { prefs.timer = TIMERS[(TIMERS.indexOf(prefs.timer) + 1) % TIMERS.length]; savePrefs(); paintTimer(); });
+      const paintGrid = () => { d.classList.toggle('has-grid', !!prefs.grid); gridBtn.setAttribute('aria-pressed', String(!!prefs.grid)); };
+      gridBtn.addEventListener('click', () => { prefs.grid = !prefs.grid; savePrefs(); paintGrid(); });
+      paintTimer(); paintGrid();
+
       async function start() {
-        stop(); shutter.disabled = true;
+        cancelCountdown(); stop(); shutter.disabled = true;
         say('Starting the camera…');
         try {
           if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error(), { name: 'Insecure' });
           if (window.Momento?.permission && !(await Momento.permission.ensure('camera'))) throw Object.assign(new Error(), { name: 'NotAllowedError' });
           stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
           if (settled) return stop();
+          track = stream.getVideoTracks()[0] || null;
           video.srcObject = stream;
           await video.play().catch(() => {});
-          const s = stream.getVideoTracks()[0]?.getSettings?.() || {};
-          d.classList.toggle('is-front', (s.facingMode || facing) === 'user');
+          const s = track?.getSettings?.() || {};
+          front = (s.facingMode || facing) === 'user';
+          d.classList.toggle('is-front', front);
+          setUpControls();
           shutter.disabled = false;
-          say(shots.length ? `${shots.length} taken. Take more, or use them.` : 'Photos taken here go straight to the album, not to your gallery.');
+          ready();
           const cams = (await navigator.mediaDevices.enumerateDevices()).filter((x) => x.kind === 'videoinput');
           flip.hidden = cams.length < 2;
         } catch (err) {
@@ -894,13 +1042,18 @@
             : 'The camera didn’t start. Close other apps using it and try again.', true);
         }
       }
-      shutter.addEventListener('click', () => {
+
+      // ---- taking the photo ----
+      function capture() {
         const w = video.videoWidth, h = video.videoHeight;
         if (!w || !h || shots.length >= 30) return;
+        // Digital zoom: keep the middle of the frame, as the preview shows it (full resolution of that part)
+        const z = lens ? 1 : zoom, cw = Math.round(w / z), ch = Math.round(h / z);
         const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(video, 0, 0, w, h);
-        d.querySelector('.ev-flash').classList.remove('is-on'); void d.offsetWidth; d.querySelector('.ev-flash').classList.add('is-on');
+        c.width = cw; c.height = ch;
+        c.getContext('2d').drawImage(video, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
+        const fl = $('.ev-flash');
+        fl.classList.remove('is-on'); void d.offsetWidth; fl.classList.add('is-on');
         navigator.vibrate?.(20);
         c.toBlob((blob) => {
           if (!blob) return;
@@ -914,11 +1067,35 @@
           use.textContent = shots.length === 1 ? 'Use photo' : `Use ${shots.length} photos`;
           say(`${shots.length} taken. Take more, or use ${shots.length === 1 ? 'it' : 'them'}.`);
         }, 'image/jpeg', .92);
+      }
+      function cancelCountdown() {
+        if (!countdown) return;
+        clearInterval(countdown.timer); countdown = null;
+        countEl.textContent = ''; d.classList.remove('is-counting');
+        shutter.setAttribute('aria-label', 'Take photo');
+      }
+      const tickCount = () => {
+        countEl.textContent = String(countdown.left);
+        if (!reduced) countEl.animate([{ opacity: 0, transform: 'scale(1.6)' }, { opacity: 1, transform: 'none', offset: .3 }, { opacity: .85, transform: 'scale(.92)' }], { duration: 950, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+      };
+      shutter.addEventListener('click', () => {
+        if (countdown) { cancelCountdown(); ready(); return; }   // pressing again while it counts down cancels
+        if (!prefs.timer) { capture(); return; }
+        countdown = { left: prefs.timer, timer: 0 };
+        d.classList.add('is-counting');
+        shutter.setAttribute('aria-label', 'Cancel the timer');
+        say(`Taking a photo in ${prefs.timer} seconds. Press the shutter again to cancel.`);
+        tickCount();
+        countdown.timer = setInterval(() => {
+          countdown.left -= 1;
+          if (countdown.left > 0) { tickCount(); return; }
+          cancelCountdown(); capture();
+        }, 1000);
       });
       flip.addEventListener('click', () => { facing = facing === 'environment' ? 'user' : 'environment'; start(); });
       use.addEventListener('click', () => finish(shots.slice()));
-      d.querySelector('[data-close]').addEventListener('click', () => finish([]));
-      d.addEventListener('cancel', (e) => { e.preventDefault(); finish([]); });
+      $('[data-close]').addEventListener('click', () => finish([]));
+      d.addEventListener('cancel', (e) => { e.preventDefault(); if (countdown) { cancelCountdown(); ready(); return; } finish([]); });
       d.showModal();
       start();
     });
@@ -938,6 +1115,7 @@
         <h2 id="evAskTitle">Upload ${n === 1 ? '1 photo' : `${n} photos`}?</h2>
         <p>Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.</p>
         <p class="ev-limit">Up to ${Number(limits.maxPhotoMB) || 50} MB a photo. Camera RAW files (CR3, NEF, ARW, RAF, DNG and more) can be bigger.</p>
+        <p class="ev-limit">Works with JPEG, PNG, HEIC and HEIF (iPhone), WebP, AVIF, GIF, TIFF, JPEG XL and camera RAW, including iPhone ProRAW (DNG).</p>
         <p class="ev-limit">By uploading, you confirm you took ${n === 1 ? 'this photo' : 'these photos'} or have permission to share ${n === 1 ? 'it' : 'them'} (<a href="terms" target="_blank" rel="noopener">Terms</a>).</p>
         <div class="ev-thumbs">${urls.map((u) => `<img src="${u}" alt="">`).join('')}${n > urls.length ? `<span>+${n - urls.length}</span>` : ''}</div>
         <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;

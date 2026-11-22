@@ -834,8 +834,10 @@ export default function start() {
     const isRawFile = (f) => RAW_EXTS.includes(String(f?.name || '').split('.').pop().toLowerCase());
     Momento.isRawFile = isRawFile;
     Momento.uploadLimits = () => LIMITS;
-    // The photo picker shows RAW files too (they have no image/ type on most computers)
-    albumFiles.accept = 'image/*,' + RAW_EXTS.map((e) => '.' + e).join(',');
+    // The photo picker shows every format Momento takes, named as well as by type: RAW files and (on many computers)
+    // HEIC/HEIF, AVIF and JPEG XL have no image/ type, so they'd be greyed out. On a phone it still opens the gallery.
+    const PHOTO_EXTS = ['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'avif', 'gif', 'tif', 'tiff', 'jxl', 'bmp'];
+    albumFiles.accept = 'image/*,' + [...PHOTO_EXTS, ...RAW_EXTS].map((e) => '.' + e).join(',');
 
     let uploading = false;
     albumFiles.addEventListener('change', () => { const files = [...albumFiles.files]; albumFiles.value = ''; uploadFiles(files); });
