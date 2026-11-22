@@ -47,3 +47,9 @@ Already verified before this list started: header + nav menu, static export, foo
 - Old page scripts still use window.momentoApi from api.js (guard.js needs it while the page loads).
 - Language (i18n.js) was deliberately not converted yet: it translates everything the old scripts build. Convert it once
   the pages render their own text.
+
+## Support page logic → React (`src/components/support/SupportInteractive.tsx`)
+- Quick answers: one open at a time. Topic segment (pill position). Form: name/email filled from the account into empty
+  fields; validation messages and the invalid field's outline; Sending… on the button; error note; "Message sent" slides in
+  and takes focus; Send another slides the form back and focuses the message. Help row opens the help window.
+- support-1.js keeps only the page effects (cursor, silk, glass light, buttons, header veil, page open) for the effects step.
