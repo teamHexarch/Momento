@@ -1,47 +1,34 @@
-# Where we stopped (21 Nov 2026, evening)
+# Where we stopped (22 Nov 2026)
 
-Read this first tomorrow, then `NEXTJS-HANDOFF.md` and `momento-next/qa/README.md`.
+Read this first, then `AUDIT-CHECKLIST.md` (what to check in the audit) and `NEXTJS-HANDOFF.md`.
 
-## Git
+## Agreed way of working
+- Convert first; no end-to-end checks per change. Each change: type check, build, and a smoke load of every page
+  (`node momento-next/qa/smoke.mjs http://localhost:3001`). The full old-vs-new checking happens together in the audit.
+- Hosting: GitHub Pages. `npm run build` writes the static site to `momento-next/out/` (upload that folder).
 
-- `main`: everything verified against the original.
-  - `d5408c1` starting state (wrapper port + original site files)
-  - `935f323` Header: one React `SiteHeader` + `NavWrap` (nav menu) replacing four copies
-  - `72107b4` Static export for GitHub Pages (`npm run build` → `out/`, `npm run preview` on :3002)
-- `wip/shared-shell` (checked out): the next batch, **written but not fully verified yet**. One commit on top of main:
-  - `SiteFooter` (replaces the footer the shared script injected): verified identical (`qa/behave-footer.mjs`, full suite)
-  - `Toaster` (`Momento.toast` / `Momento.flash` shim): verified identical (`qa/behave-toast.mjs`, full suite)
-  - `ThemeProvider` + `useTheme` (`Momento.theme` shim): targeted test still being made reliable (see below)
-  - `AccountProvider` + `useAccount` (`Momento.account` / `sessionReady` shim): verified identical on the export
-    (`qa/behave-account.mjs`, all app pages, signed in and out)
-  - `src/lib/legacy.ts`: the bridge (`onLegacyReady`) for React components that still talk to the old scripts
+## Done (all on `main`, one commit per step)
+1. Shared pieces as React: header + nav, footer, toast, theme (ThemeProvider/useTheme), account (AccountProvider/
+   useAccount), all dialogs (confirm, ask, choose, help, account settings, create album), account chip + menu, the
+   login / sign-up dialog, the intro engine. The ~1,080-line shell copied into five pages is gone.
+2. Typed API layer: `src/lib/api.ts` (types + every endpoint); the React code uses it.
+3. Pages: Support's logic is React. Settings, Social, My albums and Home: their scripts moved out of the old loader into
+   modules React starts (`src/page-scripts/`), code unchanged (chosen: "fast" approach).
+4. Effects: one shared module for the inner pages (`src/components/effects/pageEffects.js`, with teardown);
+   Support has no page script at all (`PageChrome`).
+5. Clean URLs: /albums, /events, /settings, /support, /terms, /privacy (old .html addresses keep working).
+6. Static export for GitHub Pages, with a local preview that behaves like it (`npm run preview`, :3002).
 
-## To finish this batch tomorrow
-
-1. Theme test: `qa/behave-theme.mjs` was just changed to compare end states with motion on (removed the `theming`
-   flag, 3 s per transition). Run it original-vs-original first (`node behave-theme.mjs http://localhost:3000 http://localhost:3000`);
-   it must say "Theme identical". Then original vs the export (:3002).
-2. `npm run build`, start `npm run preview`, run the full suite against :3002 (one check at a time, nothing else running).
-   Expected known differences only (qa/README.md). Also run behave-footer, behave-toast, behave-account, behave-theme.
-3. If clean: merge `wip/shared-shell` into `main` (fast-forward), and update `momento-next/README.md` status and
-   `PATCH-NOTES.md`.
-
-## Then, in order (NEXTJS-HANDOFF.md, Phase 2 onwards)
-
-- Dialogs as one piece: confirm, ask, choose, help, settings, create album, account chip + menu. They share `returnTo`
-  (where focus goes back) and `cursorWas`, so they move together.
-- Login / sign-up dialog, then the language system (`i18n.js`) as a React provider.
-- Typed API layer (`src/lib/api.ts`), pages (Support, Settings, Social, My albums, Home), effects, one layout + clean URLs.
+## Not done, and why
+- **Language (i18n.js) as a React provider:** it translates everything the old page code builds, so it stays until the
+  pages render their own text.
+- **One layout + in-app navigation (next/link):** the page modules attach listeners nothing removes; swapping pages
+  without a reload would stack them. Also needs the per-page CSS scoped first (see NEXTJS-HANDOFF Phase 1).
+- **Idiomatic React for Settings, Social, My albums, Home:** they run their original code (moved, not rewritten).
+- The shared asset scripts in `public/assets/` (extras, crop, inbox, pickers, nearby, qr, album-settings, event,
+  join-here, event-albums: ~430 KB) are still classic scripts.
 
 ## Starting up
-
-- Double-click `Open Momento Next preview.cmd` (dev site :3001 + original :3000), or by hand:
-  `cd momento-next && npm run dev`, and `cd momento-next/qa/reference-site && node serve.mjs`.
+- Double-click `Open Momento Next preview.cmd` (dev site :3001 + original :3000), or `cd momento-next && npm run dev`.
 - The export: `cd momento-next && npm run build && npm run preview` (:3002).
-- From Git Bash, run the QA scripts with `export MSYS_NO_PATHCONV=1` first.
-
-## Lessons from today (also in qa/README.md)
-
-- Run one browser check at a time; parallel runs gave false failures (logout toast, theme).
-- Always run a new test original-vs-original before trusting it.
-- `emulateMediaFeatures` replaces the whole list: pass every setting each time.
+- From Git Bash, run the QA scripts with `export MSYS_NO_PATHCONV=1` first; run one browser check at a time.
