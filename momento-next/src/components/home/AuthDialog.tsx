@@ -30,7 +30,7 @@ export default function AuthDialog() {
             <label className="auth-field"><span>Email</span><input name="email" type="email" autoComplete="email" inputMode="email" /></label>
             <label className="auth-field"><span>Password</span><input name="password" type="password" autoComplete="new-password" /></label>
             <a className="auth-forgot" data-only="login" href="#">Forgot your password?</a>
-            <label className="auth-consent" data-only="signup"><input type="checkbox" name="acceptTerms" /><span>I’m 13 or older and agree to Momento’s <a href="terms.html" target="_blank" rel="noopener">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a></span></label>
+            <label className="auth-consent" data-only="signup"><input type="checkbox" name="acceptTerms" /><span>I’m 13 or older and agree to Momento’s <a href="terms" target="_blank" rel="noopener">Terms</a> and <a href="privacy" target="_blank" rel="noopener">Privacy Policy</a></span></label>
             <div data-only="signup"><div id="signupCaptcha"></div><p id="captchaStatus" role="status"></p></div>
             <p className="auth-error" id="authError" role="alert"></p>
             <button className="btn btn-dark auth-submit" type="submit" id="authSubmit">Create account</button>

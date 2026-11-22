@@ -945,7 +945,7 @@ export default function start() {
     }
     // A link to share: hosts get a join link (it carries the album code); guests get a link back to the album
     const albumLinkFor = (a) => {
-      const url = new URL('albums.html', location.href);
+      const url = new URL('albums', location.href);
       url.search = ''; url.hash = '';
       url.searchParams.set(a.code ? 'join' : 'album', a.code || a.id);
       return url.href;
@@ -2665,14 +2665,14 @@ export default function start() {
             <h2 id="liveTitle">Your albums will live here</h2>
             <p>Join an album with its code or QR code, find a public event near you, or create one for your own event. You’ll log in or sign up when you’re ready.</p>
             <div class="guest-acts">
-              <a class="btn btn-dark" href="events.html#join">Join with a code</a>
+              <a class="btn btn-dark" href="events#join">Join with a code</a>
               <button class="btn btn-light" type="button" data-create>Create an album</button>
-              <a class="btn btn-light" href="events.html#events">Events near you</a>
+              <a class="btn btn-light" href="events#events">Events near you</a>
             </div>
           </div>`;
           live.querySelectorAll('.btn').forEach((b) => rollButton?.(b));
           liveSettle(true);
-          if (params.get('join')) location.replace('events.html?join=' + encodeURIComponent(params.get('join')));
+          if (params.get('join')) location.replace('events?join=' + encodeURIComponent(params.get('join')));
           return;
         }
         if (!user.emailVerified) {
@@ -2710,7 +2710,7 @@ export default function start() {
           const ph = params.get('photo'), at = ph ? (M.a?.photoItems || []).findIndex((x) => x.id === ph) : -1;
           if (albumModal.open && at >= 0) openPhoto(at, thumbsEl.children[at]?.querySelector('img'));
         }
-        else if (joinCode) location.replace('events.html?join=' + encodeURIComponent(joinCode));
+        else if (joinCode) location.replace('events?join=' + encodeURIComponent(joinCode));
         else albumFromHash();
       } catch (err) {
         lede.textContent = 'Could not load your albums. ' + err.message + ' Reload to try again.';

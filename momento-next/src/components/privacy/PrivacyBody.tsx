@@ -2,8 +2,8 @@ export default function PrivacyBody() {
   return (
     <>
       <header className="top">
-        <a className="brand" href="index.html"><img src="assets/momento-icon.png" alt="" />Momento</a>
-        <a className="back" href="index.html">Back to Momento</a>
+        <a className="brand" href="/"><img src="assets/momento-icon.png" alt="" />Momento</a>
+        <a className="back" href="/">Back to Momento</a>
       </header>
 
       <main>
@@ -70,10 +70,10 @@ export default function PrivacyBody() {
         <p>If we change this policy, we'll update this page and the date at the top. For bigger changes we'll let account holders know by email.</p>
 
         <h2>Contact</h2>
-        <p>HexArch Limited, <a href="mailto:team@hexarch.org">team@hexarch.org</a>, or use the <a href="support.html">support page</a>.</p>
+        <p>HexArch Limited, <a href="mailto:team@hexarch.org">team@hexarch.org</a>, or use the <a href="support">support page</a>.</p>
       </main>
 
-      <footer>© 2026 HexArch Limited · <a href="index.html">Momento</a> · <a href="terms.html">Terms</a> · <a href="albums.html">My albums</a> · <a href="events.html">Events near you</a> · <a href="support.html">Support</a></footer>
+      <footer>© 2026 HexArch Limited · <a href="/">Momento</a> · <a href="terms">Terms</a> · <a href="albums">My albums</a> · <a href="events">Events near you</a> · <a href="support">Support</a></footer>
     </>
   );
 }

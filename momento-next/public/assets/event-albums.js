@@ -121,7 +121,7 @@
       const clean = code.replace('-', '');
       const { album } = await momentoApi('/api/albums/preview/' + encodeURIComponent(clean));
       joinModal.close();
-      MQ.needLogin({ action: 'join', next: 'events.html?join=' + encodeURIComponent(album.code || clean), album });
+      MQ.needLogin({ action: 'join', next: 'events?join=' + encodeURIComponent(album.code || clean), album });
     }
 
     function submitInvite(code) {
@@ -187,7 +187,7 @@
       frame = document.createElement('iframe');
       frame.title = 'Album';
       frame.allow = 'camera; geolocation; clipboard-write; web-share';
-      frame.src = 'albums.html?album=' + encodeURIComponent(id) + '&embed=1' + (upload ? '&upload=1' : '')
+      frame.src = 'albums?album=' + encodeURIComponent(id) + '&embed=1' + (upload ? '&upload=1' : '')
         + (focus.photos ? '&photos=' + encodeURIComponent(focus.photos) + (focus.by ? '&by=' + encodeURIComponent(focus.by) : '') : '')
         + (/[?&]dev\b/.test(location.search) ? '&dev' : '');
       viewer.classList.remove('is-ready');
@@ -203,7 +203,7 @@
       const a = e.target.closest?.('a[href]');
       if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const url = new URL(a.href, location.href);
-      if (url.origin !== location.origin || !/\/albums\.html$/.test(url.pathname)) return;
+      if (url.origin !== location.origin || !/\/albums(\.html)?$/.test(url.pathname)) return;
       // The album's id is only the album= part: a link from a notification about new photos carries more
       // after it (#album=<id>&photos=<id,id>&by=<who>), which used to end up in the id, so nothing opened
       const hash = new URLSearchParams(url.hash.slice(1));
@@ -261,7 +261,7 @@
       el.innerHTML = `
         <span class="eh-pic" aria-hidden="true">${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async">` : esc((a.name.trim()[0] || '·').toUpperCase())}</span>
         <div class="eh-text">
-          <h3><a class="eh-open" href="albums.html?album=${encodeURIComponent(a.id)}">${esc(a.name)}</a></h3>
+          <h3><a class="eh-open" href="albums?album=${encodeURIComponent(a.id)}">${esc(a.name)}</a></h3>
           <p class="eh-meta"><span class="eh-state is-${s.key}"><i></i>${esc(s.label)}</span><span>${esc([day(a.date), place].filter(Boolean).join(', '))}</span></p>
           ${policy(a)}
         </div>

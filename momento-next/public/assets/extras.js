@@ -218,8 +218,8 @@
   };
   // Where to come back to after logging in (the home page only sends people to My albums or Social)
   const here = () => {
-    const page = location.pathname.split('/').pop() || 'index.html';
-    return /^(albums|events)\.html$/.test(page) ? page + location.search + location.hash : 'albums.html';
+    const page = location.pathname.split('/').pop() || '/';
+    return /^(albums|events)(\.html)?$/.test(page) ? page + location.search + location.hash : 'albums';
   };
   let asking = false;
   M.needLogin = ({ action = 'continue', next, from = null, album = null } = {}) => {
@@ -254,7 +254,7 @@
     document.body.append(d);
     d.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
       const to = next || here();
-      location.href = `index.html?login=1${b.dataset.go === 'signup' ? '&signup=1' : ''}&next=${encodeURIComponent(to)}`;
+      location.href = `/?login=1${b.dataset.go === 'signup' ? '&signup=1' : ''}&next=${encodeURIComponent(to)}`;
     }));
     d.querySelector('[data-close]').addEventListener('click', () => d.close());
     d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
@@ -314,7 +314,7 @@
     if (user || M.account?.get?.()) return;
     const link = document.createElement('a');
     link.className = 'btn btn-dark nl-login';
-    link.href = 'index.html?login=1&next=' + encodeURIComponent(here());
+    link.href = '/?login=1&next=' + encodeURIComponent(here());
     link.textContent = 'Log in';
     slot.replaceChildren(link);
     slot.hidden = false;

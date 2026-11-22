@@ -9,7 +9,7 @@ export default function SiteHeader({ current }: { current: NavCurrent }) {
   return (
     <>
       <header className="header" id="header">
-        <a href="index.html" className="brand" aria-label="Momento, home">
+        <a href="/" className="brand" aria-label="Momento, home">
           <svg className="glyph" aria-hidden="true"><use href="#glyph-album" /></svg>
           <svg className="brand-word" aria-hidden="true"><use href="#wordmark" /></svg>
         </a>

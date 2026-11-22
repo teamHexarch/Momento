@@ -7,7 +7,7 @@ import { pageMetadata } from '@/lib/metadata';
 export const metadata: Metadata = pageMetadata({
   title: 'Privacy policy | Momento',
   description: "What Momento collects, why, where it's kept and how to have it deleted.",
-  url: 'https://hexarch.org/privacy.html',
+  url: 'https://hexarch.org/privacy',
 });
 
 // No page scripts. LegacyScripts only lets the language file (assets/i18n.js) start once the page is ready.

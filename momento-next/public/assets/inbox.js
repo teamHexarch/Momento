@@ -233,16 +233,16 @@
     if (n.url) return safeUrl(n.url);
     if (n.albumId) {
       // (with who asked, so their row is the one ready to answer)
-      if (n.type === 'request') return safeUrl('albums.html#' + new URLSearchParams({ requests: n.albumId, ...(n.actor?.id && { guest: n.actor.id }) }));
+      if (n.type === 'request') return safeUrl('albums#' + new URLSearchParams({ requests: n.albumId, ...(n.actor?.id && { guest: n.actor.id }) }));
       const q = new URLSearchParams({ album: n.albumId });
       if (Array.isArray(n.photoIds) && n.photoIds.length) {
         q.set('photos', n.photoIds.join(','));
         if (n.actor?.name) q.set('by', n.actor.name);
       }
-      return safeUrl('albums.html#' + q);
+      return safeUrl('albums#' + q);
     }
-    if (n.groupId) return safeUrl('events.html#group=' + encodeURIComponent(n.groupId));
-    if (n.type === 'invite') return safeUrl('events.html#needs');
+    if (n.groupId) return safeUrl('events#group=' + encodeURIComponent(n.groupId));
+    if (n.type === 'invite') return safeUrl('events#needs');
     return '';
   }
   // Links within Momento (relative ones work wherever the site is opened, even straight from the folder) or

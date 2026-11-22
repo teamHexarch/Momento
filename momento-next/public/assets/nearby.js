@@ -29,7 +29,7 @@
       if (!e) return;
       seen[e.id] = now;
       try { localStorage.setItem(SEEN, JSON.stringify(seen)); } catch (err) {}
-      const go = () => { location.href = 'events.html?event=' + encodeURIComponent(e.id); };
+      const go = () => { location.href = 'events?event=' + encodeURIComponent(e.id); };
       window.Momento?.toast?.(`${e.name} is happening near you`, 'You’re inside its zone, so you can join and add your photos.', { action: { label: 'See it', run: go } });
       if (localStorage.getItem(NOTIFY) === '1' && 'Notification' in window && Notification.permission === 'granted') {
         try {

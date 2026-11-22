@@ -107,7 +107,7 @@
     });
     const recheck = async (quiet) => {
       const u = await fetchUser();
-      if (!u) { location.href = 'index.html?login=1'; return; }
+      if (!u) { location.href = '/?login=1'; return; }
       if (u.emailVerified) { location.reload(); return; }
       if (!quiet) say('Not confirmed yet. Open the link in the email we sent, then try again.', true);
     };
@@ -117,7 +117,7 @@
     gate.querySelector('[data-logout]').addEventListener('click', async () => {
       try { await window.momentoApi('/api/auth/logout', { method: 'POST' }); } catch (e) {}
       try { sessionStorage.removeItem('momento-account'); sessionStorage.removeItem('momento-user'); } catch (e) {}
-      location.href = 'index.html';
+      location.href = '/';
     });
   }
 

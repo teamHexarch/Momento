@@ -78,7 +78,7 @@ export function setUpAuth(): () => void {
 
   const field = (n: string) => form.querySelector(`[name="${n}"]`) as HTMLInputElement;
   // Sent with sign-up so the server keeps a consent record: what was agreed to, and which version
-  const TERMS_VERSION = '2026-11-07'; // the Privacy Policy's "Last updated" date (privacy.html)
+  const TERMS_VERSION = '2026-11-07'; // the Privacy Policy's "Last updated" date (privacy)
   const consent = () => ({ acceptTerms: field('acceptTerms').checked, termsVersion: TERMS_VERSION });
   const setLabel = (btn: Element, text: string) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
   // Busy: a turning ring and what's happening ("Logging in…"); null puts the normal label back
@@ -91,7 +91,7 @@ export function setUpAuth(): () => void {
   // After logging in, go back to the album link that sent you here (albums.html only), or to your albums
   const nextPage = () => {
     const next = new URLSearchParams(location.search).get('next') || '';
-    return /^(?:albums|events)\.html([?#]|$)/.test(next) ? next : 'albums.html';
+    return /^(?:albums|events)(?:\.html)?([?#]|$)/.test(next) ? next : 'albums';
   };
   // Sent here by an invite link (events.html?join=…): the dialog says so
   const fromInvite = /[?&]join=/.test(nextPage());
@@ -399,7 +399,7 @@ export function setUpAuth(): () => void {
           const { user } = await api.auth.resetPassword(token, pw);
           M().account.set(user);
           M().flash?.('Password set', 'You’re logged in.');
-          location.href = 'albums.html';
+          location.href = 'albums';
         } catch (err) {
           go.disabled = false; go.textContent = 'Set password';
           if ((err as Err).status === 400 && /expired|used/i.test((err as Err).message)) showExpired(); else say((err as Err).message);

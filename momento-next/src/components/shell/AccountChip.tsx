@@ -93,8 +93,8 @@ function Chip({ logoutTo }: { logoutTo: string | null }) {
 /** Inner pages: the chip is always there (signed out it reads "You"); logging out goes to the home page */
 export function MeSlot() {
   return (
-    <div className="me-slot" data-acct-host="" data-acct-always="" data-acct-logout="index.html">
-      <Chip logoutTo="index.html" />
+    <div className="me-slot" data-acct-host="" data-acct-always="" data-acct-logout="/">
+      <Chip logoutTo="/" />
     </div>
   );
 }

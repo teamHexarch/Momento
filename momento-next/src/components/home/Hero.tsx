@@ -13,7 +13,7 @@ export default function Hero() {
 
             <div className="hero-cta">
               <a className="btn btn-dark" href="#how-it-works" data-create="">Create an album</a>
-              <a className="btn btn-pearl" href="events.html#join">Join with a code</a>
+              <a className="btn btn-pearl" href="events#join">Join with a code</a>
             </div>
           </section>
 

@@ -26,7 +26,7 @@ echo Waiting for the site to be ready...
 set /a tries=0
 :wait
 set /a tries+=1
-curl -s -o nul --max-time 2 http://localhost:3001/terms.html && goto ready
+curl -s -o nul --max-time 2 http://localhost:3001/terms && goto ready
 if %tries% geq 60 goto ready
 timeout /t 1 /nobreak >nul
 goto wait

@@ -5,9 +5,9 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
  * (then `scripts/finish-export.mjs` tidies it for GitHub Pages: see that file). Test the export locally with
  * `npm run preview`, which serves `out/` the way GitHub Pages does.
  *
- * `npm run dev` is not an export, so it keeps two redirects that GitHub Pages gives us for free:
- *   /index.html -> /       (on GitHub Pages, out/index.html simply is the home page)
- *   /albums     -> /albums.html   (GitHub Pages serves name.html for /name)
+ * The pages have clean addresses (/albums, /events, /settings, /support, /terms, /privacy). The export still writes
+ * albums.html and so on, so on GitHub Pages the old addresses (/albums.html, in bookmarks, QR codes, emails,
+ * notifications) open the same pages. `npm run dev` is not an export, so it redirects the old addresses itself.
  * groups.html is the original redirect page itself, in public/, so it behaves the same everywhere.
  */
 export default function nextConfig(phase) {
@@ -25,7 +25,7 @@ export default function nextConfig(phase) {
   else {
     config.redirects = async () => [
       { source: '/index.html', destination: '/', permanent: false },
-      { source: '/albums', destination: '/albums.html', permanent: false },
+      ...['albums', 'events', 'settings', 'support', 'terms', 'privacy'].map((n) => ({ source: `/${n}.html`, destination: `/${n}`, permanent: false })),
     ];
   }
   return config;

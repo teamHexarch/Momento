@@ -2,15 +2,15 @@ export default function TermsBody() {
   return (
     <>
       <header className="top">
-        <a className="brand" href="index.html"><img src="assets/momento-icon.png" alt="" />Momento</a>
-        <a className="back" href="index.html">Back to Momento</a>
+        <a className="brand" href="/"><img src="assets/momento-icon.png" alt="" />Momento</a>
+        <a className="back" href="/">Back to Momento</a>
       </header>
 
       <main>
         <h1>Terms of Service</h1>
         <p className="updated">Last updated 20 November 2026</p>
 
-        <p className="lede">These terms are the agreement between you and HexArch Limited, which runs Momento (hexarch.org). By creating an account or using Momento you agree to them, and to our <a href="privacy.html">Privacy policy</a>. They're written to be short and plain.</p>
+        <p className="lede">These terms are the agreement between you and HexArch Limited, which runs Momento (hexarch.org). By creating an account or using Momento you agree to them, and to our <a href="privacy">Privacy policy</a>. They're written to be short and plain.</p>
 
         <h2>The service</h2>
         <p>Momento gives each event one shared photo album: the host creates it, guests join with a code, link or QR code, and everyone adds their photos. Momento is free to use. We may change or stop features, and we'll tell you in good time before anything that affects your photos.</p>
@@ -79,13 +79,13 @@ export default function TermsBody() {
         <p>We want everyone to be able to use Momento, and we aim to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA. Momento works with a keyboard and screen readers, supports reduced motion and light and dark themes, and is checked with automated accessibility tests. If anything is hard to use, or you need something in another format, email <a href="mailto:team@hexarch.org?subject=Accessibility">team@hexarch.org</a> with the subject “Accessibility”. We'll reply within 5 working days.</p>
 
         <h2>Contact</h2>
-        <p>HexArch Limited, <a href="mailto:team@hexarch.org">team@hexarch.org</a>, or use the <a href="support.html">support page</a>.</p>
+        <p>HexArch Limited, <a href="mailto:team@hexarch.org">team@hexarch.org</a>, or use the <a href="support">support page</a>.</p>
 
         <h2>Credits</h2>
         <p>On devices without flag emoji (such as Windows), country flags are drawn with <a href="https://github.com/twitter/twemoji" rel="noopener">Twemoji</a> by Twitter, used under the <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a> licence, through the country-flag-emoji-polyfill font by TalkJS (MIT licence).</p>
       </main>
 
-      <footer>© 2026 HexArch Limited · <a href="index.html">Momento</a> · <a href="privacy.html">Privacy</a> · <a href="albums.html">My albums</a> · <a href="events.html">Events near you</a> · <a href="support.html">Support</a></footer>
+      <footer>© 2026 HexArch Limited · <a href="/">Momento</a> · <a href="privacy">Privacy</a> · <a href="albums">My albums</a> · <a href="events">Events near you</a> · <a href="support">Support</a></footer>
     </>
   );
 }

@@ -1089,7 +1089,7 @@ export default function start() {
       const count = Number.isFinite(pick.photos) ? pick.photos : shots.length;
       const left = { ...last.left, no: '05', title: pick.name || 'Your album',
                      body: `${count} photo${count === 1 ? '' : 's'} so far, from everyone who was there. Every new one lands right here.`,
-                     button: 'Open album', href: `albums.html#album=${encodeURIComponent(pick.id)}`,
+                     button: 'Open album', href: `albums#album=${encodeURIComponent(pick.id)}`,
                      photos: last.left.photos.map(fill) };
       const right = { ...last.right, photos: last.right.photos.map(fill) };
       [left, right].forEach((page, i) => {

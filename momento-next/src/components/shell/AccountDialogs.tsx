@@ -24,9 +24,9 @@ export const HelpDialog = forwardRef<OpenHandle, { onSupportPage: boolean }>(fun
         <details><summary>How long does an album stay open?</summary><p>Uploads and downloads stay open for a while after the event, then the album is kept as an archive. Download your photos before it closes.</p></details>
         <div className="acct-links">
           {/* already here on the Support page */}
-          <a href="support.html" hidden={onSupportPage}>Contact us</a>
-          <a href="index.html#how-it-works">How it works</a>
-          <a href="index.html#faq">FAQ</a>
+          <a href="support" hidden={onSupportPage}>Contact us</a>
+          <a href="/#how-it-works">How it works</a>
+          <a href="/#faq">FAQ</a>
           <a href={`mailto:${SUPPORT}`}>Email support</a>
         </div>
       </div>
@@ -143,7 +143,7 @@ export const SettingsDialog = forwardRef<OpenHandle, { onSettingsPage: boolean }
           ))}
         </div>
         {/* already here on the Settings page */}
-        <a className="acct-adv" href="settings.html" hidden={onSettingsPage}><span className="acct-adv-ic">{ICON.settings()}</span><span><b>Advanced settings</b><small>Password, permissions, notifications and storage</small></span>{ICON.chev()}</a>
+        <a className="acct-adv" href="settings" hidden={onSettingsPage}><span className="acct-adv-ic">{ICON.settings()}</span><span><b>Advanced settings</b><small>Password, permissions, notifications and storage</small></span>{ICON.chev()}</a>
         <p className={status.bad ? 'acct-status is-error' : 'acct-status'} role="status">{status.msg}</p>
         <div className="acct-actions"><button className="acct-ghost" type="button" data-close="">Cancel</button><button className="acct-primary" type="submit">Save changes</button></div>
       </form>

@@ -98,7 +98,7 @@
     button.disabled = true;
     try {
       // Not logged in: the Social page shows what the album is and asks to log in
-      if (!(await Momento.sessionReady?.catch?.(() => null))) { location.href = 'events.html?join=' + encodeURIComponent(code); return; }
+      if (!(await Momento.sessionReady?.catch?.(() => null))) { location.href = 'events?join=' + encodeURIComponent(code); return; }
       const { album, pending } = await admit(code);
       if (pending) { note.textContent = 'Your request is waiting for the host. It shows in My albums once they let you in.'; return; }
       d.close();
@@ -119,7 +119,7 @@
     const a = e.target.closest?.('a[href]');
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const url = new URL(a.href, location.href);
-    if (url.origin !== location.origin || !/\/events\.html$/.test(url.pathname) || url.hash !== '#join') return;
+    if (url.origin !== location.origin || !/\/events(\.html)?$/.test(url.pathname) || url.hash !== '#join') return;
     e.preventDefault();
     open();
   }, true);

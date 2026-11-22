@@ -16,7 +16,7 @@ export const metadata: Metadata = pageMetadata({
   title: 'Social | Momento',
   description:
     'Your friend groups and event albums in one place: share albums with the people you see most, join events with an invitation and discover events nearby.',
-  url: 'https://hexarch.org/events.html',
+  url: 'https://hexarch.org/events',
   shareTitle: 'Join the album on Momento',
   shareDescription: 'You’re invited to share photos. Open the link to see the album and add yours. No sign-up needed.',
 });

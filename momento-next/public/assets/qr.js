@@ -21,8 +21,8 @@
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // QR codes keep the old-style in-app link (the scanner below reads ?join= / ?group=); "Copy link" uses the share link
-  const linkFor = (code) => new URL('events.html?join=' + encodeURIComponent(code), location.href).href;
-  const groupLinkFor = (code) => new URL('events.html?group=' + encodeURIComponent(code), location.href).href;
+  const linkFor = (code) => new URL('events?join=' + encodeURIComponent(code), location.href).href;
+  const groupLinkFor = (code) => new URL('events?group=' + encodeURIComponent(code), location.href).href;
   const shareLinkFor = (code) => (Momento.inviteLink ? Momento.inviteLink(code) : 'https://api.hexarch.org/s/' + encodeURIComponent(code));
   const toast = (t, b) => (Momento.toast ? Momento.toast(t, b) : null);
   const isPhone = () => (navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) && matchMedia('(pointer: coarse)').matches;
@@ -381,7 +381,7 @@
     d.querySelector('[data-type]').addEventListener('click', () => {
       d.close();
       if (Momento.openJoin) Momento.openJoin();
-      else location.href = new URL('events.html#join', location.href).href;
+      else location.href = new URL('events#join', location.href).href;
     });
     d.querySelector('[data-photo]').addEventListener('click', () => file.click());
     file.addEventListener('change', async () => {

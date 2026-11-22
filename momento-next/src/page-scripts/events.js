@@ -754,7 +754,7 @@ export default function start() {
           ${grid}
           <div class="ev-acts">
             ${e.joined
-              ? `<a class="btn btn-dark" href="albums.html#album=${encodeURIComponent(e.id)}">Open album</a>`
+              ? `<a class="btn btn-dark" href="albums#album=${encodeURIComponent(e.id)}">Open album</a>`
               : `<button class="btn btn-dark" type="button" data-join>Join and add photos</button>`}
             <p class="ev-acts-note" role="status">${e.joined ? 'You’re in this album.' : 'Check in to join. If approval is needed, your request goes to the host.'}</p>
           </div>`;
@@ -869,7 +869,7 @@ export default function start() {
         }
       }
       async function join(e, btn) {
-        if (!Momento.account?.get?.()) { Momento.needLogin({ action: 'join', from: btn, next: 'events.html#events', album: { name: e.name, hostName: e.hostName, photos: e.photos, guests: e.guests, live: e.live, cover: e.cover } }); return; }
+        if (!Momento.account?.get?.()) { Momento.needLogin({ action: 'join', from: btn, next: 'events#events', album: { name: e.name, hostName: e.hostName, photos: e.photos, guests: e.guests, live: e.live, cover: e.cover } }); return; }
         const noteEl = card.querySelector('.ev-acts-note');
         const tell = (t, bad) => { noteEl.textContent = t; noteEl.classList.toggle('is-error', !!bad); };
         btn.disabled = true;
@@ -882,7 +882,7 @@ export default function start() {
           tell(r.already ? 'You were already in. Opening the album…' : 'You’re in! Opening the album…');
           btn.textContent = 'Opening…';
           Momento.flash?.(`You joined ${e.name}`, 'Add your photos while it’s on.');
-          setTimeout(() => { if (Momento.openAlbumHere) Momento.openAlbumHere(e.id); else location.href = 'albums.html#album=' + encodeURIComponent(e.id); }, 700);
+          setTimeout(() => { if (Momento.openAlbumHere) Momento.openAlbumHere(e.id); else location.href = 'albums#album=' + encodeURIComponent(e.id); }, 700);
         } catch (err) {
           btn.disabled = false; btn.textContent = label;
           tell(err.message, true);
@@ -1147,7 +1147,7 @@ export default function start() {
       // The link (and so the QR code) that lets people into a group; a native share sheet only where there is one
       const linkOf = (g) => (Momento.groupLink ? Momento.groupLink(g.inviteCode) : 'https://api.hexarch.org/s/' + encodeURIComponent(g.inviteCode));
       // The QR keeps the old-style link: the in-app scanner reads ?group= (a /s/ code can't say album or group)
-      const qrLinkOf = (g) => new URL('events.html?group=' + encodeURIComponent(g.inviteCode), location.href).href;
+      const qrLinkOf = (g) => new URL('events?group=' + encodeURIComponent(g.inviteCode), location.href).href;
       const canShare = !!navigator.share && matchMedia('(pointer: coarse)').matches;
       const cleanCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -1274,7 +1274,7 @@ export default function start() {
         const shown = g.members.slice(0, 5);
         const more = g.members.length - shown.length;
         const albums = g.albums.map((a) => `
-          <a class="gra" href="albums.html#album=${encodeURIComponent(a.id)}" aria-label="${esc(a.name)}, ${esc(dateOf(a))}, ${plural(a.photos, 'photo', 'photos')}">
+          <a class="gra" href="albums#album=${encodeURIComponent(a.id)}" aria-label="${esc(a.name)}, ${esc(dateOf(a))}, ${plural(a.photos, 'photo', 'photos')}">
             <span class="gra-pic">${evCover(a) ? `<img src="${esc(evCover(a))}" alt="" loading="lazy">` : '<span class="gra-none">No photos yet</span>'}${a.live ? '<span class="gra-live"><i></i>Live</span>' : ''}</span>
             <b>${esc(a.name)}</b>
             <small>${esc(dateOf(a))}, ${plural(a.photos, 'photo', 'photos')}</small>
@@ -1437,7 +1437,7 @@ export default function start() {
         let user = null;
         try { user = await Momento.sessionReady; } catch (err) {}
         // Not logged in: log in or sign up first, and the link carries on from there
-        if (!user) { Momento.needLogin({ action: 'joinGroup', next: 'events.html?group=' + encodeURIComponent(code) }); return; }
+        if (!user) { Momento.needLogin({ action: 'joinGroup', next: 'events?group=' + encodeURIComponent(code) }); return; }
         if (preview.member) {
           await load(true);
           Momento.toast('You’re already in this group', g.name);
@@ -1519,7 +1519,7 @@ export default function start() {
         } catch (err) { Momento.toast('Couldn’t remove them', err.message); }
       }
 
-      $('grNew').addEventListener('click', (e) => (Momento.account?.get?.() ? newGroup(e.currentTarget) : Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events.html#groups' })));
+      $('grNew').addEventListener('click', (e) => (Momento.account?.get?.() ? newGroup(e.currentTarget) : Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events#groups' })));
       // An album made from here (Share another album) shows up in its group straight away
       document.addEventListener('momento:albums', () => load(true));
 
@@ -1534,7 +1534,7 @@ export default function start() {
         if (!user) {
           body.removeAttribute('aria-busy');
           body.innerHTML = '<div class="panel gr-guest"><h3>Your friends, your albums</h3><p>Make a group for the people you see most, and every album you share with it shows up for all of them.</p><button class="btn btn-dark" type="button" data-guest-groups>Log in to see your groups</button></div>';
-          body.querySelector('[data-guest-groups]').addEventListener('click', (e) => Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events.html#groups' }));
+          body.querySelector('[data-guest-groups]').addEventListener('click', (e) => Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events#groups' }));
           if (groupCode) joinFromLink(groupCode);
           return;
         }

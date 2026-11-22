@@ -2,7 +2,8 @@
 // Quick smoke test (not a comparison): loads every page once and lists JavaScript errors and failed scripts.
 import puppeteer from 'puppeteer';
 const base = process.argv[2] || 'http://localhost:3001';
-const PAGES = ['/', '/albums.html', '/events.html', '/settings.html', '/support.html', '/terms.html', '/privacy.html', '/albums.html?dev=off'];
+// the clean addresses, plus the old .html ones (bookmarks, QR codes, emails) and a signed-out load
+const PAGES = ['/', '/albums', '/events', '/settings', '/support', '/terms', '/privacy', '/albums?dev=off', '/index.html', '/albums.html', '/events.html?join=ABC123'];
 const b = await puppeteer.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 let bad = 0;
 for (const path of PAGES) {

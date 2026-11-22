@@ -12,7 +12,7 @@ import '@/styles/join-here.css';
 export const viewport: Viewport = pageViewport;
 
 // An old link that asks to join an album lands on the Social page, where joining lives
-const JOIN_REDIRECT = `if (location.hash === "#join" || new URLSearchParams(location.search).has("join")) location.replace("events.html" + location.search + location.hash);`;
+const JOIN_REDIRECT = `if (location.hash === "#join" || new URLSearchParams(location.search).has("join")) location.replace("events" + location.search + location.hash);`;
 
 // Embedded (albums.html?album=<id>&embed=1 inside another Momento page): only the album window shows,
 // over the page that opened it. Links leave to the top page; no intro plays. (The rules for html.is-embed are

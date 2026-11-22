@@ -203,7 +203,7 @@ export default function start() {
       M.account.onChange(fill);
       // This page's account comes from the server (it may be opened in a fresh tab)
       momentoApi('/api/auth/me').then(({ user }) => { if (user) M.account.set(user); else M.account.clear(); fill(); }, () => {});
-      const needLogin = () => { if (M.account.get()) return false; location.href = 'index.html?login=1'; return true; };
+      const needLogin = () => { if (M.account.get()) return false; location.href = '/?login=1'; return true; };
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -555,7 +555,7 @@ export default function start() {
       // Download my data: the server builds the file; it is saved as JSON
       const exportBtn = document.getElementById('exportData');
       exportBtn.addEventListener('click', async () => {
-        if (!M.account.get()) { location.href = 'index.html?login=1'; return; }
+        if (!M.account.get()) { location.href = '/?login=1'; return; }
         if (exportBtn.disabled) return;
         exportBtn.disabled = true;
         const idle = exportBtn.textContent;
@@ -580,13 +580,13 @@ export default function start() {
       // Account: log out and delete both happen on the server, not just in this browser
       document.getElementById('logOut').addEventListener('click', async () => {
         try { await momentoApi('/api/auth/logout', { method: 'POST' }); } catch (err) {}
-        M.account.clear(); M.flash('You’re logged out', 'Log back in any time'); location.href = 'index.html';
+        M.account.clear(); M.flash('You’re logged out', 'Log back in any time'); location.href = '/';
       });
       const delWrap = document.getElementById('deleteConfirm'), delPass = document.getElementById('deletePass'), delNote = document.getElementById('deleteNote');
       const sayDel = (msg, bad) => { delNote.textContent = msg; delNote.classList.toggle('is-error', !!bad); };
       document.getElementById('deleteAcct').addEventListener('click', async (e) => {
         const a = M.account.get();
-        if (!a) { location.href = 'index.html?login=1'; return; }
+        if (!a) { location.href = '/?login=1'; return; }
         // Accounts with a password confirm it first (Google-only accounts have none)
         if (a.hasPassword && !delPass.value) {
           delWrap.hidden = false;
@@ -612,7 +612,7 @@ export default function start() {
         try { ['momento-my-albums', 'momento-removed', 'momento-waitlist'].forEach((k) => localStorage.removeItem(k)); } catch (err) {}
         M.account.clear();
         M.flash('Account deleted', 'Your albums and photos have been removed');
-        location.href = 'index.html';
+        location.href = '/';
       });
     });
 

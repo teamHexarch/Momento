@@ -36,7 +36,7 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
  * "Create an album" / "Host a public event" keep data-create: the shared script's page-wide click listener opens them.
  */
 export default function SiteFooter({ home = false }: { home?: boolean }) {
-  const P = home ? '' : 'index.html';
+  const P = home ? '' : '/';
   const { pref, set: setTheme } = useTheme();
   const signedIn = !!useAccount();
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -80,7 +80,7 @@ export default function SiteFooter({ home = false }: { home?: boolean }) {
     <footer className="site-foot" data-site-foot="" onClick={onFootClick}>
       <div className="sf-grid">
         <div className="sf-brand">
-          <a className="sf-logo" href={home ? '#home' : 'index.html'} aria-label="Momento, home"><svg className="glyph" aria-hidden="true"><use href="#glyph-album" /></svg><svg className="brand-word" aria-hidden="true"><use href="#wordmark" /></svg></a>
+          <a className="sf-logo" href={home ? '#home' : '/'} aria-label="Momento, home"><svg className="glyph" aria-hidden="true"><use href="#glyph-album" /></svg><svg className="brand-word" aria-hidden="true"><use href="#wordmark" /></svg></a>
           <p>Every photo from your event, in one shared album.</p>
         </div>
         {col('Product', 'Product', <>
@@ -89,24 +89,24 @@ export default function SiteFooter({ home = false }: { home?: boolean }) {
           <li><a className="sf-link" href={`${P}#quality`}>Full quality</a></li>
         </>)}
         {col('Albums', 'Your albums', <>
-          <li><a className="sf-link" href="albums.html">My albums</a></li>
-          <li><a className="sf-link" href="events.html#join">Join with a code</a></li>
-          <li><a className="sf-link" href="events.html#groups">Groups</a></li>
+          <li><a className="sf-link" href="albums">My albums</a></li>
+          <li><a className="sf-link" href="events#join">Join with a code</a></li>
+          <li><a className="sf-link" href="events#groups">Groups</a></li>
           <li><a className="sf-link" href={`${P}#how-it-works`} data-create="">Create an album</a></li>
-          <li><a className="sf-link" href="settings.html">Settings</a></li>
+          <li><a className="sf-link" href="settings">Settings</a></li>
         </>)}
         {col('Events', 'Events', <>
-          <li><a className="sf-link" href="events.html#events">Events near you</a></li>
+          <li><a className="sf-link" href="events#events">Events near you</a></li>
           <li><a className="sf-link" href={`${P}#how-it-works`} data-create="" data-create-kind="event">Host a public event</a></li>
-          <li><a className="sf-link" href="events.html#alerts">Event alerts</a></li>
+          <li><a className="sf-link" href="events#alerts">Event alerts</a></li>
         </>)}
         {col('Help', 'Help', <>
           <li><button className="sf-link" type="button" data-foot-act="help" onClick={(e) => momento()?.openHelp?.(e.currentTarget)}>Help and support</button></li>
-          <li><a className="sf-link" href="support.html">Contact support</a></li>
+          <li><a className="sf-link" href="support">Contact support</a></li>
           <li><a className="sf-link" href={`${P}#faq`}>FAQ</a></li>
           <li><a className="sf-link" href={`mailto:${SUPPORT}`}>Email support</a></li>
-          <li><a className="sf-link" href="privacy.html">Privacy policy</a></li>
-          <li><a className="sf-link" href="terms.html">Terms of Service</a></li>
+          <li><a className="sf-link" href="privacy">Privacy policy</a></li>
+          <li><a className="sf-link" href="terms">Terms of Service</a></li>
           <li data-foot-account="" hidden={!signedIn}><button className="sf-link" type="button" data-foot-act="settings" onClick={(e) => momento()?.openSettings?.(e.currentTarget)}>Account settings</button></li>
         </>)}
       </div>

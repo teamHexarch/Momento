@@ -2,24 +2,23 @@ import type { Metadata } from 'next';
 import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
 import SiteHeader from '@/components/shared/SiteHeader';
-import SupportPage from '@/components/support/SupportPage';
+import SettingsPage from '@/components/settings/SettingsPage';
 import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
-import PageChrome from '@/components/effects/PageChrome';
-import LegacyScripts from '@/legacy/LegacyScripts';
+import SettingsScripts from '@/page-scripts/SettingsScripts';
 
-// Served at /support.html on purpose: the page scripts recognise pages by that address.
+// Served at /settings.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
-  title: 'Support | Momento',
-  description: 'Quick answers, and a way to contact the Momento team.',
-  url: 'https://hexarch.org/support.html',
+  title: 'Settings | Momento',
+  description: 'Upload rules, cloud destination, privacy and appearance for your Momento account.',
+  url: 'https://hexarch.org/settings',
 });
 
-// Page behaviour is the original code, run in the original order: the two inline blocks of support.html, then the scripts
-// that were `defer`red in <head>.
+// Page behaviour is the original code, run in the original order: the language menu script that sat inside the markup,
+// the two inline blocks of settings.html, then the scripts that were `defer`red in <head>.
 const SCRIPTS = [
   '/assets/extras.js',
   '/assets/crop.js',
@@ -31,18 +30,17 @@ const SCRIPTS = [
   '/assets/event.js',
 ];
 
-export default function SupportRoute() {
+export default function SettingsRoute() {
   return (
     <ThemeProvider>
-    <AccountProvider>
+    <AccountProvider activity>
       <Backdrop />
       <SvgSprite />
-      <SiteHeader current={null} />
-      <SupportPage />
+      <SiteHeader current="settings" />
+      <SettingsPage />
       <Shell />
       <Toaster />
-      <PageChrome hover="a, button, input, textarea, .live-media" />
-      <LegacyScripts scripts={SCRIPTS} />
+      <SettingsScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

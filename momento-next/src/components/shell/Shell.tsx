@@ -49,11 +49,11 @@ export default function Shell({ trailFromMainLoop = false, choose = false }: {
       madeRef.current = [...madeRef.current, n];
       flushSync(() => setMade(madeRef.current));
     };
-    const onAlbums = /albums\.html$/.test(location.pathname);
+    const onAlbums = /\/albums(\.html)?$/.test(location.pathname);
     const viewAlbum = (id: string) => {
       if (onAlbums) document.dispatchEvent(new CustomEvent('momento:open-album', { detail: id }));
       else if (choose && M.openAlbumHere) M.openAlbumHere(id); // Social opens it over the page
-      else location.href = `albums.html#album=${encodeURIComponent(id)}`;
+      else location.href = `albums#album=${encodeURIComponent(id)}`;
     };
     viewAlbumRef.current = viewAlbum;
 
@@ -118,8 +118,8 @@ export default function Shell({ trailFromMainLoop = false, choose = false }: {
   if (!made.length) return null;
   const dialog = (n: Name) => {
     switch (n) {
-      case 'settings': return <SettingsDialog key={n} ref={settings} onSettingsPage={/settings\.html$/.test(path)} />;
-      case 'help': return <HelpDialog key={n} ref={help} onSupportPage={/support\.html$/.test(path)} />;
+      case 'settings': return <SettingsDialog key={n} ref={settings} onSettingsPage={/\/settings(\.html)?$/.test(path)} />;
+      case 'help': return <HelpDialog key={n} ref={help} onSupportPage={/\/support(\.html)?$/.test(path)} />;
       case 'confirm': return <ConfirmDialog key={n} ref={confirmQ} />;
       case 'ask': return <AskDialog key={n} ref={askQ} />;
       case 'choose': return <ChooseDialog key={n} ref={chooseQ} />;

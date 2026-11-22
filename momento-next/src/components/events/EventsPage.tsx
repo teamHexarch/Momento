@@ -56,7 +56,7 @@ export default function EventsPage() {
                 <div className="ev-actions">
                   <button className="btn btn-light" type="button" id="joinOpen">Join with a code</button>
                   <button className="btn btn-light" type="button" id="scanOpen" data-qr-scan="">Scan a QR code</button>
-                  <a className="btn btn-light" href="index.html#how-it-works" data-create="" data-create-kind="event"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Create an event</a>
+                  <a className="btn btn-light" href="/#how-it-works" data-create="" data-create-kind="event"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Create an event</a>
                 </div>
               </div>
               <section className="ea-requests" id="admission-status" aria-live="polite" hidden><h3>Your join requests</h3><ul></ul></section>
