@@ -6,6 +6,7 @@ import { pageViewport } from '@/lib/metadata';
 import '@/styles/support.css';
 import '@/styles/glass.css';
 import '@/styles/touch.css';
+import '@/styles/nav-extra.css';   // the header menu's Reviews link
 // The Reviews page's own parts (after the shared sheets)
 import '@/styles/reviews.css';
 

@@ -35,7 +35,7 @@ export default function ReviewsRoute() {
     <AccountProvider>
       <Backdrop />
       <SvgSprite />
-      <SiteHeader current={null} />
+      <SiteHeader current="reviews" />
       <ReviewsPage />
       <Shell />
       <Toaster />

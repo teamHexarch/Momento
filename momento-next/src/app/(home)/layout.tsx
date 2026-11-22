@@ -6,6 +6,7 @@ import { pageMetadata, pageViewport } from '@/lib/metadata';
 import '@/styles/home.css';
 import '@/styles/glass.css';
 import '@/styles/touch.css';
+import '@/styles/nav-extra.css';   // the header menu's Reviews link
 
 export const metadata: Metadata = pageMetadata({
   title: 'Momento | Moments, kept.',

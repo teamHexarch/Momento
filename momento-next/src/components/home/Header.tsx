@@ -24,6 +24,9 @@ export default function Header() {
             <a href="#features" className="menu-item">Features</a>
             <a href="#faq" className="menu-item">FAQ</a>
             <span className="menu-hint">Hold and drag down the list to glide through the page</span>
+            {/* Another page, not a section: not a .menu-item, so the section pill and the drag-to-glide leave it alone */}
+            <hr className="menu-sep" />
+            <a href="reviews" className="menu-link">Reviews</a>
           </div>
         </div>
         {/* Log in / Sign up, or the account chip once signed in */}

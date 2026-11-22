@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /** The nav item marked as the current page. Support is not in the nav, so it marks none. */
-export type NavCurrent = 'albums' | 'social' | 'settings' | null;
+export type NavCurrent = 'albums' | 'social' | 'settings' | 'reviews' | null;
 
 /**
  * The header nav of the inner pages (My albums, Social, Settings, Support): Home goes to the home page, and the
@@ -77,11 +77,14 @@ export default function NavWrap({ current }: { current: NavCurrent }) {
         <a href="events" className="nav-item nav-social" aria-label="Social" aria-current={here('social')}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" /><circle cx="16.8" cy="9.5" r="2.5" /><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4" /></svg><span className="nav-label">Social</span></a>
         <a href="settings" className="nav-item nav-settings" aria-label="Settings" aria-current={here('settings')}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></svg><span className="nav-label">Settings</span></a>
       </nav>
-      <div className={open ? 'nav-menu glass is-open' : 'nav-menu glass'} id="navMenu" aria-label="Home page sections" onPointerEnter={onEnter} onPointerLeave={onLeave}>
+      <div className={open ? 'nav-menu glass is-open' : 'nav-menu glass'} id="navMenu" aria-label="Home page sections, and Reviews" onPointerEnter={onEnter} onPointerLeave={onLeave}>
         <a href="/#how-it-works" className="menu-item">How it works</a>
         <a href="/#features" className="menu-item">Features</a>
         <a href="/#quality" className="menu-item">Full quality</a>
         <a href="/#faq" className="menu-item">FAQ</a>
+        {/* Another page, not a section of Home: set apart by a line */}
+        <hr className="menu-sep" />
+        <a href="reviews" className="menu-item" aria-current={current === 'reviews' ? 'page' : undefined}>Reviews</a>
       </div>
     </div>
   );

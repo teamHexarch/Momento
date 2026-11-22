@@ -7,6 +7,7 @@ import '@/styles/maplibre-gl.css';
 import '@/styles/events.css';
 import '@/styles/glass.css';
 import '@/styles/touch.css';
+import '@/styles/nav-extra.css';   // the header menu's Reviews link
 import '@/styles/event-albums.css';
 
 export const viewport: Viewport = pageViewport;

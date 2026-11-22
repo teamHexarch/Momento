@@ -6,6 +6,7 @@ import { pageViewport } from '@/lib/metadata';
 import '@/styles/settings.css';
 import '@/styles/glass.css';
 import '@/styles/touch.css';
+import '@/styles/nav-extra.css';   // the header menu's Reviews link
 
 export const viewport: Viewport = pageViewport;
 

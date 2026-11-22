@@ -7,6 +7,7 @@ import { pageViewport } from '@/lib/metadata';
 import '@/styles/albums.css';
 import '@/styles/glass.css';
 import '@/styles/touch.css';
+import '@/styles/nav-extra.css';   // the header menu's Reviews link
 import '@/styles/join-here.css';
 // The album window's sort and filter row, and the viewer's zoom controls (new: after the original sheets)
 import '@/styles/album-tools.css';
