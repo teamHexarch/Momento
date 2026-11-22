@@ -43,7 +43,7 @@ try {
   const user = new mongoose.Types.ObjectId();
   const albums = Array.from({ length: 6 }, () => new mongoose.Types.ObjectId());
   const waiting = await ModerationDecision.insertMany(Array.from({ length: 60 }, (_, i) => ({ user, album: albums[i % 6], kind: 'photo',
-    hash: 'p' + i, model: 'NSFW.js MobileNetV2', status: 'review-requested', scores: { allow: .35, classes: photo(.34 + (i % 10) / 1000), version: 5 } })));
+    hash: 'p' + i, model: 'NSFW.js MobileNetV2', status: 'review-requested', scores: { allow: .35, classes: photo(.34 + (i % 10) / 1000), version: 6 } })));
   const review = (d, body) => fetch(BASE + '/api/admin/moderation/' + d._id, { method: 'POST',
     headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(async (r) => assert.equal(r.status, 200, await r.text()));
 

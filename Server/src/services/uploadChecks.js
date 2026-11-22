@@ -29,7 +29,7 @@ export const MODEL_NAME = 'NSFW.js MobileNetV2';
 // How sure a score range must be before it publishes on its own (the agreed standard for one model)
 export const CONFIDENCE = 0.85;
 // The score definition (stageOneScores, below); every calibration table records the version it was built with
-export const SCORE_VERSION = 5;
+export const SCORE_VERSION = 6;   // 6: scored on the preview (5: the thumbnail)
 
 // ---- The two thresholds that decide every album photo (change them with the env settings) ----
 // The photo's risk is NSFW.js's Porn + Hentai score (0 to 1). "Sexy" (swimwear, stage outfits, suggestive but not

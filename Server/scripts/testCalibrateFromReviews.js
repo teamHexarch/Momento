@@ -38,7 +38,7 @@ try {
   const scored = stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 });
   assert.equal(scored.allow.toFixed(6), '0.950000');
   assert.equal(scored.level, 0);
-  assert.equal(scored.version, 5);
+  assert.equal(scored.version, 6);
   assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.950000', 'swimwear-like (Sexy) is not risk');
   assert.equal(stageOneScores({ Neutral: .2, Sexy: .7, Porn: .1 }).level, 25);
   assert.equal(stageOneScores({ Neutral: .1, Porn: .9 }).level, 100);
@@ -122,7 +122,7 @@ try {
   assert.equal(activeTable().source, 'thresholds', 'nor when set without one');
   await relearn();
   assert.equal(activeTable().source, 'learned');
-  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 5);
+  assert.equal((await ModerationCalibration.findById('stage-one').lean()).scoreVersion, 6);
   assert.ok(table[1].allow[0].confidence >= .9);
   assert.equal(rs(.95, table).action, 'allow');
   assert.ok(!table[1].allow.some((b) => b.min <= .85 && .85 < b.max), 'level-75 approvals do not enable a range');
