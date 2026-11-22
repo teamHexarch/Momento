@@ -30,19 +30,21 @@ export const MODEL_NAME = 'NSFW.js MobileNetV2';
 // How sure a score range must be before it publishes on its own (the agreed standard for one model)
 export const CONFIDENCE = 0.85;
 // The score definition (stageOneScores, below); every calibration table records the version it was built with
-export const SCORE_VERSION = 6;   // 6: scored on the preview (5: the thumbnail)
+export const SCORE_VERSION = 7;   // 7: Porn + Hentai + 0.77 x Sexy (6: Porn + Hentai on the preview; 5: on the thumbnail)
 
 // ---- The two thresholds that decide every album photo (change them with the env settings) ----
-// The photo's risk is NSFW.js's Porn + Hentai score (0 to 1). "Sexy" (swimwear, stage outfits, suggestive but not
-// explicit) doesn't count: beach, pool and stage photos are normal. (The 2026-11-20 standard, restored 2026-11-22;
-// version 4, from 2026-11-21, counted Sexy too and held most swimwear back.)
-//   risk below NSFW_EXPLICIT_BELOW (0.4)          → published at once (0.6 on 20 Nov; lowered 22 Nov: scored on the
-//                                                   preview, an explicit test photo came out at 53%, everyday ones at most 30%)
+// The photo's risk weighs NSFW.js's own classes: Porn + Hentai + SEXY_WEIGHT (0.77) × Sexy, from 0 to 1. Sexy counts
+// for a little less, so most swimwear and stage outfits stay under the line while a swimsuit worn in a sexual scene
+// (Sexy 95%) or see-through swimwear doesn't. Chosen 22 Nov from a labelled local test set (Desktop\Momento Model Lab):
+// against Porn + Hentai at 40%, it let fewer level 75/100 photos through and held back fewer everyday ones.
+//   risk below NSFW_RISK_BELOW (0.77)             → published at once
 //   Porn or Hentai at NSFW_HARD_DECLINE (0.85)+   → hard decline: no Request review, no staff email
-//   anything else (0.4 and up)                    → declined with Request review,
+//   anything else (0.77 and up)                   → declined with Request review,
 //     unless what staff decided on earlier reviews shows that score range is fine (learning, below)
 const fraction = (value, fallback) => { const n = Number(value); return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback; };
-export const PUBLISH_BELOW = fraction(process.env.NSFW_EXPLICIT_BELOW, 0.4);
+export const SEXY_WEIGHT = fraction(process.env.NSFW_SEXY_WEIGHT, 0.77);
+export const PUBLISH_BELOW = fraction(process.env.NSFW_RISK_BELOW, 0.77);
+export const riskOf = (porn, hentai, sexy) => porn + hentai + SEXY_WEIGHT * sexy;
 export const HARD_DECLINE_AT = fraction(process.env.NSFW_HARD_DECLINE, 0.85);
 
 // ---- Learning from staff decisions ----
@@ -78,12 +80,12 @@ export function activeTable() {
 export const calibratedBins = () => binsOf(activeTable().table);
 
 // MobileNetV2's own classes, against Momento's levels: Neutral and Drawing are everyday (0), Sexy covers swimwear to
-// clearly suggestive (15-50), Porn and Hentai are explicit (75-100). The "allow" score is 1 - risk (1 - Porn - Hentai),
+// clearly suggestive (15-50), Porn and Hentai are explicit (75-100). The "allow" score is 1 - risk (riskOf, above),
 // the score the learned table works on. The estimated level is kept for comparison with staff ratings.
 const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
 export function stageOneScores(classes) {
   const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
-  const allow = Math.max(0, Math.min(1, 1 - (p('Porn') + p('Hentai'))));
+  const allow = Math.max(0, Math.min(1, 1 - riskOf(p('Porn'), p('Hentai'), p('Sexy'))));
   const top = Object.keys(CLASS_LEVEL).reduce((a, b) => (p(b) > p(a) ? b : a), 'Neutral');
   return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])), version: SCORE_VERSION };
 }
@@ -95,7 +97,7 @@ export function routeScore(scores, table = activeTable().table) {
   const porn = p('Porn'), hentai = p('Hentai'), sexy = p('Sexy');
   if (![porn, hentai, sexy].every(Number.isFinite)) return { action: 'decline' };   // no usable scores: never publish
   if (Math.max(porn, hentai) >= HARD_DECLINE_AT) return { action: 'decline', explicit: true };
-  const risk = porn + hentai;
+  const risk = riskOf(porn, hentai, sexy);
   if (risk < PUBLISH_BELOW) return { action: 'allow', risk };
   // Learned from staff decisions: a score range they approve 85%+ of the time publishes too
   const allow = 1 - risk;

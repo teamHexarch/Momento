@@ -49,10 +49,10 @@ nsfw.useFeaturer(async () => Float32Array.from({ length: 1280 }, (_, i) => i / 1
 const { TrainingSample, featuresOf } = await import('../src/models/TrainingSample.js');
 
 try {
-  // ---- The thresholds: risk (Porn + Hentai) under 40% publishes; Porn or Hentai 85%+ is a hard decline ----
+  // ---- The thresholds: risk (Porn + Hentai + 0.77 x Sexy) under 77% publishes; Porn or Hentai 85%+ is a hard decline ----
   const cls = (porn, sexy = 0, hentai = 0) => ({ classes: { Neutral: 1 - porn - sexy - hentai, Drawing: 0, Sexy: sexy, Porn: porn, Hentai: hentai } });
-  assert.equal(routeScore(cls(.3, .1, .09)).action, 'allow');
-  assert.equal(routeScore(cls(.3, .1, .1)).action, 'decline');
+  assert.equal(routeScore(cls(.5, .2, .1)).action, 'allow');
+  assert.equal(routeScore(cls(.5, .2, .13)).action, 'decline');
   assert.equal(routeScore(cls(0, .99)).action, 'allow', 'swimwear (Sexy) publishes');
   assert.equal(routeScore(cls(.85)).explicit, true);
   assert.equal(routeScore(cls(0, 0, .9)).explicit, true);
