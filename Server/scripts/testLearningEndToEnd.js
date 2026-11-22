@@ -23,7 +23,7 @@ const { withDevMode } = await import('./devModeTestKit.js');
 const server = app.listen(4118);
 const BASE = 'http://localhost:4118';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-// A middle-zone photo: risk 0.65 (all "Porn"), above the 0.6 auto-publish line and under the 0.85 hard decline, so it goes to staff review
+// A middle-zone photo: risk 0.65 (all "Porn"), above the 0.4 auto-publish line and under the 0.85 hard decline, so it goes to staff review
 const photo = (allow) => ({ Neutral: allow, Drawing: 0, Sexy: 0, Porn: 1 - allow, Hentai: 0 });
 const route = () => routeScore({ classes: photo(.35) });
 

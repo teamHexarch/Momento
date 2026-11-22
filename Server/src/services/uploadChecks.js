@@ -36,12 +36,13 @@ export const SCORE_VERSION = 6;   // 6: scored on the preview (5: the thumbnail)
 // The photo's risk is NSFW.js's Porn + Hentai score (0 to 1). "Sexy" (swimwear, stage outfits, suggestive but not
 // explicit) doesn't count: beach, pool and stage photos are normal. (The 2026-11-20 standard, restored 2026-11-22;
 // version 4, from 2026-11-21, counted Sexy too and held most swimwear back.)
-//   risk below NSFW_EXPLICIT_BELOW (0.6)          → published at once
+//   risk below NSFW_EXPLICIT_BELOW (0.4)          → published at once (0.6 on 20 Nov; lowered 22 Nov: scored on the
+//                                                   preview, an explicit test photo came out at 53%, everyday ones at most 30%)
 //   Porn or Hentai at NSFW_HARD_DECLINE (0.85)+   → hard decline: no Request review, no staff email
-//   anything else (0.6 and up)                    → declined with Request review,
+//   anything else (0.4 and up)                    → declined with Request review,
 //     unless what staff decided on earlier reviews shows that score range is fine (learning, below)
 const fraction = (value, fallback) => { const n = Number(value); return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback; };
-export const PUBLISH_BELOW = fraction(process.env.NSFW_EXPLICIT_BELOW, 0.6);
+export const PUBLISH_BELOW = fraction(process.env.NSFW_EXPLICIT_BELOW, 0.4);
 export const HARD_DECLINE_AT = fraction(process.env.NSFW_HARD_DECLINE, 0.85);
 
 // ---- Learning from staff decisions ----

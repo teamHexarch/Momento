@@ -42,12 +42,12 @@ try {
   assert.equal(stageOneScores({ Neutral: .1, Sexy: .85, Porn: .05 }).allow.toFixed(6), '0.950000', 'swimwear-like (Sexy) is not risk');
   assert.equal(stageOneScores({ Neutral: .2, Sexy: .7, Porn: .1 }).level, 25);
   assert.equal(stageOneScores({ Neutral: .1, Porn: .9 }).level, 100);
-  // The two thresholds: risk under 60% publishes; Porn or Hentai 85%+ is a hard decline; the rest is declined (review)
-  assert.equal(PUBLISH_BELOW, .6); assert.equal(HARD_DECLINE_AT, .85);
+  // The two thresholds: risk under 40% publishes; Porn or Hentai 85%+ is a hard decline; the rest is declined (review)
+  assert.equal(PUBLISH_BELOW, .4); assert.equal(HARD_DECLINE_AT, .85);
   assert.equal(activeTable().source, 'thresholds');
-  assert.equal(rs(.41).action, 'allow');
-  assert.equal(rs(.4).action, 'decline');
-  assert.equal(rs(.4).explicit, undefined, 'under 85% is never a hard decline: it can be reviewed');
+  assert.equal(rs(.61).action, 'allow');
+  assert.equal(rs(.6).action, 'decline');
+  assert.equal(rs(.6).explicit, undefined, 'under 85% is never a hard decline: it can be reviewed');
   assert.equal(routeScore({ classes: { Neutral: .01, Drawing: 0, Sexy: .99, Porn: 0, Hentai: 0 } }).action, 'allow', 'swimwear and stage outfits publish');
   assert.equal(routeScore({ classes: { Neutral: .1, Sexy: 0, Porn: .85, Hentai: .05 } }).explicit, true);
   assert.equal(routeScore({ classes: { Neutral: .1, Sexy: .1, Porn: .4, Hentai: .4 } }).explicit, undefined, 'neither class alone at 85%');
