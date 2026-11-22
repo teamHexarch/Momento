@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onLegacyReady } from '@/lib/legacy';
+import { api } from '@/lib/api';
 
 /** Which emails a person gets. Pages differ in the defaults they assume (see NOTIFY below) */
 export type Notify = { photos: boolean; closing: boolean; recap: boolean; activity?: boolean };
@@ -17,8 +18,6 @@ const AccountContext = createContext<Account | null>(null);
 
 /** The signed-in person, or null (also while the page is still asking the server) */
 export const useAccount = () => useContext(AccountContext);
-
-type MomentoApi = (path: string, init?: RequestInit) => Promise<{ user?: Partial<Account> | null }>;
 
 /**
  * The account: who is signed in, kept for the tab (sessionStorage 'momento-account'), shared by every page.
@@ -45,7 +44,7 @@ export default function AccountProvider({ activity = false, children }: { activi
       } catch {}
     };
     const emit = () => { setAccount(current); listeners.forEach((fn) => fn(current)); };
-    const api = {
+    const store = {
       get: () => current,
       set(patch: Partial<Account>) {
         current = norm({ ...(current || {}), ...patch, notify: { ...(current && current.notify), ...patch.notify } as Notify });
@@ -58,19 +57,19 @@ export default function AccountProvider({ activity = false, children }: { activi
       blank: () => norm({}) as Account,
     };
 
-    const w = window as unknown as { Momento?: Record<string, unknown>; momentoApi?: MomentoApi };
+    const w = window as unknown as { Momento?: Record<string, unknown> };
     const M = (w.Momento ||= {});
-    M.account = api;
+    M.account = store;
     let live = true;
-    const asked = w.momentoApi!('/api/auth/me');
+    const asked = api.auth.me();
     M.sessionReady = asked.then(({ user }) => new Promise((resolve) => {
       onLegacyReady(() => {
-        if (live) { if (user) api.set(user); else api.clear(); }
+        if (live) { if (user) store.set(user as Partial<Account>); else store.clear(); }
         resolve(user);
       });
     }));
     (M.sessionReady as Promise<unknown>).catch(() => {});
-    return () => { live = false; if (M.account === api) delete M.account; };
+    return () => { live = false; if (M.account === store) delete M.account; };
   }, [activity]);
 
   return <AccountContext.Provider value={account}>{children}</AccountContext.Provider>;

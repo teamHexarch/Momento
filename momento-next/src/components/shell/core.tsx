@@ -27,9 +27,6 @@ export function morph(from: Element, card: Element) {
 
 /** window.Momento, for the shims the old scripts still call */
 export const momentoGlobal = () => ((window as unknown as { Momento?: Record<string, unknown> }).Momento ||= {}) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-/** The old api.js helpers (window.momentoApi / momentoJson), until the typed API layer replaces them */
-export const api = (path: string, init?: RequestInit) => (window as any).momentoApi(path, init); // eslint-disable-line @typescript-eslint/no-explicit-any
-export const json = (method: string, body: unknown) => (window as any).momentoJson(method, body); // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** The 24x24 line icons the shell draws (the old `svg()` helper) */
 export function Svg({ size = 18, className, children }: { size?: number; className?: string; children: React.ReactNode }) {

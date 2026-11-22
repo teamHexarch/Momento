@@ -3,7 +3,8 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import ShellDialog, { type DialogHandle } from './ShellDialog';
-import { ICON, SUPPORT, api, json, momentoGlobal, reducedMotion } from './core';
+import { ICON, SUPPORT, momentoGlobal, reducedMotion } from './core';
+import { api } from '@/lib/api';
 import { useAccount, type Account } from '../shared/AccountProvider';
 
 export type OpenHandle = { open(): void };
@@ -85,11 +86,9 @@ export const SettingsDialog = forwardRef<OpenHandle, { onSettingsPage: boolean }
     // Crop it to a square first (Cancel keeps the current photo)
     const pic: Blob | null = M().cropAvatar ? await M().cropAvatar(f) : f;
     if (!pic) return;
-    const fd = new FormData();
-    fd.append('avatar', pic, pic === f ? (f.name || 'photo.jpg') : 'avatar.jpg');
     setAvatarBusy(true); setPhotoBusy(true); say('Uploading your photo…');
     try {
-      const { user } = await api('/api/auth/avatar', { method: 'POST', body: fd });
+      const { user } = await api.auth.setAvatar(pic, pic === f ? (f.name || 'photo.jpg') : 'avatar.jpg');
       M().account.set(user);
       say('Photo updated. Friends see it in groups and albums.');
     } catch (err) { say((err as Error).message, true); }
@@ -98,7 +97,7 @@ export const SettingsDialog = forwardRef<OpenHandle, { onSettingsPage: boolean }
   const removePhoto = async () => {
     setPhotoBusy(true);
     try {
-      const { user } = await api('/api/auth/avatar', { method: 'DELETE' });
+      const { user } = await api.auth.removeAvatar();
       M().account.set(user);
       say('Photo removed. Your initials show instead.');
     } catch (err) { say((err as Error).message, true); }
@@ -114,7 +113,7 @@ export const SettingsDialog = forwardRef<OpenHandle, { onSettingsPage: boolean }
     const notify = { ...sw };
     if (email !== M().account.get().email) { say('To change your email, use the Settings page (Advanced settings).', true); return; }
     try {
-      const { user } = await api('/api/auth/me', json('PATCH', { name, notify }));
+      const { user } = await api.auth.update({ name, notify });
       M().account.set(user);
     } catch (err) { say((err as Error).message, true); return; }
     say('Saved');

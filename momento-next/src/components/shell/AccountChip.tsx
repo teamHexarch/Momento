@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ICON, api, firstName, momentoGlobal } from './core';
+import { ICON, firstName, momentoGlobal } from './core';
+import { api } from '@/lib/api';
 import { useAccount, type Account } from '../shared/AccountProvider';
 import { useTheme } from '../shared/ThemeProvider';
 import type { ThemePref } from '@/lib/legacy';
@@ -59,7 +60,7 @@ function Chip({ logoutTo }: { logoutTo: string | null }) {
     if (what === 'settings') M.openSettings(btn.current);
     else if (what === 'help') M.openHelp(btn.current);
     else {
-      try { await api('/api/auth/logout', { method: 'POST' }); } catch (err) { M.toast('Could not log out', (err as Error).message); return; }
+      try { await api.auth.logout(); } catch (err) { M.toast('Could not log out', (err as Error).message); return; }
       M.account.clear();
       if (logoutTo) { M.flash('You’re logged out', 'Log back in any time'); location.href = logoutTo; }
       else M.toast('You’re logged out', 'Log back in any time');

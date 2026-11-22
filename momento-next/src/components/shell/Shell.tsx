@@ -5,7 +5,8 @@ import { createPortal, flushSync } from 'react-dom';
 import { HelpDialog, SettingsDialog, type OpenHandle } from './AccountDialogs';
 import CreateDialog, { type CreateHandle, type CreateOpts } from './CreateDialog';
 import { AskDialog, ChooseDialog, ConfirmDialog, type AskOpts, type ChooseOpts, type ConfirmOpts, type QuestionHandle } from './Questions';
-import { api, momentoGlobal, shell } from './core';
+import { momentoGlobal, shell } from './core';
+import { api } from '@/lib/api';
 import { flourish, useCardLight, useFlourish, usePageLeave, useTrail } from './effects';
 import { intro } from './intro';
 
@@ -90,7 +91,7 @@ export default function Shell({ trailFromMainLoop = false, choose = false }: {
       });
       if (!ok) return false;
       try {
-        await api('/api/albums/' + encodeURIComponent(a.id) + (host ? '' : '/membership'), { method: 'DELETE' });
+        await (host ? api.albums.remove(a.id) : api.albums.leave(a.id));
       } catch (err) { M.toast('Could not remove album', (err as Error).message); return false; }
       document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'remove', id: a.id } }));
       M.toast(host ? 'Album deleted' : 'You left the album', a.name);

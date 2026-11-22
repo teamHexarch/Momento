@@ -1,10 +1,9 @@
 import { onLegacyReady } from '@/lib/legacy';
+import { api, type ApiError } from '@/lib/api';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Err = Error & { status?: number; code?: string; challenge?: string };
+type Err = ApiError;
 const W = () => window as any;
-const api = (path: string, init?: RequestInit): Promise<any> => W().momentoApi(path, init);
-const json = (method: string, body: unknown) => W().momentoJson(method, body);
 const M = () => W().Momento;
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
@@ -38,7 +37,7 @@ export function setUpAuth(): () => void {
       captchaStatus.textContent = 'Loading security check…';
       try {
         // Google reCAPTCHA's "I'm not a robot" box. The public site key comes from the server.
-        const { captcha } = await api('/api/config');
+        const { captcha } = await api.config();
         if (!captcha?.siteKey) throw new Error('Sign-up is temporarily unavailable. Please try again later.');
         if (!W().grecaptcha?.render) await new Promise<void>((resolve, reject) => {
           const script = document.createElement('script');
@@ -171,7 +170,7 @@ export function setUpAuth(): () => void {
     e.preventDefault();
     const email = field('email').value.trim();
     if (!email) { error.textContent = 'Enter your email first.'; return; }
-    try { await api('/api/auth/password/forgot', json('POST', { email })); error.textContent = 'If this account exists, a password reset link has been sent.'; }
+    try { await api.auth.forgotPassword(email); error.textContent = 'If this account exists, a password reset link has been sent.'; }
     catch (err) { error.textContent = (err as Error).message; }
   });
 
@@ -215,9 +214,7 @@ export function setUpAuth(): () => void {
     deviceAction.disabled = resend.disabled = true;
     deviceError.textContent = '';
     try {
-      const result = await api('/api/auth/devices/' + step, json('POST', {
-        challenge, code: deviceCode.value.trim(), ticket, deviceId: selected?.value,
-      }));
+      const result = await api.auth.devices(step, { challenge, code: deviceCode.value.trim(), ticket, deviceId: selected?.value });
       if (current !== challenge) return;
       if (step === 'code') {
         deviceHelp.textContent = 'Enter the six-digit code sent to your account email.';
@@ -226,11 +223,12 @@ export function setUpAuth(): () => void {
         deviceCode.value = '';
         deviceCode.focus();
       } else if (step === 'verify') {
-        ticket = result.ticket;
+        ticket = result.ticket ?? null;
         codeField.hidden = resend.hidden = true;
-        deviceHelp.textContent = result.devices.length ? 'Choose a device to log out so you can sign in here.' : 'A slot has opened. Close this window and log in again.';
+        const devices = result.devices || [];
+        deviceHelp.textContent = devices.length ? 'Choose a device to log out so you can sign in here.' : 'A slot has opened. Close this window and log in again.';
         deviceAction.textContent = 'Log out selected device and sign in';
-        for (const device of result.devices) {
+        for (const device of devices) {
           const label = document.createElement('label');
           label.className = 'device-choice'; // a glass choice card (assets/glass.css)
           const radio = document.createElement('input');
@@ -261,7 +259,7 @@ export function setUpAuth(): () => void {
     document.head.append(s);
   }));
   // Loaded ahead of the click, so the popup opens straight from it (browsers block late popups)
-  api('/api/config').then((c) => { googleId = c.googleClientId || null; if (googleId) loadGsi().catch(() => {}); }).catch(() => {});
+  api.config().then((c) => { googleId = c.googleClientId || null; if (googleId) loadGsi().catch(() => {}); }).catch(() => {});
   on(googleBtn, 'click', async () => {
     error.textContent = '';
     // A new Google account is a sign-up too, so it needs the same agreement
@@ -279,7 +277,7 @@ export function setUpAuth(): () => void {
         setBusy('Signing in with Google…');
         try {
           const newAccount = form.dataset.mode === 'signup';
-          const { user } = await api('/api/auth/google', json('POST', { code: resp.code, ...(newAccount ? consent() : {}) }));
+          const { user } = await api.auth.google({ code: resp.code!, ...(newAccount ? consent() : {}) });
           M().account.set(user);
           // A new account picks its language before going in
           if (newAccount) await M().chooseLanguage?.();
@@ -318,7 +316,9 @@ export function setUpAuth(): () => void {
     setBusy(signup ? 'Creating your account…' : 'Logging in…');
     let leaving = false;
     try {
-      const { user } = await api('/api/auth/' + (signup ? 'signup' : 'login'), json('POST', { name, email, password: pass, ...(signup ? { captchaToken, joinCode: inviteCode(), ...consent() } : {}) }));
+      const { user } = await (signup
+        ? api.auth.signup({ name, email, password: pass, captchaToken, joinCode: inviteCode(), ...consent() })
+        : api.auth.login({ email, password: pass }));
       field('password').value = '';
       M().account.set(user);
       // A new account picks its language before going in
@@ -396,7 +396,7 @@ export function setUpAuth(): () => void {
         if (pw !== again) { say('The two passwords don’t match.'); f.again.focus(); return; }
         const go = f.querySelector<HTMLButtonElement>('[type="submit"]')!; go.disabled = true; go.textContent = 'Setting password…'; say('');
         try {
-          const { user } = await api('/api/auth/password/reset', json('POST', { token, password: pw }));
+          const { user } = await api.auth.resetPassword(token, pw);
           M().account.set(user);
           M().flash?.('Password set', 'You’re logged in.');
           location.href = 'albums.html';
@@ -432,7 +432,7 @@ export function setUpAuth(): () => void {
     s.view('<h2 id="eaTitle">Checking the link…</h2>');
     s.open();
     let info: { email: string; newEmail: string };
-    try { info = await api('/api/auth/email/approve-info?token=' + encodeURIComponent(token)); }
+    try { info = await api.auth.approveInfo(token); }
     catch { expired(); return; }
     s.view(`
       <h2 id="eaTitle">Approve your new email?</h2>
@@ -447,7 +447,7 @@ export function setUpAuth(): () => void {
       s.inner.querySelectorAll<HTMLButtonElement>('.acct-actions button').forEach((x) => { x.disabled = true; });
       b.textContent = path === 'approve' ? 'Approving…' : 'Stopping…';
       try {
-        const { result } = await api('/api/auth/email/' + path, json('POST', { token }));
+        const { result } = await (path === 'approve' ? api.auth.approveEmail(token) : api.auth.cancelEmail(token));
         if (result === 'approved') {
           s.view(`
             <h2 id="eaTitle">One last step</h2>

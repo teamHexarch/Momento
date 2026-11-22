@@ -37,3 +37,13 @@ Already verified before this list started: header + nav menu, static export, foo
 - Email links: `?reset=`, `?email-approve=`, `?email=changed|taken|invalid`, `?verified=…`; tokens leave the address bar at once.
 - Timing: the start-up part (open on `?login`, email-link popups) now runs once the old scripts have all run (was the
   replayed DOMContentLoaded, after the earlier home scripts' handlers): same moment, slightly different order.
+
+## Typed API layer (`src/lib/api.ts`)
+- Every endpoint the site calls, typed (User, AlbumSummary, Photo with optional miniUrl, TrashPhoto, HiddenPhoto, Group…),
+  `ApiError` with status / code / challenge / retryAt. Goes through window.momentoFetch, so sample data still answers locally.
+- React code now uses it: account (me), Account settings (avatar, PATCH me), chip logout, album remove/leave, Create album
+  (groups, create), login (config, login, signup, google, devices, forgot/reset password, email approve/cancel).
+  Check those flows' error messages too (offline, 4xx).
+- Old page scripts still use window.momentoApi from api.js (guard.js needs it while the page loads).
+- Language (i18n.js) was deliberately not converted yet: it translates everything the old scripts build. Convert it once
+  the pages render their own text.

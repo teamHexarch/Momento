@@ -2,11 +2,11 @@
 
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from 'react';
 import ShellDialog, { type DialogHandle } from './ShellDialog';
-import { ICON, api, json, momentoGlobal, reducedMotion } from './core';
+import { ICON, momentoGlobal, reducedMotion } from './core';
+import { api, type AlbumSummary } from '@/lib/api';
 
 export type CreateOpts = { groupId?: string; groupName?: string; kind?: string };
 export type CreateHandle = { open(opts?: CreateOpts): void };
-type Album = { id: string; code: string; name: string; [k: string]: unknown };
 
 /** The markup, rendered once and never again: event.js fills the event step and other scripts reach in by id */
 const CreateMarkup = memo(function CreateMarkup() {
@@ -74,7 +74,7 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
     // Only an event asks for times and a venue; an album (and a friend-group album) is just its name and date
     const isEvent = () => !F.group?.value && F.kind?.value === 'event';
     let step = 'details';
-    let made: Album | null = null;
+    let made: AlbumSummary | null = null; // the created album (you host it, so it has its code)
     const say = (msg: string, field?: HTMLElement) => {
       form.querySelectorAll('.m-field-error').forEach((el) => el.remove());
       form.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
@@ -148,7 +148,7 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
       const known: G[] | null = M.myGroups?.cached();
       fill(known || []);
       let groups: G[];
-      try { groups = M.myGroups ? await M.myGroups.refresh() : (await api('/api/groups')).groups; } catch { return; }
+      try { groups = M.myGroups ? await M.myGroups.refresh() : (await api.groups.list()).groups; } catch { return; }
       if (ask !== groupsAsked) return;
       if (JSON.stringify(groups.map((g) => [String(g.id), g.name])) !== JSON.stringify((known || []).map((g) => [g.id, g.name]))) fill(groups);
     }
@@ -175,13 +175,13 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
       form.dataset.busy = 'true';
       submit.disabled = back.disabled = true;
       try {
-        ({ album: made } = await api('/api/albums', json('POST', { name, date, place, ...ev.fields, ...(groupId && { groupId }) })));
+        ({ album: made } = await api.albums.create({ name, date, place, ...ev.fields, ...(groupId && { groupId }) }));
         document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
       } catch (err) { say((err as Error).message); return; }
       finally { delete form.dataset.busy; submit.disabled = back.disabled = false; }
       const when = new Date(date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
       d.querySelector('.m-done .acct-sub')!.textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
-      d.querySelector('.m-code b')!.textContent = made!.code;
+      d.querySelector('.m-code b')!.textContent = made!.code || '';
       d.querySelector('.m-copy')!.textContent = 'Copy code';
       d.querySelector('.m-link')!.textContent = M.inviteLink(made!.code);
       d.querySelector('[data-copy-link]')!.textContent = 'Copy link';
@@ -193,7 +193,7 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
     });
     d.querySelector('.m-copy')!.addEventListener('click', async (e) => {
       const b = e.currentTarget as HTMLElement;
-      try { await navigator.clipboard.writeText(made!.code); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
+      try { await navigator.clipboard.writeText(made!.code || ''); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
       setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
     });
     d.querySelector('[data-copy-link]')!.addEventListener('click', (e) => M.shareInvite(made, e.currentTarget, 'Copy link'));
