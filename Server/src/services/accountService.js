@@ -123,8 +123,9 @@ export async function deleteAccount(user) {
   const { ZipFile } = await import('./zipService.js');
   const zips = await ZipFile.find({ $or: [{ user: user._id }, { album: { $in: hostedIds } }] }, 'key');
   await Promise.all(zips.map((z) => z.key && removeFile(z.key).catch(() => {})));
-  const [{ Consent }, { Report }, { ModerationDecision }] = await Promise.all([
+  const [{ Consent }, { Report }, { ModerationDecision }, { TrainingSample }] = await Promise.all([
     import('../models/Consent.js'), import('../models/Report.js'), import('../models/ModerationDecision.js'),
+    import('../models/TrainingSample.js'),
   ]);
   await Promise.all([
     Photo.deleteMany({ _id: { $in: photos.map((p) => p._id) } }),
@@ -135,6 +136,8 @@ export async function deleteAccount(user) {
     Consent.deleteMany({ user: user._id }),
     Report.deleteMany({ $or: [{ reporter: user._id }, { album: { $in: hostedIds } }] }),
     ModerationDecision.deleteMany({ user: user._id }),
+    // The features kept from their photos for training (models/TrainingSample.js)
+    TrainingSample.deleteMany({ user: user._id }),
     // Join requests they left in other people's albums
     Album.updateMany({ 'requests.user': user._id }, { $pull: { requests: { user: user._id } } }),
   ]);

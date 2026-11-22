@@ -9,7 +9,8 @@ import { User } from '../models/User.js';
 import { Membership } from '../models/Membership.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { notifyPhotos } from './notifyService.js';
-import { scan, checkIsOff } from './nsfwService.js';
+import { scan, checkIsOff, isAllowedFile, features, FEATURE_LAYER } from './nsfwService.js';
+import { TrainingSample, packFeatures, UNLABELLED_DAYS } from '../models/TrainingSample.js';
 import { isBanned } from './contentSafety.js';
 import { storePhoto, openPhoto, deletePhoto, removeFile } from './storageService.js';
 import { sanitizePhoto } from './imageService.js';
@@ -176,6 +177,21 @@ async function decline(job, owns, { scores, reason, entry, explicit = false }) {
     ...(entry && { $push: { history: entry } }) });
 }
 
+// Keeps the photo's 1280 features (models/TrainingSample.js) for training later; staff's rating is added on review.
+// A failure here is logged and ignored: it never holds up or changes a photo's check.
+async function recordSample(job, image, scores, action, explicit) {
+  if (checkIsOff()) return;
+  try {
+    const floats = await features(image);
+    if (!floats) return;
+    await TrainingSample.updateOne({ _id: job._id }, { $set: {
+      user: job.user, album: job.album, hash: job.hash, layer: FEATURE_LAYER, scoreVersion: SCORE_VERSION,
+      features: packFeatures(floats), classes: scores?.classes, auto: action, explicit,
+      expires: new Date(Date.now() + UNLABELLED_DAYS * 86400000), at: new Date(),
+    } }, { upsert: true });
+  } catch (error) { console.error('Photo training sample not saved: %s', error.message); }
+}
+
 // One step of the queue. step 0: publish approved photos; step 1: check new ones. Returns whether it did anything.
 // only: this one job (checkNow), instead of the next one due
 export async function processCheck(step, infer = classify, table = activeTable().table, only) {
@@ -206,10 +222,19 @@ export async function processCheck(step, infer = classify, table = activeTable()
       await removeFile(job.rawKey);
       await UploadCheck.updateOne(owns, { $unset: { rawKey: 1 } });
     }
+    // Staff already approved this exact file (same fingerprint) on review.html: it passes without the model
+    if (await isAllowedFile(job.hash)) {
+      await UploadCheck.updateOne(owns, { $set: { state: 'publish', attempts: 0, due: new Date() }, $unset: { claim: 1 },
+        $push: { history: { stage: 1, action: 'allow', rule: 'staff-approved', at: new Date() } } });
+      return true;
+    }
     // Scored on the preview (up to 2500 px, JPEG 82): the 600 px WebP thumbnail is compressed enough to make the model
     // read swimwear and stage outfits as Porn (a denim crop top: 30% on the preview, 64% on the thumbnail)
-    const scores = await infer(await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey)));
+    const image = await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey));
+    const scores = await infer(image);
     const { action, explicit = false, risk, learned: byLearning, confidence } = routeScore(scores, table);
+    // Training data for Momento's own decision layer (never affects this photo)
+    await recordSample(job, image, scores, action, explicit);
     const entry = { stage: 1, model: MODEL_NAME, scores, action, risk, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT,
       ...(byLearning && { rule: 'learned', confidence }) };
     if (action === 'allow') {

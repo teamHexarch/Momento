@@ -44,6 +44,9 @@ console.log = (...args) => { const line = args.join(' '); if (line.startsWith('[
 const SURE = { Neutral: .97, Drawing: .01, Sexy: .01, Porn: .005, Hentai: .005 };
 const UNSURE = { Neutral: .15, Sexy: .2, Porn: .65 };
 nsfw.useClassifier(async () => SURE);
+// The stand-in for the 1280 features (the layer before MobileNetV2 decides)
+nsfw.useFeaturer(async () => Float32Array.from({ length: 1280 }, (_, i) => i / 1280));
+const { TrainingSample, featuresOf } = await import('../src/models/TrainingSample.js');
 
 try {
   // ---- The thresholds: risk (Porn + Hentai) under 60% publishes; Porn or Hentai 85%+ is a hard decline ----
@@ -77,6 +80,12 @@ try {
   assert.equal(ok.photos.length, 1);
   assert.equal(ok.checks.length, 0);
   assert.ok(await Photo.exists({ _id: ok.photos[0].id }));
+  // Its 1280 features are kept for training (no picture), unrated, and go after 90 days
+  const sample = await TrainingSample.findById(ok.photos[0].id).lean();
+  assert.equal(featuresOf(sample).length, 1280);
+  assert.ok(Math.abs(featuresOf(sample)[640] - .5) < 1e-6, 'the numbers come back as stored');
+  assert.deepEqual([sample.auto, sample.layer, sample.level, sample.labelledAt], ['allow', 'flatten_1', undefined, undefined]);
+  assert.ok(sample.expires - Date.now() > 89 * 86400000);
 
   // ---- An uncertain one is declined: private, shown only to its uploader, and NOT sent to staff ----
   nsfw.useClassifier(async () => UNSURE);
@@ -132,6 +141,10 @@ try {
   // Publishing needs only the level
   const reviewed = await (await request('/api/admin/moderation/' + declined.id, 200, staff, 'POST', { allow: true, severity: 15 })).json();
   assert.deepEqual([reviewed.severity, reviewed.reasons], [15, []]);
+  // The rating becomes a labelled training example, kept a year
+  const labelled = await TrainingSample.findById(declined.id).lean();
+  assert.deepEqual([labelled.auto, labelled.level, labelled.allowed, labelled.reviewer], ['decline', 15, true, 'Reviewer_T']);
+  assert.ok(labelled.expires - Date.now() > 360 * 86400000);
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: declined.id }), 'approved: published');
   const decided = await (await request('/api/admin/moderation/' + declined.id, 200, staff)).json();
@@ -157,6 +170,23 @@ try {
   await expireRefusals();
   assert.equal(await UploadCheck.exists({ _id: no2.id }), null, 'declined over 30 days ago: deleted');
   await request('/api/photos/' + no2.id, 404, cookie);
+
+  // ---- A file staff approved passes at once when uploaded again (another album), without the model ----
+  nsfw.useClassifier(async () => UNSURE);
+  const same = await sharp({ create: { width: 64, height: 64, channels: 3, background: { r: 1, g: 2, b: 3 } } }).jpeg().toBuffer();
+  const sameForm = () => { const f = new FormData(); f.append('photos', new Blob([same]), 'approved.jpg'); return f; };
+  const first = (await (await request(url + '/photos', 201, cookie, 'POST', sameForm())).json()).checks[0];
+  await request('/api/auth/moderation/' + first.id + '/review', 200, cookie, 'POST', {});
+  await request('/api/admin/moderation/' + first.id, 200, staff, 'POST', { allow: true, severity: 15 });
+  const { album: other } = await (await request('/api/albums', 201, cookie, 'POST', { kind: 'album', name: 'Second album', date: '2026-11-22' })).json();
+  const again = await (await request('/api/albums/' + other.id + '/photos', 201, cookie, 'POST', sameForm())).json();
+  assert.equal(again.photos.length, 1, 'staff approved this exact file: published without another review');
+  assert.equal(again.declined, 0);
+  assert.equal((await UploadCheck.findById(again.photos[0].id).lean()).history.at(-1).rule, 'staff-approved');
+  // A different file with the same (unsure) score still waits
+  const different = await (await request('/api/albums/' + other.id + '/photos', 201, cookie, 'POST', await form('different.jpg'))).json();
+  assert.equal(different.declined, 1);
+  nsfw.useClassifier(async () => SURE);
 
   // ---- A big upload (over 10 photos) is checked in the background by the queue ----
   nsfw.useClassifier(async () => SURE);

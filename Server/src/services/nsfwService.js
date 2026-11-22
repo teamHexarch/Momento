@@ -17,7 +17,10 @@ const enabled = process.env.NSFW_CHECK !== 'off';
 // Tests never load the real model (slow); they pass a stand-in with useClassifier
 const testing = process.env.NODE_ENV === 'test';
 
-let classifier = null, loading = null;
+let classifier = null, featurer = null, loading = null;
+// The layer just before MobileNetV2 decides: 1280 numbers describing what is in the picture (no picture can be
+// rebuilt from them). Kept with staff ratings to train Momento's own decision layer later (models/TrainingSample.js).
+export const FEATURE_LAYER = 'flatten_1', FEATURE_SIZE = 1280;
 async function load() {
   if (classifier) return classifier;
   loading ||= (async () => {
@@ -26,13 +29,23 @@ async function load() {
     await tf.setBackend('cpu');
     tf.enableProdMode();
     const model = await nsfw.load('MobileNetV2');
-    classifier = async (buffer) => {
+    const pixels = async (buffer) => {
       const { data, info } = await sharp(buffer, { limitInputPixels: 100_000_000 }).rotate()
         .resize(224, 224, { fit: 'fill' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-      const x = tf.tensor3d(new Uint8Array(data), [info.height, info.width, 3], 'int32');
+      return tf.tensor3d(new Uint8Array(data), [info.height, info.width, 3], 'int32');
+    };
+    classifier = async (buffer) => {
+      const x = await pixels(buffer);
       try {
         const out = await model.classify(x, 5);
         return Object.fromEntries(out.map((c) => [c.className, c.probability]));
+      } finally { x.dispose(); }
+    };
+    featurer = async (buffer) => {
+      const x = await pixels(buffer);
+      try {
+        const out = model.infer(x, FEATURE_LAYER);
+        try { return Float32Array.from(await out.data()); } finally { out.dispose(); }
       } finally { x.dispose(); }
     };
     console.log('Nudity check: ready');
@@ -43,6 +56,20 @@ async function load() {
 
 // For tests: use a stand-in instead of the real model
 export function useClassifier(fn) { classifier = fn; }
+export function useFeaturer(fn) { featurer = fn; }
+
+// The photo's 1280 features (Float32Array), or null when the check is off or unavailable. Never blocks an upload.
+export async function features(buffer) {
+  if (!enabled || (testing && !featurer)) return null;
+  try {
+    if (!featurer) await load();
+    const out = await oneAtATime(() => featurer(buffer));
+    return out?.length === FEATURE_SIZE ? out : null;
+  } catch (err) {
+    console.error(`Photo features unavailable: ${err.message}`);
+    return null;
+  }
+}
 
 // One photo at a time
 let chain = Promise.resolve();

@@ -8,6 +8,7 @@ import { ModerationDecision } from '../models/ModerationDecision.js';
 import { UploadCheck } from '../models/UploadCheck.js';
 import { Album } from '../models/Album.js';
 import { ModerationCalibration } from '../models/ModerationCalibration.js';
+import { TrainingSample, LABELLED_DAYS } from '../models/TrainingSample.js';
 import { activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from '../services/uploadChecks.js';
 import { relearn, relearnHours, relearnSoon } from '../services/stageOneLearning.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
@@ -140,6 +141,11 @@ export async function decide(req, res) {
   await audit('moderation.reviewed', { req, target: d._id, meta: { allow, severity, reasons: why } });
   // The automatic check learns from this rating within a minute (services/stageOneLearning.js)
   if (d.kind === 'photo') relearnSoon();
+  // The rating becomes a labelled example for Momento's own decision layer (models/TrainingSample.js)
+  if (d.kind === 'photo') await TrainingSample.updateOne({ _id: d._id }, {
+    $set: { level: severity, allowed: allow, reasons: why, labelledAt: new Date(), reviewer: req.dev?.reviewerLabel,
+      expires: new Date(Date.now() + LABELLED_DAYS * 86400000) },
+  }).catch((error) => console.error('Training label not saved: %s', error.message));
   // The person who asked hears the answer: in their inbox and by email (only for album photos they sent for review)
   if (job && d.requestedAt) tellUploader(d, allow).catch((err) => console.error(`Review ${d.id} decided, but telling the uploader failed: ${err.message}`));
   res.json({ id: d.id, status: d.status, severity: d.severity ?? null, reasons: d.reasons || [] });
