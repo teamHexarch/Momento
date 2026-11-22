@@ -1,6 +1,9 @@
 // Momento's reaction emoji: one shared list for the album page (the picker and its search) and the
 // dev preview (which checks a reaction is one of these). Each entry is [emoji, name, search words].
 // The first group is the original twelve, kept first and named as before.
+/* eslint-disable */
+// (Was public/assets/emoji.js, a plain script. Now installed by the My albums page code as it starts: browser only.)
+export default function installEmoji() {
 (function () {
   const GROUPS = [
     ['Popular', [
@@ -97,3 +100,4 @@
   }
   window.MomentoEmoji = { groups: GROUPS.map(([g]) => g), all, byEmoji, has: (e) => !!byEmoji[e], name: (e) => byEmoji[e]?.name, search };
 })();
+}

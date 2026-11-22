@@ -3,12 +3,13 @@ import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
 import SiteHeader from '@/components/shared/SiteHeader';
 import EventsPage from '@/components/events/EventsPage';
-import LegacyScripts, { type LegacyScript } from '@/legacy/LegacyScripts';
+import type { LegacyScript } from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
+import EventsScripts from '@/page-scripts/EventsScripts';
 
 // Served at /events.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -23,7 +24,6 @@ export const metadata: Metadata = pageMetadata({
 // Page behaviour is the original code, run in the original order: the two inline blocks of events.html, then the scripts that
 // were `defer`red in <head>, in the order <head> listed them (the map library sits between event.js and event-albums.js).
 const SCRIPTS: LegacyScript[] = [
-  '/legacy/events-1.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -51,7 +51,7 @@ export default function EventsRoute() {
       <EventsPage />
       <Shell choose />
       <Toaster />
-      <LegacyScripts scripts={SCRIPTS} />
+      <EventsScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

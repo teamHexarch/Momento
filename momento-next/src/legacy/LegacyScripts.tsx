@@ -18,7 +18,12 @@ import { markLegacyReady } from '@/lib/legacy';
 /** A script address, or one that must be checked against a published hash (the map library on the Social page) */
 export type LegacyScript = string | { src: string; integrity: string; crossOrigin: 'anonymous' };
 
-export default function LegacyScripts({ scripts }: { scripts: LegacyScript[] }) {
+/**
+ * `start`: the page's own code (src/page-scripts/<page>.js, formerly public/legacy/<page>-N.js). It runs where the first
+ * of the old scripts ran: once the late-listener shim is in place (so its DOMContentLoaded and load listeners queue first,
+ * in order) and before the shared asset scripts are added.
+ */
+export default function LegacyScripts({ scripts, start }: { scripts: LegacyScript[]; start?: () => void }) {
   useEffect(() => {
     const w = window as unknown as { __momentoLegacy?: boolean };
     if (w.__momentoLegacy) return; // run once per page load
@@ -63,6 +68,9 @@ export default function LegacyScripts({ scripts }: { scripts: LegacyScript[] }) 
       return winAdd(type, fn as EventListener, opts);
     }) as typeof window.addEventListener;
 
+    // ---- the page's own code first, as on the original page ----
+    if (start) { try { start(); } catch (err) { console.error(err); } }
+
     // ---- load the scripts: downloaded together, executed in order ----
     const restore = () => {
       // The language file's start-up goes first, as it did on the original page (it was the first script there)
@@ -102,7 +110,7 @@ export default function LegacyScripts({ scripts }: { scripts: LegacyScript[] }) 
     }
     // A page with no scripts of its own (Terms, Privacy) still needs the language file's start-up released
     if (pending === 0) restore();
-  }, [scripts]);
+  }, [scripts, start]);
 
   return null;
 }

@@ -1,3 +1,13 @@
+/* My albums: the page's own behaviour (moved from public/legacy/albums-1.js).
+   The code is the original, unchanged: it still drives the server-rendered markup by id and class. It is started by
+   <AlbumsScripts> (through LegacyScripts) at the point the first old script used to run, so its DOMContentLoaded and load
+   listeners still run in their original order. Converting it into React components is the next step for this page. */
+/* eslint-disable */
+import installEmoji from './emoji.js';
+
+export default function start() {
+  installEmoji(); // window.MomentoEmoji, the reaction list: read as this code starts (it was the script before it)
+  // ======== from albums-1.js ========
     const still =matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const root = document.documentElement;
@@ -2938,3 +2948,4 @@
     }
     updateScroll();
     requestAnimationFrame(frame);
+}

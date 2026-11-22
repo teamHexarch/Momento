@@ -7,12 +7,12 @@ import AlbumModal from '@/components/albums/AlbumModal';
 import ActivityModal from '@/components/albums/ActivityModal';
 import BinModal from '@/components/albums/BinModal';
 import Viewer from '@/components/albums/Viewer';
-import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
+import AlbumsScripts from '@/page-scripts/AlbumsScripts';
 
 // This page is served at /albums.html on purpose: the page scripts (and the notification links that open
 // albums.html#album=...) recognise it by that address.
@@ -25,8 +25,6 @@ export const metadata: Metadata = pageMetadata({
 // Page behaviour is the original code, run in the original order: the emoji list (a plain script in the body),
 // the two inline blocks of albums.html, then the shared scripts that were `defer`red in <head>.
 const SCRIPTS = [
-  '/assets/emoji.js',
-  '/legacy/albums-1.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -52,7 +50,7 @@ export default function AlbumsRoute() {
       <Viewer />
       <Shell />
       <Toaster />
-      <LegacyScripts scripts={SCRIPTS} />
+      <AlbumsScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

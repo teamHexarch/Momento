@@ -1,3 +1,11 @@
+/* Social: the page's own behaviour (moved from public/legacy/events-1.js).
+   The code is the original, unchanged: it still drives the server-rendered markup by id and class. It is started by
+   <EventsScripts> (through LegacyScripts) at the point the first old script used to run, so its DOMContentLoaded and load
+   listeners still run in their original order. Converting it into React components is the next step for this page. */
+/* eslint-disable */
+
+export default function start() {
+  // ======== from events-1.js ========
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const root = document.documentElement;
@@ -1833,3 +1841,4 @@
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+}

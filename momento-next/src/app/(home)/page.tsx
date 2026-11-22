@@ -7,20 +7,16 @@ import Hero from '@/components/home/Hero';
 import HowItWorks from '@/components/home/HowItWorks';
 import Features from '@/components/home/Features';
 import Faq from '@/components/home/Faq';
-import LegacyScripts from '@/legacy/LegacyScripts';
 import SiteFooter from '@/components/shared/SiteFooter';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
+import HomeScripts from '@/page-scripts/HomeScripts';
 
 // Page behaviour (silk background, album, intro, auth, footer...) is the original code, run in the original order:
 // the five inline blocks of index.html first, then the shared scripts that were `defer`red.
 const SCRIPTS = [
-  '/legacy/home-1.js',
-  '/legacy/home-2.js',
-  '/legacy/home-3.js',
-  '/legacy/home-4.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -57,7 +53,7 @@ export default function HomePage() {
 
       <Shell trailFromMainLoop />
       <Toaster />
-      <LegacyScripts scripts={SCRIPTS} />
+      <HomeScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

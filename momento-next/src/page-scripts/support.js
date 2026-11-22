@@ -1,3 +1,11 @@
+/* Support: the page's own behaviour (moved from public/legacy/support-1.js).
+   The code is the original, unchanged: it still drives the server-rendered markup by id and class. It is started by
+   <SupportScripts> (through LegacyScripts) at the point the first old script used to run, so its DOMContentLoaded and load
+   listeners still run in their original order. Converting it into React components is the next step for this page. */
+/* eslint-disable */
+
+export default function start() {
+  // ======== from support-1.js ========
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const root = document.documentElement;
@@ -248,3 +256,4 @@
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+}

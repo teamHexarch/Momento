@@ -1,3 +1,285 @@
+/* Home: the page's own behaviour (moved from public/legacy/home-1.js, home-2.js, home-3.js, home-4.js).
+   The code is the original, unchanged: it still drives the server-rendered markup by id and class. It is started by
+   <HomeScripts> (through LegacyScripts) at the point the first old script used to run, so its DOMContentLoaded and load
+   listeners still run in their original order. Converting it into React components is the next step for this page. */
+/* eslint-disable */
+
+export default function start() {
+  // ======== from home-1.js ========
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Phones and low-power devices (touch screens, 4 or fewer cores, Data Saver): the scroll lean/stretch
+    // is skipped and the silk background is drawn about 30 times a second instead of 60-75
+    const LOW_POWER = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || !!navigator.connection?.saveData;
+    const finePointer = matchMedia('(pointer: fine)').matches;
+    const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const ease = (v) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
+    const easeOut = (v) => 1 - Math.pow(1 - v, 3);
+
+    // ---- Photos ----
+    // Stand-ins for the photos/ folder of the second page (01 to 13). Swap these
+    // for real files, e.g. PHOTO_SRC[1] = 'photos/01.jpg'.
+    const PICSUM = [0, 91, 1027, 64, 1011, 1040, 1035, 1005, 1015, 1012, 177, 1047, 1062, 1025];
+    const PHOTO_SRC = {};
+    // The demo photos are kept in assets/photos (no third-party request on a visit): square WebP copies at a few
+    // sizes, and the nearest one at least as big as asked for is used (the 36px one is the 'chat app' copy)
+    const photo = (n, w = 400, h = w) => {
+      if (PHOTO_SRC[n]) return PHOTO_SRC[n];
+      const id = PICSUM[n], m = Math.max(w, h);
+      const size = m <= 40 && id === 1015 ? 36 : m <= 96 ? 96 : m <= 480 || id !== 1015 ? 480 : 1200;
+      return `assets/photos/${id}-${size}.webp`;
+    };
+    for (const img of document.querySelectorAll('img[data-p]')) {
+      img.src = photo(+img.dataset.p, +(img.dataset.w || 200), +(img.dataset.h || img.dataset.w || 200));
+      img.loading = 'lazy';
+    }
+
+    // Decorative QR pattern (not a real, scannable code)
+    (() => {
+      const N = 25; let cells = '', seed = 7;
+      const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+      const finder = (x, y) => `<path d="M${x} ${y}h7v7h-7zM${x + 1} ${y + 1}v5h5v-5z" fill-rule="evenodd"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3"/>`;
+      const inFinder = (x, y) => (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!inFinder(x, y) && rand() > 0.52) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+      const art = `<g fill="#2E2C3A">${finder(0, 0)}${finder(N - 7, 0)}${finder(0, N - 7)}${cells}</g>`;
+      document.getElementById('qrHero').innerHTML = art;
+      const qrStep = document.getElementById('qrStep');   // the QR in How it works
+      if (qrStep) qrStep.innerHTML = art;
+    })();
+
+    // ---- Shared pointer state ----
+    const pointer = { x: innerWidth / 2, y: innerHeight / 2, active: false, nx: 0, ny: 0, ix: 0, iy: 0 };
+    let vw = innerWidth, vh = innerHeight;
+    addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
+
+    // ---- Living background: flowing silk, drawn by a small shader at a third of screen size ----
+    // It drifts slowly on its own and stays fixed to the screen while the page scrolls.
+    // Without WebGL the page keeps its plain fog gradient.
+    const canvas = document.getElementById('bg');
+    const gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
+    // The silk is soft, so it is drawn into a modest buffer (about 300k pixels on any screen, at most half
+    // the screen size) that the browser scales up smoothly. The drift is slow, so redrawing about 30 times
+    // a second looks fluid. The background never moves with the scroll: it is fixed to the screen.
+    const LOW_POWER_SILK = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 || !!navigator.connection?.saveData;
+    const SILK_PIXELS = LOW_POWER_SILK ? 90000 : 300000;
+    const flow = { t: 0, dirty: true, acc: 0 };
+    let renderFluid = () => {};
+    if (gl) {
+      const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
+      const frag = `
+        #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+        #else
+        precision mediump float;
+        #endif
+        uniform vec2 res;
+        uniform float t;
+        uniform vec3 c0, c1, c2, c3;   // the palette: fog, folds, sea glass, glints (eased between light and dark)
+        // Stable hash (no sin), so the noise doesn't break into blocks at lower precision
+        float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        float fbm(vec2 p) {
+          float s = 0.0, a = 0.5;
+          for (int i = 0; i < 3; i++) { s += a * noise(p); p = p * 2.02 + vec2(1.7, 9.2); a *= 0.5; }
+          return s;
+        }
+        void main() {
+          vec2 uv = gl_FragCoord.xy / res;
+          float asp = res.x / res.y;
+          vec2 p = vec2(uv.x * asp, 1.0 - uv.y);
+          p *= 1.25;
+          // Domain warping folds the noise into large soft ridges, like draped silk
+          vec2 q = vec2(fbm(p + vec2(0.0, t * 0.05)), fbm(p + vec2(5.2, 1.3) - t * 0.04));
+          vec2 r = vec2(fbm(p + 3.4 * q + vec2(1.7, 9.2) + t * 0.06), fbm(p + 3.4 * q + vec2(8.3, 2.8) - t * 0.05));
+          float f = fbm(p + 3.2 * r);
+          vec3 col = mix(c0, c1, smoothstep(0.46, 0.74, f));
+          col = mix(col, c2, smoothstep(0.62, 0.95, q.y) * 0.3);
+          // Soft cream light where the folds turn over
+          float edge = exp(-pow((f - 0.44) * 9.0, 2.0)) + 0.7 * exp(-pow((r.x - 0.6) * 8.0, 2.0)) + 0.5 * exp(-pow((f - 0.6) * 10.0, 2.0));
+          col = mix(col, c3, clamp(edge * 0.4 + smoothstep(0.36, 0.2, f) * 0.4, 0.0, 1.0));
+          // A whisper of noise (about one colour step) stops the smooth fog from banding
+          col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+          gl_FragColor = vec4(col, 1.0);
+        }`;
+      const prog = gl.createProgram();
+      for (const [type, src] of [[gl.VERTEX_SHADER, vert], [gl.FRAGMENT_SHADER, frag]]) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        gl.attachShader(prog, s);
+      }
+      gl.bindAttribLocation(prog, 0, 'a');
+      gl.linkProgram(prog);
+      if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        const u = {};
+        for (const name of ['res', 't', 'c0', 'c1', 'c2', 'c3']) u[name] = gl.getUniformLocation(prog, name);
+        // Pale blue fog, lavender-blue folds, sea glass and cream edges by day; by night the same
+        // silk goes near-black, with the glints turning to moonlit lavender
+        const PAL = {
+          light: [[.905, .918, .955], [.740, .775, .880], [.790, .865, .870], [1, .975, .925]],
+          dark:  [[.046, .042, .072], [.020, .018, .034], [.052, .062, .108], [.175, .152, .280]],
+        };
+        // The folds and fog darken first; the glints warm up a beat later, like lamps coming on
+        const THEME = window.__theme || (window.__theme = { target: 0, a: 0, b: 0 });
+        const mixPal = (i, m) => PAL.light[i].map((v, c) => v + (PAL.dark[i][c] - v) * m);
+        const sizeCanvas = () => {
+          const s = Math.min(.5, Math.sqrt(SILK_PIXELS / Math.max(1, innerWidth * innerHeight)));
+          canvas.width = Math.max(1, Math.round(innerWidth * s));
+          canvas.height = Math.max(1, Math.round(innerHeight * s));
+          gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.uniform2f(u.res, canvas.width, canvas.height);
+          flow.dirty = true;
+        };
+        sizeCanvas();
+        // Resizing reallocates the buffer, so it waits until the window has settled. A small height-only
+        // change (a phone's address bar sliding away as you scroll) is ignored: the canvas just stretches
+        let sizedW = innerWidth, sizedH = innerHeight, resizeTimer = 0;
+        addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            if (innerWidth === sizedW && Math.abs(innerHeight - sizedH) < sizedH * .25) return;
+            sizedW = innerWidth; sizedH = innerHeight;
+            sizeCanvas();
+          }, 150);
+        });
+        renderFluid = (dt) => {
+          const k = (rate) => 1 - Math.exp(-dt * rate);
+          if (!still) flow.t += dt * 0.6;
+          // Ease toward the chosen theme (instantly with reduced motion)
+          const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
+          const settling = Math.abs(THEME.target - THEME.a) > .002 || Math.abs(THEME.target - THEME.b) > .002;
+          if (settling) {
+            THEME.a += (THEME.target - THEME.a) * fade; THEME.b += (THEME.target - THEME.b) * glow;
+            if (Math.abs(THEME.target - THEME.a) <= .002) THEME.a = THEME.target;
+            if (Math.abs(THEME.target - THEME.b) <= .002) THEME.b = THEME.target;
+            flow.dirty = true;
+          }
+          if (still && !flow.dirty) return;
+          // The drift is slow, so about 30 draws a second look fluid (fewer on low-power devices)
+          flow.acc += dt;
+          if (!flow.dirty && flow.acc < 1 / (LOW_POWER_SILK ? 24 : 30)) return;
+          flow.acc = 0; flow.dirty = false;
+          gl.uniform1f(u.t, flow.t);
+          gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
+          gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        };
+      }
+    }
+
+    // ---- Cursor ----
+    const cursorEl = document.getElementById('cursor');
+    const useCursor = finePointer && !still;
+    // The dot starts where the mouse was on the last page (clicking a link doesn't move the mouse),
+    // not in the middle of the screen. Until the mouse has been seen, the dot stays hidden and the
+    // normal pointer shows
+    try {
+      const at = JSON.parse(sessionStorage.getItem('momento-pointer') || 'null');
+      if (at && Date.now() - at.t < 15000 && at.x <= innerWidth && at.y <= innerHeight) {
+        pointer.x = at.x; pointer.y = at.y;
+        document.documentElement.classList.add('cursor-seen');
+      }
+    } catch (e) {}
+    addEventListener('pagehide', () => {
+      try { if (document.documentElement.classList.contains('cursor-seen')) sessionStorage.setItem('momento-pointer', JSON.stringify({ x: pointer.x, y: pointer.y, t: Date.now() })); } catch (e) {}
+    });
+    let rx = pointer.x, ry = pointer.y;
+    if (useCursor) document.documentElement.classList.add('has-cursor');
+    // Touch, a pen, or Chrome's mobile preview (switched on without a reload) send no mouse moves
+    // between taps, so the bead would sit stuck beside the real touch point. Hide it and give the
+    // normal pointer back until a mouse moves again.
+    {
+      const fineMq = matchMedia('(pointer: fine)'), rootCl = document.documentElement.classList;
+      const sync = (e) => {
+        rootCl.toggle('cursor-off', !fineMq.matches || (!!e && e.pointerType !== 'mouse'));
+        if (e && e.pointerType === 'mouse') rootCl.add('cursor-seen');
+      };
+      addEventListener('pointermove', sync, { passive: true, capture: true });
+      addEventListener('pointerdown', sync, { passive: true, capture: true });
+      fineMq.addEventListener('change', () => sync());
+    }
+    addEventListener('pointermove', (e) => {
+      // Movement since the last event drags the silk; the first event only places the cursor
+      if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
+      else { rx = e.clientX; ry = e.clientY; }
+      pointer.x = e.clientX; pointer.y = e.clientY;
+      pointer.nx = e.clientX / vw - .5; pointer.ny = e.clientY / vh - .5;
+      pointer.active = true;
+      if (useCursor) {
+        const el = e.target instanceof Element ? e.target : null;
+        const root = document.documentElement.classList;
+        const drag = !!el?.closest('input[type="range"]');
+        root.toggle('cursor-drag', drag);
+        root.toggle('cursor-hover', !drag && !!el?.closest('a, button, .qa button'));
+      }
+    }, { passive: true });
+    document.documentElement.addEventListener('pointerleave', () => { pointer.active = false; });
+    addEventListener('pointerdown', () => document.documentElement.classList.add('cursor-down'));
+    addEventListener('pointerup', () => document.documentElement.classList.remove('cursor-down'));
+
+    // ---- Glass rim light follows the pointer ----
+    function lightUp(glass) {
+      glass.dataset.lit = '1';
+      glass.addEventListener('pointerenter', () => glass.style.setProperty('--shine', 1));
+      glass.addEventListener('pointerleave', () => glass.style.setProperty('--shine', 0));
+      // One rect read and one write per frame, however many pointer events arrive
+      let gx = 0, gy = 0, gq = false;
+      glass.addEventListener('pointermove', (e) => {
+        gx = e.clientX; gy = e.clientY;
+        if (gq) return;
+        gq = true;
+        requestAnimationFrame(() => {
+          gq = false;
+          const r = glass.getBoundingClientRect();
+          glass.style.setProperty('--mx', `${gx - r.left}px`);
+          glass.style.setProperty('--my', `${gy - r.top}px`);
+        });
+      });
+    }
+    document.querySelectorAll('.glass, .panel, .qr-card').forEach(lightUp);
+    // Glass a script makes later (the account chip and menu, toasts) lights up the first time the pointer reaches it
+    document.addEventListener('pointerover', (e) => {
+      const g = e.target.closest?.('.glass, .panel');
+      if (!g || g.dataset.lit) return;
+      lightUp(g); g.style.setProperty('--shine', 1);
+    }, { passive: true });
+
+    // ---- Buttons: fill floods in from where the cursor enters, label rolls, slight pull ----
+    for (const btn of document.querySelectorAll('.btn')) {
+      const inner = btn.innerHTML.trim();
+      btn.innerHTML = `<span class="btn-fill" aria-hidden="true"></span><span class="btn-label"><span class="roll"><span>${inner}</span><span aria-hidden="true">${inner}</span></span></span>`;
+      const origin = (e) => {
+        const r = btn.getBoundingClientRect();
+        btn.style.setProperty('--fx', `${e.clientX - r.left}px`);
+        btn.style.setProperty('--fy', `${e.clientY - r.top}px`);
+      };
+      btn.addEventListener('pointerenter', origin);
+      btn.addEventListener('pointerleave', (e) => { origin(e); btn.style.setProperty('--bx', '0px'); btn.style.setProperty('--by', '0px'); });
+      let bx = 0, by = 0, bq = false;
+      if (useCursor) btn.addEventListener('pointermove', (e) => {
+        bx = e.clientX; by = e.clientY;
+        if (bq) return;
+        bq = true;
+        requestAnimationFrame(() => {
+          bq = false;
+          if (!btn.matches(':hover')) return;   // pointer already left; keep the reset
+          const r = btn.getBoundingClientRect();
+          btn.style.setProperty('--bx', `${(bx - r.left - r.width / 2) * .18}px`);
+          btn.style.setProperty('--by', `${(by - r.top - r.height / 2) * .3}px`);
+        });
+      });
+    }
+
+  // ======== from home-2.js ========
     // ---- Album: built from ALBUM, opened and paged by scroll ----
     // Each photo is placed by hand: x/y = top-left as % of the page, w = % of page width,
     // r = ratio, rot = degrees, mount = corners | tape | polaroid.
@@ -925,3 +1207,462 @@
         setIf(f.el, 'opacity', String(1 - intro));
       }
     };
+
+  // ======== from home-3.js ========
+    // ---- Nav: Home goes to the top; the arrow beside it (or hovering) opens this page's sections ----
+    (() => {
+      const header = document.getElementById('header');
+      const wrap = document.getElementById('navWrap');
+      const split = wrap.querySelector('.nav-split');
+      const home = wrap.querySelector('.nav-home');
+      const caret = wrap.querySelector('.nav-caret');
+      const menu = document.getElementById('navMenu');
+      const pill = menu.querySelector('.menu-pill');
+      const items = [...menu.querySelectorAll('.menu-item')];
+      let active = null, open = false, closeTimer;
+
+      function place(item) {
+        pill.style.opacity = 1;
+        pill.style.height = `${item.offsetHeight}px`;
+        pill.style.translate = `0 ${item.offsetTop}px`;
+      }
+      // null means the top of the page, where no section is marked
+      function select(item) {
+        if (item === active) return;
+        active?.classList.remove('active');
+        active = item;
+        if (item) { item.classList.add('active'); place(item); }
+        else pill.style.opacity = 0;
+      }
+      function setOpen(v) {
+        clearTimeout(closeTimer);
+        if (v === open) return;
+        open = v;
+        menu.classList.toggle('is-open', v);
+        caret.setAttribute('aria-expanded', v);
+        if (v && active) place(active);
+      }
+      const sectionOf = (item) => document.querySelector(item.getAttribute('href'));
+      let lock = 0;
+      window.updateNav = () => {
+        header.classList.toggle('is-veiled', document.getElementById('how-it-works').getBoundingClientRect().top < 90 || (innerWidth <= 900 && scrollY > 40));
+        if (performance.now() < lock) return;
+        let current = null;
+        for (const item of items) if (sectionOf(item).getBoundingClientRect().top <= innerHeight * .4) current = item;
+        select(current);
+      };
+      const sectionTop = (item) => {
+        const section = sectionOf(item);
+        return section.getBoundingClientRect().top + scrollY - 90;
+      };
+      function go(item) {
+        select(item);
+        lock = performance.now() + 1500;
+        scrollTo({ top: item ? sectionTop(item) : 0, behavior: still ? 'auto' : 'smooth' });
+      }
+
+      home.addEventListener('click', (e) => { e.preventDefault(); setOpen(false); go(null); });
+      document.querySelector('.brand').addEventListener('click', (e) => { e.preventDefault(); go(null); window.resetHome?.(); });
+      // A click just after hovering opened it keeps it open (instead of closing it straight away)
+      caret.addEventListener('click', () => { if (open && performance.now() - (caret._hoverAt || 0) < 500) return; setOpen(!open); });
+      // With a mouse, hovering Home or the list opens it; it waits a moment before closing
+      if (finePointer) for (const zone of [split, menu]) {
+        zone.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { if (!open) caret._hoverAt = performance.now(); setOpen(true); } });
+        zone.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !drag?.on) closeTimer = setTimeout(() => setOpen(false), 260); });
+      }
+      document.addEventListener('pointerdown', (e) => { if (open && !wrap.contains(e.target)) setOpen(false); });
+      addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { setOpen(false); caret.focus(); } });
+
+      // ---- Hold and drag down the list: the pill follows and the page glides to each section.
+      // A mouse drags straight away; a finger holds briefly first.
+      const nearest = (y) => items.reduce((best, i) =>
+        Math.abs(i.offsetTop + i.offsetHeight / 2 - y) < Math.abs(best.offsetTop + best.offsetHeight / 2 - y) ? i : best);
+      let drag = null, swallowClick = false;
+      function startDrag() {
+        if (!drag || drag.on) return;
+        drag.on = true;
+        menu.classList.add('is-dragging');
+        try { menu.setPointerCapture(drag.id); } catch {}
+        lock = Infinity;
+        followPointer(drag.lastY);
+      }
+      function followPointer(clientY) {
+        const y = clientY - menu.getBoundingClientRect().top;
+        const target = nearest(y);
+        const first = items[0], last = items[items.length - 1], h = target.offsetHeight;
+        pill.style.opacity = 1;
+        pill.style.height = `${h}px`;
+        pill.style.translate = `0 ${Math.min(Math.max(y - h / 2, first.offsetTop), last.offsetTop + last.offsetHeight - h)}px`;
+        if (target !== drag.target) {
+          drag.target = target;
+          items.forEach((i) => i.classList.toggle('active', i === target));
+          scrollTo({ top: sectionTop(target), behavior: still ? 'auto' : 'smooth' });
+        }
+      }
+      menu.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || !e.target.closest('.menu-item')) return;
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, mouse: e.pointerType === 'mouse', on: false, target: active };
+        if (!drag.mouse) drag.timer = setTimeout(startDrag, 260);
+      });
+      menu.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        drag.lastY = e.clientY;
+        if (!drag.on) {
+          const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+          if (drag.mouse && dy > 5) startDrag();
+          else if (!drag.mouse && (dx > 8 || dy > 8)) { clearTimeout(drag.timer); drag = null; }
+          if (!drag?.on) return;
+        }
+        followPointer(e.clientY);
+      });
+      function endDrag() {
+        if (!drag) return;
+        clearTimeout(drag.timer);
+        if (drag.on) {
+          const target = drag.target;
+          menu.classList.remove('is-dragging');
+          // Only the click that ends this drag is ignored, never a later one
+          swallowClick = true;
+          setTimeout(() => { swallowClick = false; }, 0);
+          active = null;
+          select(target);
+          lock = performance.now() + 1200;
+          setTimeout(() => setOpen(false), 350);
+        }
+        drag = null;
+      }
+      menu.addEventListener('pointerup', endDrag);
+      menu.addEventListener('pointercancel', endDrag);
+      menu.addEventListener('dragstart', (e) => e.preventDefault());
+      menu.addEventListener('touchmove', (e) => { if (drag?.on) e.preventDefault(); }, { passive: false });
+      menu.addEventListener('contextmenu', (e) => { if (drag) e.preventDefault(); });
+
+      menu.addEventListener('click', async (e) => {
+        const item = e.target.closest('.menu-item');
+        if (!item) return;
+        e.preventDefault();
+        if (swallowClick) { swallowClick = false; return; }
+        go(item);
+        setOpen(false);
+      });
+      const snap = () => { const a = active; active = undefined; select(a); };
+      addEventListener('resize', snap);
+      document.fonts.ready.then(snap);
+      pill.style.opacity = 0;
+      // Arriving from another page with a section in the address (e.g. #faq)
+      const fromHash = items.find((i) => i.getAttribute('href') === location.hash);
+      if (fromHash) addEventListener('load', () => setTimeout(() => go(fromHash), 60));
+    })();
+
+    // (Sign up / log in and the email-link popups: src/components/home/AuthDialog.tsx + authLogic.ts)
+
+    // ---- Sections: rise-in, steps, zone slider, switches, FAQ, counters ----
+    (() => {
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+      }, { threshold: .12 });
+      document.querySelectorAll('.rise-in').forEach((el) => io.observe(el));
+
+
+      const qas = [...document.querySelectorAll('.qa')];
+      for (const qa of qas) qa.querySelector('button').addEventListener('click', () => {
+        const opening = !qa.classList.contains('is-open');
+        for (const other of qas) {
+          other.classList.toggle('is-open', other === qa && opening);
+          other.querySelector('button').setAttribute('aria-expanded', other === qa && opening);
+        }
+      });
+
+      // Full quality: the range sets --x (and the divider's position); on first view a gentle sweep shows it can be dragged
+      const qc = document.getElementById('qc');
+      const qcRange = document.getElementById('qcRange');
+      const setQc = (v) => { qc.style.setProperty('--x', v + '%'); qc.style.setProperty('--qx', (qc.clientWidth * v / 100) + 'px'); };
+      let qcTouched = false;
+      qcRange.addEventListener('input', () => { qcTouched = true; setQc(+qcRange.value); });
+      addEventListener('resize', () => setQc(+qcRange.value));
+      setQc(50);
+      new IntersectionObserver((entries, obs) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        obs.disconnect();
+        if (still) return;
+        const start = performance.now() + 400, stops = [50, 30, 70, 50];
+        const tick = (now) => {
+          if (qcTouched) return;
+          const p = Math.min(Math.max((now - start) / 2400, 0), 1), seg = Math.min(Math.floor(p * 3), 2), t = ease(p * 3 - seg);
+          const v = lerp(stops[seg], stops[seg + 1], t);
+          qcRange.value = v; setQc(v);
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }, { threshold: .5 }).observe(qc);
+
+      // How it works: autoplay lights the five cards up one after another (CSS runs the timer bar, this only
+      // listens for its end). Hovering or focusing the row holds it, and once the visitor clicks a card or uses
+      // the arrow keys it stops and they're in charge. Nothing here listens to the wheel, touch or swipe,
+      // so the page always scrolls normally.
+      const hiw = document.querySelector('.hiw');
+      const row = hiw.querySelector('.hiw-steps');
+      const cards = [...hiw.querySelectorAll('.hiw-card')];
+      let current = -1;
+      function setStep(i) {
+        if (i === current) return;
+        current = i;
+        cards.forEach((c, k) => {
+          c.classList.toggle('is-on', k === i); c.classList.toggle('is-done', k < i);
+          const b = c.querySelector('button');
+          if (k === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+        });
+      }
+      window.updateSteps = () => {};
+      setStep(0);
+
+      const reducedHiw = matchMedia('(prefers-reduced-motion: reduce)');
+      let auto = !reducedHiw.matches;
+      hiw.classList.toggle('is-auto', auto);
+      const stopAuto = () => { if (auto) { auto = false; hiw.classList.remove('is-auto'); } };
+      hiw.addEventListener('animationend', (e) => {
+        if (e.animationName !== 'step-time' || !auto) return;
+        setStep((current + 1) % cards.length);
+      });
+      // Held (timer paused) while the row is off screen, hovered or has focus
+      let seen = false, over = false, focused = false;
+      const syncHeld = () => hiw.classList.toggle('is-held', !seen || over || focused);
+      syncHeld();
+      new IntersectionObserver(([en]) => { seen = en.isIntersecting; syncHeld(); }, { threshold: .2 }).observe(row);
+      if (matchMedia('(hover: hover)').matches) {
+        row.addEventListener('pointerenter', () => { over = true; syncHeld(); });
+        row.addEventListener('pointerleave', () => { over = false; syncHeld(); });
+      }
+      row.addEventListener('focusin', () => { focused = true; syncHeld(); });
+      row.addEventListener('focusout', () => { focused = false; syncHeld(); });
+
+      const go = (i) => { stopAuto(); setStep(Math.max(0, Math.min(cards.length - 1, i))); };
+      row.addEventListener('click', (e) => {
+        const b = e.target.closest('.hiw-btn');
+        if (b) go(Number(b.dataset.i));
+      });
+      // Left and right arrows move between the cards (up and down are left alone, so the page still scrolls)
+      row.addEventListener('keydown', (e) => {
+        const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (d === undefined || !e.target.closest('.hiw-btn')) return;
+        e.preventDefault();
+        go(current + d);
+        cards[current].querySelector('button').focus({ preventScroll: true });
+      });
+
+      // Features: the sharing-zone slider. 25 m at the left end to 1 km at the right.
+      const map = document.getElementById('zoneMap');
+      const range = document.getElementById('zoneR');
+      const out = document.getElementById('zoneOut');
+      const countIn = document.getElementById('zoneIn');
+      const metres = (v) => Math.round((25 * Math.pow(40, v / 100)) / 5) * 5;
+      const label = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`);
+      const radius = (v) => .12 + (v / 100) * .72;
+      const GUESTS = [
+        { v: 10, a: 40, p: 2 }, { v: 22, a: 200, p: 12 }, { v: 31, a: 120, p: 13 }, { v: 38, a: 300, p: 7 },
+        { v: 52, a: 15, p: 4 }, { v: 63, a: 160, p: 1 }, { v: 74, a: 250, p: 9 }, { v: 86, a: 95, p: 5 }, { v: 96, a: 330, p: 11 },
+      ];
+      document.getElementById('zoneAll').textContent = GUESTS.length;
+      const guests = GUESTS.map((g) => {
+        const d = document.createElement('span');
+        d.className = 'guest';
+        d.style.backgroundImage = `url(${photo(g.p, 80)})`;
+        d.innerHTML = '<small></small>';
+        map.querySelector('.zone-guests').append(d);
+        return { ...g, el: d, tag: d.firstChild };
+      });
+      function update() {
+        const v = Number(range.value);
+        // On a small map the outer guests' "… out" tags would run off its edge, so everything is
+        // drawn a little closer to the middle there (the zone and the guests together)
+        const half = map.clientWidth / 2 * (map.clientWidth < 380 ? .84 : 1);
+        map.style.setProperty('--r', `${radius(v) * half}px`);
+        range.style.setProperty('--fill', `${v}%`);
+        out.textContent = label(metres(v));
+        let count = 0;
+        for (const g of guests) {
+          const r = radius(g.v) * half, a = (g.a * Math.PI) / 180;
+          g.el.style.setProperty('--gx', `${Math.cos(a) * r}px`);
+          g.el.style.setProperty('--gy', `${Math.sin(a) * r}px`);
+          const inside = g.v <= v;
+          g.el.classList.toggle('is-in', inside);
+          if (inside) count++; else g.tag.textContent = `${label(metres(g.v) - metres(v))} out`;
+        }
+        countIn.textContent = count;
+      }
+      range.addEventListener('input', update);
+      addEventListener('resize', update);
+      update();
+    })();
+
+    // ---- Growing lines: the rules under titles draw themselves as they scroll into view ----
+    (() => {
+      const grows = [...document.querySelectorAll('.grow, .divider-line')];
+      // Read phase, then write phase: the loop measures every element before changing any
+      const tops = [];
+      window.measureLines = () => { grows.forEach((g, i) => { tops[i] = g.getBoundingClientRect().top; }); };
+      window.updateLines = () => {
+        grows.forEach((g, i) => {
+          // Only when it changes: most of the time a line is fully grown (or not started) and stays put
+          const t = `scaleX(${easeOut(clamp01((innerHeight * .95 - tops[i]) / (innerHeight * .5))).toFixed(3)})`;
+          if (g._t !== t) { g._t = t; g.style.transform = t; }
+        });
+      };
+    })();
+
+    // ---- Depth on scroll: pictures lean back as they rise, stand up mid-screen, and stretch
+    // and bend with the speed of the scroll, while the photo inside drifts and zooms ----
+    (() => {
+      const targets = [...document.querySelectorAll('.qc, .zone-map')];
+      const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+      let y = scrollY, v = 0, lastKey = '', pending = null;
+      // Read phase: every rect is measured before anything is written this frame
+      window.measureWarp = (dt) => {
+        pending = null;
+        if (still || LOW_POWER || !dt) return;
+        v = lerp(v, (scrollY - y) / dt, 1 - Math.exp(-dt * 10));
+        y = scrollY;
+        const s = clamp(v / 2000, -1, 1);
+        const key = `${scrollY}|${s.toFixed(3)}`;
+        if (key === lastKey) return;   // nothing has moved since the last frame
+        lastKey = key;
+        const place = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.bottom < -100 || r.top > innerHeight + 100 ? null : clamp((r.top + r.height / 2) / innerHeight * 2 - 1, -1, 1);
+        };
+        pending = { s, t: targets.map(place) };
+      };
+      // Write phase
+      window.updateWarp = () => {
+        if (!pending) return;
+        const { s, t } = pending, a = Math.abs(s);
+        pending = null;
+        targets.forEach((el, k) => {
+          if (t[k] === null) return;
+          el.style.transform = `perspective(1200px) rotateX(${(t[k] * 7 + s * 12).toFixed(2)}deg) skewY(${(s * 2.5).toFixed(2)}deg) scale(${(1 - a * .04).toFixed(4)}, ${(1 + a * .06).toFixed(4)})`;
+        });
+      };
+    })();
+
+    // ---- Pause looping animations that are off screen ----
+    (() => {
+      const idle = new IntersectionObserver((entries) => {
+        for (const e of entries) e.target.classList.toggle('is-idle', !e.isIntersecting);
+      }, { rootMargin: '120px 0px' });
+      document.querySelectorAll('.qr-card, .zone-map, .hiw-art').forEach((el) => idle.observe(el));
+    })();
+
+    // ---- One loop for the background, cursor, album and scroll effects ----
+    (() => {
+      let last = performance.now(), lastScroll = -1, lastW = 0;
+      function frame(now) {
+        const dt = Math.min(Math.max((now - last) / 1000, 0), .1);
+        last = now;
+        if (!document.hidden) {
+          // Reads first (one layout), then every write, so nothing forces a second layout mid-frame
+          const sy = scrollY;   // read once, before anything is written this frame
+          const scrolled = sy !== lastScroll || vw !== lastW;
+          if (scrolled) window.measureLines();
+          window.measureWarp(dt);
+          if (scrolled) { window.updateNav(); window.updateSteps(); }
+          renderFluid(dt);
+          if (useCursor) {
+            // The bead trails the pointer just slightly; the gap becomes a stretch along the
+            // direction of travel, so it reads like a droplet, and it rounds off when still
+            rx = lerp(rx, pointer.x, .35); ry = lerp(ry, pointer.y, .35);
+            if (Math.abs(pointer.x - rx) < .05 && Math.abs(pointer.y - ry) < .05) { rx = pointer.x; ry = pointer.y; }
+            const lx = pointer.x - rx, ly = pointer.y - ry;
+            const lens = document.documentElement.classList.contains('cursor-hover') || document.documentElement.classList.contains('cursor-drag');
+            // The focus frame stays square and upright, so it doesn't stretch
+            const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
+            const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
+            if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
+          }
+          if (scrolled) window.stringScrolled?.(sy);
+          window.updateAlbum(dt, now, sy);
+          if (scrolled) { lastScroll = sy; lastW = vw; window.updateLines(); }
+          window.updateWarp();
+          window.stringTick?.();
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })();
+
+  // ======== from home-4.js ========
+    // ---- Intro (once per tab): the glyph appears, the sunset "o" rises and slides along, and the letters
+    // of the name appear behind it. The logo then lands in the header, the QR code settles in on its own
+    // (its code blooming out from the middle), and the headline rises ----
+    document.addEventListener('DOMContentLoaded', () => window.Momento.intro(async (I) => {
+      const $ = (s, r = document) => r.querySelector(s);
+      const lock = $('#introLock'), glyph = $('#ilGlyph'), word = $('#ilWord'), sun = $('#ilSun');
+      const letters = [...word.querySelectorAll('.ltr')];
+      const brand = $('.header .brand'), bGlyph = $('.glyph', brand), bWord = $('.brand-word', brand);
+      const bg = $('#intro .intro-bg'), qr = $('#qrCard'), frame = $('.qr-frame', qr);
+      const hero = [...$('#heroLeft').children];
+      const ease = (p) => (p < .5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2);
+      const OUT = 'cubic-bezier(.2, .8, .2, 1)', GLIDE = 'cubic-bezier(.65, 0, .25, 1)';
+      // Letter centres along the word and the sun's start, in the wordmark's own units (the sun ends at x 8424.7)
+      const CX = [950, 2400, 3850, 5300, 6450, 7400], SUN_X = 8424.7, START = 7900;
+
+      [brand, qr, ...hero].forEach(I.hold);
+      // The sun starts beside the glyph; the row is shifted so what is showing sits in the middle
+      const wordW = word.getBoundingClientRect().width;
+      const shift = (wordW - 1164 * wordW / 9217) / 2;
+      sun.setAttribute('transform', `translate(${-START} 0)`);
+      lock.style.transform = `translateX(${shift}px)`;
+      lock.style.opacity = 1;
+      I.play(glyph, [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 480, easing: OUT });
+      // Sky above the horizon rises, water below it drops in, each inside its own clip
+      I.play($('#ilSky'), [{ transform: 'translate(0, -640px)' }, { transform: 'none' }], { duration: 680, delay: 120, easing: 'cubic-bezier(.2, .9, .3, 1)' });
+      I.play($('#ilWater'), [{ transform: 'translate(0, 640px)' }, { transform: 'none' }], { duration: 680, delay: 120, easing: 'cubic-bezier(.2, .9, .3, 1)' });
+      await I.wait(520);
+
+      // The "o" slides to the end of the word; each letter appears as it passes
+      const shown = new Set();
+      await I.tween(920, (p) => {
+        const e = ease(p), x = SUN_X - START * (1 - e);
+        sun.setAttribute('transform', `translate(${(-START * (1 - e)).toFixed(1)} 0)`);
+        lock.style.transform = `translateX(${(shift * (1 - e)).toFixed(1)}px)`;
+        letters.forEach((l, i) => {
+          if (shown.has(i) || x < CX[i]) return;
+          shown.add(i);
+          I.play(l, [{ opacity: 0, transform: 'translate(0, -260px)' }, { opacity: 1, transform: 'none' }], { duration: 520, easing: OUT });
+        });
+      });
+      letters.forEach((l, i) => { if (!shown.has(i)) I.play(l, [{ opacity: 1 }, { opacity: 1 }], { duration: 1 }); });
+      sun.setAttribute('transform', 'translate(0 0)');
+      lock.style.transform = 'none';
+      await I.wait(160);
+
+      // The logo lands on the header's
+      const gFrom = glyph.getBoundingClientRect(), gTo = bGlyph.getBoundingClientRect(), wTo = bWord.getBoundingClientRect();
+      const flights = [
+        I.play(bg, [{ opacity: 1 }, { opacity: 0 }], { duration: 700, delay: 160, easing: 'ease' }),
+        I.play(glyph, [{ transform: 'none' }, { transform: I.flip(glyph, gTo) }], { duration: 780, easing: GLIDE }),
+        wTo.width
+          ? I.play(word, [{ transform: 'none' }, { transform: I.flip(word, wTo) }], { duration: 780, easing: GLIDE })
+          : I.play(word, [{ opacity: 1 }, { opacity: 0 }], { duration: 300 }),   // phone width: the header shows the glyph alone
+      ];
+      // The QR card comes in on its own: it settles onto the page like a print being set down, the headline's soft spring
+      // (transform keeps the card's tilt vars so it lands exactly where the live tilt expects it)
+      const tilt = 'perspective(900px) rotateX(var(--trx)) rotateY(var(--try))';
+      flights.push(I.play(qr, [{ opacity: 0, scale: .94, transform: `${tilt} translateY(26px)` }, { opacity: 1, scale: 1, transform: `${tilt} translateY(0)` }], { duration: 860, delay: 520, easing: 'cubic-bezier(.16, 1, .3, 1)' }));
+      const qrSvg = $('#qrHero'), qrArt = qrSvg.querySelector('g');
+      qrSvg.insertAdjacentHTML('afterbegin', '<defs><mask id="qrBloom" maskUnits="userSpaceOnUse" x="0" y="0" width="25" height="25"><circle id="qrBloomDot" cx="12.5" cy="12.5" r="18" fill="#fff"/></mask></defs>');
+      qrArt.setAttribute('mask', 'url(#qrBloom)');
+      I.undo(() => { qrArt.removeAttribute('mask'); qrSvg.querySelector('defs')?.remove(); qr.classList.remove('is-scanning'); });
+      const dot = $('#qrBloomDot');
+      dot.style.transformBox = 'fill-box'; dot.style.transformOrigin = 'center';
+      flights.push(I.play(dot, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 900, delay: 960, easing: 'cubic-bezier(.3, .7, .2, 1)' }));
+      // ...and the headline rises as the veil clears
+      hero.forEach((el, i) => flights.push(I.play(el, [{ opacity: 0, transform: 'translateY(34px)' }, { opacity: 1, transform: 'none' }], { duration: 900, delay: 440 + i * 130, easing: 'cubic-bezier(.16, 1, .3, 1)' })));
+
+      await I.wait(780);
+      I.play(brand, [{ opacity: 0 }, { opacity: 1 }], { duration: 1 });   // the real logo takes over where the copy landed
+      lock.style.visibility = 'hidden';
+      await I.wait(1000); qr.classList.add('is-scanning');   // once the code has drawn in, the viewfinder closes in, like a lock
+      await I.wait(420); qr.classList.remove('is-scanning');
+      await Promise.all(flights);
+    }));
+}

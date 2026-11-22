@@ -3,12 +3,12 @@ import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
 import SiteHeader from '@/components/shared/SiteHeader';
 import SettingsPage from '@/components/settings/SettingsPage';
-import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
+import SettingsScripts from '@/page-scripts/SettingsScripts';
 
 // Served at /settings.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -20,8 +20,6 @@ export const metadata: Metadata = pageMetadata({
 // Page behaviour is the original code, run in the original order: the language menu script that sat inside the markup,
 // the two inline blocks of settings.html, then the scripts that were `defer`red in <head>.
 const SCRIPTS = [
-  '/legacy/settings-1.js',
-  '/legacy/settings-2.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -42,7 +40,7 @@ export default function SettingsRoute() {
       <SettingsPage />
       <Shell />
       <Toaster />
-      <LegacyScripts scripts={SCRIPTS} />
+      <SettingsScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

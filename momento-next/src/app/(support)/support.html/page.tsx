@@ -3,12 +3,12 @@ import Backdrop from '@/components/shared/Backdrop';
 import SvgSprite from '@/components/shared/SvgSprite';
 import SiteHeader from '@/components/shared/SiteHeader';
 import SupportPage from '@/components/support/SupportPage';
-import LegacyScripts from '@/legacy/LegacyScripts';
 import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
+import SupportScripts from '@/page-scripts/SupportScripts';
 
 // Served at /support.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -20,7 +20,6 @@ export const metadata: Metadata = pageMetadata({
 // Page behaviour is the original code, run in the original order: the two inline blocks of support.html, then the scripts
 // that were `defer`red in <head>.
 const SCRIPTS = [
-  '/legacy/support-1.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -41,7 +40,7 @@ export default function SupportRoute() {
       <SupportPage />
       <Shell />
       <Toaster />
-      <LegacyScripts scripts={SCRIPTS} />
+      <SupportScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

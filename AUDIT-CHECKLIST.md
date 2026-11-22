@@ -53,3 +53,14 @@ Already verified before this list started: header + nav menu, static export, foo
   fields; validation messages and the invalid field's outline; Sending… on the button; error note; "Message sent" slides in
   and takes focus; Send another slides the form back and focuses the message. Help row opens the help window.
 - support-1.js keeps only the page effects (cursor, silk, glass light, buttons, header veil, page open) for the effects step.
+
+## Page scripts moved into React-started modules (`src/page-scripts/`)
+- Home, My albums, Social, Settings, Support: each page's own code (formerly public/legacy/<page>-N.js, loaded as
+  <script> tags) is now one bundled module, started by <HomeScripts>/<AlbumsScripts>/... through LegacyScripts at the
+  point the first old script ran (its DOMContentLoaded/load listeners queue first, as before). Code unchanged.
+- Checked mechanically before moving: every page parses as a module, no undeclared assignments (strict mode), no asset
+  script uses a page's top-level names.
+- emoji.js is now installed by the My albums code as it starts (it reads the list at once).
+- Differences to look for: a top-level error in one of Home's four old blocks used to leave the others running; now
+  they are one function. Whole-page check on every page: everything that moved.
+- Still not React inside: these modules drive the server-rendered markup by id/class, as before.
