@@ -32,7 +32,7 @@ const user = new mongoose.Types.ObjectId(), staff = new mongoose.Types.ObjectId(
 let n = 0;
 // Reviews as the live check stores them: the raw classes (allow is recomputed from them when learning)
 const decision = (album, allow, status, extra = {}) => ({ user, album, kind: 'photo', hash: 'h' + n++, model: 'NSFW.js MobileNetV2',
-  scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 3 }, status, reviewedBy: staff, reviewedAt: new Date(), ...extra });
+  scores: { allow: 0, classes: { Neutral: allow, Porn: 1 - allow }, version: 6 }, status, reviewedBy: staff, reviewedAt: new Date(), ...extra });
 try {
   // The score: allow = 1 - risk, where risk = Porn + Hentai (Sexy doesn't count)
   const scored = stageOneScores({ Neutral: .5, Drawing: .3, Sexy: .15, Porn: .04, Hentai: .01 });
@@ -82,6 +82,8 @@ try {
   docs.push({ ...decision(mixed, .99, 'upheld'), hash: 'h0', at: new Date(Date.now() + 60000), reviewedAt: new Date(0) });
   // Scored the old way (Neutral only, no raw classes): left out, so learning never mixes score definitions
   docs.push({ ...decision(mixed, .99, 'upheld'), scores: { allow: .99 } });
+  // Scored another way (version 5: the thumbnail): never learned from
+  docs.push({ ...decision(mixed, .99, 'allowed'), scores: { allow: 0, classes: { Neutral: .99, Porn: .01 }, version: 5 } });
   await ModerationDecision.insertMany(docs);
 
   const rows = await reviewedRows();

@@ -8,7 +8,7 @@
 // had scored those photos as safe (its blind spots).
 import { createHash } from 'node:crypto';
 import { ModerationDecision } from '../models/ModerationDecision.js';
-import { MODEL_NAME, stageOneScores } from './uploadChecks.js';
+import { MODEL_NAME, stageOneScores, SCORE_VERSION } from './uploadChecks.js';
 import { LEVELS, truthOf, buildTable, STAGE_ONE_PUBLISH_MAX } from './calibrationTable.js';
 import { REASON_KEYS, BLIND_SPOT_ALLOW } from '../utils/reviewReasons.js';
 
@@ -20,6 +20,9 @@ export async function reviewedRows() {
   const docs = await ModerationDecision.find({
     kind: 'photo', model: MODEL_NAME, status: { $in: ['allowed', 'upheld'] }, reviewedBy: { $exists: true },
     'scores.classes': { $type: 'object' },
+    // Only photos scored the way the live check scores now (SCORE_VERSION: same image, same score), so a table is
+    // never learned from scores of another kind (thumbnail scores before version 6)
+    'scores.version': SCORE_VERSION,
   }, 'album hash scores status severity reasons reviewedAt').sort({ reviewedAt: -1, at: -1 }).lean();
   const seen = new Set(), rows = [];
   for (const d of docs) {
