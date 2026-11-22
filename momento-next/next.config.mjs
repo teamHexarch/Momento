@@ -25,7 +25,7 @@ export default function nextConfig(phase) {
   else {
     config.redirects = async () => [
       { source: '/index.html', destination: '/', permanent: false },
-      ...['albums', 'events', 'settings', 'support', 'terms', 'privacy'].map((n) => ({ source: `/${n}.html`, destination: `/${n}`, permanent: false })),
+      ...['albums', 'events', 'settings', 'support', 'terms', 'privacy', 'reviews'].map((n) => ({ source: `/${n}.html`, destination: `/${n}`, permanent: false })),
     ];
   }
   return config;

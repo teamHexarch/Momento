@@ -219,7 +219,7 @@
   // Where to come back to after logging in (the home page only sends people to My albums or Social)
   const here = () => {
     const page = location.pathname.split('/').pop() || '/';
-    return /^(albums|events)(\.html)?$/.test(page) ? page + location.search + location.hash : 'albums';
+    return /^(albums|events|reviews)(\.html)?$/.test(page) ? page + location.search + location.hash : 'albums';
   };
   let asking = false;
   M.needLogin = ({ action = 'continue', next, from = null, album = null } = {}) => {

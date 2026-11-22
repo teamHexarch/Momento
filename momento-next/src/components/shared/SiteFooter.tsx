@@ -87,6 +87,7 @@ export default function SiteFooter({ home = false }: { home?: boolean }) {
           <li><a className="sf-link" href={`${P}#how-it-works`}>How it works</a></li>
           <li><a className="sf-link" href={`${P}#features`}>Features</a></li>
           <li><a className="sf-link" href={`${P}#quality`}>Full quality</a></li>
+          <li><a className="sf-link" href="reviews">Reviews</a></li>
         </>)}
         {col('Albums', 'Your albums', <>
           <li><a className="sf-link" href="albums">My albums</a></li>

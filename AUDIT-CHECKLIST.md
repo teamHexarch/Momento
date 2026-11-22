@@ -76,3 +76,21 @@ Already verified before this list started: header + nav menu, static export, foo
 - Support has no page script at all now: `<PageChrome>` runs its effects, the header veil and the page opening.
   The opening now starts at hydration (was once the page's scripts had loaded): the page may reveal a moment sooner.
 - Home's effects (photobook, polaroids, intro) are its own and stay in src/page-scripts/home.js.
+
+## New features (22 Nov 2026, from the "Momento update" list) — front end only
+- **Camera** (`assets/event.js`): zoom slider + 1×/2×/3× chips (0.5× on wide-lens phones), pinch, mouse wheel, + / -
+  keys; the lens's own zoom where the browser offers it, else digital zoom that crops the saved photo to match. Flash
+  (cameras with a light), self-timer 3 s / 10 s with countdown (press shutter again to cancel), grid lines, brightness
+  (where supported). Test on a real phone: the back camera's zoom, flash, front-camera mirror, photos saved at the zoom.
+- **Upload formats**: the picker lists HEIC/HEIF, AVIF, JPEG XL, TIFF, the common formats and camera RAW (incl. iPhone
+  ProRAW DNG); the upload confirmation lists them. Test: picking HEIC and DNG from an iPhone and a Windows PC.
+- **Album sort and filter**: Sort menu (newest, oldest, file name, largest first, who added them, most reactions;
+  name/size only with server data); filters (all, yours, bookmarked, with reactions, added by). Check the viewer steps
+  through the filtered photos, Select clears filters, the album card cover doesn't change with the sort.
+- **Viewer zoom**: − / level / + (pointer devices), + − 0 keys, Ctrl + wheel / trackpad pinch around the pointer, phone
+  pinch keeps the pinched level (max 6×). Click-to-zoom and drag-to-look-around unchanged.
+- **Reviews page** (`/reviews`, footer → Product → Reviews): overall score + bars (press a bar to filter), write / edit /
+  delete your review (one per person), sort, show more, empty and error states, signed-out login prompt (returns to
+  /reviews after logging in). Needs the backend routes in `momento-next/BACKEND-NOTES.md`; until then the live page
+  shows "Reviews didn't load". New English text is not translated yet.
+- Checks: `qa/feature-check.mjs` (sort, filter, zoom, camera with Chrome's fake camera), `qa/reviews-check.mjs`.

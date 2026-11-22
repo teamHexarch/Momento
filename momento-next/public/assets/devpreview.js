@@ -294,6 +294,67 @@
       return { body: { exportedAt: new Date().toISOString(), user: state.user, consents: state.consents || [],
         albums: state.albums.map((a) => ({ id: a.id, name: a.name, role: a.role, photos: photosOf(a).map((p) => ({ id: p.id, url: p.url, by: p.by })) })) } };
     }
+    // ---- Reviews of Momento (the Reviews page; spec in BACKEND-NOTES.md) ----
+    // GET /api/reviews?sort=newest|highest|lowest&rating=1-5&cursor=  ->  { reviews, summary, mine, next }
+    // POST /api/reviews { rating, title?, body }  (signed in; one per person, posting again replaces it)  ->  { review, summary }
+    // DELETE /api/reviews/:id  (your own)  ->  { summary }
+    if (path === '/api/reviews' || path.startsWith('/api/reviews/')) {
+      const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+      state.reviews ||= [
+        ['r1', 'Hannah L.', 5, 'Every photo from the wedding, in one place', 'We put the QR code on the tables and by the end of the night there were over 400 photos from guests. Things we would never have seen otherwise, like the kids dancing in the corner.', 3],
+        ['r2', 'Marcus T.', 5, 'Our launch party, sorted', 'Guests scanned the code at the door and started adding photos straight away. No app to install was the big win for us.', 9],
+        ['r3', 'Isla G.', 4, 'Really easy for guests', 'My grandparents managed it without any help, which says a lot. I would love a way to sort by who took the photo.', 16],
+        ['r4', 'Raj P.', 5, '', 'Used it for a 30th. The full-quality downloads meant we could print the best ones afterwards.', 21],
+        ['r5', 'Zoe F.', 3, 'Good, a few hiccups', 'Uploads were slow on the venue Wi-Fi, but everything got there in the end. The album looked lovely.', 34],
+        ['r6', 'Tom H.', 5, 'Better than a shared folder', 'We used to collect photos in a group chat and half of them came through blurry. This kept the originals.', 47],
+        ['r7', 'Ana S.', 4, 'Lovely for a graduation', 'Simple, quick and the album still looks great months later.', 63],
+        ['r8', 'Dev S.', 2, 'Hard to find the code again', 'Once I closed the page I could not work out how to get back to the album. It was fine after a friend sent the link.', 70],
+        ['r9', 'Sam R.', 5, '', 'The camera inside the album is great: photos go straight in and do not clog up my phone.', 88],
+        ['r10', 'Maya O.', 5, 'Our go-to for events now', 'Third event we have used it for. Hosts love seeing everything in one place the next morning.', 102],
+        ['r11', 'Jon P.', 4, '', 'Worked well at a festival with patchy signal. Photos queued and went up when we got back.', 131],
+        ['r12', 'Ruby S.', 5, 'Exactly what we needed', 'Setting up the album took a minute and the guests did the rest.', 160],
+      ].map(([id, name, rating, title, body, days]) => ({ id, name, rating, title, body, createdAt: ago(days), by: 'u-' + id }));
+      const summarize = () => {
+        const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        state.reviews.forEach((r) => { counts[r.rating]++; });
+        const count = state.reviews.length;
+        return { average: count ? Math.round((state.reviews.reduce((t, r) => t + r.rating, 0) / count) * 10) / 10 : 0, count, counts };
+      };
+      const me = state.signedIn ? 'dev-user' : null;
+      const shape = (r) => ({ id: r.id, name: r.name, rating: r.rating, title: r.title || undefined, body: r.body, createdAt: r.createdAt, updatedAt: r.updatedAt, you: !!me && r.by === me });
+      if (path === '/api/reviews' && method === 'GET') {
+        const sort = query?.get('sort') || 'newest', rating = +(query?.get('rating') || 0), from = +(query?.get('cursor') || 0) || 0;
+        const SIZE = 6;
+        const list = state.reviews.filter((r) => !rating || r.rating === rating).sort((a, b) =>
+          sort === 'highest' ? b.rating - a.rating || b.createdAt.localeCompare(a.createdAt)
+            : sort === 'lowest' ? a.rating - b.rating || b.createdAt.localeCompare(a.createdAt)
+              : b.createdAt.localeCompare(a.createdAt));
+        const mine = me ? state.reviews.find((r) => r.by === me) : null;
+        return { body: { reviews: list.slice(from, from + SIZE).map(shape), summary: summarize(), mine: mine ? shape(mine) : null, next: from + SIZE < list.length ? String(from + SIZE) : null } };
+      }
+      if (path === '/api/reviews' && method === 'POST') {
+        if (!state.signedIn) return fail(401, 'Log in to write a review.', 'login-required');
+        const rating = Math.round(+body.rating), text = String(body.body || '').trim(), title = String(body.title || '').trim();
+        if (!(rating >= 1 && rating <= 5)) return fail(400, 'Choose from one to five stars.');
+        if (text.length < 20) return fail(400, 'Write a little more: at least 20 characters.');
+        if (text.length > 1500 || title.length > 80) return fail(400, 'That review is too long. Keep it under 1,500 characters and the title under 80.');
+        const first = (state.user.name || 'You').trim().split(/\s+/), name = first[0] + (first[1] ? ' ' + first[1][0] + '.' : '');
+        let r = state.reviews.find((x) => x.by === me);
+        if (r) Object.assign(r, { rating, title, body: text, name, updatedAt: new Date().toISOString() });
+        else { r = { id: 'rv-' + Date.now().toString(36), name, rating, title, body: text, createdAt: new Date().toISOString(), by: me }; state.reviews.unshift(r); }
+        save();
+        return { status: 201, body: { review: shape(r), summary: summarize() } };
+      }
+      const del = /^\/api\/reviews\/([^/]+)$/.exec(path);
+      if (del && method === 'DELETE') {
+        if (!state.signedIn) return fail(401, 'Log in to continue.', 'login-required');
+        const i = state.reviews.findIndex((r) => r.id === decodeURIComponent(del[1]));
+        if (i < 0) return fail(404, 'That review has already been deleted.');
+        if (state.reviews[i].by !== me) return fail(403, 'You can only delete your own review.');
+        state.reviews.splice(i, 1); save();
+        return { body: { summary: summarize() } };
+      }
+    }
     // The support form: checked like the server does, then "sent" (nothing leaves this preview)
     if (path === '/api/support' && method === 'POST') {
       if (!String(body.name || '').trim()) return fail(400, 'Enter your name so we know who to reply to.');
