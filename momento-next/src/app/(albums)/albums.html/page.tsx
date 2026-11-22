@@ -12,6 +12,7 @@ import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
+import Shell from '@/components/shell/Shell';
 
 // This page is served at /albums.html on purpose: the page scripts (and the notification links that open
 // albums.html#album=...) recognise it by that address.
@@ -26,7 +27,6 @@ export const metadata: Metadata = pageMetadata({
 const SCRIPTS = [
   '/assets/emoji.js',
   '/legacy/albums-1.js',
-  '/legacy/albums-2.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -50,6 +50,7 @@ export default function AlbumsRoute() {
       <ActivityModal />
       <BinModal />
       <Viewer />
+      <Shell />
       <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
     </AccountProvider>

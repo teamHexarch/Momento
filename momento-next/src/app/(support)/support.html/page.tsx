@@ -8,6 +8,7 @@ import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
+import Shell from '@/components/shell/Shell';
 
 // Served at /support.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -20,7 +21,6 @@ export const metadata: Metadata = pageMetadata({
 // that were `defer`red in <head>.
 const SCRIPTS = [
   '/legacy/support-1.js',
-  '/legacy/support-2.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -39,6 +39,7 @@ export default function SupportRoute() {
       <SvgSprite />
       <SiteHeader current={null} />
       <SupportPage />
+      <Shell />
       <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
     </AccountProvider>

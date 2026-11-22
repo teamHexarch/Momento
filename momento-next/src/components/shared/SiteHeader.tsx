@@ -1,4 +1,5 @@
 import NavWrap, { type NavCurrent } from './NavWrap';
+import { MeSlot } from '../shell/AccountChip';
 
 /**
  * The header of the inner pages (My albums, Social, Settings, Support): logo, nav, and the slot the account chip
@@ -13,8 +14,8 @@ export default function SiteHeader({ current }: { current: NavCurrent }) {
           <svg className="brand-word" aria-hidden="true"><use href="#wordmark" /></svg>
         </a>
         <NavWrap current={current} />
-        {/* The account chip and its menu are built here by the shared script */}
-        <div className="me-slot" data-acct-host="" data-acct-always="" data-acct-logout="index.html"></div>
+        {/* The account chip and its menu */}
+        <MeSlot />
       </header>
     </>
   );

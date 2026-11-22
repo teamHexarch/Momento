@@ -1,3 +1,5 @@
+import { HomeAuthArea } from '../shell/AccountChip';
+
 export default function Header() {
   return (
     <>
@@ -24,14 +26,8 @@ export default function Header() {
             <span className="menu-hint">Hold and drag down the list to glide through the page</span>
           </div>
         </div>
-        <div className="auth" id="authArea">
-          <div className="auth-out" id="authOut">
-            <button className="auth-login" type="button" data-auth="login">Log in</button>
-            <button className="btn btn-pearl" type="button" data-auth="signup">Sign up</button>
-          </div>
-          {/* Once signed in, the script below puts the account chip and its menu here */}
-          <div className="auth-in" data-acct-host="" data-acct-out="authOut" hidden></div>
-        </div>
+        {/* Log in / Sign up, or the account chip once signed in */}
+        <HomeAuthArea />
       </header>
     </>
   );

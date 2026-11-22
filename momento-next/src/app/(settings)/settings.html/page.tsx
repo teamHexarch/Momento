@@ -8,6 +8,7 @@ import { pageMetadata } from '@/lib/metadata';
 import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
+import Shell from '@/components/shell/Shell';
 
 // Served at /settings.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -21,7 +22,6 @@ export const metadata: Metadata = pageMetadata({
 const SCRIPTS = [
   '/legacy/settings-1.js',
   '/legacy/settings-2.js',
-  '/legacy/settings-3.js',
   '/assets/extras.js',
   '/assets/crop.js',
   '/assets/inbox.js',
@@ -40,6 +40,7 @@ export default function SettingsRoute() {
       <SvgSprite />
       <SiteHeader current="settings" />
       <SettingsPage />
+      <Shell />
       <Toaster />
       <LegacyScripts scripts={SCRIPTS} />
     </AccountProvider>
