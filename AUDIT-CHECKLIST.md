@@ -29,3 +29,11 @@ Already verified before this list started: header + nav menu, static export, foo
 - **Momento.intro** (`intro.ts`): Home intro, skip by press/key/wheel/touch, 9 s cap, no intro when reopened scrolled.
 - **Shims** still on window.Momento for the remaining page scripts: openSettings, openHelp, confirm, ask, choose,
   createAlbum, removeAlbum, inviteLink, shareInvite, intro, flourish.
+
+## Login / sign-up (Home: `AuthDialog.tsx` + `authLogic.ts`), block removed from home-3.js
+- Log in / Sign up buttons, tabs, field errors, Forgot password, Google button, captcha (needs backend config),
+  new-device step (needs backend), `?login`, `?login&signup`, `?next=` invite text, scan flow from the photobook
+  (`openAuth({ fromScan })`), Back button un-sticks the busy button.
+- Email links: `?reset=`, `?email-approve=`, `?email=changed|taken|invalid`, `?verified=…`; tokens leave the address bar at once.
+- Timing: the start-up part (open on `?login`, email-link popups) now runs once the old scripts have all run (was the
+  replayed DOMContentLoaded, after the earlier home scripts' handlers): same moment, slightly different order.

@@ -1,4 +1,11 @@
+'use client';
+
+import { useEffect } from 'react';
+import { setUpAuth } from './authLogic';
+
+/** Sign up / log in (window.openAuth), the new-device step, and the popups for links from emails (see authLogic.ts) */
 export default function AuthDialog() {
+  useEffect(() => setUpAuth(), []);
   return (
     <>
       <dialog className="auth-dialog" id="authDialog" aria-labelledby="authTitle">
