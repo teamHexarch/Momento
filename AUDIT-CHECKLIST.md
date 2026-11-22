@@ -64,3 +64,15 @@ Already verified before this list started: header + nav menu, static export, foo
 - Differences to look for: a top-level error in one of Home's four old blocks used to leave the others running; now
   they are one function. Whole-page check on every page: everything that moved.
 - Still not React inside: these modules drive the server-rendered markup by id/class, as before.
+
+## Effects: one shared module (`src/components/effects/pageEffects.js`, `PageChrome.tsx`)
+- My albums, Social, Settings and Support had four copies of the cursor, silk background, glass rim light, button
+  fill/roll and the animation loop; now one module (drawing code unchanged). Options: Support's cursor also treats
+  textareas as hoverable; My albums' glass light updates once per frame. `stop()` undoes the page-wide listeners, the
+  animation frame and the WebGL context.
+- My albums still calls each piece at its original point (its own code sits between them); its loop also runs its
+  scroll effects. Check: cursor (dot, lens over links/buttons, hidden for touch), silk colours and the theme fade,
+  glass light on panels and on later popups, button fill/roll/pull, section rules drawing on scroll (My albums).
+- Support has no page script at all now: `<PageChrome>` runs its effects, the header veil and the page opening.
+  The opening now starts at hydration (was once the page's scripts had loaded): the page may reveal a moment sooner.
+- Home's effects (photobook, polaroids, intro) are its own and stay in src/page-scripts/home.js.

@@ -8,7 +8,8 @@ import Toaster from '@/components/shared/Toaster';
 import ThemeProvider from '@/components/shared/ThemeProvider';
 import AccountProvider from '@/components/shared/AccountProvider';
 import Shell from '@/components/shell/Shell';
-import SupportScripts from '@/page-scripts/SupportScripts';
+import PageChrome from '@/components/effects/PageChrome';
+import LegacyScripts from '@/legacy/LegacyScripts';
 
 // Served at /support.html on purpose: the page scripts recognise pages by that address.
 export const metadata: Metadata = pageMetadata({
@@ -40,7 +41,8 @@ export default function SupportRoute() {
       <SupportPage />
       <Shell />
       <Toaster />
-      <SupportScripts scripts={SCRIPTS} />
+      <PageChrome hover="a, button, input, textarea, .live-media" />
+      <LegacyScripts scripts={SCRIPTS} />
     </AccountProvider>
     </ThemeProvider>
   );

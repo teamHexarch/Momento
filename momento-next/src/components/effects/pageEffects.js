@@ -1,11 +1,19 @@
-/* Support: the page's own behaviour (moved from public/legacy/support-1.js).
-   The code is the original, unchanged: it still drives the server-rendered markup by id and class. It is started by
-   <SupportScripts> (through LegacyScripts) at the point the first old script used to run, so its DOMContentLoaded and load
-   listeners still run in their original order. Converting it into React components is the next step for this page. */
-/* eslint-disable */
+/* The inner pages' effects (My albums, Social, Settings, Support): the custom cursor, the silk background, the glass rim
+   light, the buttons' fill and rolling label, and one animation loop for them. Each page used to carry its own copy
+   (byte-identical apart from the options below); the drawing code is that code, unchanged.
 
-export default function start() {
-  // ======== from support-1.js ========
+   const fx = createPageEffects({ hover, rimThrottle });   // sets up the cursor, silk, light and buttons
+   fx.lightExisting(); fx.rollExisting();                   // the glass and buttons already on the page
+   fx.loop(onFrame);                                        // the loop (onFrame: the page's own per-frame step)
+   fx.lightUp(el), fx.rollButton(el), fx.pointer, fx.useCursor: for the page code that uses them
+
+   (Home has its own, larger set of effects in src/page-scripts/home.js.) */
+/* eslint-disable */
+export function createPageEffects({ hover = 'a, button, input, .live-media', rimThrottle = false } = {}) {
+    // Everything it adds to the page (listeners, the animation frame, the WebGL context) is undone by stop()
+    const undo = [];
+    // The drawing code below calls addEventListener(...) on the window; this records each one so stop() can take it off
+    const addEventListener = (type, fn, opts) => { window.addEventListener(type, fn, opts); undo.push(() => window.removeEventListener(type, fn, opts)); };
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = matchMedia('(pointer: fine)').matches;
     const root = document.documentElement;
@@ -46,7 +54,8 @@ export default function start() {
       };
       addEventListener('pointermove', sync, { passive: true, capture: true });
       addEventListener('pointerdown', sync, { passive: true, capture: true });
-      fineMq.addEventListener('change', () => sync());
+      const onFine = () => sync();
+      fineMq.addEventListener('change', onFine); undo.push(() => fineMq.removeEventListener('change', onFine));
     }
     addEventListener('pointermove', (e) => {
       if (pointer.active) { pointer.ix += e.clientX - pointer.x; pointer.iy += e.clientY - pointer.y; }
@@ -55,10 +64,11 @@ export default function start() {
       pointer.active = true;
       if (useCursor) {
         const el = e.target instanceof Element ? e.target : null;
-        root.classList.toggle('cursor-hover', !!el?.closest('a, button, input, textarea, .live-media'));
+        root.classList.toggle('cursor-hover', !!el?.closest(hover));
       }
     }, { passive: true });
-    root.addEventListener('pointerleave', () => { pointer.active = false; });
+    const onLeave = () => { pointer.active = false; };
+    root.addEventListener('pointerleave', onLeave); undo.push(() => root.removeEventListener('pointerleave', onLeave));
     addEventListener('pointerdown', () => root.classList.add('cursor-down'));
     addEventListener('pointerup', () => root.classList.remove('cursor-down'));
 
@@ -189,20 +199,35 @@ export default function start() {
       glass.dataset.lit = '1';
       glass.addEventListener('pointerenter', () => glass.style.setProperty('--shine', 1));
       glass.addEventListener('pointerleave', () => glass.style.setProperty('--shine', 0));
-      glass.addEventListener('pointermove', (e) => {
+      if (!rimThrottle) glass.addEventListener('pointermove', (e) => {
         const r = glass.getBoundingClientRect();
         glass.style.setProperty('--mx', `${e.clientX - r.left}px`);
         glass.style.setProperty('--my', `${e.clientY - r.top}px`);
       });
+      else {
+        // (My albums) One rect read and one write per frame, however many pointer events arrive
+        let gx = 0, gy = 0, queued = false;
+        glass.addEventListener('pointermove', (e) => {
+          gx = e.clientX; gy = e.clientY;
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(() => {
+            queued = false;
+            const r = glass.getBoundingClientRect();
+            glass.style.setProperty('--mx', `${gx - r.left}px`);
+            glass.style.setProperty('--my', `${gy - r.top}px`);
+          });
+        }, { passive: true });
+      }
     }
-    document.querySelectorAll('.glass, .panel').forEach((g) => { if (!g.closest('.album')) lightUp(g); });
 
     // Glass a script makes later (the account chip and menu, toasts, new cards) lights up the first time the pointer reaches it
-    document.addEventListener('pointerover', (e) => {
+    const onOver = (e) => {
       const g = e.target.closest?.('.glass, .panel');
       if (!g || g.dataset.lit || g.closest('.album')) return;
       lightUp(g); g.style.setProperty('--shine', 1);
-    }, { passive: true });
+    };
+    document.addEventListener('pointerover', onOver, { passive: true }); undo.push(() => document.removeEventListener('pointerover', onOver, { passive: true }));
 
     // ---- Buttons: fill floods in from where the cursor enters, label rolls, slight pull ----
     function rollButton(btn) {
@@ -222,21 +247,14 @@ export default function start() {
         btn.style.setProperty('--by', `${(e.clientY - r.top - r.height / 2) * .3}px`);
       });
     }
-    document.querySelectorAll('.btn').forEach(rollButton);
 
-    // (The accordion, topic picker and message form: src/components/support/SupportInteractive.tsx)
+    const lightExisting = () => document.querySelectorAll('.glass, .panel').forEach((g) => { if (!g.closest('.album')) lightUp(g); });
+    const rollExisting = () => document.querySelectorAll('.btn').forEach(rollButton);
 
-    // ---- The header gains a veil once scrolled, and the page opens ----
-    const header = document.getElementById('header');
-    const veil = () => header.classList.toggle('is-veiled', scrollY > 40);
-    addEventListener('scroll', veil, { passive: true });
-    veil();
-    // (after the page intro, when there is one: it lifts the veil by announcing momento:intro-reveal)
-    const open = () => requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('is-ready')));
-    if (root.classList.contains('intro-on')) document.addEventListener('momento:intro-reveal', open, { once: true });
-    else open();
-
-    // ---- One loop for everything that moves ----
+    let raf = 0;
+    undo.push(() => cancelAnimationFrame(raf));
+    function loop(onFrame) {
+  // ---- One loop for everything that moves ----
     let last = performance.now();
     function frame(now) {
       const dt = Math.min(Math.max((now - last) / 1000, 0), .1);
@@ -251,9 +269,19 @@ export default function start() {
           const s = lens ? 0 : Math.min(Math.hypot(lx, ly) / 50, .55);
           const tf = `translate3d(${rx}px, ${ry}px, 0) rotate(${lens ? 0 : Math.atan2(ly, lx)}rad) scale(${1 + s}, ${1 - s * .45})`;
           if (tf !== cursorEl._tf) cursorEl.style.transform = cursorEl._tf = tf;
-        }
+                }
+        if (onFrame) onFrame();
       }
-      requestAnimationFrame(frame);
+      raf = requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
+    raf = requestAnimationFrame(frame);
+    }
+
+    // Takes everything off again (for when pages are swapped without a reload)
+    const stop = () => {
+      undo.splice(0).forEach((fn) => fn());
+      try { if (gl) gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch (e) {}
+    };
+
+    return { pointer, useCursor, lightUp, rollButton, lightExisting, rollExisting, loop, stop };
 }
