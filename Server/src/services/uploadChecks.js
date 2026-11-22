@@ -18,7 +18,7 @@ import { sanitizePhoto } from './imageService.js';
 // Every album upload is saved privately first (uploadIntake.js) and queued here. The API runs the queue itself:
 // no model service, no GPU and no separate worker. For each photo:
 //   1. its location data is removed and its previews made (sanitizePhoto);
-//   2. the model scores it; a score range the active table trusts publishes it at once;
+//   2. the model scores its preview (not the small thumbnail); a score range the active table trusts publishes it at once;
 //   3. anything else is declined and stays private. The uploader sees "Declined" with a Request review button
 //      (privacyController.requestReview). Only then does it go to staff (review.html), who are emailed about it.
 //      A declined photo nobody asks about is deleted after 30 days (expireRefusals).
@@ -206,7 +206,9 @@ export async function processCheck(step, infer = classify, table = activeTable()
       await removeFile(job.rawKey);
       await UploadCheck.updateOne(owns, { $unset: { rawKey: 1 } });
     }
-    const scores = await infer(await buffer(await openPhoto(job.files.thumbnailKey)));
+    // Scored on the preview (up to 2500 px, JPEG 82): the 600 px WebP thumbnail is compressed enough to make the model
+    // read swimwear and stage outfits as Porn (a denim crop top: 30% on the preview, 64% on the thumbnail)
+    const scores = await infer(await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey)));
     const { action, explicit = false, risk, learned: byLearning, confidence } = routeScore(scores, table);
     const entry = { stage: 1, model: MODEL_NAME, scores, action, risk, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT,
       ...(byLearning && { rule: 'learned', confidence }) };
