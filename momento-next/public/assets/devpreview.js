@@ -156,7 +156,8 @@
     for (let i = 0; i < total && out.length < Math.min(a.photos, 60); i++) {
       if (gone.has(i) || binned.has(i)) continue;
       const mine = i < mineUpTo, n = salt(a) + i, so = socialOf(a, i, mine);
-      out.push({ id: `${a.id}-p${i}`, url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), miniUrl: picsum(n, 320, 256), downloadUrl: picsum(n, 1200, 750),
+      // name and size (bytes): optional, for the album window's File name / Largest first sorting
+      out.push({ id: `${a.id}-p${i}`, name: `IMG_${String(4200 + ((n * 37) % 900)).padStart(4, '0')}.${i % 7 === 3 ? 'HEIC' : 'JPG'}`, size: 1200000 + ((n * 7919) % 5200000), url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), miniUrl: picsum(n, 320, 256), downloadUrl: picsum(n, 1200, 750),
         by: mine ? 'You' : NAMES[(i + 1) % NAMES.length], mine, at: new Date(Date.now() - i * 37 * 60000).toISOString(),
         likes: so.likes, liked: so.liked, bookmarked: so.bookmarked ?? !!so.liked, reactions: so.reactions, reaction: so.reaction });
     }

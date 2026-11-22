@@ -46,6 +46,16 @@ export default function AlbumModal() {
                 <button className="icon" type="button" id="albumQr" aria-label="Show QR code" title="Show QR code"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2v2M20 14v6h-6" /></svg></button>
               </span>
             </div>
+            {/* Sort and filter the photos (on this device): a menu for the order, chips for which photos show */}
+            <div className="ab-tools" id="abTools" hidden>
+              <div className="ab-sort-wrap">
+                <button className="ab-btn ab-sort" type="button" id="abSortBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="abSortMenu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5" /></svg><span id="abSortLabel">Newest first</span></button>
+                <div className="ab-menu ab-sort-menu" id="abSortMenu" role="menu" aria-label="Sort photos" hidden></div>
+              </div>
+              <div className="ab-filters" id="abFilters" role="group" aria-label="Show"></div>
+              <label className="ab-who-wrap" id="abWhoWrap" hidden><span className="ab-who-label">Added by</span><select className="ab-who" id="abWho"><option value="">Everyone</option></select></label>
+            </div>
+            <p className="ab-shown" id="abShown" role="status" hidden><span></span><button className="ab-shown-clear" type="button" id="abShownClear">Show all</button></p>
             <div className="ab-grid" id="thumbs" role="group" aria-label="Photos"></div>
             {/* More photos below: a nudge to scroll, gone once you do */}
             <button className="ab-more" type="button" id="abScrollHint" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg><span>Scroll to see more photos</span></button>

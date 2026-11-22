@@ -41,7 +41,8 @@ export default function start() {
     }
     const pic = (id, w = 600, h = Math.round(w * .8)) => (typeof id === 'string' ? id : `https://picsum.photos/id/${id}/${w}/${h}`);
     // The album's cover: the host's own image while it's upcoming, then its most loved photo (the server decides)
-    const coverPic = (a) => a.cover?.thumbUrl || a.pics?.[0] || null;
+    // (the first photo in the server's order, whatever order the album window is showing them in)
+    const coverPic = (a) => { if (a.cover?.thumbUrl) return a.cover.thumbUrl; const i = (a.photoItems || []).findIndex((p) => p._o === 0); return a.pics?.[i >= 0 ? i : 0] || null; };
     const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
     const num = (n) => n.toLocaleString('en-GB');
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -737,7 +738,127 @@ export default function start() {
       unhide.hidden = !a.hiddenCount;
       unhide.querySelector('span').textContent = a.hiddenCount ? `Hidden by you (${a.hiddenCount})` : 'Hidden by you';
       albumRemove.textContent = a.role === 'host' ? 'Delete album' : 'Leave album';
+      paintPhotoTools(a);   // sort and filter (below)
     }
+
+    // ---- Sort and filter the photos in the open album ----
+    // Done here on this device (nothing is sent): the order reorders the album's photo list itself, so the grid, the
+    // full-size viewer, Select and downloads all follow it; the server's own order is kept on each photo (_o) to fall
+    // back on. The filter hides the other tiles and the viewer steps through the shown ones only (M.only), like a
+    // notification's "just these photos". The order is remembered on this device; the filter is per visit.
+    const SORTS = [
+      ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['name', 'File name'], ['size', 'Largest first'],
+      ['person', 'Who added them'], ['reactions', 'Most reactions'],
+    ];
+    const FILTERS = [['all', 'All'], ['mine', 'Yours'], ['saved', 'Bookmarked'], ['reacted', 'With reactions']];
+    const SORT_KEY = 'momento-photo-sort';
+    let photoSort = 'newest', photoFilter = 'all', photoWho = '';
+    try { const s = localStorage.getItem(SORT_KEY); if (SORTS.some(([k]) => k === s)) photoSort = s; } catch (e) {}
+    const abTools = document.getElementById('abTools'), sortBtn = document.getElementById('abSortBtn');
+    const sortMenu = document.getElementById('abSortMenu'), sortLabel = document.getElementById('abSortLabel');
+    const filtersEl = document.getElementById('abFilters'), whoWrap = document.getElementById('abWhoWrap'), whoSel = document.getElementById('abWho');
+    const shownEl = document.getElementById('abShown');
+    const photoReactions = (p) => Object.values(p.reactions || {}).reduce((t, n) => t + (+n || 0), 0);
+    const fileNameOf = (p) => String(p.name || p.fileName || p.filename || '');
+    const timeOf = (p) => Date.parse(p.at || p.addedAt || p.createdAt || '') || 0;
+    // "File name" and "Largest first" only when the server sends names and sizes
+    const sortable = (a, key) => key === 'name' ? (a.photoItems || []).some((p) => fileNameOf(p)) : key === 'size' ? (a.photoItems || []).some((p) => +p.size > 0) : true;
+    const COMPARE = {
+      newest: (x, y) => (timeOf(y.p) - timeOf(x.p)) || (x.p._o - y.p._o),
+      oldest: (x, y) => (timeOf(x.p) - timeOf(y.p)) || (y.p._o - x.p._o),
+      name: (x, y) => fileNameOf(x.p).localeCompare(fileNameOf(y.p), undefined, { numeric: true, sensitivity: 'base' }) || (x.p._o - y.p._o),
+      size: (x, y) => ((+y.p.size || 0) - (+x.p.size || 0)) || (x.p._o - y.p._o),
+      person: (x, y) => (x.p.mine === y.p.mine ? String(x.p.by || '').localeCompare(String(y.p.by || '')) : x.p.mine ? -1 : 1) || (x.p._o - y.p._o),
+      reactions: (x, y) => (photoReactions(y.p) - photoReactions(x.p)) || (x.p._o - y.p._o),
+    };
+    // Puts the album's photos (and their thumbnails, which go with them) in the chosen order
+    function sortPhotos(a) {
+      const items = a.photoItems || [];
+      if (!items.length) return;
+      items.forEach((p, i) => { if (p._o === undefined) p._o = i; });
+      const key = sortable(a, photoSort) ? photoSort : 'newest';
+      const rows = items.map((p, i) => ({ p, pic: a.pics[i] })).sort(COMPARE[key]);
+      a.photoItems = rows.map((r) => r.p);
+      a.pics = rows.map((r) => r.pic);
+    }
+    const matches = (p) => (photoFilter === 'all' || (photoFilter === 'mine' && p.mine) || (photoFilter === 'saved' && p.bookmarked) || (photoFilter === 'reacted' && photoReactions(p) > 0))
+      && (!photoWho || String(p.by || '') === photoWho);
+    const filtering = () => photoFilter !== 'all' || !!photoWho;
+    function paintPhotoTools(a) {
+      const items = a.photoItems || [];
+      abTools.hidden = items.length < 2;
+      const key = sortable(a, photoSort) ? photoSort : 'newest';
+      sortLabel.textContent = SORTS.find(([k]) => k === key)[1];
+      sortMenu.innerHTML = SORTS.filter(([k]) => sortable(a, k)).map(([k, label]) =>
+        `<button class="ab-item" type="button" role="menuitemradio" aria-checked="${k === key}" data-sort="${k}">${label}</button>`).join('');
+      filtersEl.innerHTML = FILTERS.map(([k, label]) => `<button class="ab-btn ab-chip" type="button" aria-pressed="${k === photoFilter}" data-filter="${k}">${label}</button>`).join('');
+      // Added by: everyone who has photos here (you first), once there are at least two people
+      const people = [...new Set(items.map((p) => String(p.by || '')).filter(Boolean))].sort((x, y) => (x === 'You' ? -1 : y === 'You' ? 1 : x.localeCompare(y)));
+      if (photoWho && !people.includes(photoWho)) photoWho = '';
+      whoSel.replaceChildren(new Option('Everyone', ''), ...people.map((n) => new Option(n, n)));
+      whoSel.value = photoWho;
+      whoWrap.hidden = people.length < 2;
+      applyPhotoFilter();
+    }
+    function applyPhotoFilter() {
+      const a = M.a;
+      if (!a) return;
+      const tiles = [...thumbsEl.children];
+      // A notification's "just these photos" view takes precedence until its Show all photos
+      if (M.focus && M.focus.album === a.id && M.only && !filtering()) { shownEl.hidden = true; return; }
+      if (!filtering()) {
+        if (!(M.focus && M.focus.album === a.id)) { tiles.forEach((t) => { t.hidden = false; }); M.only = null; }
+        shownEl.hidden = true;
+        return;
+      }
+      const keep = [];
+      (a.photoItems || []).forEach((p, n) => { const on = matches(p); if (tiles[n]) tiles[n].hidden = !on; if (on) keep.push(n); });
+      M.only = keep;
+      shownEl.hidden = false;
+      shownEl.querySelector('span').textContent = keep.length
+        ? `Showing ${plural(keep.length, 'photo', 'photos')} of ${num(a.photoItems.length)}`
+        : 'No photos match these choices.';
+    }
+    function resetPhotoFilter() { photoFilter = 'all'; photoWho = ''; if (M.a) paintPhotoTools(M.a); }
+    function setFilter(next) {
+      if (M.focus) { M.focus = null; document.getElementById('abFocus')?.remove(); }
+      if ('filter' in next) photoFilter = next.filter;
+      if ('who' in next) photoWho = next.who;
+      paintPhotoTools(M.a);
+    }
+    filtersEl.addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (b) setFilter({ filter: b.dataset.filter }); });
+    whoSel.addEventListener('change', () => setFilter({ who: whoSel.value }));
+    document.getElementById('abShownClear').addEventListener('click', () => { resetPhotoFilter(); thumbsEl.querySelector('.ab-tile')?.focus({ preventScroll: true }); });
+    // The sort menu: the button opens it, a choice closes it; arrows move, Escape or a press outside closes it
+    const sortItems = () => [...sortMenu.querySelectorAll('.ab-item')];
+    function setSortOpen(open, focusChosen) {
+      sortMenu.hidden = !open;
+      sortBtn.setAttribute('aria-expanded', String(open));
+      if (open && focusChosen) (sortMenu.querySelector('[aria-checked="true"]') || sortItems()[0])?.focus();
+    }
+    sortBtn.addEventListener('click', (e) => setSortOpen(sortMenu.hidden, e.detail === 0));
+    sortMenu.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sort]');
+      if (!b || !M.a) return;
+      photoSort = b.dataset.sort;
+      try { localStorage.setItem(SORT_KEY, photoSort); } catch (err) {}
+      setSortOpen(false);
+      sortBtn.focus();
+      sortPhotos(M.a);
+      M.i = 0;
+      fillAlbum(M.a);
+      if (!still) [...thumbsEl.children].slice(0, 24).forEach((t, n) => t.animate([{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: n * 12, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' }));
+    });
+    sortMenu.addEventListener('keydown', (e) => {
+      const list = sortItems(), at = list.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSortOpen(false); sortBtn.focus(); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); list[(at + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus(); }
+      else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); list[e.key === 'Home' ? 0 : list.length - 1]?.focus(); }
+      else if (e.key === 'Tab') setSortOpen(false);
+    });
+    sortBtn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setSortOpen(true, true); } });
+    document.addEventListener('pointerdown', (e) => { if (!sortMenu.hidden && !sortMenu.contains(e.target) && !sortBtn.contains(e.target)) setSortOpen(false); });
+
     const canAdd = (a) => !!a?.open;
     // Why photos can't be added right now, in words
     function noAddReason(a) {
@@ -1003,7 +1124,7 @@ export default function start() {
       albumCard.classList.toggle('is-selecting', on);
       // Selecting works on the whole album, so photos hidden by a notification's filter come back first
       // (nothing can be picked, downloaded or deleted without being seen)
-      if (on && M.only) showAllPhotos();
+      if (on && (M.only || filtering())) { if (filtering()) resetPhotoFilter(); showAllPhotos(); }
       const items = picked(), n = items.length, total = M.a?.photoItems?.length || 0;
       abCount.textContent = n ? `${plural(n, 'photo', 'photos')} selected` : 'Select photos';
       abAll.textContent = n && n === total ? 'Deselect all' : 'Select all';
@@ -1579,12 +1700,52 @@ export default function start() {
       if (e.target.closest?.('input, .rx-picker, .rx-who')) return;   // typing a search, or moving through the emoji
       if (e.key === 'ArrowRight') { e.preventDefault(); vwStep(1); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); vwStep(-1); }
+      else if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zoomLevel() * 1.5); }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoom(zoomLevel() / 1.5); }
+      else if (e.key === '0') { e.preventDefault(); unzoom(); }
     });
     // Zoom: a click (or a pinch) shows the photo at its real size (at least twice the fitted size), centred on
     // the spot you picked; drag to look around; a click or tap without dragging fits it again
+    // Beyond that: the - and + buttons (and the + - 0 keys), Ctrl + the mouse wheel or a trackpad pinch, and a pinch on a
+    // phone zoom in steps up to 6 times the fitted size, keeping the spot under the pointer where it is
+    const Z_MAX = 6, vwZoomIn = document.getElementById('vwZoomIn'), vwZoomOut = document.getElementById('vwZoomOut'), vwZoomFit = document.getElementById('vwZoomFit');
+    let zoomLv = 1, zoomFit = null;
+    const zoomLevel = () => (viewer.classList.contains('is-zoomed') ? zoomLv : 1);
+    function paintZoom() {
+      const lv = zoomLevel();
+      vwZoomFit.textContent = lv > 1.01 ? `${Math.round(lv * 10) / 10}×` : 'Fit';
+      vwZoomOut.disabled = lv <= 1.01; vwZoomIn.disabled = lv >= Z_MAX - 0.01;
+    }
+    function setZoom(lv, x = innerWidth / 2, y = innerHeight / 2, animate = false) {
+      lv = clamp(lv, 1, Z_MAX);
+      if (lv < 1.02) { unzoom(); return; }
+      const zoomed = viewer.classList.contains('is-zoomed');
+      if (!zoomed) { vwImg.style.transform = ''; const r0 = vwImg.getBoundingClientRect(); if (!r0.width) return; zoomFit = { w: r0.width, h: r0.height }; }
+      const r = vwImg.getBoundingClientRect();
+      const fx = clamp((x - r.left) / r.width, 0, 1), fy = clamp((y - r.top) / r.height, 0, 1);
+      const w = zoomFit.w * lv, h = zoomFit.h * lv;
+      viewer.classList.add('is-zoomed'); vwStage.classList.add('is-zoomed');
+      vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px';
+      // keep the spot under the pointer (or the middle of the screen) where it is
+      const ir = vwImg.getBoundingClientRect();
+      vwStage.scrollLeft += ir.left + fx * w - x;
+      vwStage.scrollTop += ir.top + fy * h - y;
+      zoomLv = lv; paintZoom(); vwHint.hidden = true;
+      if (animate && !still) vwImg.animate([{ transform: `scale(${r.width / w})`, transformOrigin: `${fx * 100}% ${fy * 100}%` }, { transform: 'none', transformOrigin: `${fx * 100}% ${fy * 100}%` }], { duration: 260, easing: SOFT_EASE });
+    }
+    vwZoomIn.addEventListener('click', () => setZoom(zoomLevel() * 1.5, undefined, undefined, true));
+    vwZoomOut.addEventListener('click', () => setZoom(zoomLevel() / 1.5));
+    vwZoomFit.addEventListener('click', () => unzoom());
+    // Ctrl + the wheel (a trackpad pinch arrives like this too) zooms around the pointer; the plain wheel still scrolls
+    vwStage.addEventListener('wheel', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom(zoomLevel() * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
+    }, { passive: false });
     function unzoom() {
       viewer.classList.remove('is-zoomed'); vwStage.classList.remove('is-zoomed', 'is-dragging');
       vwImg.style.width = ''; vwImg.style.height = '';
+      zoomLv = 1; paintZoom();
     }
     function zoomAt(x, y) {
       vwImg.style.transform = '';
@@ -1592,10 +1753,12 @@ export default function start() {
       if (!r.width) return;
       const fx = clamp((x - r.left) / r.width, 0, 1), fy = clamp((y - r.top) / r.height, 0, 1);
       const w = Math.max(vwImg.naturalWidth, r.width * 2), h = w * (r.height / r.width);
+      zoomFit = { w: r.width, h: r.height }; zoomLv = Math.min(Z_MAX, w / r.width);
       viewer.classList.add('is-zoomed'); vwStage.classList.add('is-zoomed');
       vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px';
       vwStage.scrollLeft = fx * w - innerWidth / 2;
       vwStage.scrollTop = fy * h - innerHeight / 2;
+      paintZoom();
       if (!still) vwImg.animate([{ transform: `scale(${r.width / w})`, transformOrigin: `${fx * 100}% ${fy * 100}%` }, { transform: 'none', transformOrigin: `${fx * 100}% ${fy * 100}%` }], { duration: 320, easing: SOFT_EASE });
       vwHint.hidden = true;
     }
@@ -1695,7 +1858,7 @@ export default function start() {
       if (s.pinch) {
         g = null;
         vwImg.style.transform = '';
-        if (s.r > 1.12) zoomAt(s.cx, s.cy);
+        if (s.r > 1.12) setZoom(s.r, s.cx, s.cy, true);
         else if (!still && s.r !== 1) vwImg.animate([{ transform: `scale(${clamp(s.r, .8, 3)})` }, { transform: 'none' }], { duration: 300, easing: SOFT_EASE });
         return;
       }
@@ -2354,6 +2517,7 @@ export default function start() {
       Object.assign(a, fromStore(result.album));
       a.photoItems = result.photos;
       a.pics = result.photos.map((p) => p.thumbnailUrl || p.url + '?size=thumb');
+      sortPhotos(a);   // in the order chosen on this device (the server's order is kept on each photo)
     }
     async function loadAlbums() {
       // Until the email is confirmed the server refuses the list (403), and the confirm-your-email popup
