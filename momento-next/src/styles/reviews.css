@@ -38,7 +38,8 @@
 /* ---------- Writing a review ---------- */
 .rv-write { padding: 1.3rem 1.4rem 1.25rem; }
 .rv-write-lede { margin: 0 0 1rem; color: var(--slate); line-height: 1.55; }
-.rv-pick-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .8rem; margin: 0 0 1rem; }
+/* The stars, and what the rating means always on its own line under them (so it never jumps beside them) */
+.rv-pick-wrap { display: grid; justify-items: start; gap: .3rem; margin: 0 0 1rem; }
 .rv-pick { display: flex; gap: .1rem; margin-left: -.3rem; border-radius: 12px; }
 .rv-pick.is-invalid { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
 .rv-pick-star { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; padding: 0; border: 0; border-radius: 10px; background: none; cursor: pointer; }
