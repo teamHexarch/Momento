@@ -1534,7 +1534,9 @@ export default function start() {
         if (!user) {
           body.removeAttribute('aria-busy');
           body.innerHTML = '<div class="panel gr-guest"><h3>Your friends, your albums</h3><p>Make a group for the people you see most, and every album you share with it shows up for all of them.</p><button class="btn btn-dark" type="button" data-guest-groups>Log in to see your groups</button></div>';
-          body.querySelector('[data-guest-groups]').addEventListener('click', (e) => Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events#groups' }));
+          const login = body.querySelector('[data-guest-groups]');
+          rollButton?.(login);
+          login.addEventListener('click', (e) => Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events#groups' }));
           if (groupCode) joinFromLink(groupCode);
           return;
         }

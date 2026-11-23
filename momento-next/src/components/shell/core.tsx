@@ -40,6 +40,7 @@ export const ICON = {
   chev: (className?: string) => <Svg size={14} className={className}><path d="m6 9 6 6 6-6" /></Svg>,
   close: () => <Svg><path d="M6 6l12 12M18 6L6 18" /></Svg>,
   settings: () => <Svg><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></Svg>,
+  review: () => <Svg><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z" /><path d="m8.8 12.2 2.2 2.2 4.2-4.4" /></Svg>,
   help: () => <Svg><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2.1-2.4 3.8M12 17h.01" /></Svg>,
   logout: () => <Svg><path d="M9 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3M15 8l4 4-4 4M19 12H9" /></Svg>,
   sun: () => <Svg size={16}><circle cx="12" cy="12" r="3.6" /><g className="rays"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" /></g></Svg>,

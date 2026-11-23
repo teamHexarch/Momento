@@ -74,8 +74,8 @@ for (const type of ['pageswap', 'pagereveal']) {
   // Dev preview: assets/devpreview.js answers the API calls with sample albums and photos, so every
   // page works with no server. It's on by default for the local preview (node serve.mjs, port 3000),
   // on this computer or a phone on the same Wi-Fi. ?dev=off turns it off, ?dev turns it back on,
-  // ?dev=reset starts the sample data again. Through the real server (port 4000) it's off unless ?dev
-  // is used, and it is never active on the live site.
+  // ?dev=reset starts the sample data again. The integrated local server always uses the real API.
+  if (location.port === '4000') return;
   try {
     const lan = local || /^(192\.168|10)\.\d+\.\d+(\.\d+)?$|^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$|\.local$/.test(location.hostname);
     const q = new URLSearchParams(location.search).get('dev');

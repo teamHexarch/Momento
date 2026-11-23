@@ -1011,7 +1011,7 @@ export default function start() {
       }
       const sizeOf = (b) => b.reduce((t, f) => t + f.size, 0);
       const sent = batches.map(() => 0);
-      const r = { added: 0, dupes: 0, blocked: 0, removed: 0, tooBig: [], failed: [], errors: [] };
+      const r = { added: 0, queued: 0, dupes: 0, blocked: 0, unsure: 0, explicit: 0, removed: 0, tooBig: [], failed: [], errors: [] };
       let stop = false, lastRefresh = 0;
       const paint = () => {
         const done = sent.reduce((t, n) => t + n, 0), p = Math.min(1, done / total);
@@ -1027,6 +1027,8 @@ export default function start() {
           try {
             const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => { sent[k] = sizeOf(b) * Math.min(1, p); paint(); }, headers);
             r.added += d.photos?.length || 0; r.dupes += d.skipped || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
+            r.queued += (d.checks || []).filter((c) => ['checking', 'publish'].includes(c.state)).length;
+            for (const c of d.checks || []) if (c.state === 'rejected') { if (c.explicit) r.explicit++; else r.unsure++; }
             r.tooBig.push(...(d.tooBig || [])); r.failed.push(...(d.failed || []));
             sent[k] = sizeOf(b); paint();
             // The photos show up in the album while the rest are still going (not while one is open full size)
@@ -1058,18 +1060,22 @@ export default function start() {
         if (left.length || r.tooBig.length) lines.push(bigLine([...left.map((f) => f.name), ...r.tooBig]));
         if (r.failed.length) lines.push(`${listNames(r.failed)} couldn’t be read. Try exporting ${r.failed.length === 1 ? 'it' : 'them'} as JPEG.`);
         if (r.dupes) lines.push(`${plural(r.dupes, 'photo was', 'photos were')} already in the album.`);
-        if (r.blocked) lines.push(`${plural(r.blocked, 'photo', 'photos')} couldn’t be added: ${r.blocked === 1 ? 'it looks' : 'they look'} like ${r.blocked === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
+        if (r.unsure) lines.push(`${plural(r.unsure, 'photo needs', 'photos need')} a quick check by our team before ${r.unsure === 1 ? 'it appears' : 'they appear'}. Only you can see ${r.unsure === 1 ? 'it' : 'them'} for now: press Request review below.`);
+        if (r.explicit) lines.push(`${plural(r.explicit, 'photo was', 'photos were')} declined: ${r.explicit === 1 ? 'it looks' : 'they look'} like ${r.explicit === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
+        if (r.blocked && !r.unsure && !r.explicit) lines.push(`${plural(r.blocked, 'photo was', 'photos were')} declined by the automatic check.`);
         if (r.removed) lines.push(`${plural(r.removed, 'photo was', 'photos were')} removed from Momento before and can’t be added again.`);
         if (r.errors.length) lines.push(r.errors[0]);
-        if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
-        else { setUpload('failed', 1, 'Nothing was uploaded'); uploadPct.textContent = ''; }
+        if (r.queued) setUpload('done', 1, 'Upload received. You can keep using Momento.');
+        else if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
+        else if (r.unsure) { setUpload('done', 1, r.unsure === 1 ? 'Uploaded: waiting for a review' : 'Uploaded: waiting for review'); uploadPct.textContent = ''; }
+        else { setUpload('failed', 1, r.explicit ? 'Not added' : 'Nothing was uploaded'); uploadPct.textContent = ''; }
         await loadAlbums();
         await fetchAlbum(a);
         photosChanged(a, 0);
         await gpsCheck;
         if (hadGps && r.added) lines.push(r.added === 1 ? 'Location data was removed from this photo.' : 'Location data was removed from these photos.');
         note.textContent = lines.join(' ');
-        if (r.added) uploadHide = setTimeout(() => setUpload('off'), 2500);
+        if (r.added || r.queued || r.unsure) uploadHide = setTimeout(() => setUpload('off'), 2500);
       } catch (err) {
         setUpload('failed', 1, 'Upload didn’t finish');
         uploadPct.textContent = '';
@@ -1125,8 +1131,9 @@ export default function start() {
     const abBar = document.getElementById('abBar'), abSelBar = document.getElementById('abSelBar');
     const abCount = document.getElementById('abCount'), abAll = document.getElementById('abAll');
     const abDl = document.getElementById('abDl'), abHide = document.getElementById('abHide'), abDel = document.getElementById('abDel');
-    // Only the host can delete photos (any photo in their album). Everyone else can hide other people's photos from their own view
-    const canDel = (a) => a.role === 'host';
+    // The host can delete any photo in their album; everyone can delete the photos they added. Other people's
+    // photos can be hidden from your own view
+    const canDel = (a, p) => a?.role === 'host' || !!p?.mine;
     const canHide = (a, p) => !p.mine;
     const picked = () => (M.a?.photoItems || []).filter((p) => albumSel.ids.has(p.id));
     function syncSelect() {
@@ -1139,8 +1146,10 @@ export default function start() {
       const items = picked(), n = items.length, total = M.a?.photoItems?.length || 0;
       abCount.textContent = n ? `${plural(n, 'photo', 'photos')} selected` : 'Select photos';
       abAll.textContent = n && n === total ? 'Deselect all' : 'Select all';
-      abDel.hidden = M.a?.role !== 'host';
-      abDl.disabled = abDel.disabled = !n;
+      const deletable = items.filter((p) => canDel(M.a, p)).length;
+      abDel.hidden = M.a?.role !== 'host' && !(M.a?.photoItems || []).some((p) => p.mine);
+      abDl.disabled = !n;
+      abDel.disabled = !deletable;
       const hideable = items.filter((p) => canHide(M.a, p)).length;
       abHide.disabled = !hideable;
       abHide.querySelector('span').textContent = hideable && hideable < n ? `Hide ${hideable}` : 'Hide';
@@ -1192,7 +1201,8 @@ export default function start() {
     }
     async function binPhotos(items, from) {
       const a = M.a;
-      if (!a || a.role !== 'host' || !items.length) return false;   // only the host deletes
+      items = items.filter((p) => canDel(a, p));   // the host deletes any; others only their own
+      if (!a || !items.length) return false;
       const n = items.length, at = M.i;
       if (!await Momento.confirm({ from, title: n === 1 ? 'Delete this photo?' : `Delete ${n} photos?`, body: 'They stay in Recently deleted for 30 days, then they’re deleted for good. Everyone in the album stops seeing them.', ok: 'Delete' })) return false;
       try { await momentoApi('/api/trash', momentoJson('POST', { photoIds: items.map((p) => p.id) })); }
@@ -1367,7 +1377,7 @@ export default function start() {
       // The arrows (computers only) stop at the first and last photo, like a swipe does
       document.getElementById('vwPrev').hidden = stepTarget(-1) == null; document.getElementById('vwNext').hidden = stepTarget(1) == null;
       // Delete is for photos you added (or any, as the host); Hide is for other people's photos
-      document.getElementById('vwDel').hidden = !canDel(M.a);
+      document.getElementById('vwDel').hidden = !canDel(M.a, p);
       document.getElementById('vwHide').hidden = !canHide(M.a, p);
       document.getElementById('vwReport').hidden = !canHide(M.a, p);
     }
@@ -2531,10 +2541,78 @@ export default function start() {
       }
     }
 
+    let checkTimer;
+    function showChecks(a, checks) {
+      if (M.a && M.a.id !== a.id && albumModal.open) return;
+      clearTimeout(checkTimer);
+      const box = document.getElementById('albumChecks');
+      // Each of your photos still on its way: "IMG_204.jpg · Declined" with Request review, and so on
+      const labels = {
+        checking: 'Checking…', publish: 'Passed: adding it to the album…', review: 'Waiting for our team (within 1–2 working days)',
+        rejected: 'Declined', failed: 'Couldn’t be read: try another copy of this photo',
+      };
+      box.replaceChildren(...checks.map(check => {
+        const line = document.createElement('li');
+        line.className = 'check is-' + check.state;
+        line.innerHTML = '<span class="check-dot" aria-hidden="true"></span><span class="check-text"><span class="check-name"></span><span class="check-state"></span></span>';
+        line.querySelector('.check-name').textContent = check.name;
+        line.querySelector('.check-name').title = check.name;
+        line.querySelector('.check-state').textContent = check.state === 'rejected'
+          ? (check.reviewed ? 'Declined by our team' : check.explicit ? 'Declined: it looks like nudity' : 'Needs a review: our check wasn’t sure')
+          : labels[check.state] || check.state;
+        if (check.state === 'rejected' && !check.reviewed && !check.explicit) line.classList.add('is-unsure');
+        // Only a photo the check was unsure about can be sent to our team
+        if (check.state === 'rejected' && !check.reviewed && !check.explicit) {
+          const appeal = document.createElement('button');
+          appeal.type = 'button'; appeal.className = 'check-act'; appeal.textContent = 'Request review';
+          appeal.setAttribute('aria-label', 'Request review of ' + check.name);
+          appeal.addEventListener('click', async () => {
+            appeal.disabled = true; appeal.textContent = 'Sending…';
+            try {
+              const r = await momentoApi('/api/auth/moderation/' + check.id + '/review', momentoJson('POST', {}));
+              Momento.toast('Review requested', r.message || 'A staff member will look at it.');
+              await fetchAlbum(a);
+            } catch (error) { Momento.toast('Review request', error.message); appeal.disabled = false; appeal.textContent = 'Request review'; }
+          });
+          line.append(appeal);
+        }
+        // A declined or unreadable upload can be removed from the list (deleted at once)
+        if (check.state === 'rejected' || check.state === 'failed') {
+          const remove = document.createElement('button');
+          remove.type = 'button'; remove.className = 'check-x';
+          remove.setAttribute('aria-label', 'Remove ' + check.name);
+          remove.title = 'Remove';
+          remove.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+          remove.addEventListener('click', async () => {
+            remove.disabled = true;
+            try { await momentoApi('/api/albums/' + a.id + '/checks/' + check.id, { method: 'DELETE' }); await fetchAlbum(a); }
+            catch (error) { Momento.toast('Couldn’t remove it', error.message); remove.disabled = false; }
+          });
+          line.append(remove);
+        }
+        return line;
+      }));
+      box.hidden = !checks.length;
+      if (!checks.some(c => ['checking', 'publish', 'review'].includes(c.state))) return;
+      const poll = async () => {
+        if (!albumModal.open || M.a?.id !== a.id) return;
+        if (document.hidden || viewer.open) { checkTimer = setTimeout(poll, 5000); return; }
+        try {
+          const { checks: current } = await momentoApi('/api/albums/' + a.id + '/checks');
+          if (!albumModal.open || M.a?.id !== a.id) return;
+          if (JSON.stringify(checks) !== JSON.stringify(current)) {
+            await fetchAlbum(a);
+            if (albumModal.open && M.a?.id === a.id && !viewer.open) photosChanged(a, 0);
+          } else showChecks(a, current);
+        } catch { checkTimer = setTimeout(poll, 15000); }
+      };
+      checkTimer = setTimeout(poll, checks.some(c => c.state !== 'review') ? 4000 : 60000);
+    }
     async function fetchAlbum(a) {
       const result = await momentoApi('/api/albums/' + a.id);
       Object.assign(a, fromStore(result.album));
       a.photoItems = result.photos;
+      showChecks(a, result.checks || []);
       a.pics = result.photos.map((p) => p.thumbnailUrl || p.url + '?size=thumb');
       sortPhotos(a);   // in the order chosen on this device (the server's order is kept on each photo)
     }

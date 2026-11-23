@@ -871,6 +871,44 @@
     :root[data-theme="dark"] .upload-track { background: rgba(255,255,255,.1); }
     @media (prefers-reduced-motion: reduce) { .upload-track i { transition: none; } .upload.is-processing .upload-track::after { animation: none; } }
     .album-card .note { padding: 0 1.1rem; }
+/* Your own uploads still being checked, waiting for staff, or declined (only you see these) */
+.checks { position: relative; z-index: 2; display: grid; gap: .4rem; max-height: min(11.5rem, 28dvh); overflow-y: auto; margin: .7rem 1.1rem 0; padding: 0 0 .7rem; list-style: none; overscroll-behavior: contain; flex: none; }
+.checks[hidden] { display: none; }
+.check { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .4rem .65rem; min-height: 2.75rem;
+  padding: .45rem .5rem .45rem .7rem; border-radius: 14px; background: rgba(127, 120, 150, .1); box-shadow: inset 0 0 0 1px rgba(127, 120, 150, .14); }
+.check-dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--slate); }
+.check-text { display: grid; min-width: 0; }
+.check-name { overflow: hidden; color: var(--dusk); font-size: .88rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+.check-state { color: var(--slate); font-size: .78rem; line-height: 1.35; }
+.check.is-checking .check-dot, .check.is-publish .check-dot { background: #6F9896; animation: check-pulse 1.4s ease-in-out infinite; }
+.check.is-review .check-dot { background: #C8963E; }
+.check.is-rejected .check-dot, .check.is-failed .check-dot { background: #B4503F; }
+.check.is-unsure .check-dot { background: #C8963E; }
+.check.is-unsure .check-state { color: #8A5A12 !important; }
+:root[data-theme="dark"] .check.is-unsure .check-state { color: #E2B062 !important; }
+.check.is-rejected .check-state, .check.is-failed .check-state { color: #9A3D3D; font-weight: 600; }
+.check-act { min-height: 2.25rem; padding: 0 .85rem; border: 0; border-radius: 100px; cursor: pointer; white-space: nowrap;
+  font: 650 .8rem var(--font-main); color: var(--paper, #F8F7FA); background: var(--dusk);
+  transition: transform .2s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), opacity .2s ease; }
+.check-act:hover { opacity: .9; }
+.check-act:active { transform: scale(.96); }
+.check-act:focus-visible { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: 2px; }
+.check-act:disabled { opacity: .55; cursor: default; }
+.check:has(.check-x) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.check:has(.check-x):not(:has(.check-act)) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.check-x { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  color: var(--slate); background: transparent; transition: background-color .2s ease, color .2s ease; }
+.check-x:hover { color: var(--dusk); background: rgba(127, 120, 150, .16); }
+.check-x:focus-visible { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: 2px; }
+@media (pointer: coarse) { .check-x { width: 2.75rem; height: 2.75rem; } }
+:root[data-theme="dark"] .check-x { color: rgba(242, 239, 248, .7); }
+@media (pointer: coarse) { .check-act { min-height: 2.75rem; } }
+@keyframes check-pulse { 50% { opacity: .35; } }
+:root[data-theme="dark"] .check { background: rgba(242, 239, 248, .07); box-shadow: inset 0 0 0 1px rgba(242, 239, 248, .1); }
+:root[data-theme="dark"] .check-name { color: #F2EFF8; }
+:root[data-theme="dark"] .check.is-rejected .check-state, :root[data-theme="dark"] .check.is-failed .check-state { color: #F0A3A3; }
+:root[data-theme="dark"] .check-act { color: #15131D; background: #F2EFF8; }
+@media (prefers-reduced-motion: reduce) { .check-dot { animation: none !important; } .check-act { transition: none; } }
 
     /* ---------- Album window: header, photo grid, select mode ---------- */
     :root { --pick: #8A5232; }

@@ -31,7 +31,7 @@ function Chip({ logoutTo }: { logoutTo: string | null }) {
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  const items = () => [...menu.current!.querySelectorAll<HTMLElement>('.acct-item, .acct-seg button')];
+  const items = () => [...menu.current!.querySelectorAll<HTMLElement>('.acct-item:not([hidden]), .acct-seg button')];
   const setOpen = (v: boolean, focusFirst = false) => {
     if (v === isOpen.current) return;
     isOpen.current = v;
@@ -83,6 +83,8 @@ function Chip({ logoutTo }: { logoutTo: string | null }) {
           {THEMES.map((t) => <button key={t.pref} type="button" role="radio" aria-checked={t.pref === pref} data-theme={t.pref} onClick={() => setTheme(t.pref)}>{t.icon()}{t.label}</button>)}
         </div>
         <button className="acct-item" type="button" role="menuitem" data-act="help" onClick={() => act('help')}>{ICON.help()}Help and support</button>
+        {/* staff only (shown for the staff plan) */}
+        <button className="acct-item" type="button" role="menuitem" data-act="review" hidden={!(account && account.plan === 'staff')} onClick={() => { setOpen(false); location.href = 'review.html'; }}>{ICON.review()}Photo review</button>
         <hr className="acct-sep" />
         <button className="acct-item" type="button" role="menuitem" data-act="logout" onClick={() => act('logout')}>{ICON.logout()}Log out</button>
       </div>

@@ -91,7 +91,7 @@ export function setUpAuth(): () => void {
   // After logging in, go back to the album link that sent you here (albums.html only), or to your albums
   const nextPage = () => {
     const next = new URLSearchParams(location.search).get('next') || '';
-    return /^(?:albums|events|reviews)(?:\.html)?([?#]|$)/.test(next) ? next : 'albums';
+    return /^(?:albums|events|reviews|review)(?:\.html)?([?#]|$)/.test(next) ? next : 'albums';
   };
   // Sent here by an invite link (events.html?join=…): the dialog says so
   const fromInvite = /[?&]join=/.test(nextPage());
