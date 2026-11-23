@@ -1078,7 +1078,7 @@
         track?.applyConstraints({ advanced: [{ torch }] }).catch(() => { torch = false; torchBtn.setAttribute('aria-pressed', 'false'); });
         torchBtn.setAttribute('aria-pressed', String(torch));
       });
-      const TIMERS = [0, 3, 10];
+      const TIMERS = [0, 3, 5, 10];
       const paintTimer = () => {
         timerBtn.querySelector('.ev-tval').textContent = prefs.timer ? `${prefs.timer}s` : '';
         timerBtn.setAttribute('aria-label', prefs.timer ? `Self-timer: ${prefs.timer} seconds` : 'Self-timer: off');
