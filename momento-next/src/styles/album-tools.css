@@ -23,15 +23,18 @@
   --gb-shadow: var(--gb-smoke-shadow); --gb-ink: var(--paper); --gb-lift: var(--gb-smoke-lift);
 }
 
-.ab-who-wrap { display: inline-flex; align-items: center; gap: .45rem; margin-left: auto; color: var(--slate); font-size: .84rem; font-weight: 600; }
-.ab-who {
-  appearance: none; -webkit-appearance: none; min-height: 2.25rem; max-width: 11rem; padding: 0 2rem 0 .9rem; border: 0; border-radius: 100px;
-  background: rgba(46, 44, 58, .06) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='%235C596B' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right .7rem center;
-  color: var(--dusk); font: inherit; font-size: .84rem; font-weight: 600; text-overflow: ellipsis; cursor: pointer;
+/* Added by: a glass button and menu like Sort's, at the right of the row */
+.ab-who-wrap { margin-left: auto; }
+.ab-who-pre { color: var(--slate); font-weight: 600; }
+.ab-who-btn #abWhoLabel { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-who-chev { color: var(--slate); margin-left: -.1rem; }
+/* A person chosen: the deep smoke glass, like a chosen filter */
+.ab-btn.ab-who-btn.is-set {
+  --gb-sheen: var(--gb-smoke-sheen); --gb-fill: var(--gb-smoke-fill); --gb-rim: var(--gb-smoke-rim);
+  --gb-shadow: var(--gb-smoke-shadow); --gb-ink: var(--paper); --gb-lift: var(--gb-smoke-lift);
 }
-.ab-who:hover { background-color: rgba(46, 44, 58, .1); }
-.ab-who:active { background-color: rgba(46, 44, 58, .14); }
-.ab-who:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+.ab-who-btn.is-set :is(svg, .ab-who-pre, .ab-who-chev) { color: inherit; opacity: .75; }
+.ab-menu.ab-who-menu { left: auto; right: 0; max-height: min(22rem, 55vh); overflow-y: auto; }
 
 .ab-shown { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0 0 .65rem; padding: .5rem .45rem .5rem .95rem; border-radius: 16px; background: rgba(111, 152, 150, .13); color: var(--dusk); font-size: .86rem; font-weight: 600; }
 .ab-shown-clear { flex: none; min-height: 2rem; padding: 0 .8rem; border: 0; border-radius: 100px; background: transparent; color: var(--dusk); font: inherit; font-size: .84rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
@@ -39,8 +42,6 @@
 .ab-shown-clear:active { background: rgba(46, 44, 58, .12); }
 .ab-shown-clear:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
 
-:root[data-theme="dark"] .ab-who { background-color: rgba(255, 255, 255, .08); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='%23C9C5D6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
-:root[data-theme="dark"] .ab-who:hover { background-color: rgba(255, 255, 255, .13); }
 :root[data-theme="dark"] .ab-shown { background: rgba(111, 152, 150, .2); }
 :root[data-theme="dark"] .ab-shown-clear:hover { background: rgba(255, 255, 255, .08); }
 
@@ -49,7 +50,8 @@
   .ab-tools::-webkit-scrollbar { display: none; }
   .ab-filters { overflow: visible; }
   .ab-who-wrap { margin-left: 0; }
-  .ab-who-label { display: none; }
+  .ab-who-pre { display: none; }
+  .ab-menu.ab-who-menu { left: 1rem; right: 1rem; }
   /* (the sort menu escapes the scrolling row by sitting below it, fixed to the album window) */
   .ab-menu.ab-sort-menu { position: fixed; top: auto; left: 1rem; right: 1rem; bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 }

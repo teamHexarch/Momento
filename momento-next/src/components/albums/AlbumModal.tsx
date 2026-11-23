@@ -53,7 +53,11 @@ export default function AlbumModal() {
                 <div className="ab-menu ab-sort-menu" id="abSortMenu" role="menu" aria-label="Sort photos" hidden></div>
               </div>
               <div className="ab-filters" id="abFilters" role="group" aria-label="Show"></div>
-              <label className="ab-who-wrap" id="abWhoWrap" hidden><span className="ab-who-label">Added by</span><select className="ab-who" id="abWho"><option value="">Everyone</option></select></label>
+              {/* Added by: one person's photos (a glass menu like Sort, not the browser's own dropdown) */}
+              <div className="ab-sort-wrap ab-who-wrap" id="abWhoWrap" hidden>
+                <button className="ab-btn ab-sort ab-who-btn" type="button" id="abWhoBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="abWhoMenu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6" /><path d="M4.8 20c.8-3.8 3.6-6 7.2-6s6.4 2.2 7.2 6" /></svg><span className="ab-who-pre">Added by</span><span id="abWhoLabel">Everyone</span><svg className="ab-who-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></button>
+                <div className="ab-menu ab-sort-menu ab-who-menu" id="abWhoMenu" role="menu" aria-label="Added by" hidden></div>
+              </div>
             </div>
             <p className="ab-shown" id="abShown" role="status" hidden><span></span><button className="ab-shown-clear" type="button" id="abShownClear">Show all</button></p>
             <div className="ab-grid" id="thumbs" role="group" aria-label="Photos"></div>

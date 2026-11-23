@@ -36,8 +36,12 @@ await page.click('#abFilters [data-filter="mine"]'); await wait(300);
 out.mine = await grid();
 await page.click('#abShownClear'); await wait(300);
 out.cleared = await grid();
-const who = await page.evaluate(() => [...document.querySelectorAll('#abWho option')].map((o) => o.value).filter(Boolean)[1] || '');
-if (who) { await page.select('#abWho', who); await wait(300); out.who = { who, ...(await grid()) }; await page.select('#abWho', ''); await wait(200); }
+await page.click('#abWhoBtn'); await wait(200);
+out.whoOptions = await page.evaluate(() => [...document.querySelectorAll('#abWhoMenu .ab-item')].map((x) => x.textContent).join(', '));
+await page.click('#abWhoMenu .ab-item:nth-child(3)'); await wait(300);
+out.who = { label: await page.evaluate(() => document.getElementById('abWhoLabel').textContent), set: await page.evaluate(() => document.getElementById('abWhoBtn').classList.contains('is-set')), ...(await grid()) };
+await page.click('#abWhoBtn'); await wait(200); await page.click('#abWhoMenu .ab-item:nth-child(1)'); await wait(300);
+out.whoCleared = await grid();
 
 // ---- the viewer's zoom ----
 await page.click('#abSortBtn'); await wait(200); await page.click('#abSortMenu [data-sort="newest"]'); await wait(400);

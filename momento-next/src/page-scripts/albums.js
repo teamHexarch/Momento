@@ -748,15 +748,16 @@ export default function start() {
     // notification's "just these photos". The order is remembered on this device; the filter is per visit.
     const SORTS = [
       ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['name', 'File name'], ['size', 'Largest first'],
-      ['person', 'Who added them'], ['reactions', 'Most reactions'],
-    ];
+      ['reactions', 'Most reactions'],
+    ];   // (one person's photos: the Added by menu beside it)
     const FILTERS = [['all', 'All'], ['mine', 'Yours'], ['saved', 'Bookmarked'], ['reacted', 'With reactions']];
     const SORT_KEY = 'momento-photo-sort';
     let photoSort = 'newest', photoFilter = 'all', photoWho = '';
     try { const s = localStorage.getItem(SORT_KEY); if (SORTS.some(([k]) => k === s)) photoSort = s; } catch (e) {}
     const abTools = document.getElementById('abTools'), sortBtn = document.getElementById('abSortBtn');
     const sortMenu = document.getElementById('abSortMenu'), sortLabel = document.getElementById('abSortLabel');
-    const filtersEl = document.getElementById('abFilters'), whoWrap = document.getElementById('abWhoWrap'), whoSel = document.getElementById('abWho');
+    const filtersEl = document.getElementById('abFilters'), whoWrap = document.getElementById('abWhoWrap');
+    const whoBtn = document.getElementById('abWhoBtn'), whoMenu = document.getElementById('abWhoMenu'), whoLabel = document.getElementById('abWhoLabel');
     const shownEl = document.getElementById('abShown');
     const photoReactions = (p) => Object.values(p.reactions || {}).reduce((t, n) => t + (+n || 0), 0);
     const fileNameOf = (p) => String(p.name || p.fileName || p.filename || '');
@@ -768,7 +769,6 @@ export default function start() {
       oldest: (x, y) => (timeOf(x.p) - timeOf(y.p)) || (y.p._o - x.p._o),
       name: (x, y) => fileNameOf(x.p).localeCompare(fileNameOf(y.p), undefined, { numeric: true, sensitivity: 'base' }) || (x.p._o - y.p._o),
       size: (x, y) => ((+y.p.size || 0) - (+x.p.size || 0)) || (x.p._o - y.p._o),
-      person: (x, y) => (x.p.mine === y.p.mine ? String(x.p.by || '').localeCompare(String(y.p.by || '')) : x.p.mine ? -1 : 1) || (x.p._o - y.p._o),
       reactions: (x, y) => (photoReactions(y.p) - photoReactions(x.p)) || (x.p._o - y.p._o),
     };
     // Puts the album's photos (and their thumbnails, which go with them) in the chosen order
@@ -795,8 +795,10 @@ export default function start() {
       // Added by: everyone who has photos here (you first), once there are at least two people
       const people = [...new Set(items.map((p) => String(p.by || '')).filter(Boolean))].sort((x, y) => (x === 'You' ? -1 : y === 'You' ? 1 : x.localeCompare(y)));
       if (photoWho && !people.includes(photoWho)) photoWho = '';
-      whoSel.replaceChildren(new Option('Everyone', ''), ...people.map((n) => new Option(n, n)));
-      whoSel.value = photoWho;
+      whoLabel.textContent = photoWho || 'Everyone';
+      whoBtn.classList.toggle('is-set', !!photoWho);
+      whoMenu.innerHTML = ['', ...people].map((n) =>
+        `<button class="ab-item" type="button" role="menuitemradio" aria-checked="${n === photoWho}" data-who="${esc(n)}">${n ? esc(n) : 'Everyone'}</button>`).join('');
       whoWrap.hidden = people.length < 2;
       applyPhotoFilter();
     }
@@ -827,37 +829,46 @@ export default function start() {
       paintPhotoTools(M.a);
     }
     filtersEl.addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (b) setFilter({ filter: b.dataset.filter }); });
-    whoSel.addEventListener('change', () => setFilter({ who: whoSel.value }));
     document.getElementById('abShownClear').addEventListener('click', () => { resetPhotoFilter(); thumbsEl.querySelector('.ab-tile')?.focus({ preventScroll: true }); });
-    // The sort menu: the button opens it, a choice closes it; arrows move, Escape or a press outside closes it
-    const sortItems = () => [...sortMenu.querySelectorAll('.ab-item')];
-    function setSortOpen(open, focusChosen) {
-      sortMenu.hidden = !open;
-      sortBtn.setAttribute('aria-expanded', String(open));
-      if (open && focusChosen) (sortMenu.querySelector('[aria-checked="true"]') || sortItems()[0])?.focus();
+    // The Sort and Added by menus (the album window's own glass menu): the button opens it, a choice closes it; arrows,
+    // Home and End move, Escape or a press outside closes it. Opening one closes the other
+    const menus = [];
+    function glassMenu(btn, menu, onPick) {
+      const items = () => [...menu.querySelectorAll('.ab-item')];
+      const setOpen = (open, focusChosen) => {
+        if (open) menus.forEach((m) => { if (m.menu !== menu) m.setOpen(false); });
+        menu.hidden = !open;
+        btn.setAttribute('aria-expanded', String(open));
+        if (open && focusChosen) (menu.querySelector('[aria-checked="true"]') || items()[0])?.focus();
+      };
+      btn.addEventListener('click', (e) => setOpen(menu.hidden, e.detail === 0));
+      btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true, true); } });
+      menu.addEventListener('click', (e) => {
+        const b = e.target.closest('.ab-item');
+        if (!b || !M.a) return;
+        setOpen(false);
+        btn.focus();
+        onPick(b);
+      });
+      menu.addEventListener('keydown', (e) => {
+        const list = items(), at = list.indexOf(document.activeElement);
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); btn.focus(); }
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); list[(at + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus(); }
+        else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); list[e.key === 'Home' ? 0 : list.length - 1]?.focus(); }
+        else if (e.key === 'Tab') setOpen(false);
+      });
+      document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false); });
+      menus.push({ menu, setOpen });
     }
-    sortBtn.addEventListener('click', (e) => setSortOpen(sortMenu.hidden, e.detail === 0));
-    sortMenu.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-sort]');
-      if (!b || !M.a) return;
+    glassMenu(sortBtn, sortMenu, (b) => {
       photoSort = b.dataset.sort;
       try { localStorage.setItem(SORT_KEY, photoSort); } catch (err) {}
-      setSortOpen(false);
-      sortBtn.focus();
       sortPhotos(M.a);
       M.i = 0;
       fillAlbum(M.a);
       if (!still) [...thumbsEl.children].slice(0, 24).forEach((t, n) => t.animate([{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: n * 12, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' }));
     });
-    sortMenu.addEventListener('keydown', (e) => {
-      const list = sortItems(), at = list.indexOf(document.activeElement);
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSortOpen(false); sortBtn.focus(); }
-      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); list[(at + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus(); }
-      else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); list[e.key === 'Home' ? 0 : list.length - 1]?.focus(); }
-      else if (e.key === 'Tab') setSortOpen(false);
-    });
-    sortBtn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setSortOpen(true, true); } });
-    document.addEventListener('pointerdown', (e) => { if (!sortMenu.hidden && !sortMenu.contains(e.target) && !sortBtn.contains(e.target)) setSortOpen(false); });
+    glassMenu(whoBtn, whoMenu, (b) => setFilter({ who: b.dataset.who }));
 
     const canAdd = (a) => !!a?.open;
     // Why photos can't be added right now, in words
