@@ -1560,7 +1560,8 @@ export default function start() {
         // The main photo takes over the picture that slid in (already loaded), then everything snaps back home unseen
         M.i = t;
         vwImg.src = side.currentSrc || side.src;
-        try { await vwImg.decode(); } catch {}
+        // (never wait long: a photo still loading mustn't hold up the next swipe; it sharpens when it arrives)
+        try { await Promise.race([vwImg.decode(), new Promise((r) => setTimeout(r, 400))]); } catch {}
         runs.forEach((a) => a.cancel());
         sliding = false;
         vwLoad(false);
@@ -1788,7 +1789,12 @@ export default function start() {
         vwStage.setPointerCapture(e.pointerId);
         return;
       }
+      // A new touch (no other finger down): forget any finger whose lift was missed, so a swipe is never mistaken
+      // for a pinch (that left swiping stuck until the page was reloaded)
+      if (e.isPrimary) fingers.clear();
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Every finger is followed to wherever it lifts, even off the photo (over the strip or the bars)
+      if (e.pointerType !== 'mouse') { try { vwStage.setPointerCapture(e.pointerId); } catch {} }
       // Zoomed with a finger: the browser scrolls the big photo; a tap that doesn't move fits it again
       if (zoomed) { g = { tapOnly: true, x: e.clientX, y: e.clientY, moved: false }; return; }
       // Mid-slide: the photos keep gliding, and a quick swipe now is remembered and runs the moment they land
@@ -1913,6 +1919,8 @@ export default function start() {
     }
     vwStage.addEventListener('pointerup', endGesture);
     vwStage.addEventListener('pointercancel', endGesture);
+    // A safety net: a finger lifted anywhere is no longer down (after the photo's own handler has had it)
+    for (const t of ['pointerup', 'pointercancel']) addEventListener(t, (e) => { if (fingers.delete(e.pointerId) && !fingers.size && g && !g.pinch && e.target !== vwStage && !vwStage.contains(e.target)) { if (g.axis === 'x') settleX(g.px ?? g.dx); else if (g.axis === 'y') settleY(g); g = null; } });
     // The browser's own double-click (selecting, zooming) and long-press menu are replaced by ours
     vwStage.addEventListener('dblclick', (e) => e.preventDefault());
     vwStage.addEventListener('contextmenu', (e) => { if (e.pointerType && e.pointerType !== 'mouse') e.preventDefault(); });

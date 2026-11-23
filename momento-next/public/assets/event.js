@@ -243,7 +243,8 @@
     .ev-flash.is-on { animation: ev-flash .35s ease-out; }
     @keyframes ev-flash { from { opacity: .85; } to { opacity: 0; } }
     /* The camera's tools: zoom (chips + slider), flash, timer, grid lines, brightness */
-    .ev-cam video { touch-action: none; transition: transform .18s ease-out; }
+    .ev-cam { touch-action: none; }   /* pinch to zoom is the camera's, not the page's */
+    .ev-cam video { transition: transform .18s ease-out; }
     .ev-cam-tools { position: absolute; right: max(14px, env(safe-area-inset-right)); top: 50%; z-index: 2; display: flex; flex-direction: column; gap: .55rem; translate: 0 -50%; }
     .ev-cam-tools .mq-btn[aria-pressed="true"], .ev-cam .ev-zchip[aria-pressed="true"] { background: #fff; color: #2E2C3A; }
     .ev-timer { position: relative; }
@@ -974,22 +975,39 @@
       chips.addEventListener('click', (e) => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.dataset.z); });
       range.addEventListener('input', () => setZoom(+range.value));
       brightRange.addEventListener('input', () => { track?.applyConstraints({ advanced: [{ exposureCompensation: +brightRange.value }] }).catch(() => {}); });
-      // A pinch on the picture
+      // Two fingers anywhere on the camera (not starting on a button or slider) pinch to zoom in and out, like a
+      // phone's own camera app. The page itself never zooms or scrolls while the camera is open (touch-action, and
+      // Safari's own gesture events)
       const fingers = new Map();
-      let pinch = null;
-      video.addEventListener('pointerdown', (e) => {
+      let pinch = null, pinchRaf = 0, pinchTo = 0;
+      // (one finger on a button or slider still uses it; a second finger makes it a pinch, wherever either landed, and
+      // both are then held by the camera so lifting them presses nothing underneath)
+      d.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        if (e.isPrimary) fingers.clear();   // a new touch: forget any lift that was missed
         fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (fingers.size === 2) { const [a, b] = [...fingers.values()]; pinch = { d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoom }; }
+        if (fingers.size === 2) {
+          for (const id of fingers.keys()) { try { d.setPointerCapture(id); } catch (err) {} }
+          const [a, b] = [...fingers.values()];
+          pinch = { d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoom };
+        }
       });
-      video.addEventListener('pointermove', (e) => {
+      d.addEventListener('pointermove', (e) => {
         if (!fingers.has(e.pointerId)) return;
         fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (!pinch || fingers.size < 2) return;
+        e.preventDefault();
         const [a, b] = [...fingers.values()];
-        setZoom(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0);
+        pinchTo = pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0;
+        // at most once a frame (the camera's own zoom is a request to the camera)
+        if (!pinchRaf) pinchRaf = requestAnimationFrame(() => { pinchRaf = 0; if (pinch) setZoom(pinchTo); });
       });
-      const lift = (e) => { fingers.delete(e.pointerId); if (fingers.size < 2) pinch = null; };
-      video.addEventListener('pointerup', lift); video.addEventListener('pointercancel', lift);
+      const lift = (e) => {
+        fingers.delete(e.pointerId);
+        if (fingers.size < 2 && pinch) { pinch = null; cancelAnimationFrame(pinchRaf); pinchRaf = 0; setZoom(pinchTo || zoom); }
+      };
+      d.addEventListener('pointerup', lift); d.addEventListener('pointercancel', lift);
+      for (const t of ['gesturestart', 'gesturechange', 'gestureend']) d.addEventListener(t, (e) => e.preventDefault());
       // The mouse wheel (or a trackpad pinch)
       d.addEventListener('wheel', (e) => { if (zoomBox.hidden || e.target.closest('.ev-cam-bar, .ev-cam-tools')) return; e.preventDefault(); setZoom(zoom * Math.exp(-e.deltaY * 0.0025)); }, { passive: false });
       function onKey(e) {
