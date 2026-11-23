@@ -250,15 +250,15 @@
     .ev-timer { position: relative; }
     .ev-timer span { position: absolute; right: -.2rem; bottom: -.2rem; min-width: 1.15rem; padding: .05rem .25rem; border-radius: 100px; background: #fff; color: #2E2C3A; font-size: .64rem; font-weight: 800; line-height: 1.3; }
     .ev-timer span:empty { display: none; }
-    .ev-zoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.2rem); z-index: 2; display: grid; justify-items: center; gap: .55rem; translate: -50% 0; }
-    .ev-zoom[hidden], .ev-bright[hidden] { display: none; }
-    .ev-zoom-chips { display: flex; gap: .3rem; padding: .25rem; border-radius: 100px; background: rgba(12, 11, 18, .45); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    .ev-camzoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.2rem); z-index: 2; display: grid; justify-items: center; gap: .55rem; translate: -50% 0; }
+    .ev-camzoom[hidden], .ev-bright[hidden] { display: none; }
+    .ev-camzoom-chips { display: flex; gap: .3rem; padding: .25rem; border-radius: 100px; background: rgba(12, 11, 18, .45); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
     .ev-zchip { min-width: 2.5rem; height: 2.1rem; padding: 0 .55rem; border: 0; border-radius: 100px; background: transparent; color: #fff; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
     .ev-zchip:hover { background: rgba(255, 255, 255, .16); }
     .ev-zchip:active { transform: scale(.9); }
     .ev-zchip:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 2px; }
-    .ev-zoom-range, .ev-bright input { width: min(14rem, 60vw); accent-color: #fff; cursor: pointer; }
-    .ev-zoom-range:focus-visible, .ev-bright input:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 4px; border-radius: 4px; }
+    .ev-camzoom-range, .ev-bright input { width: min(14rem, 60vw); accent-color: #fff; cursor: pointer; }
+    .ev-camzoom-range:focus-visible, .ev-bright input:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 4px; border-radius: 4px; }
     .ev-bright { position: absolute; left: max(16px, env(safe-area-inset-left)); top: 50%; z-index: 2; display: grid; gap: .35rem; translate: 0 -50%; color: rgba(255, 255, 255, .85); font-size: .78rem; font-weight: 600; }
     .ev-bright input { width: 8.5rem; }
     /* Grid lines: the rule of thirds */
@@ -898,9 +898,9 @@
           <button class="mq-btn ev-timer" type="button" data-timer title="Self-timer">${CAM_ICON.timer}<span></span></button>
           <button class="mq-btn" type="button" data-grid aria-pressed="false" aria-label="Grid lines" title="Grid lines">${CAM_ICON.grid}</button>
         </div>
-        <div class="ev-zoom" hidden>
-          <div class="ev-zoom-chips" role="group" aria-label="Zoom"></div>
-          <input class="ev-zoom-range" type="range" aria-label="Zoom" step="0.1">
+        <div class="ev-camzoom" hidden>
+          <div class="ev-camzoom-chips" role="group" aria-label="Zoom"></div>
+          <input class="ev-camzoom-range" type="range" aria-label="Zoom" step="0.1">
         </div>
         <label class="ev-bright" hidden><span>Brightness</span><input type="range" aria-label="Brightness"></label>
         <div class="ev-cam-bar">
@@ -916,7 +916,7 @@
       const video = $('video'), status = $('.ev-cam-top p'), shutter = $('.ev-shutter');
       const shotsEl = $('.ev-shots'), use = $('[data-use]'), flip = $('[data-flip]');
       const torchBtn = $('[data-torch]'), timerBtn = $('[data-timer]'), gridBtn = $('[data-grid]');
-      const zoomBox = $('.ev-zoom'), chips = $('.ev-zoom-chips'), range = $('.ev-zoom-range');
+      const zoomBox = $('.ev-camzoom'), chips = $('.ev-camzoom-chips'), range = $('.ev-camzoom-range');
       const bright = $('.ev-bright'), brightRange = bright.querySelector('input'), countEl = $('.ev-count');
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const shots = [], urls = [];
