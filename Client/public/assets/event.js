@@ -257,10 +257,13 @@
     .ev-badge { position: absolute; right: -.15rem; bottom: -.15rem; min-width: 1.1rem; padding: .05rem .25rem; border-radius: 100px; background: #fff; color: #1d1b26;
       box-shadow: 0 1px 4px rgba(0, 0, 0, .3); font-size: .62rem; font-weight: 800; line-height: 1.3; text-align: center; }
     .ev-badge:empty { display: none; }
-    /* The timer and brightness show their setting inside the button (3s, 10s, +1), in place of the icon */
-    .ev-tval { font-size: .8rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+    /* The timer and brightness keep their icon; their setting (3s, 10s, +1) sits right beside it, to the left, in a
+       small glass label of one fixed size that never moves */
+    .ev-cam-tools .ev-cbtn { position: relative; }
+    .ev-tval { position: absolute; right: calc(100% + .75rem); top: 50%; display: grid; place-items: center; width: 2.9rem; height: 1.85rem; margin-top: -.925rem;
+      border-radius: 100px; background: var(--lg-fill); box-shadow: var(--lg-edge); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+      color: #fff; font-size: .8rem; font-weight: 800; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); pointer-events: none; }
     .ev-tval:empty { display: none; }
-    .ev-cbtn:has(.ev-tval:not(:empty)) svg { display: none; }
 
     /* Zoom: glass chips above the shutter; the chosen one shows the exact zoom while pinching */
     .ev-camzoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.4rem); z-index: 2; display: flex; gap: .25rem; padding: .25rem; border-radius: 100px; translate: -50% 0; }
