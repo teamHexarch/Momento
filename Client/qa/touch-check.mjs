@@ -46,7 +46,7 @@ await page.keyboard.press('Escape'); await wait(800);
 // ---- camera: pinch out and in, one finger starting on the bottom bar ----
 await page.evaluate(() => { window.__cam = Momento.event.camera(); });
 await wait(2500);
-const zoom = () => page.evaluate(() => ({ range: document.querySelector('.ev-zoom-range').value, video: document.querySelector('.ev-cam video').style.transform }));
+const zoom = () => page.evaluate(() => ({ range: document.querySelector('.ev-camzoom-range').value, video: document.querySelector('.ev-cam video').style.transform }));
 out.camStart = await zoom();
 await touch('touchStart', [[195, 330], [195, 760]]);   // the second finger lands on the bottom bar
 for (let i = 1; i <= 8; i++) { await touch('touchMove', [[195, 330 - i * 22], [195, 760 + i * 6]]); await wait(20); }
