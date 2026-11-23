@@ -1,0 +1,14 @@
+/* The header menu's link to the Reviews page (under the home page's sections, set apart by a line).
+   On the inner pages it is a .menu-item; on the home page a .menu-link, which looks the same but stays out of the
+   section pill and the drag-to-glide (they look up a section on the page for every .menu-item). */
+.menu-sep { height: 1px; margin: .3rem .75rem; border: 0; background: rgba(46, 44, 58, .1); }
+:root[data-theme="dark"] .menu-sep { background: rgba(255, 255, 255, .1); }
+.menu-link {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem; border-radius: 16px;
+  color: var(--slate); text-decoration: none; font-size: .92rem; font-weight: 600; transition: color .25s ease, background-color .25s ease;
+}
+.menu-link:hover { color: var(--dusk); background-color: var(--g-wash); }
+.menu-link:active { background-color: var(--g-wash-press); }
+.menu-link:focus-visible { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: -2px; }
+.menu-item[aria-current="page"] { color: var(--dusk); }
+@media (prefers-reduced-motion: reduce) { .menu-link { transition: none; } }

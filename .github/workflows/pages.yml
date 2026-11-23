@@ -1,8 +1,9 @@
-# Publishes the Client folder to https://hexarch.org (GitHub Pages) on every push that
-# changes it. Only the files the site needs are published; design-time files in Client/
-# (CLAUDE.md, serve.mjs) stay in the repo but aren't served.
-# assets/devpreview.js (local dev mode) is removed from the published files.
+# Publishes the website to https://hexarch.org (GitHub Pages) on every push that changes Client/.
+# Client/ is the Next.js site: it's built here (npm run build makes the static site in Client/out) and only
+# that output is published. assets/devpreview.js (local sample data) is removed from the published files.
+# If the build fails, nothing is published and the site already live stays as it is.
 #
+# The HTML version of the site (before Next.js) is kept on the html-site branch.
 # Needs Settings > Pages > Build and deployment > Source set to "GitHub Actions".
 # To publish again without changing anything: GitHub > Actions > Publish site > Run workflow.
 
@@ -29,24 +30,30 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: Client
     steps:
       - uses: actions/checkout@v7
 
-      - name: Collect the public site files
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Client/package-lock.json
+
+      - name: Build the site
         run: |
-          mkdir -p _site
-          cp Client/index.html Client/albums.html Client/settings.html Client/support.html Client/events.html Client/groups.html Client/privacy.html Client/terms.html Client/review.html Client/404.html Client/sw.js Client/CNAME Client/manifest.webmanifest Client/favicon.ico _site/
-          # The whole assets folder (scripts, styles, translations, icons, the link preview picture, the globe
-          # and the site's own photos), so a new kind of file there is never left off the live site
-          cp -r Client/assets _site/assets
-          rm -f _site/assets/devpreview.js
-          ls -R _site
+          npm ci --no-audit --no-fund
+          npm run build
+          rm -f out/assets/devpreview.js
+          ls out
 
       - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: _site
+          path: Client/out
 
       - id: deployment
         uses: actions/deploy-pages@v5

@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const LANGS = ['zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt', 'ru', 'ur', 'yue', 'id'];
 const here = path.dirname(fileURLToPath(import.meta.url));
-const outDir = path.join(here, '..', 'assets', 'i18n');
+const outDir = path.join(here, '..', 'public', 'assets', 'i18n');
 
 const files = fs.readdirSync(here).filter((f) => f.endsWith('.mjs') && f !== 'build.mjs').sort();
 const all = {}, problems = [];

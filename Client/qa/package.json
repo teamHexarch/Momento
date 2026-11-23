@@ -1,0 +1,11 @@
+{
+  "name": "momento-qa",
+  "private": true,
+  "type": "module",
+  "description": "Old site vs new site checks for the Momento Next.js port",
+  "dependencies": {
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^25.18.1"
+  }
+}

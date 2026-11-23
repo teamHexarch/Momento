@@ -1,0 +1,65 @@
+/* My albums: the album window's sort and filter row, and the full-size viewer's zoom controls.
+   Built from the page's own parts (the .ab-btn glass pill, the .ab-menu list, the viewer's .vw-btn) so they read as
+   part of the album window. Motion is transform and opacity only. */
+
+/* ---------- Sort and filter ---------- */
+.ab-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .5rem; margin: 0 0 .75rem; }
+.ab-tools[hidden], .ab-shown[hidden], .ab-who-wrap[hidden], .ab-sort-menu[hidden] { display: none; }
+.ab-sort-wrap { position: relative; }
+.ab-btn.ab-sort { display: inline-flex; align-items: center; gap: .45rem; padding: 0 .95rem 0 .8rem; font-size: .86rem; font-weight: 650; }
+.ab-sort svg { flex: none; color: var(--slate); }
+.ab-menu.ab-sort-menu { top: calc(100% + .4rem); left: 0; right: auto; min-width: 13.5rem; }
+.ab-sort-menu .ab-item { justify-content: space-between; }
+.ab-sort-menu .ab-item[aria-checked="true"] { font-weight: 700; }
+.ab-sort-menu .ab-item[aria-checked="true"]::after { content: ""; width: .55rem; height: .3rem; margin-left: .8rem; border: solid currentColor; border-width: 0 0 2px 2px; rotate: -45deg; translate: 0 -.1rem; }
+
+.ab-filters { display: flex; gap: .35rem; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.ab-filters::-webkit-scrollbar { display: none; }
+.ab-btn.ab-chip { min-height: 2.25rem; padding: 0 .9rem; font-size: .84rem; font-weight: 600; white-space: nowrap; transition: transform .25s var(--spring); }
+.ab-btn.ab-chip:active { transform: scale(.95); }
+/* The chosen one wears the deep smoke glass, like the page's main actions */
+.ab-btn.ab-chip[aria-pressed="true"] {
+  --gb-sheen: var(--gb-smoke-sheen); --gb-fill: var(--gb-smoke-fill); --gb-rim: var(--gb-smoke-rim);
+  --gb-shadow: var(--gb-smoke-shadow); --gb-ink: var(--paper); --gb-lift: var(--gb-smoke-lift);
+}
+
+/* Added by: a glass button and menu like Sort's, at the right of the row */
+.ab-who-wrap { margin-left: auto; }
+.ab-who-pre { color: var(--slate); font-weight: 600; }
+.ab-who-btn #abWhoLabel { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-who-chev { color: var(--slate); margin-left: -.1rem; }
+/* A person chosen: the deep smoke glass, like a chosen filter */
+.ab-btn.ab-who-btn.is-set {
+  --gb-sheen: var(--gb-smoke-sheen); --gb-fill: var(--gb-smoke-fill); --gb-rim: var(--gb-smoke-rim);
+  --gb-shadow: var(--gb-smoke-shadow); --gb-ink: var(--paper); --gb-lift: var(--gb-smoke-lift);
+}
+.ab-who-btn.is-set :is(svg, .ab-who-pre, .ab-who-chev) { color: inherit; opacity: .75; }
+.ab-menu.ab-who-menu { left: auto; right: 0; max-height: min(22rem, 55vh); overflow-y: auto; }
+
+.ab-shown { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0 0 .65rem; padding: .5rem .45rem .5rem .95rem; border-radius: 16px; background: rgba(111, 152, 150, .13); color: var(--dusk); font-size: .86rem; font-weight: 600; }
+.ab-shown-clear { flex: none; min-height: 2rem; padding: 0 .8rem; border: 0; border-radius: 100px; background: transparent; color: var(--dusk); font: inherit; font-size: .84rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ab-shown-clear:hover { background: rgba(46, 44, 58, .07); }
+.ab-shown-clear:active { background: rgba(46, 44, 58, .12); }
+.ab-shown-clear:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
+:root[data-theme="dark"] .ab-shown { background: rgba(111, 152, 150, .2); }
+:root[data-theme="dark"] .ab-shown-clear:hover { background: rgba(255, 255, 255, .08); }
+
+@media (max-width: 600px) {
+  .ab-tools { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -.75rem; padding-inline: .75rem; }
+  .ab-tools::-webkit-scrollbar { display: none; }
+  .ab-filters { overflow: visible; }
+  .ab-who-wrap { margin-left: 0; }
+  .ab-who-pre { display: none; }
+  .ab-menu.ab-who-menu { left: 1rem; right: 1rem; }
+  /* (the sort menu escapes the scrolling row by sitting below it, fixed to the album window) */
+  .ab-menu.ab-sort-menu { position: fixed; top: auto; left: 1rem; right: 1rem; bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+}
+
+/* ---------- The viewer's zoom ---------- */
+.vw-zoom { display: inline-flex; align-items: center; gap: .3rem; margin-right: .35rem; }
+.vw-zoom-level { min-width: 3.6rem; font-size: .84rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vw-btn:disabled { opacity: .38; cursor: default; }
+/* Phones and tablets pinch to zoom instead */
+@media (hover: none) { .vw-zoom { display: none; } }
+@media (prefers-reduced-motion: reduce) { .ab-btn.ab-chip { transition: none; } }
