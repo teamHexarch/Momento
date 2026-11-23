@@ -220,47 +220,78 @@
     .ev-made::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0) 60%); }
     @media (prefers-reduced-motion: reduce) { .ev-cover-pick, .ev-cover-empty svg, .ev-cover-btn { transition: none; } }
 
-    /* Momento's camera */
-    .ev-cam { background: #0b0a10; color: #fff; }
-    .ev-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    /* Momento's camera: the picture fills the screen and every control floats over it as liquid glass (a clear,
+       blurred and brightened pane with a light edge along the top and a soft glow inside). No words on screen:
+       the camera's state is read out to screen readers, and only a problem is shown, in a glass card. */
+    .ev-cam { --lg-fill: linear-gradient(180deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .08) 55%, rgba(255, 255, 255, .14));
+      --lg-blur: blur(20px) saturate(185%) brightness(1.08);
+      --lg-edge: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 1px rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .2), inset 0 0 18px rgba(255, 255, 255, .08), 0 10px 30px -12px rgba(0, 0, 0, .55);
+      background: #0b0a10; color: #fff; touch-action: none; }   /* (pinch to zoom is the camera's, not the page's) */
+    .ev-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .18s ease-out; }
     .ev-cam.is-front video { transform: scaleX(-1); }
-    .ev-cam-top { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: 4.5rem; z-index: 2; }
-    .ev-cam-top h2 { margin: .35rem 0 0; font-size: 1.25rem; font-weight: 750; letter-spacing: -.03em; }
-    .ev-cam-top p { margin: .25rem 0 0; color: rgba(255, 255, 255, .78); font-size: .88rem; line-height: 1.45; }
-    .ev-cam-top p.is-error { color: #ffb4a8; }
-    .ev-cam-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; padding: 1.2rem 16px max(1.4rem, env(safe-area-inset-bottom)); background: linear-gradient(to top, rgba(8, 7, 12, .85), rgba(8, 7, 12, 0)); }
-    .ev-shutter { width: 4.6rem; height: 4.6rem; border: 4px solid #fff; border-radius: 50%; background: rgba(255, 255, 255, .25); cursor: pointer; transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
-    .ev-shutter:hover { background: rgba(255, 255, 255, .4); }
-    .ev-shutter:active { transform: scale(.88); }
-    .ev-shutter:focus-visible { outline: 3px solid #9fd2cd; outline-offset: 4px; }
-    .ev-shutter[disabled] { opacity: .4; cursor: default; }
-    .ev-shots { display: flex; align-items: center; gap: .35rem; min-width: 0; overflow: hidden; }
-    .ev-shots img { width: 2.6rem; height: 2.6rem; flex: none; border-radius: 10px; object-fit: cover; box-shadow: 0 0 0 2px rgba(255, 255, 255, .7); animation: ev-pop .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-cam:focus { outline: none; }
+    .ev-lg { position: relative; isolation: isolate; border: 0; background: var(--lg-fill); box-shadow: var(--lg-edge); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+    /* the curved highlight a glass edge catches */
+    .ev-lg::before { content: ""; position: absolute; inset: 1px; z-index: -1; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(120% 70% at 30% 0%, rgba(255, 255, 255, .32), rgba(255, 255, 255, 0) 60%); }
+    .ev-cam-status:not(.is-error) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .ev-cam-status.is-error { position: absolute; left: 50%; top: 50%; z-index: 3; width: min(20rem, calc(100% - 3rem)); margin: 0; padding: 1rem 1.2rem; border-radius: 22px;
+      translate: -50% -50%; font-size: .92rem; font-weight: 600; line-height: 1.45; text-align: center; }
+
+    /* Round glass buttons */
+    .ev-cbtn { display: grid; place-items: center; width: 2.9rem; height: 2.9rem; padding: 0; border: 0; border-radius: 50%; color: #fff; cursor: pointer;
+      transition: transform .3s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), opacity .2s ease; }
+    .ev-cbtn svg { display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
+    .ev-cbtn:hover { opacity: .88; }
+    .ev-cbtn:active { transform: scale(.88); }
+    .ev-cbtn:focus-visible, .ev-zchip:focus-visible, .ev-shutter:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+    .ev-cbtn[hidden] { display: none; }
+    .ev-cam-x { position: absolute; top: max(1rem, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); z-index: 2; }
+
+    /* Flash, timer, grid and brightness: one glass column; a tool that's on turns white */
+    .ev-cam-tools { position: absolute; right: max(14px, env(safe-area-inset-right)); top: 50%; z-index: 2; display: grid; gap: .2rem; padding: .3rem; border-radius: 100px; translate: 0 -50%; }
+    .ev-cam-tools .ev-cbtn { width: 2.6rem; height: 2.6rem; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .ev-cam-tools .ev-cbtn::before { content: none; }
+    .ev-cam-tools .ev-cbtn[aria-pressed="true"] { background: #fff; color: #1d1b26; }
+    .ev-cam-tools .ev-cbtn[aria-pressed="true"] svg { filter: none; }
+    .ev-badge { position: absolute; right: -.15rem; bottom: -.15rem; min-width: 1.1rem; padding: .05rem .25rem; border-radius: 100px; background: #fff; color: #1d1b26;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .3); font-size: .62rem; font-weight: 800; line-height: 1.3; text-align: center; }
+    .ev-badge:empty { display: none; }
+
+    /* Zoom: glass chips above the shutter; the chosen one shows the exact zoom while pinching */
+    .ev-camzoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.4rem); z-index: 2; display: flex; gap: .25rem; padding: .25rem; border-radius: 100px; translate: -50% 0; }
+    .ev-camzoom[hidden] { display: none; }
+    .ev-zchip { min-width: 2.35rem; height: 2.35rem; padding: 0 .45rem; border: 0; border-radius: 100px; background: transparent; color: #fff; font: inherit; font-size: .76rem; font-weight: 750;
+      font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); cursor: pointer; transition: transform .3s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-zchip:hover { background: rgba(255, 255, 255, .14); }
+    .ev-zchip:active { transform: scale(.88); }
+    .ev-zchip[aria-pressed="true"] { min-width: 2.9rem; background: rgba(255, 255, 255, .92); color: #1d1b26; text-shadow: none; }
+
+    /* The bottom row: the last photo taken, the shutter, then switch camera and use the photos */
+    .ev-cam-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;
+      padding: 1.2rem max(20px, env(safe-area-inset-right)) max(1.6rem, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+    .ev-shutter { display: grid; place-items: center; width: 4.9rem; height: 4.9rem; padding: .32rem; border: 0; border-radius: 50%; cursor: pointer; }
+    .ev-shutter i { width: 100%; height: 100%; border-radius: 50%; background: #fff; box-shadow: inset 0 -3px 6px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .25);
+      transition: transform .3s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), background-color .2s ease; }
+    .ev-shutter:hover i { transform: scale(.95); }
+    .ev-shutter:active i { transform: scale(.82); }
+    .ev-shutter[disabled] { cursor: default; }
+    .ev-shutter[disabled] i { opacity: .35; transform: none; }
+    .ev-cam.is-counting .ev-shutter i { background: #ff6b5e; transform: scale(.6); border-radius: 30%; }
+    .ev-shots { position: relative; justify-self: start; width: 3.1rem; height: 3.1rem; padding: .2rem; border-radius: 16px; }
+    .ev-shots:empty, .ev-shots:not(:has(img)) { visibility: hidden; }
+    .ev-shots img { display: block; width: 100%; height: 100%; border-radius: 12px; object-fit: cover; animation: ev-pop .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-shots img:not(:last-of-type) { display: none; }
     @keyframes ev-pop { from { transform: scale(.4); opacity: 0; } }
-    .ev-cam-right { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
-    /* The camera's buttons are HUD glass, the main one a white disc (assets/glass.css) */
+    .ev-cam-right { display: flex; justify-content: flex-end; align-items: center; gap: .6rem; }
+    .ev-use { position: relative; background: #fff; color: #1d1b26; box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .5); }
+    .ev-use::before { content: none; }
+    .ev-use svg { filter: none; }
+    .ev-use .ev-badge { right: -.2rem; top: -.2rem; bottom: auto; background: #1d1b26; color: #fff; box-shadow: 0 0 0 2px #fff; }
+
     .ev-flash { position: absolute; inset: 0; z-index: 1; background: #fff; opacity: 0; pointer-events: none; }
     .ev-flash.is-on { animation: ev-flash .35s ease-out; }
     @keyframes ev-flash { from { opacity: .85; } to { opacity: 0; } }
-    /* The camera's tools: zoom (chips + slider), flash, timer, grid lines, brightness */
-    .ev-cam { touch-action: none; }   /* pinch to zoom is the camera's, not the page's */
-    .ev-cam video { transition: transform .18s ease-out; }
-    .ev-cam-tools { position: absolute; right: max(14px, env(safe-area-inset-right)); top: 50%; z-index: 2; display: flex; flex-direction: column; gap: .55rem; translate: 0 -50%; }
-    .ev-cam-tools .mq-btn[aria-pressed="true"], .ev-cam .ev-zchip[aria-pressed="true"] { background: #fff; color: #2E2C3A; }
-    .ev-timer { position: relative; }
-    .ev-timer span { position: absolute; right: -.2rem; bottom: -.2rem; min-width: 1.15rem; padding: .05rem .25rem; border-radius: 100px; background: #fff; color: #2E2C3A; font-size: .64rem; font-weight: 800; line-height: 1.3; }
-    .ev-timer span:empty { display: none; }
-    .ev-camzoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.2rem); z-index: 2; display: grid; justify-items: center; gap: .55rem; translate: -50% 0; }
-    .ev-camzoom[hidden], .ev-bright[hidden] { display: none; }
-    .ev-camzoom-chips { display: flex; gap: .3rem; padding: .25rem; border-radius: 100px; background: rgba(12, 11, 18, .45); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-    .ev-zchip { min-width: 2.5rem; height: 2.1rem; padding: 0 .55rem; border: 0; border-radius: 100px; background: transparent; color: #fff; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: transform .25s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
-    .ev-zchip:hover { background: rgba(255, 255, 255, .16); }
-    .ev-zchip:active { transform: scale(.9); }
-    .ev-zchip:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 2px; }
-    .ev-camzoom-range, .ev-bright input { width: min(14rem, 60vw); accent-color: #fff; cursor: pointer; }
-    .ev-camzoom-range:focus-visible, .ev-bright input:focus-visible { outline: 2px solid #9fd2cd; outline-offset: 4px; border-radius: 4px; }
-    .ev-bright { position: absolute; left: max(16px, env(safe-area-inset-left)); top: 50%; z-index: 2; display: grid; gap: .35rem; translate: 0 -50%; color: rgba(255, 255, 255, .85); font-size: .78rem; font-weight: 600; }
-    .ev-bright input { width: 8.5rem; }
     /* Grid lines: the rule of thirds */
     .ev-grid { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .25s ease;
       background: linear-gradient(to right, transparent calc(33.333% - .5px), rgba(255, 255, 255, .45) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .45) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)),
@@ -268,9 +299,11 @@
     .ev-cam.has-grid .ev-grid { opacity: 1; }
     /* The self-timer's countdown */
     .ev-count { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: #fff; font-size: clamp(6rem, 24vw, 11rem); font-weight: 800; letter-spacing: -.05em; text-shadow: 0 4px 30px rgba(0, 0, 0, .45); pointer-events: none; }
-    .ev-cam.is-counting .ev-shutter { background: rgba(255, 120, 100, .55); }
-    @media (max-width: 600px) { .ev-bright { top: auto; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 10.4rem); translate: 0 0; } }
-    @media (prefers-reduced-motion: reduce) { .ev-cam video, .ev-grid, .ev-zchip { transition: none; } }
+    @media (pointer: coarse) { .ev-cam-tools .ev-cbtn { width: 2.75rem; height: 2.75rem; } .ev-zchip { min-height: 2.75rem; } }
+    /* No blur available, or less transparency asked for: the same shapes in a near-solid dark glass */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .ev-cam { --lg-fill: linear-gradient(180deg, rgba(60, 58, 72, .82), rgba(30, 28, 40, .78)); } }
+    @media (prefers-reduced-transparency: reduce) { .ev-cam { --lg-fill: linear-gradient(rgba(30, 28, 40, .94), rgba(30, 28, 40, .94)); --lg-blur: none; } }
+    @media (prefers-reduced-motion: reduce) { .ev-cam video, .ev-grid, .ev-zchip, .ev-cbtn, .ev-shutter i { transition: none; } }
 
     /* Asking before an upload */
     .ev-ask { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 32px)); height: fit-content; max-height: calc(100dvh - 32px); box-sizing: border-box; padding: 1.4rem; border-radius: var(--r-card, 28px); overflow: auto;
@@ -877,6 +910,8 @@
     torch: svgIcon('<path d="M13 2 5 13h6l-1 9 8-11h-6l1-9Z"/>', 18),
     timer: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/>', 18),
     grid: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/>', 18),
+    bright: svgIcon('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>', 18),
+    use: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 22),
   };
   const CAM_KEY = 'momento-camera';
   function camera() {
@@ -886,38 +921,38 @@
       const savePrefs = () => { try { localStorage.setItem(CAM_KEY, JSON.stringify(prefs)); } catch (e) {} };
       const d = document.createElement('dialog');
       d.className = 'mq-dlg ev-cam';
+      d.setAttribute('aria-label', 'Camera');
+      d.tabIndex = -1;
       d.innerHTML = `
         <video playsinline muted autoplay></video>
         <span class="ev-grid" aria-hidden="true"></span>
         <span class="ev-flash" aria-hidden="true"></span>
         <span class="ev-count" aria-hidden="true"></span>
-        <div class="ev-cam-top"><h2>Take a photo</h2><p role="status" aria-live="polite">Starting the camera…</p></div>
-        <button class="mq-x" type="button" aria-label="Close the camera" data-close>${ICON.close}</button>
-        <div class="ev-cam-tools" role="group" aria-label="Camera settings">
-          <button class="mq-btn" type="button" data-torch hidden aria-pressed="false" aria-label="Flash" title="Flash">${CAM_ICON.torch}</button>
-          <button class="mq-btn ev-timer" type="button" data-timer title="Self-timer">${CAM_ICON.timer}<span></span></button>
-          <button class="mq-btn" type="button" data-grid aria-pressed="false" aria-label="Grid lines" title="Grid lines">${CAM_ICON.grid}</button>
+        <p class="ev-cam-status ev-lg" role="status" aria-live="polite">Starting the camera…</p>
+        <button class="ev-cbtn ev-lg ev-cam-x" type="button" aria-label="Close the camera" title="Close" data-close>${ICON.close}</button>
+        <div class="ev-cam-tools ev-lg" role="group" aria-label="Camera settings">
+          <button class="ev-cbtn" type="button" data-torch hidden aria-pressed="false" aria-label="Flash" title="Flash">${CAM_ICON.torch}</button>
+          <button class="ev-cbtn" type="button" data-timer title="Self-timer">${CAM_ICON.timer}<span class="ev-badge"></span></button>
+          <button class="ev-cbtn" type="button" data-grid aria-pressed="false" aria-label="Grid lines" title="Grid lines">${CAM_ICON.grid}</button>
+          <button class="ev-cbtn" type="button" data-bright hidden aria-pressed="false" title="Brightness">${CAM_ICON.bright}<span class="ev-badge"></span></button>
         </div>
-        <div class="ev-camzoom" hidden>
-          <div class="ev-camzoom-chips" role="group" aria-label="Zoom"></div>
-          <input class="ev-camzoom-range" type="range" aria-label="Zoom" step="0.1">
-        </div>
-        <label class="ev-bright" hidden><span>Brightness</span><input type="range" aria-label="Brightness"></label>
+        <div class="ev-camzoom ev-lg" role="group" aria-label="Zoom" hidden></div>
         <div class="ev-cam-bar">
-          <div class="ev-shots" aria-live="polite"></div>
-          <button class="ev-shutter" type="button" aria-label="Take photo" disabled></button>
+          <div class="ev-shots ev-lg" aria-hidden="true"></div>
+          <button class="ev-shutter ev-lg" type="button" aria-label="Take photo" disabled><i></i></button>
           <div class="ev-cam-right">
-            <button class="mq-btn" type="button" data-flip hidden aria-label="Switch camera" title="Switch camera">${ICON.flip}</button>
-            <button class="mq-btn is-main" type="button" data-use hidden>Use photos</button>
+            <button class="ev-cbtn ev-lg" type="button" data-flip hidden aria-label="Switch camera" title="Switch camera">${ICON.flip}</button>
+            <button class="ev-cbtn ev-use" type="button" data-use hidden title="Use the photos">${CAM_ICON.use}<span class="ev-badge"></span></button>
           </div>
         </div>`;
       document.body.append(d);
       const $ = (s) => d.querySelector(s);
-      const video = $('video'), status = $('.ev-cam-top p'), shutter = $('.ev-shutter');
+      const video = $('video'), status = $('.ev-cam-status'), shutter = $('.ev-shutter');
       const shotsEl = $('.ev-shots'), use = $('[data-use]'), flip = $('[data-flip]');
       const torchBtn = $('[data-torch]'), timerBtn = $('[data-timer]'), gridBtn = $('[data-grid]');
-      const zoomBox = $('.ev-camzoom'), chips = $('.ev-camzoom-chips'), range = $('.ev-camzoom-range');
-      const bright = $('.ev-bright'), brightRange = bright.querySelector('input'), countEl = $('.ev-count');
+      const zoomBox = $('.ev-camzoom'), chips = zoomBox;
+      const brightBtn = $('[data-bright]'), countEl = $('.ev-count');
+      let brightLevels = [0], bright = 0;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const shots = [], urls = [];
       let stream = null, track = null, facing = 'environment', settled = false, front = false;
@@ -939,9 +974,13 @@
       // ---- zoom ----
       const fmt = (z) => (Math.round(z * 10) / 10).toString().replace(/\.0$/, '') + '×';
       function paintZoom() {
-        range.value = String(zoom);
-        range.setAttribute('aria-valuetext', fmt(zoom));
-        chips.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(+b.dataset.z - zoom) < 0.05)));
+        // the chip at or just below the zoom is the chosen one and shows the exact zoom (2.4×), the others their own
+        const list = [...chips.querySelectorAll('button')];
+        const on = list.filter((b) => +b.dataset.z <= zoom + 0.05).pop() || list[0];
+        list.forEach((b) => {
+          b.setAttribute('aria-pressed', String(b === on));
+          b.textContent = b === on ? fmt(zoom) : fmt(+b.dataset.z);
+        });
         video.style.transform = `${front ? 'scaleX(-1) ' : ''}${!lens && zoom > 1 ? `scale(${zoom})` : ''}`.trim();
       }
       function setZoom(z) {
@@ -955,7 +994,6 @@
         zMin = lens ? caps.zoom.min : 1;
         zMax = lens ? Math.min(caps.zoom.max, 10) : 5;
         zoom = lens ? Math.min(zMax, Math.max(zMin, settings.zoom || 1)) : 1;
-        range.min = String(zMin); range.max = String(zMax);
         const presets = [zMin < 0.95 ? Math.round(zMin * 10) / 10 : null, 1, 2, 3].filter((z) => z !== null && z >= zMin - 0.01 && z <= zMax + 0.01);
         chips.innerHTML = presets.map((z) => `<button type="button" class="ev-zchip" data-z="${z}" aria-pressed="false" aria-label="Zoom ${fmt(z)}">${fmt(z)}</button>`).join('');
         zoomBox.hidden = zMax <= 1;
@@ -963,18 +1001,25 @@
         torch = false;
         torchBtn.hidden = !caps.torch;
         torchBtn.setAttribute('aria-pressed', 'false');
-        // Brightness: where the camera lets the page set its exposure
+        // Brightness: where the camera lets the page set its exposure, a tap goes brighter, darker, then back
         const ex = caps.exposureCompensation;
-        bright.hidden = !(ex && ex.max > ex.min);
-        if (!bright.hidden) {
-          brightRange.min = String(ex.min); brightRange.max = String(ex.max); brightRange.step = String(ex.step || 0.1);
-          brightRange.value = String(settings.exposureCompensation ?? 0);
-        }
+        brightBtn.hidden = !(ex && ex.max > ex.min);
+        brightLevels = brightBtn.hidden ? [0] : [...new Set([0, Math.min(1, ex.max), Math.max(-1, ex.min)])];
+        bright = 0; paintBright();
         paintZoom();
       }
       chips.addEventListener('click', (e) => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.dataset.z); });
-      range.addEventListener('input', () => setZoom(+range.value));
-      brightRange.addEventListener('input', () => { track?.applyConstraints({ advanced: [{ exposureCompensation: +brightRange.value }] }).catch(() => {}); });
+      function paintBright() {
+        const t = bright > 0 ? '+' + bright : bright < 0 ? '−' + -bright : '';
+        brightBtn.querySelector('.ev-badge').textContent = t;
+        brightBtn.setAttribute('aria-pressed', String(!!bright));
+        brightBtn.setAttribute('aria-label', bright ? `Brightness: ${bright > 0 ? 'brighter' : 'darker'}` : 'Brightness: normal');
+      }
+      brightBtn.addEventListener('click', () => {
+        bright = brightLevels[(brightLevels.indexOf(bright) + 1) % brightLevels.length];
+        track?.applyConstraints({ advanced: [{ exposureCompensation: bright }] }).catch(() => {});
+        paintBright();
+      });
       // Two fingers anywhere on the camera (not starting on a button or slider) pinch to zoom in and out, like a
       // phone's own camera app. The page itself never zooms or scrolls while the camera is open (touch-action, and
       // Safari's own gesture events)
@@ -1025,7 +1070,7 @@
       });
       const TIMERS = [0, 3, 10];
       const paintTimer = () => {
-        timerBtn.querySelector('span').textContent = prefs.timer ? `${prefs.timer}s` : '';
+        timerBtn.querySelector('.ev-badge').textContent = prefs.timer ? `${prefs.timer}s` : '';
         timerBtn.setAttribute('aria-label', prefs.timer ? `Self-timer: ${prefs.timer} seconds` : 'Self-timer: off');
         timerBtn.setAttribute('aria-pressed', String(!!prefs.timer));
       };
@@ -1080,9 +1125,10 @@
           const url = URL.createObjectURL(blob); urls.push(url);
           const img = new Image(); img.src = url; img.alt = '';
           shotsEl.append(img);
-          while (shotsEl.children.length > 4) shotsEl.firstChild.remove();
+          while (shotsEl.children.length > 2) shotsEl.firstChild.remove();
           use.hidden = false;
-          use.textContent = shots.length === 1 ? 'Use photo' : `Use ${shots.length} photos`;
+          use.querySelector('.ev-badge').textContent = shots.length > 1 ? String(shots.length) : '';
+          use.setAttribute('aria-label', shots.length === 1 ? 'Use photo' : `Use ${shots.length} photos`);
           say(`${shots.length} taken. Take more, or use ${shots.length === 1 ? 'it' : 'them'}.`);
         }, 'image/jpeg', .92);
       }
@@ -1115,6 +1161,7 @@
       $('[data-close]').addEventListener('click', () => finish([]));
       d.addEventListener('cancel', (e) => { e.preventDefault(); if (countdown) { cancelCountdown(); ready(); return; } finish([]); });
       d.showModal();
+      d.focus({ focusVisible: false });   // (the camera itself has focus, not a ring on the close button; Tab reaches the buttons)
       start();
     });
   }

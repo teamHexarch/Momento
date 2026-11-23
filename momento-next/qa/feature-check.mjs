@@ -61,12 +61,12 @@ await wait(2500);
 const cam = () => page.evaluate(() => {
   const d = document.querySelector('.ev-cam');
   return d && {
-    status: d.querySelector('.ev-cam-top p').textContent,
+    status: d.querySelector('.ev-cam-status').textContent,
     chips: [...d.querySelectorAll('.ev-zchip')].map((b) => b.textContent + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join(' '),
-    zoomShown: !d.querySelector('.ev-camzoom').hidden, range: d.querySelector('.ev-camzoom-range').value,
+    zoomShown: !d.querySelector('.ev-camzoom').hidden, range: d.querySelector('.ev-zchip[aria-pressed="true"]').textContent,
     video: d.querySelector('video').style.transform, timer: d.querySelector('[data-timer]').getAttribute('aria-label'),
     grid: d.classList.contains('has-grid'), torch: !d.querySelector('[data-torch]').hidden, shots: d.querySelectorAll('.ev-shots img').length,
-    use: d.querySelector('[data-use]').hidden ? '' : d.querySelector('[data-use]').textContent,
+    use: d.querySelector('[data-use]').hidden ? '' : d.querySelector('[data-use]').getAttribute('aria-label'),
   };
 });
 out.camera = await cam();
