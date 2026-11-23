@@ -257,6 +257,10 @@
     .ev-badge { position: absolute; right: -.15rem; bottom: -.15rem; min-width: 1.1rem; padding: .05rem .25rem; border-radius: 100px; background: #fff; color: #1d1b26;
       box-shadow: 0 1px 4px rgba(0, 0, 0, .3); font-size: .62rem; font-weight: 800; line-height: 1.3; text-align: center; }
     .ev-badge:empty { display: none; }
+    /* The timer and brightness show their setting inside the button (3s, 10s, +1), in place of the icon */
+    .ev-tval { font-size: .8rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+    .ev-tval:empty { display: none; }
+    .ev-cbtn:has(.ev-tval:not(:empty)) svg { display: none; }
 
     /* Zoom: glass chips above the shutter; the chosen one shows the exact zoom while pinching */
     .ev-camzoom { position: absolute; left: 50%; bottom: calc(max(1.4rem, env(safe-area-inset-bottom)) + 6.4rem); z-index: 2; display: flex; gap: .25rem; padding: .25rem; border-radius: 100px; translate: -50% 0; }
@@ -298,12 +302,15 @@
         linear-gradient(to bottom, transparent calc(33.333% - .5px), rgba(255, 255, 255, .45) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .45) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)); }
     .ev-cam.has-grid .ev-grid { opacity: 1; }
     /* The self-timer's countdown */
-    .ev-count { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: #fff; font-size: clamp(6rem, 24vw, 11rem); font-weight: 800; letter-spacing: -.05em; text-shadow: 0 4px 30px rgba(0, 0, 0, .45); pointer-events: none; }
+    .ev-count { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; opacity: 0; transition: opacity .25s ease; }
+    .ev-cam.is-counting .ev-count { opacity: 1; }
+    .ev-count b { display: grid; place-items: center; width: clamp(7.5rem, 30vw, 9.5rem); aspect-ratio: 1; border-radius: 50%; }
+    .ev-count span { display: block; color: #fff; font-size: clamp(3.4rem, 13vw, 4.4rem); font-weight: 750; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0, 0, 0, .3); }
     @media (pointer: coarse) { .ev-cam-tools .ev-cbtn { width: 2.75rem; height: 2.75rem; } .ev-zchip { min-height: 2.75rem; } }
     /* No blur available, or less transparency asked for: the same shapes in a near-solid dark glass */
     @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .ev-cam { --lg-fill: linear-gradient(180deg, rgba(60, 58, 72, .82), rgba(30, 28, 40, .78)); } }
     @media (prefers-reduced-transparency: reduce) { .ev-cam { --lg-fill: linear-gradient(rgba(30, 28, 40, .94), rgba(30, 28, 40, .94)); --lg-blur: none; } }
-    @media (prefers-reduced-motion: reduce) { .ev-cam video, .ev-grid, .ev-zchip, .ev-cbtn, .ev-shutter i { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .ev-cam video, .ev-grid, .ev-zchip, .ev-cbtn, .ev-shutter i, .ev-count { transition: none; } }
 
     /* Asking before an upload */
     .ev-ask { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 32px)); height: fit-content; max-height: calc(100dvh - 32px); box-sizing: border-box; padding: 1.4rem; border-radius: var(--r-card, 28px); overflow: auto;
@@ -927,14 +934,14 @@
         <video playsinline muted autoplay></video>
         <span class="ev-grid" aria-hidden="true"></span>
         <span class="ev-flash" aria-hidden="true"></span>
-        <span class="ev-count" aria-hidden="true"></span>
+        <span class="ev-count" aria-hidden="true"><b class="ev-lg"><span></span></b></span>
         <p class="ev-cam-status ev-lg" role="status" aria-live="polite">Starting the camera…</p>
         <button class="ev-cbtn ev-lg ev-cam-x" type="button" aria-label="Close the camera" title="Close" data-close>${ICON.close}</button>
         <div class="ev-cam-tools ev-lg" role="group" aria-label="Camera settings">
           <button class="ev-cbtn" type="button" data-torch hidden aria-pressed="false" aria-label="Flash" title="Flash">${CAM_ICON.torch}</button>
-          <button class="ev-cbtn" type="button" data-timer title="Self-timer">${CAM_ICON.timer}<span class="ev-badge"></span></button>
+          <button class="ev-cbtn" type="button" data-timer title="Self-timer">${CAM_ICON.timer}<span class="ev-tval"></span></button>
           <button class="ev-cbtn" type="button" data-grid aria-pressed="false" aria-label="Grid lines" title="Grid lines">${CAM_ICON.grid}</button>
-          <button class="ev-cbtn" type="button" data-bright hidden aria-pressed="false" title="Brightness">${CAM_ICON.bright}<span class="ev-badge"></span></button>
+          <button class="ev-cbtn" type="button" data-bright hidden aria-pressed="false" title="Brightness">${CAM_ICON.bright}<span class="ev-tval"></span></button>
         </div>
         <div class="ev-camzoom ev-lg" role="group" aria-label="Zoom" hidden></div>
         <div class="ev-cam-bar">
@@ -951,7 +958,7 @@
       const shotsEl = $('.ev-shots'), use = $('[data-use]'), flip = $('[data-flip]');
       const torchBtn = $('[data-torch]'), timerBtn = $('[data-timer]'), gridBtn = $('[data-grid]');
       const zoomBox = $('.ev-camzoom'), chips = zoomBox;
-      const brightBtn = $('[data-bright]'), countEl = $('.ev-count');
+      const brightBtn = $('[data-bright]'), countEl = $('.ev-count span');
       let brightLevels = [0], bright = 0;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const shots = [], urls = [];
@@ -1011,7 +1018,7 @@
       chips.addEventListener('click', (e) => { const b = e.target.closest('[data-z]'); if (b) setZoom(+b.dataset.z); });
       function paintBright() {
         const t = bright > 0 ? '+' + bright : bright < 0 ? '−' + -bright : '';
-        brightBtn.querySelector('.ev-badge').textContent = t;
+        brightBtn.querySelector('.ev-tval').textContent = t;
         brightBtn.setAttribute('aria-pressed', String(!!bright));
         brightBtn.setAttribute('aria-label', bright ? `Brightness: ${bright > 0 ? 'brighter' : 'darker'}` : 'Brightness: normal');
       }
@@ -1070,7 +1077,7 @@
       });
       const TIMERS = [0, 3, 10];
       const paintTimer = () => {
-        timerBtn.querySelector('.ev-badge').textContent = prefs.timer ? `${prefs.timer}s` : '';
+        timerBtn.querySelector('.ev-tval').textContent = prefs.timer ? `${prefs.timer}s` : '';
         timerBtn.setAttribute('aria-label', prefs.timer ? `Self-timer: ${prefs.timer} seconds` : 'Self-timer: off');
         timerBtn.setAttribute('aria-pressed', String(!!prefs.timer));
       };
@@ -1140,7 +1147,7 @@
       }
       const tickCount = () => {
         countEl.textContent = String(countdown.left);
-        if (!reduced) countEl.animate([{ opacity: 0, transform: 'scale(1.6)' }, { opacity: 1, transform: 'none', offset: .3 }, { opacity: .85, transform: 'scale(.92)' }], { duration: 950, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+        if (!reduced) countEl.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none', offset: .35 }, { opacity: 1, transform: 'none' }], { duration: 950, easing: 'cubic-bezier(.16, 1, .3, 1)' });
       };
       shutter.addEventListener('click', () => {
         if (countdown) { cancelCountdown(); ready(); return; }   // pressing again while it counts down cancels
