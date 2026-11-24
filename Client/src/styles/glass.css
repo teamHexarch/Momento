@@ -246,6 +246,11 @@ html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(
 :root:root { background-color: #E7EAF4; }
 :root:root[data-theme="dark"] { background-color: #0C0B12; }
 :root[data-theme="dark"] .grain { opacity: .14; }
+/* The silk background fades in over the page colour once its first frame is drawn (the page scripts add .is-drawn),
+   instead of the plain colour switching to silk at once, or a blank canvas showing for a frame */
+canvas.bg { opacity: 0; transition: opacity .5s ease; }
+canvas.bg.is-drawn { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { canvas.bg { transition: none; } }
 
 /* The soft veil behind the fixed header (each page decides when it shows; this is only its colour).
    Eased over five stops so it melts into the page with no visible bottom edge, in both themes. */
@@ -686,6 +691,10 @@ html.intro-on #intro { display: block; }
   position: absolute; top: .25rem; bottom: .25rem; left: .25rem; width: calc((100% - .5rem) / 3); border-radius: var(--r-pill);
   translate: calc(var(--i, 0) * 100%) 0; transition: translate .5s var(--out);
 }
+/* Until the page has drawn the choice (no --i yet), the pill already sits on the saved theme (data-theme-pref is set
+   before the first paint), so it doesn't slide across from Light on every page load. (Every switch: Light, Dark, System) */
+:root[data-theme-pref="dark"] .acct-seg:not([style*="--i"]) > .acct-seg-pill { translate: 100% 0; }
+:root[data-theme-pref="system"] .acct-seg:not([style*="--i"]) > .acct-seg-pill { translate: 200% 0; }
 .acct-seg button {
   position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: .35rem; padding: .5rem .2rem; border: none; border-radius: 100px;
   background: none; color: var(--slate); font: 600 .8rem var(--font-main); cursor: pointer; transition: color .25s ease;
@@ -1324,3 +1333,9 @@ html .header { top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-lef
    assets/inbox.js puts the bell in (.has-inbox), an empty space the bell's size keeps the chip where it will be */
 :root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden]) { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
 :root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden])::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }
+
+/* Known to be signed out this tab (html.is-guest, set before the first paint): the empty "You" chip isn't shown first,
+   only to be swapped for "Log in" (assets/extras.js, guestHeader) a moment later. The button fades in when it arrives */
+:root.is-guest .me-slot[data-acct-always] > .acct { visibility: hidden; }
+.me-slot > .nl-login { animation: slot-in .3s ease both; }
+@keyframes slot-in { from { opacity: 0; } }

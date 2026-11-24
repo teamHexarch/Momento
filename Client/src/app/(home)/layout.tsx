@@ -4,6 +4,7 @@ import { pageMetadata, pageViewport } from '@/lib/metadata';
 
 // Same order as the original page: the page's own styles first, then the shared glass + touch sheets
 import '@/styles/home.css';
+import '@/styles/fonts.css';   // the site's own web fonts (Inter, and Caveat on Home)
 import '@/styles/glass.css';
 import '@/styles/touch.css';
 import '@/styles/nav-extra.css';   // the header menu's Reviews link
@@ -26,7 +27,7 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
         <SharedHead
           variant="home"
           jsonLd
-          fontsHref="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@400;500;600;700&display=swap"
+          handwriting
         />
       </head>
       <body>{children}</body>

@@ -169,8 +169,16 @@ export function createPageEffects({ hover = 'a, button, input, .live-media', rim
             sizeCanvas();
           }, 150);
         });
+        // While the page scrolls, the silk holds still (it's behind everything, so nobody sees it pause): the frame goes
+        // to the scrolling instead, and it carries on from the same place ~150 ms after scrolling stops
+        let scrolling = false, scrollTimer = 0, drawn = false;
+        addEventListener('scroll', () => {
+          scrolling = true; clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(() => { scrolling = false; }, 150);
+        }, { passive: true });
         renderFluid = (dt) => {
           const k = (rate) => 1 - Math.exp(-dt * rate);
+          if (scrolling && drawn && !flow.dirty && Math.abs(THEME.target - THEME.a) <= .002 && Math.abs(THEME.target - THEME.b) <= .002) return;
           if (!still) flow.t += dt * 0.6;
           // Ease toward the chosen theme (instantly with reduced motion)
           const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
@@ -190,6 +198,8 @@ export function createPageEffects({ hover = 'a, button, input, .live-media', rim
           gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
           gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
           gl.drawArrays(gl.TRIANGLES, 0, 3);
+          // Shown once there is something drawn: before that an opaque canvas is blank (glass.css, canvas.bg)
+          if (!drawn) { drawn = true; canvas.classList.add('is-drawn'); }
         };
       }
     }

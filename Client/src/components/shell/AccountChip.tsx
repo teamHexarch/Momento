@@ -101,11 +101,11 @@ export function MeSlot() {
   );
 }
 
-/** Home: Log in / Sign up while signed out; the chip (built the first time it's needed) once signed in */
+/** Home: Log in / Sign up while signed out; the chip once signed in. The chip is in the page from the start, so someone
+ *  already signed in this tab (html.has-account, set before the first paint) sees it straight away instead of the
+ *  Log in buttons first (home.css) */
 export function HomeAuthArea() {
   const account = useAccount();
-  const [built, setBuilt] = useState(false);
-  useEffect(() => { if (account) setBuilt(true); }, [account]);
   return (
     <div className="auth" id="authArea">
       <div className="auth-out" id="authOut" hidden={!!account}>
@@ -113,7 +113,7 @@ export function HomeAuthArea() {
         <button className="btn btn-pearl" type="button" data-auth="signup">Sign up</button>
       </div>
       <div className="auth-in" data-acct-host="" data-acct-out="authOut" hidden={!account}>
-        {(built || account) && <Chip logoutTo={null} />}
+        <Chip logoutTo={null} />
       </div>
     </div>
   );

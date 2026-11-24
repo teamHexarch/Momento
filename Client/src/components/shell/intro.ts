@@ -20,6 +20,7 @@ export function intro(run: (kit: IntroKit) => unknown) {
   const root = document.documentElement;
   const veil = document.getElementById('intro');
   if (!root.classList.contains('intro-on')) { if (veil) veil.remove(); return; }
+  root.classList.add('intro-run'); // it has started: the boot script's early safety release stands down (headScripts.ts)
   const anims: Animation[] = [], undo: (() => void)[] = [];
   let done = false, revealed = false;
   // The moment the page's own entrance (groups rising in, headings) may begin

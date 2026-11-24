@@ -33,10 +33,16 @@ export function useTrail(mainLoop: boolean) {
     svg.setAttribute('class', 'trail-svg'); path.setAttribute('class', 'trail-line'); svg.append(path);
     let prints: { el: HTMLElement; l: number; on: boolean }[] = [], lut: [number, number][] = [], len = 0, target = 0, drawn = 0, raf = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let builtW = -1, builtH = -1, builtVH = -1;
 
     function build() {
-      host!.replaceChildren(svg); prints = []; lut = [];
       const wr = wrap.getBoundingClientRect(), W = wrap.offsetWidth, H = wrap.offsetHeight;
+      builtW = W; builtH = H; builtVH = innerHeight;
+      // Prints from the last build. With the same width the string is the same curve (only its end moves), so a print
+      // at the same point along it is kept as it is instead of disappearing and reappearing
+      const old = new Map(prints.map((p) => [Math.round(p.l), p]));
+      if (!host!.contains(svg)) host!.replaceChildren(svg);
+      prints = []; lut = [];
       const small = innerWidth < 700, pad = +(host!.dataset.pad || 0) || 26;
       svg.setAttribute('width', String(W)); svg.setAttribute('height', String(H)); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
@@ -91,13 +97,25 @@ export function useTrail(mainLoop: boolean) {
         kept.push({ x, y });
         // It hangs under the string, leaning a little with the string's direction
         const dev = ((Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI - 90 + 540) % 360) - 180;
-        const el = document.createElement('span');
-        el.className = 'tp';
-        el.style.cssText = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * 0.25, -14, 14) + TILT[k % TILT.length] * 0.5).toFixed(1)}deg`;
-        el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
-        host!.append(el);
-        prints.push({ el, l, on: false });
+        const css = `--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--w:${pw}px;--r:${(clamp(dev * 0.25, -14, 14) + TILT[k % TILT.length] * 0.5).toFixed(1)}deg`;
+        const same = old.get(Math.round(l));
+        if (same && same.el.style.cssText.replace(/\s/g, '') === css.replace(/\s/g, '')) {
+          old.delete(Math.round(l));
+          prints.push(same);
+        } else {
+          const el = document.createElement('span');
+          el.className = 'tp';
+          el.style.cssText = css;
+          el.innerHTML = `<img src="assets/photos/${IDS[k % IDS.length]}-96.webp" alt="" loading="lazy" decoding="async" draggable="false">`;
+          host!.append(el);
+          prints.push({ el, l, on: false });
+        }
         k++;
+      }
+      // Prints that no longer fit fade out (their .is-on transition) instead of vanishing
+      for (const p of old.values()) {
+        p.el.classList.remove('is-on');
+        setTimeout(() => p.el.remove(), reduced ? 400 : 700);
       }
       drawn = reduced ? len : Math.min(drawn, len);
       target = reduced ? len : aim();
@@ -135,10 +153,19 @@ export function useTrail(mainLoop: boolean) {
       w.stringTick = () => { if (drawn !== target) step(); };
       if (!reduced) w.stringScrolled = (sy) => { const t = aim(sy); if (t !== target) { target = t; kick(); } };
     } else if (!reduced) addEventListener('scroll', onScroll, { passive: true });
-    const ro = new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(build, 250); });
+    // Measuring the page is a long task, so it runs when the browser is idle, never in the middle of an animation
+    const idle = (fn: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 1000 }) : setTimeout(fn, 0));
+    const soon = (ms: number) => { clearTimeout(timer); timer = setTimeout(() => idle(build), ms); };
+    // Only a real change of size rebuilds it: a width change, or the page growing or shrinking by more than a little
+    // (content arriving, a section opening). Small changes left the string and its prints jumping for nothing.
+    const ro = new ResizeObserver(() => {
+      if (builtW < 0) { soon(250); return; }
+      const W = wrap.offsetWidth, H = wrap.offsetHeight;
+      if (W !== builtW || Math.abs(H - builtH) > 40 || Math.abs(innerHeight - builtVH) > 80) soon(250);
+    });
     ro.observe(wrap);
     // Text that is still rising into place when the page first measures is measured again once it has settled
-    const later = (ms: number) => () => { clearTimeout(timer); timer = setTimeout(build, ms); };
+    const later = (ms: number) => () => soon(ms);
     const onLoad = later(1800), onIntroEnd = later(1600);
     // (the page's load, as the old scripts see it: once they have all run)
     const cancelLoad = onLegacyReady(onLoad);
@@ -177,7 +204,9 @@ export function usePageLeave() {
       // The next page reads this mark and rises in (headScripts.ts, is-arriving), so the switch is one motion out and in
       try { sessionStorage.setItem('momento-pt', '1'); } catch {}
       if (ptFile) root.classList.add('pt-file');
-      setTimeout(() => { location.href = url.href; }, 240);
+      // The next page starts loading straight away; this page keeps fading out while it does (it used to wait 240 ms
+      // before even asking for it). One frame first, so the fade has started before the browser is busy navigating.
+      requestAnimationFrame(() => { location.href = url.href; });
     };
     const onShow = (e: PageTransitionEvent) => { if (e.persisted) root.classList.remove('is-leaving'); }; // back from the page cache
     document.addEventListener('click', onClick);

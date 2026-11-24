@@ -147,8 +147,16 @@ export default function start() {
             sizeCanvas();
           }, 150);
         });
+        // While the page scrolls, the silk holds still (it's behind everything, so nobody sees it pause): the frame goes
+        // to the scrolling instead, and it carries on from the same place ~150 ms after scrolling stops
+        let scrolling = false, scrollTimer = 0, drawn = false;
+        addEventListener('scroll', () => {
+          scrolling = true; clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(() => { scrolling = false; }, 150);
+        }, { passive: true });
         renderFluid = (dt) => {
           const k = (rate) => 1 - Math.exp(-dt * rate);
+          if (scrolling && drawn && !flow.dirty && Math.abs(THEME.target - THEME.a) <= .002 && Math.abs(THEME.target - THEME.b) <= .002) return;
           if (!still) flow.t += dt * 0.6;
           // Ease toward the chosen theme (instantly with reduced motion)
           const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
@@ -168,6 +176,8 @@ export default function start() {
           gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
           gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
           gl.drawArrays(gl.TRIANGLES, 0, 3);
+          // Shown once there is something drawn: before that an opaque canvas is blank (glass.css, canvas.bg)
+          if (!drawn) { drawn = true; canvas.classList.add('is-drawn'); }
         };
       }
     }
@@ -1624,7 +1634,10 @@ export default function start() {
     // ---- Intro (once per tab): the glyph appears, the sunset "o" rises and slides along, and the letters
     // of the name appear behind it. The logo then lands in the header, the QR code settles in on its own
     // (its code blooming out from the middle), and the headline rises ----
-    document.addEventListener('DOMContentLoaded', () => window.Momento.intro(async (I) => {
+    // It starts as soon as this code runs (right after hydration), not on the replayed DOMContentLoaded, which only
+    // comes once every shared script has downloaded: on a slow connection the veil sat there, blank, until then.
+    // It only drives its own elements, so it needs nothing from those scripts.
+    const runIntro = () => window.Momento.intro(async (I) => {
       const $ = (s, r = document) => r.querySelector(s);
       const lock = $('#introLock'), glyph = $('#ilGlyph'), word = $('#ilWord'), sun = $('#ilSun');
       const letters = [...word.querySelectorAll('.ltr')];
@@ -1695,5 +1708,6 @@ export default function start() {
       await I.wait(1000); qr.classList.add('is-scanning');   // once the code has drawn in, the viewfinder closes in, like a lock
       await I.wait(420); qr.classList.remove('is-scanning');
       await Promise.all(flights);
-    }));
+    });
+    if (window.Momento?.intro) runIntro(); else document.addEventListener('DOMContentLoaded', runIntro);
 }

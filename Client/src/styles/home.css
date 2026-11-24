@@ -986,6 +986,12 @@
     .auth > * { flex: none; white-space: nowrap; }
     .auth-out { display: flex; align-items: center; gap: .35rem; }
     .auth-out[hidden], .auth-in[hidden] { display: none; }
+    /* Signed in earlier in this tab (html.has-account, set before the first paint, kept up to date by AccountProvider):
+       the chip shows from the start instead of Log in / Sign up first. With the bell's place held (glass.css, .bell-ready) */
+    :root.has-account .auth-out { display: none; }
+    :root.has-account .auth-in[hidden] { display: block; }
+    :root.has-account.bell-ready .auth-in[hidden]:not(.has-inbox) { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
+    :root.has-account.bell-ready .auth-in[hidden]:not(.has-inbox)::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }
     .auth .btn { min-height: 2.75rem; padding: 0 1.2rem; font-size: .88rem; }
     @media (max-width: 900px) {
       .auth-login { padding: .6rem .85rem; }

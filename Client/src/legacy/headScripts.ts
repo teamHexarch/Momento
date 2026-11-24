@@ -45,6 +45,13 @@ const bootTemplate = `
   root.dataset.themePref = pref;
   window.__theme = { target: +dark, a: +dark, b: +dark };   // read by the silk shader
 
+  // Signed in (or known to be signed out) earlier in this tab: the header shows the right buttons from the first
+  // paint, not the signed-out ones until the server has answered (AccountProvider keeps these classes up to date)
+  try {
+    if (sessionStorage.getItem('momento-account')) root.classList.add('has-account');
+    else if (sessionStorage.getItem('momento-guest') === '1') root.classList.add('is-guest');
+  } catch (e) {}
+
   // Pages opened straight from the folder (file://) can't cross-fade into each other, so the page
   // that was left marks it, and this one rises in instead (see "Leaving a page")
   try {
@@ -64,11 +71,15 @@ const bootTemplate = `
     const page = root.dataset.page, seen = sessionStorage.getItem('momento-intro-' + page);
     if (__INTRO_PAGE__ && !matchMedia('(prefers-reduced-motion: reduce)').matches && (/[?&]intro\\b/.test(location.search) || (!seen && !location.hash))) {
       root.classList.add('intro-on');
-      setTimeout(() => {
+      const lift = () => {
         if (!root.classList.contains('intro-on')) return;
         root.classList.remove('intro-on');
         document.dispatchEvent(new Event('momento:intro-reveal')); document.dispatchEvent(new Event('momento:intro-end'));
-      }, 10000);
+      };
+      // Not started 3.5 s in (its script is slow or failed): the page is shown rather than a blank veil. Once it has
+      // started (.intro-run) it ends itself; 10 s is the last resort either way
+      setTimeout(() => { if (!root.classList.contains('intro-run')) lift(); }, 3500);
+      setTimeout(lift, 10000);
     }
   } catch (e) {}
 })();
@@ -107,6 +118,35 @@ export const EXTENSION_ATTR_GUARD = `
   sweep();
 })();
 `;
+
+// Inter starts downloading with the page, except on Apple devices: there the font stacks' first choice, the system font
+// (-apple-system), is always there, so Inter is never used. It is added at the end of <head> (see THEME_COLOR_SYNC).
+export const INTER_PRELOAD = `
+(() => {
+  if (/Mac OS X|iPhone|iPad|iPod/.test(navigator.userAgent)) return;
+  const l = document.createElement('link');
+  l.rel = 'preload'; l.as = 'font'; l.type = 'font/woff2'; l.crossOrigin = ''; l.href = '/assets/fonts/inter-latin.woff2';
+  document.head.append(l);
+})();
+`;
+
+// Page switches: when the pointer rests on a link to another Momento page (or it is pressed, on touch), Chrome and Edge
+// fetch that page ahead, so the click opens it straight from memory. Only the page itself is fetched (no scripts run
+// until it is opened). Browsers without speculation rules ignore this tag.
+export const SPECULATION_RULES = JSON.stringify({
+  prefetch: [{
+    source: 'document',
+    where: {
+      and: [
+        { href_matches: '/*' },
+        { not: { href_matches: '/assets/*' } },
+        { not: { href_matches: '/*?*embed*' } },   // (URL pattern: the part after ? is the query)
+        { not: { selector_matches: '[target], [download], [rel~="nofollow"]' } },
+      ],
+    },
+    eagerness: 'moderate',
+  }],
+});
 
 export const JSON_LD = JSON.stringify({
   '@context': 'https://schema.org',

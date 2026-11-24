@@ -4,6 +4,7 @@ import { pageViewport } from '@/lib/metadata';
 
 // Same order as the original page: the map library's sheet (pinned, bundled here), the page's styles, the shared glass + touch sheets, then the event-albums sheet
 import '@/styles/maplibre-gl.css';
+import '@/styles/fonts.css';   // the site's own web fonts (Inter, and Caveat on Home)
 import '@/styles/events.css';
 import '@/styles/glass.css';
 import '@/styles/touch.css';
@@ -19,7 +20,6 @@ export default function EventsLayout({ children }: { children: React.ReactNode }
       <head>
         <SharedHead
           variant="inner"
-          fontsHref="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
         />
       </head>
       <body>{children}</body>
