@@ -1481,23 +1481,59 @@ export default function start() {
       vwSwipe.classList.add('is-gone');
       setTimeout(() => { vwSwipe.hidden = true; }, 420);
     }
+    // The zoom (see "Zoom" below) and the gesture under way on the photo
+    const Z = { s: 1, x: 0, y: 0, fit: null, max: 6, raf: 0, tick: 0, anim: null, fling: null };
+    let gz = null, g = null, lastTap = null, tapTimer = 0;
+    const fingers = new Map();
     const urlAt = (i) => { const p = M.a?.photoItems?.[i]; return p ? (p.url || pic(M.a.pics[i], 1600, 1000)) : ''; };
     const sideOff = () => innerWidth + SLIDE_GAP;
-    // Where the three photos sit, dx pixels into a swipe
+    // Photos already fetched and decoded, kept (the last few dozen) so moving back and forth never waits or
+    // flickers. A photo that's ready swaps in on the very next frame
+    const imgCache = new Map();
+    function cacheImg(url) {
+      if (!url) return null;
+      let c = imgCache.get(url);
+      if (c) { imgCache.delete(url); imgCache.set(url, c); return c; }
+      const img = new Image(); img.decoding = 'async'; img.src = url;
+      c = { img, ready: false };
+      c.p = img.decode().then(() => { c.ready = true; }, () => { c.ready = img.complete && img.naturalWidth > 0; });
+      imgCache.set(url, c);
+      while (imgCache.size > 40) imgCache.delete(imgCache.keys().next().value);
+      return c;
+    }
+    const isReady = (url) => { const c = url && imgCache.get(url); return !!c && (c.ready || (c.img.complete && c.img.naturalWidth > 0)); };
+    // Where the three photos sit, dx pixels into a swipe (a zoomed photo keeps its own place)
     function place(dx) {
       const off = sideOff();
-      vwImg.style.transform = dx ? `translate3d(${dx}px, 0, 0)` : '';
+      if (!isZoomed()) vwImg.style.transform = dx ? `translate3d(${dx}px, 0, 0)` : '';
       vwPrevImg.style.transform = `translate3d(${dx - off}px, 0, 0)`;
       vwNextImg.style.transform = `translate3d(${dx + off}px, 0, 0)`;
     }
-    // The photos either side load in the background, so a swipe shows them straight away
+    // The photos either side, ready for a swipe. A picture keeps showing its old photo until its new one has
+    // loaded, so a side whose photo isn't ready shows that photo's small grid picture instead (stretched to the
+    // full size's place), or nothing at all: never the photo you're already looking at
+    function fillSide(el, i) {
+      if (i == null) { el.removeAttribute('src'); el.dataset.want = ''; return; }
+      const url = urlAt(i), small = thumbAt(i);
+      if (el.dataset.want === url && el.getAttribute('src')) return;
+      el.dataset.want = url;
+      el.decoding = 'async';
+      const sharp = () => { if (el.dataset.want !== url) return; el.style.width = ''; el.style.height = ''; el.style.opacity = ''; el.src = url; };
+      cacheImg(url);
+      if (isReady(url)) { sharp(); return; }
+      el.style.opacity = '0';
+      const th = cacheImg(small);
+      const blurry = () => {
+        if (el.dataset.want !== url || isReady(url) || !th?.img.naturalWidth) return;
+        const [w, h] = fitBox(th.img.naturalWidth, th.img.naturalHeight);
+        el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.opacity = ''; el.src = small;
+      };
+      if (th && isReady(small)) blurry(); else th?.p.then(blurry);
+      imgCache.get(url).p.then(sharp);
+    }
     function paintSides() {
-      for (const [el, d] of [[vwPrevImg, -1], [vwNextImg, 1]]) {
-        const t = stepTarget(d);
-        if (t == null) { el.removeAttribute('src'); continue; }
-        const u = urlAt(t);
-        if (el.getAttribute('src') !== u) { el.decoding = 'async'; el.src = u; }
-      }
+      fillSide(vwPrevImg, stepTarget(-1));
+      fillSide(vwNextImg, stepTarget(1));
       place(0);
     }
     // Puts photo i on the main image straight away, so the last photo never lingers while the new one loads:
@@ -1512,28 +1548,38 @@ export default function start() {
     }
     function setPhoto(i, alt) {
       const seq = ++vwSeq, url = urlAt(i), small = thumbAt(i);
-      const sharp = () => { vwImg.style.width = ''; vwImg.style.height = ''; vwImg.style.opacity = ''; vwImg.src = url; vwImg.alt = alt; };
-      const full = new Image(); full.decoding = 'async'; full.src = url;
-      if (full.complete && full.naturalWidth) { sharp(); return; }
-      const thumb = new Image(); thumb.src = small;
+      const sharp = () => {
+        if (seq !== vwSeq) return;
+        vwImg.style.width = ''; vwImg.style.height = ''; vwImg.style.opacity = ''; vwImg.src = url; vwImg.alt = alt;
+        if (isZoomed()) zRefit();   // the sharp photo can be a touch different in shape from its grid picture
+      };
+      const full = cacheImg(url);
+      if (isReady(url)) { sharp(); return; }
+      const th = cacheImg(small);
       const blurry = () => {
-        if (seq !== vwSeq || !thumb.naturalWidth) return;
-        const [w, h] = fitBox(thumb.naturalWidth, thumb.naturalHeight);
+        if (seq !== vwSeq || isReady(url) || !th?.img.naturalWidth) return;
+        const [w, h] = fitBox(th.img.naturalWidth, th.img.naturalHeight);
         vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px'; vwImg.style.opacity = '';
         vwImg.src = small; vwImg.alt = alt;
       };
-      if (small && thumb.complete && thumb.naturalWidth) blurry();
+      if (th && isReady(small)) blurry();
       else {
         // Nothing of this photo is loaded yet: hide the last one rather than show the wrong photo
         vwImg.style.opacity = '0';
-        thumb.decode().then(blurry, () => {});
+        th?.p.then(blurry);
       }
-      full.decode().catch(() => {}).then(() => { if (seq === vwSeq && !viewer.classList.contains('is-zoomed')) sharp(); });
+      full.p.then(sharp);
     }
     // The next two photos either way load in the background too, so moving along never waits
     function prefetchAround() {
-      for (const d of [2, -2]) { const t = stepTarget(d > 0 ? 1 : -1) != null ? stepTarget(d) : null; if (t != null) { const im = new Image(); im.decoding = 'async'; im.src = urlAt(t); } }
+      for (const d of [1, -1, 2, -2]) {
+        if (Math.abs(d) === 2 && stepTarget(d / 2) == null) continue;
+        const t = stepTarget(d);
+        if (t != null) { cacheImg(urlAt(t)); cacheImg(thumbAt(t)); }
+      }
     }
+    // While photos are flying past, the soft glow behind them changes once they stop, not on every one
+    let lastLoadAt = 0, ambT = 0;
     function vwLoad(fade) {
       const p = current();
       if (!p) return;
@@ -1543,7 +1589,10 @@ export default function start() {
       if (!viewer.open) vwPaint();
       setPhoto(M.i, `Photo ${M.i + 1}${p.by ? ', added by ' + p.by : ''}`);
       paintSides();
-      setAmbient(thumbAt(M.i));
+      const now = performance.now(), quick = now - lastLoadAt < 350;
+      lastLoadAt = now;
+      clearTimeout(ambT);
+      if (quick && viewer.open) ambT = setTimeout(() => setAmbient(thumbAt(M.i)), 180); else setAmbient(thumbAt(M.i));
       paintFilm();
       prefetchAround();
       prefetchWho(p);
@@ -1553,25 +1602,30 @@ export default function start() {
       vwImg.getAnimations().forEach((a) => a.cancel());
       vwImg.animate([{ opacity: .35, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: SOFT_EASE });
     }
-    // Slide to the next (1) or previous (-1) photo, carrying on from dx pixels into a swipe. False at either end
-    function slideTo(d, fromDx = 0, speed = 0) {
+    // Slide to the next (1) or previous (-1) photo, carrying on from dx pixels into a swipe. False at either end.
+    // `quick`: more slides are waiting (fast swipes, a held arrow key), so this one goes faster
+    function slideTo(d, fromDx = 0, speed = 0, quick = false) {
       const t = stepTarget(d);
       if (t == null || sliding) return false;
       if (still) { show(t); return true; }
       sliding = true;
+      fillSide(d > 0 ? vwNextImg : vwPrevImg, t);   // (already there, unless the album just changed)
       const off = sideOff(), side = d > 0 ? vwNextImg : vwPrevImg, left = Math.abs(-d * off - fromDx);
       // Quicker when the finger was moving fast, never slower than a calm 340ms
-      const duration = clamp(speed ? left / Math.max(Math.abs(speed) * 1.6, .9) : 340, 160, 340);
-      const go = (el, a) => el.animate([{ transform: `translate3d(${a}px, 0, 0)` }, { transform: `translate3d(${a - d * off - fromDx}px, 0, 0)` }], { duration, easing: 'cubic-bezier(.2, .9, .3, 1)', fill: 'forwards' });
+      const duration = quick ? 190 : clamp(speed ? left / Math.max(Math.abs(speed) * 1.6, .9) : 340, 160, 340);
+      const go = (el, a) => el.animate([{ transform: `translate3d(${a}px, 0, 0)` }, { transform: `translate3d(${a - d * off - fromDx}px, 0, 0)` }], { duration, easing: quick ? 'cubic-bezier(.3, .7, .4, 1)' : 'cubic-bezier(.2, .9, .3, 1)', fill: 'forwards' });
       const runs = [go(vwImg, fromDx), go(vwPrevImg, fromDx - off), go(vwNextImg, fromDx + off)];
       paintFilm(t);   // the strip moves with the photo, not after it
       hideSwipeHint(true);
-      runs[0].finished.then(async () => {
-        // The main photo takes over the picture that slid in (already loaded), then everything snaps back home unseen
+      runs[0].finished.then(() => {
+        // The main photo takes over exactly what slid in (the same picture, at the same size), then everything
+        // snaps back home unseen. It sharpens by itself if that was still the small picture
         M.i = t;
-        vwImg.src = side.currentSrc || side.src;
-        // (never wait long: a photo still loading mustn't hold up the next swipe; it sharpens when it arrives)
-        try { await Promise.race([vwImg.decode(), new Promise((r) => setTimeout(r, 400))]); } catch {}
+        vwSeq++;
+        vwImg.style.width = side.style.width; vwImg.style.height = side.style.height; vwImg.style.opacity = side.style.opacity;
+        const src = side.getAttribute('src');
+        if (src) vwImg.src = src; else vwImg.style.opacity = '0';
+        side.dataset.want = '';
         runs.forEach((a) => a.cancel());
         sliding = false;
         vwLoad(false);
@@ -1580,12 +1634,24 @@ export default function start() {
       navigator.vibrate?.(4);
       return true;
     }
-    // A swipe made while the last slide was still running carries straight on once it lands
+    // Swipes and arrow presses made while a slide is still running add up, and carry straight on once it lands.
+    // Three or more waiting: it jumps straight there rather than making you watch every photo go by
     let queuedSlide = 0;
+    const queueSlide = (d) => { queuedSlide = clamp(queuedSlide + d, -30, 30); };
     function runQueuedSlide() {
-      const d = queuedSlide;
+      const q = queuedSlide;
       queuedSlide = 0;
-      if (d && viewer.open && !viewer._closing && !sliding) slideTo(d);
+      if (!q || !viewer.open || viewer._closing || sliding) return;
+      const d = Math.sign(q);
+      if (Math.abs(q) >= 3) {
+        const at = M.i;
+        let t = at;
+        for (let k = 0; k < Math.abs(q); k++) { M.i = t; const n = stepTarget(d); if (n == null) break; t = n; }
+        M.i = at;
+        if (t !== at) { show(t); hideSwipeHint(true); }
+        return;
+      }
+      if (slideTo(d, 0, 0, true)) queuedSlide = q - d;
     }
     // Back into place after a swipe that didn't go far enough (or ran into the first or last photo)
     function settleX(fromDx) {
@@ -1602,6 +1668,7 @@ export default function start() {
       vwBg.style.opacity = '';
       vwLoad(false);
       vwHint.hidden = vwHinted; vwHinted = true;
+      if (!finePointer) vwHint.textContent = 'Pinch to zoom. Double-tap to react with a ❤️';
       viewer.showModal();
       vwFilm._shown = false; paintFilm();
       showSwipeHint();
@@ -1655,7 +1722,8 @@ export default function start() {
     }
     // Arrow keys and the arrow buttons: slide along, going round from the last photo to the first
     const vwStep = (d) => {
-      if (sliding || slideTo(d)) return;
+      if (sliding) { queueSlide(d); return; }   // (pressed again mid-slide: it carries on once this one lands)
+      if (slideTo(d)) return;
       const t = stepTarget(d, true);
       if (t != null) show(t);
     };
@@ -1717,129 +1785,292 @@ export default function start() {
     document.getElementById('vwNext').addEventListener('click', () => vwStep(1));
     document.getElementById('vwDownload').addEventListener('click', () => { const p = current(); if (p) location.href = p.downloadUrl || window.MOMENTO_API + '/api/photos/' + p.id + '/download'; });
     vwMark.addEventListener('click', () => setBookmark(!isBookmarked(current())));
-    viewer.addEventListener('cancel', (e) => { e.preventDefault(); if (viewer.classList.contains('is-zoomed')) unzoom(); else closeViewer(); });
+    viewer.addEventListener('cancel', (e) => { e.preventDefault(); if (isZoomed()) unzoom(true); else closeViewer(); });
     viewer.addEventListener('keydown', (e) => {
       if (e.target.closest?.('input, .rx-picker, .rx-who')) return;   // typing a search, or moving through the emoji
+      // Zoomed, the arrow keys look around the photo; otherwise left and right move between photos
+      const PAN = { ArrowLeft: [1, 0], ArrowRight: [-1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+      if (PAN && isZoomed() && zMeasure()) { e.preventDefault(); const [x, y] = zClampXY(Z.s, Z.x + PAN[0] * 120, Z.y + PAN[1] * 120); zAnimTo(Z.s, x, y, 180); return; }
       if (e.key === 'ArrowRight') { e.preventDefault(); vwStep(1); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); vwStep(-1); }
-      else if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zoomLevel() * 1.5); }
-      else if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoom(zoomLevel() / 1.5); }
-      else if (e.key === '0') { e.preventDefault(); unzoom(); }
+      else if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zTarget() * 1.5, undefined, undefined, true); }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoom(zTarget() / 1.5, undefined, undefined, true); }
+      else if (e.key === '0') { e.preventDefault(); unzoom(true); }
     });
-    // Zoom: a click (or a pinch) shows the photo at its real size (at least twice the fitted size), centred on
-    // the spot you picked; drag to look around; a click or tap without dragging fits it again
-    // Beyond that: the - and + buttons (and the + - 0 keys), Ctrl + the mouse wheel or a trackpad pinch, and a pinch on a
-    // phone zoom in steps up to 6 times the fitted size, keeping the spot under the pointer where it is
-    const Z_MAX = 6, vwZoomIn = document.getElementById('vwZoomIn'), vwZoomOut = document.getElementById('vwZoomOut'), vwZoomFit = document.getElementById('vwZoomFit');
-    let zoomLv = 1, zoomFit = null;
-    const zoomLevel = () => (viewer.classList.contains('is-zoomed') ? zoomLv : 1);
+    // Zoom: the photo keeps its fitted size and is scaled and moved with a transform, so zooming and looking
+    // around never re-lays out the page and stays smooth. Every way in zooms around the spot under the pointer
+    // (or between your fingers), from the fitted size up to Z.max:
+    //   a pinch on a phone (as many times as you like, in or out), a trackpad pinch on a Mac or a laptop
+    //   (Safari's own pinch too), Ctrl or ⌘ + the wheel, the mouse wheel, a click, the − and + buttons, + − 0.
+    // Zoomed: drag (a finger, the mouse, a trackpad scroll or the arrow keys) to look around. It glides on a
+    // little after a flick, gives a little at the edges, and never leaves the photo's edge inside the screen
+    const vwZoomIn = document.getElementById('vwZoomIn'), vwZoomOut = document.getElementById('vwZoomOut'), vwZoomFit = document.getElementById('vwZoomFit');
+    const zoomLevel = () => Z.s;
+    function isZoomed() { return Z.s > 1.01; }
+    // The photo's fitted size and centre on screen (transforms don't change these, so this is cheap and exact)
+    function zMeasure() {
+      const w = vwImg.offsetWidth, h = vwImg.offsetHeight;
+      if (!w || !h) return false;
+      const sr = vwStage.getBoundingClientRect();
+      Z.fit = { w, h, cx: sr.left + vwImg.offsetLeft + w / 2, cy: sr.top + vwImg.offsetTop + h / 2 };
+      Z.max = clamp(((vwImg.naturalWidth || w) / w) * 2, 6, 10);
+      return true;
+    }
+    // How far the photo may move at scale s: its edges stay at or beyond the screen's (a photo still smaller
+    // than the screen one way may sit anywhere that way, as long as all of it stays on screen)
+    function zBounds(s) {
+      const f = Z.fit, W = f.w * s, H = f.h * s, vw = innerWidth, vh = innerHeight;
+      const rx = W > vw ? [vw - f.cx - W / 2, W / 2 - f.cx] : [W / 2 - f.cx, vw - f.cx - W / 2];
+      const ry = H > vh ? [vh - f.cy - H / 2, H / 2 - f.cy] : [H / 2 - f.cy, vh - f.cy - H / 2];
+      // (at the fitted size the photo stays exactly where it sits)
+      const k = clamp((s - 1) / .25, 0, 1);
+      return { x0: Math.min(0, rx[0]) * (1 - k) + rx[0] * k, x1: Math.max(0, rx[1]) * (1 - k) + rx[1] * k, y0: Math.min(0, ry[0]) * (1 - k) + ry[0] * k, y1: Math.max(0, ry[1]) * (1 - k) + ry[1] * k };
+    }
+    const zClampXY = (s, x, y) => { const b = zBounds(s); return [clamp(x, b.x0, b.x1), clamp(y, b.y0, b.y1)]; };
+    // Past an edge it gives a little, like a rubber band
+    const give = (v, lo, hi) => (v < lo ? lo - (lo - v) / (1 + (lo - v) / 160) : v > hi ? hi + (v - hi) / (1 + (v - hi) / 160) : v);
+    // Where the photo goes so that the spot under (px, py) stays under it at scale s
+    function zAround(s, px, py) {
+      const f = Z.fit, qx = (px - f.cx - Z.x) / Z.s, qy = (py - f.cy - Z.y) / Z.s;
+      return [px - f.cx - s * qx, py - f.cy - s * qy];
+    }
+    function zDraw() {
+      cancelAnimationFrame(Z.raf); Z.raf = 0;
+      const moved = Z.s > 1.001 || Math.abs(Z.x) > .5 || Math.abs(Z.y) > .5;
+      vwImg.style.transform = moved ? `translate3d(${Z.x}px, ${Z.y}px, 0) scale(${Z.s})` : '';
+      const z = isZoomed();
+      if (viewer.classList.contains('is-zoomed') !== z) {
+        viewer.classList.toggle('is-zoomed', z); vwStage.classList.toggle('is-zoomed', z);
+        if (z) { vwHint.hidden = true; if (openPick) closePicker(false); }
+      }
+      paintZoom();
+    }
+    const zQueue = () => { if (!Z.raf) Z.raf = requestAnimationFrame(zDraw); };
+    // While the photo moves it's kept on its own layer; once it rests it's drawn again, sharp at the new size
+    const zMoving = (on) => vwStage.classList.toggle('is-moving', on);
+    function zStop() { Z.anim = null; Z.fling = null; cancelAnimationFrame(Z.tick); Z.tick = 0; }
+    function zTick(now) {
+      Z.tick = 0;
+      if (Z.anim) {
+        const a = Z.anim, t = Math.min(1, (now - a.t0) / a.dur), e = easeOut(t);
+        Z.s = lerp(a.s0, a.s1, e); Z.x = lerp(a.x0, a.x1, e); Z.y = lerp(a.y0, a.y1, e);
+        if (t >= 1) Z.anim = null;
+      } else if (Z.fling) {
+        // Gliding on after a flick, slowing down; at an edge it stops quickly and settles back
+        const f = Z.fling, dt = Math.min(32, now - f.t);
+        f.t = now;
+        Z.x += f.vx * dt; Z.y += f.vy * dt;
+        const b = zBounds(Z.s), out = Z.x < b.x0 || Z.x > b.x1 || Z.y < b.y0 || Z.y > b.y1;
+        const decay = Math.pow(out ? .6 : .95, dt / 16);
+        f.vx *= decay; f.vy *= decay;
+        if (Math.hypot(f.vx, f.vy) < .03) { Z.fling = null; zDraw(); zSettle(); return; }
+      }
+      zDraw();
+      if (Z.anim || Z.fling) Z.tick = requestAnimationFrame(zTick); else zMoving(false);
+    }
+    function zAnimTo(s, x, y, dur = 280) {
+      zStop();
+      if (still) { Z.s = s; Z.x = x; Z.y = y; zDraw(); zMoving(false); return; }
+      Z.anim = { s0: Z.s, x0: Z.x, y0: Z.y, s1: s, x1: x, y1: y, t0: performance.now(), dur };
+      zMoving(true);
+      Z.tick = requestAnimationFrame(zTick);
+    }
+    function zFling(vx, vy) {
+      zStop();
+      Z.fling = { vx: clamp(vx, -4, 4), vy: clamp(vy, -4, 4), t: performance.now() };
+      zMoving(true);
+      Z.tick = requestAnimationFrame(zTick);
+    }
+    // After a pinch or a drag: back within the limits (zoom and edges), smoothly
+    function zSettle(px = innerWidth / 2, py = innerHeight / 2) {
+      if (!Z.fit && !zMeasure()) return;
+      if (Z.s < 1.02) { zAnimTo(1, 0, 0); return; }
+      const s = Math.min(Z.s, Z.max);
+      let [x, y] = s !== Z.s ? zAround(s, px, py) : [Z.x, Z.y];
+      [x, y] = zClampXY(s, x, y);
+      if (Math.abs(s - Z.s) < .001 && Math.abs(x - Z.x) < .5 && Math.abs(y - Z.y) < .5) { Z.s = s; Z.x = x; Z.y = y; zDraw(); zMoving(false); return; }
+      zAnimTo(s, x, y, 300);
+    }
+    // The layout changed under a zoomed photo (a new window size, the sharp photo arriving): measure again
+    function zRefit() { if (!zMeasure()) return; [Z.x, Z.y] = zClampXY(Z.s, Z.x, Z.y); zDraw(); }
+    const zTarget = () => (Z.anim ? Z.anim.s1 : Z.s);
     function paintZoom() {
-      const lv = zoomLevel();
-      vwZoomFit.textContent = lv > 1.01 ? `${Math.round(lv * 10) / 10}×` : 'Fit';
-      vwZoomOut.disabled = lv <= 1.01; vwZoomIn.disabled = lv >= Z_MAX - 0.01;
+      const lv = zoomLevel(), text = lv > 1.01 ? `${Math.round(lv * 10) / 10}×` : 'Fit';
+      if (vwZoomFit.textContent !== text) vwZoomFit.textContent = text;
+      const outOff = lv <= 1.01, inOff = lv >= Z.max - .01;
+      if (vwZoomOut.disabled !== outOff) vwZoomOut.disabled = outOff;
+      if (vwZoomIn.disabled !== inOff) vwZoomIn.disabled = inOff;
     }
     function setZoom(lv, x = innerWidth / 2, y = innerHeight / 2, animate = false) {
-      lv = clamp(lv, 1, Z_MAX);
-      if (lv < 1.02) { unzoom(); return; }
-      const zoomed = viewer.classList.contains('is-zoomed');
-      if (!zoomed) { vwImg.style.transform = ''; const r0 = vwImg.getBoundingClientRect(); if (!r0.width) return; zoomFit = { w: r0.width, h: r0.height }; }
-      const r = vwImg.getBoundingClientRect();
-      const fx = clamp((x - r.left) / r.width, 0, 1), fy = clamp((y - r.top) / r.height, 0, 1);
-      const w = zoomFit.w * lv, h = zoomFit.h * lv;
-      viewer.classList.add('is-zoomed'); vwStage.classList.add('is-zoomed');
-      vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px';
-      // keep the spot under the pointer (or the middle of the screen) where it is
-      const ir = vwImg.getBoundingClientRect();
-      vwStage.scrollLeft += ir.left + fx * w - x;
-      vwStage.scrollTop += ir.top + fy * h - y;
-      zoomLv = lv; paintZoom(); vwHint.hidden = true;
-      if (animate && !still) vwImg.animate([{ transform: `scale(${r.width / w})`, transformOrigin: `${fx * 100}% ${fy * 100}%` }, { transform: 'none', transformOrigin: `${fx * 100}% ${fy * 100}%` }], { duration: 260, easing: SOFT_EASE });
+      if (!zMeasure()) return;
+      Z.anim = null; Z.fling = null;
+      const s = clamp(lv, 1, Z.max);
+      let [tx, ty] = zAround(s, x, y);
+      [tx, ty] = zClampXY(s, tx, ty);
+      if (animate) zAnimTo(s, tx, ty);
+      else { zStop(); Z.s = s; Z.x = tx; Z.y = ty; zDraw(); }
     }
-    vwZoomIn.addEventListener('click', () => setZoom(zoomLevel() * 1.5, undefined, undefined, true));
-    vwZoomOut.addEventListener('click', () => setZoom(zoomLevel() / 1.5));
-    vwZoomFit.addEventListener('click', () => unzoom());
-    // Ctrl + the wheel (a trackpad pinch arrives like this too) zooms around the pointer; the plain wheel still scrolls
-    vwStage.addEventListener('wheel', (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      setZoom(zoomLevel() * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
-    }, { passive: false });
-    function unzoom() {
-      viewer.classList.remove('is-zoomed'); vwStage.classList.remove('is-zoomed', 'is-dragging');
-      vwImg.style.width = ''; vwImg.style.height = '';
-      zoomLv = 1; paintZoom();
-    }
-    function zoomAt(x, y) {
-      vwImg.style.transform = '';
-      const r = vwImg.getBoundingClientRect();
-      if (!r.width) return;
-      const fx = clamp((x - r.left) / r.width, 0, 1), fy = clamp((y - r.top) / r.height, 0, 1);
-      const w = Math.max(vwImg.naturalWidth, r.width * 2), h = w * (r.height / r.width);
-      zoomFit = { w: r.width, h: r.height }; zoomLv = Math.min(Z_MAX, w / r.width);
-      viewer.classList.add('is-zoomed'); vwStage.classList.add('is-zoomed');
-      vwImg.style.width = w + 'px'; vwImg.style.height = h + 'px';
-      vwStage.scrollLeft = fx * w - innerWidth / 2;
-      vwStage.scrollTop = fy * h - innerHeight / 2;
+    vwZoomIn.addEventListener('click', () => setZoom(zTarget() * 1.5, undefined, undefined, true));
+    vwZoomOut.addEventListener('click', () => setZoom(zTarget() / 1.5, undefined, undefined, true));
+    vwZoomFit.addEventListener('click', () => unzoom(true));
+    function unzoom(animate = false) {
+      gz = null;
+      if (animate && !still && (isZoomed() || Z.anim)) { if (Z.fit || zMeasure()) { zAnimTo(1, 0, 0); return; } }
+      zStop();
+      const was = Z.s !== 1 || Z.x || Z.y;
+      Z.s = 1; Z.x = 0; Z.y = 0;
+      cancelAnimationFrame(Z.raf); Z.raf = 0;
+      if (was) vwImg.style.transform = '';
+      viewer.classList.remove('is-zoomed'); vwStage.classList.remove('is-zoomed', 'is-dragging', 'is-moving');
       paintZoom();
-      if (!still) vwImg.animate([{ transform: `scale(${r.width / w})`, transformOrigin: `${fx * 100}% ${fy * 100}%` }, { transform: 'none', transformOrigin: `${fx * 100}% ${fy * 100}%` }], { duration: 320, easing: SOFT_EASE });
-      vwHint.hidden = true;
     }
+    // A click (or the first of a pinch's steps from the keys) on the fitted photo: 2.5×, on the spot you picked
+    function zoomAt(x, y) { setZoom(2.5, x, y, true); }
+
+    // The wheel. A trackpad pinch (Chrome, Edge, Firefox) and Ctrl or ⌘ + the wheel always zoom. A mouse wheel
+    // zooms too. A two-finger trackpad scroll zooms in from the fitted size, and looks around once zoomed.
+    // Everything that arrives within one frame is added up and drawn once
+    let wheel = null, wheelRaf = 0, wheelKind = { t: 0, mouse: false }, wheelIdle = 0;
+    function isMouseWheel(e, dx, dy) {
+      if (e.deltaMode !== 0) return true;   // Firefox counts a mouse wheel in lines
+      const now = performance.now();
+      if (now - wheelKind.t < 250) { wheelKind.t = now; return wheelKind.mouse; }   // one burst keeps one kind
+      // A trackpad scrolls in small, uneven steps (in Chrome and Safari its wheelDelta is exactly −3× its delta);
+      // a mouse wheel in whole notches of about 100
+      const trackpad = dx !== 0 || Math.abs(dy) < 40 || !Number.isInteger(dy) || (e.wheelDeltaY && e.wheelDeltaY === -3 * e.deltaY);
+      wheelKind = { t: now, mouse: !trackpad };
+      return !trackpad;
+    }
+    vwStage.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (viewer._closing || gz || fingers.size) return;
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+      const dx = e.deltaX * unit, dy = e.deltaY * unit;
+      const pinch = e.ctrlKey || e.metaKey, mouse = !pinch && isMouseWheel(e, e.deltaX, e.deltaY);
+      const w = wheel || (wheel = { f: 1, dx: 0, dy: 0, px: e.clientX, py: e.clientY });
+      w.px = e.clientX; w.py = e.clientY;
+      if (!pinch && !mouse && isZoomed()) { w.dx += dx; w.dy += dy; }
+      else w.f *= Math.exp(-clamp(dy, -120, 120) * (pinch ? .012 : mouse ? .0024 : .006));
+      if (!wheelRaf) wheelRaf = requestAnimationFrame(wheelApply);
+    }, { passive: false });
+    function wheelApply() {
+      wheelRaf = 0;
+      const w = wheel;
+      wheel = null;
+      if (!w || !viewer.open || !zMeasure()) return;
+      Z.anim = null; Z.fling = null;
+      if (w.f !== 1) {
+        const s = clamp(Z.s * w.f, 1, Z.max);
+        [Z.x, Z.y] = zClampXY(s, ...zAround(s, w.px, w.py));
+        Z.s = s;
+      }
+      if (w.dx || w.dy) [Z.x, Z.y] = zClampXY(Z.s, Z.x - w.dx, Z.y - w.dy);
+      zMoving(true);
+      zDraw();
+      clearTimeout(wheelIdle);
+      wheelIdle = setTimeout(() => { if (!Z.anim && !Z.fling && !g) zMoving(false); }, 180);
+    }
+    // Safari's trackpad pinch arrives as its own gesture events (not as the wheel)
+    viewer.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      if (fingers.size || viewer._closing || !zMeasure()) return;   // (on a phone a pinch is handled as two fingers)
+      zStop();
+      gz = { s0: Z.s, x0: Z.x, y0: Z.y, px: e.clientX, py: e.clientY };
+      zMoving(true);
+    });
+    viewer.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (!gz) return;
+      const f = Z.fit, s = clamp(gz.s0 * e.scale, .85, Z.max * 1.15);
+      const qx = (gz.px - f.cx - gz.x0) / gz.s0, qy = (gz.py - f.cy - gz.y0) / gz.s0;
+      const b = zBounds(s);
+      Z.s = s; Z.x = give(gz.px - f.cx - s * qx, b.x0, b.x1); Z.y = give(gz.py - f.cy - s * qy, b.y0, b.y1);
+      zQueue();
+    });
+    viewer.addEventListener('gestureend', (e) => {
+      e.preventDefault();
+      if (!gz) return;
+      const at = gz;
+      gz = null;
+      zSettle(at.px, at.py);
+    });
+
     // Gestures on the photo. Touch: swipe sideways to move between photos (the next one rides in with your
-    // finger), pull down to close, pinch to zoom, tap to hide or show the bars, tap twice for a ❤️.
-    // Mouse: drag works the same; a click zooms in, a click on the dark closes
+    // finger), pull down to close, pinch to zoom (again and again, in or out), drag a zoomed photo to look
+    // around, tap to hide or show the bars, tap twice for a ❤️.
+    // Mouse: drag works the same; a click zooms in (or back out), a click on the dark closes
     const DOUBLE_MS = 280;
-    let lastTap = null, tapTimer = 0, pan = null, g = null;
-    const fingers = new Map();
     const toggleBars = () => viewer.classList.toggle('is-bare');
+    function startPinch() {
+      if (!zMeasure()) { g = null; return; }
+      zStop(); clearTimeout(tapTimer); lastTap = null;
+      const [a, b] = [...fingers.values()];
+      g = { pinch: true, d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, s0: Z.s, x0: Z.x, y0: Z.y };
+      g.cx = g.mx; g.cy = g.my;
+      zMoving(true);
+    }
+    function startPan(x, y, type, target, moved = false) {
+      zStop();
+      g = { pan: true, x, y, ox: Z.x, oy: Z.y, moved, type, target, lx: x, ly: y, lt: performance.now(), vx: 0, vy: 0 };
+      zMoving(true);
+    }
     vwStage.addEventListener('pointerdown', (e) => {
       if (e.button > 0 || viewer._closing) return;
-      const zoomed = vwStage.classList.contains('is-zoomed');
-      if (zoomed && e.pointerType === 'mouse') {
-        pan = { x: e.clientX, y: e.clientY, sl: vwStage.scrollLeft, st: vwStage.scrollTop, moved: false };
-        vwStage.setPointerCapture(e.pointerId);
-        return;
-      }
       // A new touch (no other finger down): forget any finger whose lift was missed, so a swipe is never mistaken
       // for a pinch (that left swiping stuck until the page was reloaded)
       if (e.isPrimary) fingers.clear();
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       // Every finger is followed to wherever it lifts, even off the photo (over the strip or the bars)
-      if (e.pointerType !== 'mouse') { try { vwStage.setPointerCapture(e.pointerId); } catch {} }
-      // Zoomed with a finger: the browser scrolls the big photo; a tap that doesn't move fits it again
-      if (zoomed) { g = { tapOnly: true, x: e.clientX, y: e.clientY, moved: false }; return; }
+      try { vwStage.setPointerCapture(e.pointerId); } catch {}
       // Mid-slide: the photos keep gliding, and a quick swipe now is remembered and runs the moment they land
       if (sliding) { if (fingers.size === 1) g = { queue: true, x: e.clientX, y: e.clientY, dx: 0, lx: e.clientX, lt: performance.now(), vx: 0 }; return; }
       if (fingers.size === 2) {
         // A second finger: this is a pinch. Whatever the first finger was doing is put back
-        if (g?.axis === 'x') settleX(g.dx); else if (g?.axis === 'y') settleY(g);
-        const [a, b] = [...fingers.values()];
-        g = { pinch: true, d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, r: 1 };
-        clearTimeout(tapTimer); lastTap = null;
+        if (g?.axis === 'x') settleX(g.px ?? g.dx); else if (g?.axis === 'y') settleY(g);
+        vwStage.classList.remove('is-dragging');
+        startPinch();
         return;
       }
       if (fingers.size > 2) return;
-      try { vwStage.setPointerCapture(e.pointerId); } catch {}
+      // Zoomed: one finger (or the mouse) moves the photo around
+      if (isZoomed()) { startPan(e.clientX, e.clientY, e.pointerType, e.target); return; }
       const now = performance.now();
       g = { x: e.clientX, y: e.clientY, axis: null, dx: 0, dy: 0, type: e.pointerType, target: e.target, lx: e.clientX, ly: e.clientY, lt: now, vx: 0, vy: 0 };
     });
     vwStage.addEventListener('pointermove', (e) => {
-      if (pan) {
-        const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
-        if (Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vwStage.classList.add('is-dragging'); }
-        vwStage.scrollLeft = pan.sl - dx; vwStage.scrollTop = pan.st - dy;
-        return;
-      }
       if (!fingers.has(e.pointerId)) return;
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (!g) return;
-      if (g.tapOnly) { if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 8) g.moved = true; return; }
       if (g.queue) { const t = performance.now(); g.vx = .7 * ((e.clientX - g.lx) / Math.max(1, t - g.lt)) + .3 * g.vx; g.lx = e.clientX; g.lt = t; g.dx = e.clientX - g.x; return; }
       if (g.pinch) {
         if (fingers.size < 2) return;
         const [a, b] = [...fingers.values()];
-        g.r = Math.hypot(a.x - b.x, a.y - b.y) / g.d0;
-        g.cx = (a.x + b.x) / 2; g.cy = (a.y + b.y) / 2;
-        vwImg.style.transform = `scale(${clamp(g.r, .8, 3)})`;
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        // Beyond the fitted size or the most it zooms, it only gives a little
+        let s = g.s0 * (Math.hypot(a.x - b.x, a.y - b.y) / g.d0);
+        if (s < 1) s = 1 - (1 - s) / (1 + (1 - s) * 2.5);
+        else if (s > Z.max) s = Z.max * (1 + (s / Z.max - 1) / (1 + (s / Z.max - 1) * 4));
+        // The spot that was between your fingers stays between them, wherever they go
+        const f = Z.fit, qx = (g.mx - f.cx - g.x0) / g.s0, qy = (g.my - f.cy - g.y0) / g.s0;
+        const bd = zBounds(Math.max(1, s));
+        Z.s = s; Z.x = give(mx - f.cx - s * qx, bd.x0, bd.x1); Z.y = give(my - f.cy - s * qy, bd.y0, bd.y1);
+        g.cx = mx; g.cy = my;
+        zQueue();
+        return;
+      }
+      if (g.pan) {
+        const now = performance.now(), dt = Math.max(1, now - g.lt);
+        g.vx = .7 * ((e.clientX - g.lx) / dt) + .3 * g.vx; g.vy = .7 * ((e.clientY - g.ly) / dt) + .3 * g.vy;
+        g.lx = e.clientX; g.ly = e.clientY; g.lt = now;
+        const dx = e.clientX - g.x, dy = e.clientY - g.y;
+        if (!g.moved) {
+          if (Math.hypot(dx, dy) < 6) return;
+          g.moved = true; clearTimeout(tapTimer); lastTap = null;
+          vwStage.classList.add('is-dragging');
+        }
+        const b = zBounds(Z.s);
+        Z.x = give(g.ox + dx, b.x0, b.x1); Z.y = give(g.oy + dy, b.y0, b.y1);
+        zQueue();
         return;
       }
       const now = performance.now(), dt = Math.max(1, now - g.lt);
@@ -1877,22 +2108,53 @@ export default function start() {
       vwImg.animate([{ transform: from }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.25, 1.2, .5, 1)' });
       vwBg.animate({ opacity: [fromBg, 1] }, { duration: 300, easing: 'ease-out' });
     }
+    // A tap. Two close together on the photo: react with a heart. One waits a moment to be sure it isn't the
+    // first of two, then (touch) hides or shows the bars, or (mouse) zooms in on the photo, back out when it's
+    // zoomed, or closes on the dark
+    function tapAt(e, s) {
+      if (justDismissed()) return;
+      const now = performance.now(), x = e.clientX, y = e.clientY, onImg = s.target === vwImg, touch = s.type !== 'mouse';
+      clearTimeout(tapTimer);
+      if (lastTap && now - lastTap.t < DOUBLE_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < 40 && lastTap.onImg && onImg) {
+        lastTap = null;
+        doubleTap(x, y);
+        return;
+      }
+      lastTap = { t: now, x, y, onImg };
+      tapTimer = setTimeout(() => {
+        lastTap = null;
+        if (!viewer.open) return;
+        if (touch) toggleBars();
+        else if (isZoomed()) unzoom(true);
+        else if (onImg) zoomAt(x, y); else closeViewer();
+      }, onImg || touch ? DOUBLE_MS : 0);
+    }
     function endGesture(e) {
-      if (pan) { const moved = pan.moved; pan = null; vwStage.classList.remove('is-dragging'); if (!moved && e.type === 'pointerup') unzoom(); return; }
       fingers.delete(e.pointerId);
       const s = g;
       if (!s) return;
       if (s.pinch) {
+        // One finger still down on a zoomed photo: it carries on moving it
+        if (fingers.size === 1 && Z.s > 1.01) { const p = [...fingers.values()][0]; startPan(p.x, p.y, 'touch', null, true); return; }
         g = null;
-        vwImg.style.transform = '';
-        if (s.r > 1.12) setZoom(s.r, s.cx, s.cy, true);
-        else if (!still && s.r !== 1) vwImg.animate([{ transform: `scale(${clamp(s.r, .8, 3)})` }, { transform: 'none' }], { duration: 300, easing: SOFT_EASE });
+        zSettle(s.cx, s.cy);
+        return;
+      }
+      if (s.pan) {
+        g = null;
+        vwStage.classList.remove('is-dragging');
+        if (s.moved) {
+          const fresh = performance.now() - s.lt < 80;
+          if (e.type === 'pointerup' && !still && fresh && Math.hypot(s.vx, s.vy) > .15) zFling(s.vx, s.vy); else zSettle();
+          return;
+        }
+        zMoving(false);
+        if (e.type === 'pointerup' && s.target !== null) tapAt(e, s);
         return;
       }
       g = null;
-      if (s.tapOnly) { if (!s.moved && e.type === 'pointerup') unzoom(); return; }
       if (s.queue) {
-        if (e.type === 'pointerup' && (Math.abs(s.dx) > 30 || Math.abs(s.vx) > .3)) queuedSlide = s.dx < 0 ? 1 : -1;
+        if (e.type === 'pointerup' && (Math.abs(s.dx) > 30 || Math.abs(s.vx) > .3)) queueSlide(s.dx < 0 ? 1 : -1);
         if (!sliding) runQueuedSlide();
         return;
       }
@@ -1909,29 +2171,16 @@ export default function start() {
         else settleY(s);
         return;
       }
-      // A tap. Two close together on the photo: react with a heart. One waits a moment to be sure it isn't the
-      // first of two, then (touch) hides or shows the bars, or (mouse) zooms in on the photo / closes on the dark
-      if (justDismissed()) return;
-      const now = performance.now(), x = e.clientX, y = e.clientY, onImg = s.target === vwImg, touch = s.type !== 'mouse';
-      clearTimeout(tapTimer);
-      if (lastTap && now - lastTap.t < DOUBLE_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < 40 && lastTap.onImg && onImg) {
-        lastTap = null;
-        doubleTap(x, y);
-        return;
-      }
-      lastTap = { t: now, x, y, onImg };
-      tapTimer = setTimeout(() => {
-        lastTap = null;
-        if (!viewer.open) return;
-        if (touch) toggleBars();
-        else if (onImg) zoomAt(x, y); else closeViewer();
-      }, onImg || touch ? DOUBLE_MS : 0);
+      tapAt(e, s);
     }
     vwStage.addEventListener('pointerup', endGesture);
     vwStage.addEventListener('pointercancel', endGesture);
     // A safety net: a finger lifted anywhere is no longer down (after the photo's own handler has had it)
-    for (const t of ['pointerup', 'pointercancel']) addEventListener(t, (e) => { if (fingers.delete(e.pointerId) && !fingers.size && g && !g.pinch && e.target !== vwStage && !vwStage.contains(e.target)) { if (g.axis === 'x') settleX(g.px ?? g.dx); else if (g.axis === 'y') settleY(g); g = null; } });
-    // The browser's own double-click (selecting, zooming) and long-press menu are replaced by ours
+    for (const t of ['pointerup', 'pointercancel']) addEventListener(t, (e) => {
+      if (!fingers.delete(e.pointerId) || fingers.size || !g || g.pinch || e.target === vwStage || vwStage.contains(e.target)) return;
+      if (g.axis === 'x') settleX(g.px ?? g.dx); else if (g.axis === 'y') settleY(g); else if (g.pan) { vwStage.classList.remove('is-dragging'); zSettle(); }
+      g = null;
+    });
     vwStage.addEventListener('dblclick', (e) => e.preventDefault());
     vwStage.addEventListener('contextmenu', (e) => { if (e.pointerType && e.pointerType !== 'mouse') e.preventDefault(); });
     // A double-tap gives the photo a ❤️ reaction. It never takes one away: if you've already reacted, your
@@ -1959,14 +2208,14 @@ export default function start() {
           { opacity: 0, transform: 'translateY(-60px) scale(.85)' },
         ], { duration: 900, easing: 'cubic-bezier(.22, 1, .36, 1)' });
     }
-    viewer.addEventListener('close', () => { clearTimeout(tapTimer); lastTap = null; g = null; pan = null; fingers.clear(); sliding = false; queuedSlide = 0; place(0); hideSwipeHint(false); });
+    viewer.addEventListener('close', () => { clearTimeout(tapTimer); lastTap = null; g = null; gz = null; fingers.clear(); sliding = false; queuedSlide = 0; clearTimeout(ambT); unzoom(); place(0); hideSwipeHint(false); });
     // Only a real change of width (a phone turned round, a window resized) resets things: the keyboard
     // opening for the emoji search changes the height, and mustn't close anything
     let lastW = innerWidth;
     addEventListener('resize', () => {
       if (innerWidth === lastW) return;
       lastW = innerWidth;
-      if (viewer.open) { unzoom(); place(0); }
+      if (viewer.open) { if (isZoomed()) zRefit(); place(0); }
       closePicker(false);
     });
 

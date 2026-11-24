@@ -600,11 +600,11 @@
     .vw-side { position: absolute; top: 50%; left: 50%; translate: -50% -50%; pointer-events: none; }
     .vw-side:not([src]), .vw-stage.is-zoomed .vw-side { visibility: hidden; }
     .vw-stage img { display: block; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 13rem); object-fit: contain; border-radius: 6px; cursor: zoom-in; user-select: none; -webkit-user-select: none; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); }
-    /* Zoomed: the photo at its real size; drag (or scroll) to look around, click to fit it again */
-    .vw-stage.is-zoomed { display: block; overflow: auto; touch-action: pan-x pan-y; scrollbar-width: none; overscroll-behavior: contain; }
-    .vw-stage.is-zoomed::-webkit-scrollbar { display: none; }
-    .vw-stage.is-zoomed img { max-width: none; max-height: none; margin: auto; border-radius: 0; cursor: grab; }
-    .vw-stage.is-dragging img { cursor: grabbing; }
+    /* Zoomed: the photo is scaled and moved with a transform (albums.js), never laid out again, so it stays smooth.
+       While it moves it keeps its own layer; at rest that's dropped so the browser draws it sharp at the new size */
+    .vw-stage.is-zoomed #vwImg { border-radius: 0; cursor: grab; }
+    .vw-stage.is-zoomed:not(.is-moving) #vwImg { will-change: auto; }
+    .vw-stage.is-dragging #vwImg { cursor: grabbing; }
     .viewer.is-zoomed .vw-nav, .viewer.is-zoomed .vw-hint { opacity: 0; pointer-events: none; }
     .vw-nav { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 3.2rem; height: 3.2rem; margin-top: -1.6rem; padding: 0; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; color: #F2EFF8; cursor: pointer; transition: transform .3s var(--spring), opacity .25s ease; }
 
