@@ -991,6 +991,15 @@
       .auth-login { padding: .6rem .85rem; }
       .auth .btn { min-height: 2.6rem; padding: 0 1.2rem; font-size: .9rem; line-height: 1; }   /* the label sits comfortably inside, not pressed to the edges */
     }
+    /* Tablets and desktops: Log in is a pane of clear glass beside the Sign up pearl, the same height
+       (on phones the pill they share is the glass) */
+    @media (min-width: 601px) {
+      .auth-login { display: inline-flex; align-items: center; min-height: 2.75rem; padding-top: 0; padding-bottom: 0;
+        --gb-sheen: var(--gb-clear-sheen); --gb-fill: var(--gb-clear-fill); --gb-rim: var(--gb-clear-rim);
+        --gb-shadow: var(--gb-clear-shadow); --gb-ink: var(--dusk); --gb-lift: var(--gb-clear-lift); }
+    }
+    @media (min-width: 601px) and (max-width: 900px) { .auth-login { min-height: 2.6rem; } }
+    @media (min-width: 681px) { .auth-out { gap: .5rem; } }
     /* Phones, signed out: Log in and Sign up share one glass pill, split like Home and its arrow,
        and the same height as the nav beside it */
     @media (max-width: 600px) {
