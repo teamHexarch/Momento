@@ -832,15 +832,17 @@ export default function start() {
     // pages on show (the hidden ones still have boxes). Buttons first, then prints; a click anywhere else on
     // the open book turns the page toward the side that was clicked.
     const shownFaces = () => (stage.classList.contains('is-reading') && activeSpread >= 0 ? spreadFaces[activeSpread] : []);
-    const inBox = (el, x, y) => { const r = el.getBoundingClientRect(); return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
-    function hitAt(x, y, sel) {
+    const inBox = (el, x, y, m = 0) => { const r = el.getBoundingClientRect(); return r.width > 0 && x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m; };
+    // `give`: extra room around the element that is already hovered, so a button that bobs or tilts under a steady
+    // cursor (or rises when hovered) doesn't drop the hover at its edge
+    function hitAt(x, y, sel, give = 0) {
       let hit = null;   // (the last match is the one drawn on top)
-      for (const face of shownFaces()) for (const el of face.querySelectorAll(sel)) if (inBox(el, x, y)) hit = el;
+      for (const face of shownFaces()) for (const el of face.querySelectorAll(sel)) if (inBox(el, x, y, el === hoverEl ? give : 0)) hit = el;
       return hit;
     }
     const BTN = '.page-cta, .keep:not(.is-empty) .ks-btns .kb, .keep.is-empty .ks-done .kb';
     const PRINT = '[data-flip]:not(.is-pending)';
-    const pick = (x, y) => hitAt(x, y, BTN) || hitAt(x, y, PRINT);
+    const pick = (x, y, give = 0) => hitAt(x, y, BTN, give) || hitAt(x, y, PRINT, give);
 
     // Only what's on the open spread can be tabbed to
     function syncFocusable() {
@@ -857,14 +859,21 @@ export default function start() {
       el?.classList.add('is-hover');
       stage.style.cursor = el ? 'pointer' : '';
     }
+    // The book drifts and tilts toward the pointer, so what is under a steady cursor keeps changing: look again a few
+    // times a second while the mouse is over it. Only this matching drives the hover look (the buttons have no CSS
+    // :hover of their own, which flickers at their edge as they move)
+    const HOVER_GIVE = 8;
+    let mouseOver = false;
+    const lookUnderMouse = () => setHover(drag ? null : pick(hx, hy, HOVER_GIVE));
     stage.addEventListener('pointermove', (e) => {
       if (e.pointerType !== 'mouse') return;
-      hx = e.clientX; hy = e.clientY;
+      hx = e.clientX; hy = e.clientY; mouseOver = true;
       if (hoverQueued) return;
       hoverQueued = true;
-      requestAnimationFrame(() => { hoverQueued = false; setHover(drag ? null : pick(hx, hy)); });
+      requestAnimationFrame(() => { hoverQueued = false; lookUnderMouse(); });
     });
-    stage.addEventListener('pointerleave', () => setHover(null));
+    stage.addEventListener('pointerleave', () => { mouseOver = false; setHover(null); });
+    setInterval(() => { if (mouseOver && !document.hidden && stage.classList.contains('is-reading')) lookUnderMouse(); }, 120);
 
     // Turning a print over: it squeezes to its edge, swaps to the other side and springs back
     function flipPhoto(fig, to = !fig.classList.contains('is-flipped')) {
