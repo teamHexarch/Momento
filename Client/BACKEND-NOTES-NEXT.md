@@ -4,43 +4,39 @@ New since the original `BACKEND-NOTES.md` (which still applies). The front end f
 against the sample data (`public/assets/devpreview.js`, local only), which answers these routes with the shapes below:
 use it as the reference. The typed client is `src/lib/api.ts`.
 
-## 1. Reviews page (`/reviews`) — new routes
+## 1. Reviews page (`/reviews`): done on the server (`Server/src/routes/reviewRoutes.js`, `models/Review.js`)
 
-One review per person. Anyone can read; posting and deleting need a signed-in account.
+Private feedback for the team: **nobody sees anyone else's review**, and the page shows no list or numbers. One review
+per person (sending again replaces it); leaving one needs a signed-in account. It's a checklist: **only the stars are
+required**, everything else is an optional tap, and the comment is optional. Each review is emailed to `SUPPORT_EMAIL`
+(subject `[Momento review] …`, Reply-To the person).
 
-### `GET /api/reviews?sort=newest|highest|lowest&rating=1..5&cursor=…`
-- `sort`: default `newest`. `highest` / `lowest`: by rating, newest first within a rating.
-- `rating`: optional, only reviews with that many stars.
-- `cursor`: optional, from the previous answer's `next`. Pages of about 6–20.
+Checklist keys (the server and the page share them):
+- `role`: `host` | `guest`
+- `event`: `wedding` | `birthday` | `party` | `work` | `trip` | `other`
+- `worked` / `better` (lists, an area is in one or the other, never both): `join` | `upload` | `quality` | `find` | `guests` | `privacy`
 
-```json
-{
-  "reviews": [
-    { "id": "r1", "name": "Hannah L.", "rating": 5, "title": "Every photo from the wedding, in one place",
-      "body": "We put the QR code on the tables…", "createdAt": "2026-11-19T10:00:00.000Z",
-      "updatedAt": "2026-11-20T09:00:00.000Z", "you": false }
-  ],
-  "summary": { "average": 4.3, "count": 12, "counts": { "1": 0, "2": 1, "3": 1, "4": 3, "5": 7 } },
-  "mine": null,
-  "next": "6"
-}
-```
-- `summary` is for **all** reviews (ignores `rating`), average to one decimal.
-- `mine`: the signed-in person's own review (same shape), or `null`. `you: true` on it wherever it appears in `reviews`.
-- `name`: how the reviewer is shown. The sample data uses first name + last initial ("Priya S.").
-- `title` is optional (leave it out when empty). `updatedAt` only when edited.
+### `GET /api/reviews`
+`{ "mine": { "id", "rating", "role"?, "event"?, "worked": [], "better": [], "body"?, "createdAt", "updatedAt"? } }`,
+or `{ "mine": null }` (no review yet, or signed out).
 
 ### `POST /api/reviews` (signed in)
-Body `{ "rating": 1-5, "title": "optional, ≤ 80", "body": "20–1,500 characters" }`.
-Creates the person's review, or **replaces** it if they already have one. Answer `201 { "review": {…}, "summary": {…} }`.
-Errors (shown to the person as written): `401 { "error": "Log in to write a review.", "code": "login-required" }`,
-`400` for a missing rating, too short or too long text.
+Body `{ "rating": 1-5, "role"?, "event"?, "worked"?: [], "better"?: [], "body"?: "≤ 1,500 characters" }`.
+Unknown checklist values are dropped. Creates the review (`201`) or replaces it (`200`): `{ "review": {…} }`.
+Errors (shown as written): `401` with `code: "login-required"`, `400` for a missing rating or a comment over 1,500
+characters, `429` after 20 sends in an hour.
 
 ### `DELETE /api/reviews/:id` (signed in, own review only)
-Answer `{ "summary": {…} }`. `403` for someone else's review, `404` if it's gone.
+`{ "ok": true }`. `403` for someone else's review, `404` if it's gone.
 
-Worth doing server side (no front-end change needed): rate limiting, a profanity/spam check, and a way for the team to
-hide a review (just leave it out of `reviews` and `summary`).
+### `GET /api/reviews/stats` (staff only; a plain 404 for everyone else)
+The team's numbers for every review that isn't hidden:
+```json
+{ "summary": { "average": 4.3, "count": 15, "counts": { "1": 0, "2": 1, "3": 2, "4": 4, "5": 8 },
+  "areas": { "join": { "worked": 7, "better": 1 }, "upload": { "worked": 6, "better": 2 } },
+  "roles": { "host": 8, "guest": 6 }, "events": { "wedding": 4, "party": 3 }, "comments": 9 } }
+```
+To leave a review (spam, a test) out of the numbers, set `hidden: true` on it in the `reviews` collection.
 
 ## 2. Photos: optional `name` and `size` (album window sorting)
 

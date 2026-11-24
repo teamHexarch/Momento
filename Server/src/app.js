@@ -6,6 +6,7 @@ import { requestId, securityHeaders, inputGuard } from './middleware/security.js
 import { adminRoutes } from './routes/adminRoutes.js';
 import { devRoutes } from './routes/devRoutes.js';
 import { supportRoutes } from './routes/supportRoutes.js';
+import { reviewRoutes } from './routes/reviewRoutes.js';
 import mongoose from 'mongoose';
 import { RAW_TYPES } from './services/imageService.js';
 import cookieParser from 'cookie-parser';
@@ -86,6 +87,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dev', devRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api', trashRoutes);   // /api/trash and /api/hidden
 app.use('/api', (req, res, next) => next(new HttpError(404, 'Not found.')));
 

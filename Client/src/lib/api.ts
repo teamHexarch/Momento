@@ -68,13 +68,15 @@ export type Device = { id: string; name: string; loggedInAt?: string; expiresAt:
 /** An event near you (GET /api/events/nearby) */
 export type NearbyEvent = AlbumSummary & { [k: string]: unknown };
 
-/** A review of Momento (the Reviews page) */
-export type Review = { id: string; name: string; rating: 1 | 2 | 3 | 4 | 5; title?: string; body: string; createdAt: string; updatedAt?: string;
-  /** the signed-in person wrote it */ you?: boolean };
-export type ReviewSummary = { average: number; count: number; counts: Record<'1' | '2' | '3' | '4' | '5', number> };
-export type ReviewSort = 'newest' | 'highest' | 'lowest';
-export type ReviewPage = { reviews: Review[]; summary: ReviewSummary; /** your own review, if you wrote one */ mine?: Review | null;
-  /** pass back as cursor for the next page; null when there are no more */ next?: string | null };
+/** A review of Momento (the Reviews page): private feedback for the team. Only `rating` is required; the rest are
+    one-tap checklist answers. Nobody sees anyone else's review */
+export type ReviewArea = 'join' | 'upload' | 'quality' | 'find' | 'guests' | 'privacy';
+export type ReviewRole = 'host' | 'guest';
+export type ReviewEvent = 'wedding' | 'birthday' | 'party' | 'work' | 'trip' | 'other';
+export type Review = { id: string; rating: 1 | 2 | 3 | 4 | 5; role?: ReviewRole; event?: ReviewEvent;
+  /** the parts that worked well, and the parts that could be better (an area is in one list at most) */ worked?: ReviewArea[]; better?: ReviewArea[];
+  body?: string; createdAt: string; updatedAt?: string };
+export type ReviewInput = { rating: number; role?: ReviewRole; event?: ReviewEvent; worked: ReviewArea[]; better: ReviewArea[]; body?: string };
 
 /* ---------- Errors ---------- */
 
@@ -208,17 +210,11 @@ export const api = {
     answerRequest: (albumId: string, userId: string, approve: boolean) => send<unknown>('POST', `/api/events/${enc(albumId)}/requests/${enc(userId)}`, { approve }),
   },
 
-  /** The Reviews page. One review per person: posting again replaces yours (see BACKEND-NOTES.md) */
+  /** The Reviews page: your own review only (one per person, sending again replaces it). See BACKEND-NOTES-NEXT.md */
   reviews: {
-    list: (o: { sort?: ReviewSort; rating?: number; cursor?: string | null } = {}) => {
-      const q = new URLSearchParams();
-      if (o.sort) q.set('sort', o.sort);
-      if (o.rating) q.set('rating', String(o.rating));
-      if (o.cursor) q.set('cursor', o.cursor);
-      return request<ReviewPage>('/api/reviews' + (q.size ? '?' + q : ''));
-    },
-    post: (b: { rating: number; title?: string; body: string }) => send<{ review: Review; summary?: ReviewSummary }>('POST', '/api/reviews', b),
-    remove: (id: string) => request<{ summary?: ReviewSummary }>('/api/reviews/' + enc(id), { method: 'DELETE' }),
+    mine: () => request<{ mine: Review | null }>('/api/reviews'),
+    post: (b: ReviewInput) => send<{ review: Review }>('POST', '/api/reviews', b),
+    remove: (id: string) => request<{ ok: true }>('/api/reviews/' + enc(id), { method: 'DELETE' }),
   },
 
   notifications: {

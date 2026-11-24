@@ -63,6 +63,7 @@ const ACTIONS = [
   [/^POST \/api\/photos\/[^/]+\/(like|comments)/, 'react', 'Log in or sign up to like and comment on photos.'],
   [/^POST \/api\/albums$/, 'create', 'Log in or sign up to create your album. It’s free.'],
   [/^(POST|PATCH|DELETE) \/api\/groups/, 'groups', 'Log in or sign up to share albums with your friends.'],
+  [/^(POST|DELETE) \/api\/reviews/, 'review', 'Log in or sign up to write a review. It only takes a moment.'],
   [/^GET \/api\/(photos|albums)\//, 'view', 'Log in or sign up to see the photos in this album.'],
 ];
 export function loginRequired(req) {
