@@ -68,15 +68,14 @@ export type Device = { id: string; name: string; loggedInAt?: string; expiresAt:
 /** An event near you (GET /api/events/nearby) */
 export type NearbyEvent = AlbumSummary & { [k: string]: unknown };
 
-/** A review of Momento (the Reviews page): private feedback for the team. Only `rating` is required; the rest are
-    one-tap checklist answers. Nobody sees anyone else's review */
-export type ReviewArea = 'join' | 'upload' | 'quality' | 'find' | 'guests' | 'privacy';
+/** A review of Momento (the Reviews page): private feedback for the team, all out of 5 stars. Only the overall
+    `rating` is required; each part in `scores` is optional. Nobody sees anyone else's review */
+export type ReviewPart = 'join' | 'upload' | 'quality' | 'find';
 export type ReviewRole = 'host' | 'guest';
-export type ReviewEvent = 'wedding' | 'birthday' | 'party' | 'work' | 'trip' | 'other';
-export type Review = { id: string; rating: 1 | 2 | 3 | 4 | 5; role?: ReviewRole; event?: ReviewEvent;
-  /** the parts that worked well, and the parts that could be better (an area is in one list at most) */ worked?: ReviewArea[]; better?: ReviewArea[];
+export type ReviewScores = Partial<Record<ReviewPart, number>>;
+export type Review = { id: string; rating: 1 | 2 | 3 | 4 | 5; /** only the parts that were rated */ scores?: ReviewScores; role?: ReviewRole;
   body?: string; createdAt: string; updatedAt?: string };
-export type ReviewInput = { rating: number; role?: ReviewRole; event?: ReviewEvent; worked: ReviewArea[]; better: ReviewArea[]; body?: string };
+export type ReviewInput = { rating: number; scores: ReviewScores; role?: ReviewRole; body?: string };
 
 /* ---------- Errors ---------- */
 

@@ -294,24 +294,26 @@
       return { body: { exportedAt: new Date().toISOString(), user: state.user, consents: state.consents || [],
         albums: state.albums.map((a) => ({ id: a.id, name: a.name, role: a.role, photos: photosOf(a).map((p) => ({ id: p.id, url: p.url, by: p.by })) })) } };
     }
-    // ---- Reviews of Momento (the Reviews page: private feedback for the team; spec in BACKEND-NOTES-NEXT.md) ----
+    // ---- Reviews of Momento (the Reviews page: private feedback for the team, all out of 5 stars; spec in BACKEND-NOTES-NEXT.md) ----
     // GET /api/reviews  ->  { mine }   (your own review or null; nobody sees anyone else's)
-    // POST /api/reviews { rating, role?, event?, worked?, better?, body? }  (signed in; one per person, sending again
-    //   replaces it)  ->  { review }
+    // POST /api/reviews { rating, scores?: { join, upload, quality, find }, role?, body? }  (signed in; one per person,
+    //   sending again replaces it)  ->  { review }
     // DELETE /api/reviews/:id  (your own)  ->  { ok }
     if (path === '/api/reviews' || path.startsWith('/api/reviews/')) {
-      const AREAS = ['join', 'upload', 'quality', 'find', 'guests', 'privacy'], ROLES = ['host', 'guest'], EVENTS = ['wedding', 'birthday', 'party', 'work', 'trip', 'other'];
-      delete state.reviews; delete state.reviewsV2;   // the earlier public sample reviews
-      const shape = (r) => ({ id: r.id, rating: r.rating, role: r.role, event: r.event, worked: r.worked, better: r.better, body: r.body || undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
+      const PARTS = ['join', 'upload', 'quality', 'find'], ROLES = ['host', 'guest'];
+      const isStar = (v) => Number.isInteger(v) && v >= 1 && v <= 5;
+      // A review saved by the earlier checklist version of this preview: start again
+      if (state.myReview && !state.myReview.scores) delete state.myReview;
+      const shape = (r) => ({ id: r.id, rating: r.rating, scores: r.scores, role: r.role, body: r.body || undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
       if (path === '/api/reviews' && method === 'GET') return { body: { mine: state.signedIn && state.myReview ? shape(state.myReview) : null } };
       if (path === '/api/reviews' && method === 'POST') {
         if (!state.signedIn) return fail(401, 'Log in or sign up to write a review. It only takes a moment.', 'login-required');
         const rating = Number(body.rating), text = typeof body.body === 'string' ? body.body.trim() : '';
-        if (!(Number.isInteger(rating) && rating >= 1 && rating <= 5)) return fail(400, 'Choose from one to five stars.');
+        if (!isStar(rating)) return fail(400, 'Choose from one to five stars.');
         if (text.length > 1500) return fail(400, 'Keep your comment under 1,500 characters.');
-        const many = (v) => (Array.isArray(v) ? [...new Set(v.filter((x) => AREAS.includes(x)))] : []);
-        const better = many(body.better), worked = many(body.worked).filter((a) => !better.includes(a));
-        const fields = { rating, worked, better, body: text, role: ROLES.includes(body.role) ? body.role : undefined, event: EVENTS.includes(body.event) ? body.event : undefined };
+        const given = body.scores && typeof body.scores === 'object' ? body.scores : {};
+        const scores = Object.fromEntries(PARTS.filter((p) => isStar(given[p])).map((p) => [p, given[p]]));
+        const fields = { rating, scores, body: text, role: ROLES.includes(body.role) ? body.role : undefined };
         const had = !!state.myReview;
         state.myReview = had ? { ...state.myReview, ...fields, updatedAt: new Date().toISOString() } : { id: 'rv-' + Date.now().toString(36), ...fields, createdAt: new Date().toISOString() };
         save();

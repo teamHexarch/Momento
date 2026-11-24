@@ -13,7 +13,7 @@ import LegacyScripts from '@/legacy/LegacyScripts';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Reviews | Momento',
-  description: 'Used Momento at an event? Tell the Momento team how it went: a star rating and a few quick taps.',
+  description: 'Used Momento at an event? Rate it out of 5 stars for the Momento team. Only the overall rating is needed.',
   url: 'https://hexarch.org/reviews',
 });
 

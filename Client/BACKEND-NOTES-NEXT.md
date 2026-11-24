@@ -7,24 +7,23 @@ use it as the reference. The typed client is `src/lib/api.ts`.
 ## 1. Reviews page (`/reviews`): done on the server (`Server/src/routes/reviewRoutes.js`, `models/Review.js`)
 
 Private feedback for the team: **nobody sees anyone else's review**, and the page shows no list or numbers. One review
-per person (sending again replaces it); leaving one needs a signed-in account. It's a checklist: **only the stars are
-required**, everything else is an optional tap, and the comment is optional. Each review is emailed to `SUPPORT_EMAIL`
-(subject `[Momento review] …`, Reply-To the person).
+per person (sending again replaces it); leaving one needs a signed-in account. **Everything is out of 5 stars**: the
+overall `rating` is the only required answer; each part of Momento has its own optional star rating (`scores`);
+host or guest and a comment are optional. Each review is emailed to `SUPPORT_EMAIL` (subject `[Momento review] …`,
+Reply-To the person).
 
-Checklist keys (the server and the page share them):
-- `role`: `host` | `guest`
-- `event`: `wedding` | `birthday` | `party` | `work` | `trip` | `other`
-- `worked` / `better` (lists, an area is in one or the other, never both): `join` | `upload` | `quality` | `find` | `guests` | `privacy`
+Parts (`scores` keys, shared by the server and the page): `join` (joining the album), `upload` (adding photos),
+`quality` (photo quality), `find` (finding photos). `role`: `host` | `guest`.
 
 ### `GET /api/reviews`
-`{ "mine": { "id", "rating", "role"?, "event"?, "worked": [], "better": [], "body"?, "createdAt", "updatedAt"? } }`,
-or `{ "mine": null }` (no review yet, or signed out).
+`{ "mine": { "id", "rating", "scores": { "join": 4, "upload": 3 }, "role"?, "body"?, "createdAt", "updatedAt"? } }`,
+or `{ "mine": null }` (no review yet, or signed out). `scores` only has the parts that were rated.
 
 ### `POST /api/reviews` (signed in)
-Body `{ "rating": 1-5, "role"?, "event"?, "worked"?: [], "better"?: [], "body"?: "≤ 1,500 characters" }`.
-Unknown checklist values are dropped. Creates the review (`201`) or replaces it (`200`): `{ "review": {…} }`.
-Errors (shown as written): `401` with `code: "login-required"`, `400` for a missing rating or a comment over 1,500
-characters, `429` after 20 sends in an hour.
+Body `{ "rating": 1-5, "scores"?: { "join"?: 1-5, "upload"?: 1-5, "quality"?: 1-5, "find"?: 1-5 }, "role"?, "body"?: "≤ 1,500 characters" }`.
+A score that isn't a whole number from 1 to 5, or an unknown part, is dropped. Creates the review (`201`) or replaces it
+(`200`; parts left out are cleared): `{ "review": {…} }`. Errors (shown as written): `401` with `code: "login-required"`,
+`400` for a missing overall rating or a comment over 1,500 characters, `429` after 20 sends in an hour.
 
 ### `DELETE /api/reviews/:id` (signed in, own review only)
 `{ "ok": true }`. `403` for someone else's review, `404` if it's gone.
@@ -33,10 +32,12 @@ characters, `429` after 20 sends in an hour.
 The team's numbers for every review that isn't hidden:
 ```json
 { "summary": { "average": 4.3, "count": 15, "counts": { "1": 0, "2": 1, "3": 2, "4": 4, "5": 8 },
-  "areas": { "join": { "worked": 7, "better": 1 }, "upload": { "worked": 6, "better": 2 } },
-  "roles": { "host": 8, "guest": 6 }, "events": { "wedding": 4, "party": 3 }, "comments": 9 } }
+  "parts": { "join": { "average": 4.6, "count": 12 }, "upload": { "average": 3.9, "count": 11 },
+             "quality": { "average": 4.8, "count": 10 }, "find": { "average": 3.5, "count": 8 } },
+  "roles": { "host": 8, "guest": 6 }, "comments": 9 } }
 ```
-To leave a review (spam, a test) out of the numbers, set `hidden: true` on it in the `reviews` collection.
+To leave a review (spam, a test) out of the numbers, set `hidden: true` on it in the `reviews` collection. Reviews sent
+with the earlier checklist version of the form may also hold `worked`, `better` and `event`; those are no longer read.
 
 ## 2. Photos: optional `name` and `size` (album window sorting)
 

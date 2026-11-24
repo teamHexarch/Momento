@@ -1,15 +1,14 @@
-/* The Reviews page: private feedback for the Momento team. Built on the Support page's parts (the rising title,
-   .s-group, .panel glass, .acct-field, .btn) with a few of its own: the star picker, the checklist chips and your sent
-   review. Stars use the site's accent (--copper: copper in light, lavender in dark, as the rest of the site does);
-   "worked well" is tide. Motion is transform and opacity only. */
+/* The Reviews page: private feedback for the Momento team, all out of 5 stars. Built on the Support page's parts
+   (the rising title, .s-group, .panel glass, .acct-field, .btn) with a few of its own: the star pickers (a large one
+   for the overall rating, a compact row for each part), the host / guest chips and your sent review. Stars use the
+   site's accent (--copper: copper in light, lavender in dark, as the rest of the site does). Motion is transform and
+   opacity only. */
 
-/* One centred column, the width of a comfortable form. "Could be better" has its own warm colour: the accent (--copper)
-   turns lavender in dark, too close to tide */
-.rv-solo { --rv-bad: #9A603D; --rv-bad-soft: rgba(154, 96, 61, .13); max-width: 36rem; margin: var(--s4) auto var(--s5); }
+/* One centred column, the width of a comfortable form */
+.rv-solo { max-width: 36rem; margin: var(--s4) auto var(--s5); }
 /* The title and intro centred over the form (this page only: .sp-head is shared with Support) */
 html[data-page="reviews"] .sp-head { text-align: center; }
 html[data-page="reviews"] .sp-lede { margin-inline: auto; }
-:root[data-theme="dark"] .rv-solo { --rv-bad: #E2A877; --rv-bad-soft: rgba(226, 168, 119, .16); }
 
 /* ---------- Stars ---------- */
 .rv-stars { position: relative; display: inline-block; line-height: 0; vertical-align: middle; }
@@ -23,11 +22,12 @@ html[data-page="reviews"] .sp-lede { margin-inline: auto; }
 /* ---------- Writing a review ---------- */
 .rv-write { padding: 1.3rem 1.4rem 1.25rem; }
 .rv-write-lede { margin: 0 0 1rem; color: var(--slate); line-height: 1.55; }
-/* The stars, and what the rating means always on its own line under them (so it never jumps beside them) */
-.rv-pick-wrap { display: grid; justify-items: start; gap: .3rem; margin: 0 0 1rem; }
+/* The stars, and what the overall rating means always on its own line under them (so it never jumps beside them).
+   Each star button is its star plus a small margin to tap (--sz, set per picker) */
+.rv-pick-wrap { display: grid; justify-items: start; gap: .3rem; }
 .rv-pick { display: flex; gap: .1rem; margin-left: -.3rem; border-radius: 12px; }
 .rv-pick.is-invalid { box-shadow: inset 0 0 0 1.5px #9A3D3D; }
-.rv-pick-star { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; padding: 0; border: 0; border-radius: 10px; background: none; cursor: pointer; }
+.rv-pick-star { display: grid; place-items: center; width: calc(var(--sz, 30px) + 12px); height: calc(var(--sz, 30px) + 12px); padding: 0; border: 0; border-radius: 10px; background: none; cursor: pointer; }
 .rv-pick-star svg { fill: rgba(46, 44, 58, .14); stroke: rgba(46, 44, 58, .28); stroke-width: 1; transition: fill .15s ease; }
 .rv-pick-star.is-on svg { fill: var(--copper); stroke: var(--copper); }
 .rv-pick-star:hover { background: rgba(46, 44, 58, .05); }
@@ -38,30 +38,29 @@ html[data-page="reviews"] .sp-lede { margin-inline: auto; }
 :root[data-theme="dark"] .rv-pick-star.is-on svg { fill: var(--copper); stroke: var(--copper); }
 :root[data-theme="dark"] .rv-pick-star:hover { background: rgba(255, 255, 255, .06); }
 .rv-optional { color: var(--stone); font-weight: 500; }
-.rv-write textarea { min-height: 5.6rem; }
-.rv-hint { margin: -.3rem 0 .6rem; color: var(--stone); font-size: .84rem; line-height: 1.5; }
 
-/* ---------- The checklist (opens once a star is picked) ---------- */
-.rv-qs { display: grid; gap: .95rem; margin: 0 0 .4rem; animation: rv-open .5s var(--out) both; }
-@keyframes rv-open { from { opacity: 0; transform: translateY(-6px); } }
-.rv-q { margin: 0; }
-.rv-q .sp-label small { margin-left: .2rem; font-size: .78rem; }
+/* The parts: under a line, one row each, the name on the left and its stars on the right */
+.rv-parts { margin: 1.1rem 0 1rem; padding-top: 1rem; box-shadow: inset 0 1px 0 rgba(46, 44, 58, .09); }
+:root[data-theme="dark"] .rv-parts { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09); }
+.rv-parts-head { margin: 0 0 .35rem; color: var(--slate); font-size: .82rem; font-weight: 600; }
+.rv-parts-head small { margin-left: .3rem; font-size: .78rem; }
+.rv-rows { display: grid; }
+.rv-row { display: flex; align-items: center; justify-content: space-between; gap: .4rem .8rem; min-height: 2.75rem; }
+.rv-row-name { min-width: 0; color: var(--dusk); font-size: .92rem; font-weight: 600; }
+.rv-row .rv-pick { margin: 0 -.3rem 0 0; }
 .rv-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+/* Host or guest: a tick in a small round box, empty until chosen */
 .rv-chip {
-  display: inline-flex; align-items: center; gap: .45rem; min-height: 2.35rem; padding: 0 .85rem 0 .6rem; border: 0; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; gap: .45rem; min-height: 2.2rem; padding: 0 .85rem 0 .6rem; border: 0; border-radius: var(--r-pill);
   background: rgba(46, 44, 58, .05); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .1); color: var(--dusk);
   font: inherit; font-size: .86rem; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-/* The tick sits in a small round box: empty until chosen, so each answer reads as something to tick */
 .rv-chip-tick { flex: none; box-sizing: border-box; width: 1.05rem; height: 1.05rem; padding: .12rem; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(46, 44, 58, .3); color: transparent; }
 .rv-chip-tick path { transform-origin: center; transform: scale(.4); opacity: 0; transition: transform .35s var(--spring), opacity .15s ease; }
 .rv-chip[aria-pressed="true"] { background: rgba(46, 44, 58, .12); box-shadow: inset 0 0 0 1.5px var(--dusk); }
 .rv-chip[aria-pressed="true"] .rv-chip-tick { background: var(--dusk); box-shadow: none; color: var(--paper); }
 .rv-chip[aria-pressed="true"] .rv-chip-tick path { transform: scale(1); opacity: 1; }
-.rv-chip.is-good[aria-pressed="true"] { background: rgba(111, 152, 150, .17); box-shadow: inset 0 0 0 1.5px var(--tide); }
-.rv-chip.is-good[aria-pressed="true"] .rv-chip-tick { background: var(--tide); color: #fff; }
-.rv-chip.is-bad[aria-pressed="true"] { background: var(--rv-bad-soft); box-shadow: inset 0 0 0 1.5px var(--rv-bad); }
-.rv-chip.is-bad[aria-pressed="true"] .rv-chip-tick { background: var(--rv-bad); color: #fff; }
 .rv-chip:hover { background: rgba(46, 44, 58, .09); }
 .rv-chip:active { transform: scale(.95); }
 .rv-chip:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
@@ -69,12 +68,12 @@ html[data-page="reviews"] .sp-lede { margin-inline: auto; }
 :root[data-theme="dark"] .rv-chip:hover { background: rgba(255, 255, 255, .1); }
 :root[data-theme="dark"] .rv-chip-tick { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .35); }
 :root[data-theme="dark"] .rv-chip[aria-pressed="true"] { background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 1.5px var(--dusk); }
-:root[data-theme="dark"] .rv-chip.is-good[aria-pressed="true"] { background: rgba(111, 152, 150, .24); box-shadow: inset 0 0 0 1.5px var(--tide); }
-:root[data-theme="dark"] .rv-chip.is-bad[aria-pressed="true"] { background: var(--rv-bad-soft); box-shadow: inset 0 0 0 1.5px var(--rv-bad); }
-:root[data-theme="dark"] .rv-chip.is-bad[aria-pressed="true"] .rv-chip-tick { color: #2A2633; }
-.rv-qs .acct-field { margin-bottom: 0; }
+
+.rv-comment { margin-bottom: .4rem; }
+.rv-write textarea { min-height: 5.6rem; }
 .rv-write .sp-note:empty { min-height: 0; margin: 0; }
-.rv-form-foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.rv-form-foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; }
+.rv-private { color: var(--stone); font-size: .82rem; }
 .rv-count { flex: none; color: var(--stone); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .rv-form-acts { display: flex; justify-content: flex-end; align-items: center; gap: .6rem; }
 .rv-cancel, .rv-delete { min-height: 2.5rem; padding: 0 1rem; border: 0; border-radius: 100px; background: none; color: var(--dusk); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
@@ -85,27 +84,21 @@ html[data-page="reviews"] .sp-lede { margin-inline: auto; }
 :root[data-theme="dark"] .rv-delete { color: #F0A3A3; }
 :root[data-theme="dark"] :is(.rv-cancel, .rv-delete):hover { background: rgba(255, 255, 255, .07); }
 
-
 /* ---------- Your review, once sent ---------- */
 .rv-thanks { display: flex; align-items: flex-start; gap: .55rem; margin: 0 0 1rem; color: var(--dusk); font-weight: 600; line-height: 1.5; }
 .rv-thanks svg { flex: none; margin-top: .1rem; padding: .15rem; border-radius: 50%; background: var(--tide); color: #fff; }
-.rv-private { color: var(--stone); font-size: .82rem; }
 .rv-mine-acts { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding-top: .9rem; box-shadow: inset 0 1px 0 rgba(46, 44, 58, .08); }
 :root[data-theme="dark"] .rv-mine-acts { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
 .rv-mine .rv-item { padding: 0 0 .9rem; }
-.rv-item { padding: 1.25rem 0; }
-.rv-body { max-width: 40rem; margin: .6rem 0 0; color: var(--slate); line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
-.rv-meta { display: flex; align-items: baseline; gap: .7rem; margin-top: .7rem; font-size: .84rem; }
-.rv-meta b { font-weight: 650; }
+.rv-overall { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem .7rem; color: var(--slate); font-size: .9rem; font-weight: 600; }
+.rv-scores { display: grid; gap: .3rem; margin: .8rem 0 0; font-size: .86rem; }
+.rv-scores div { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 20rem; }
+.rv-scores dt { color: var(--dusk); font-weight: 600; }
+.rv-scores dd { margin: 0; }
+.rv-body { margin: .8rem 0 0; color: var(--slate); line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
+.rv-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: .7rem; margin-top: .8rem; font-size: .84rem; }
 .rv-meta time { color: var(--stone); }
 .rv-meta span { color: var(--slate); }
-.rv-meta { flex-wrap: wrap; }
-.rv-ticks { display: grid; gap: .2rem; margin: .6rem 0 0; font-size: .84rem; }
-.rv-ticks div { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .45rem; }
-.rv-ticks dt { display: inline-flex; align-items: center; gap: .35rem; font-weight: 650; color: var(--dusk); }
-.rv-ticks dt::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--tide); }
-.rv-ticks .is-bad dt::before { background: var(--rv-bad); }
-.rv-ticks dd { margin: 0; color: var(--slate); }
 
 /* While finding out whether you've already left a review: three quiet lines */
 .rv-wait { display: grid; gap: .6rem; }
@@ -116,7 +109,12 @@ html[data-page="reviews"] .sp-lede { margin-inline: auto; }
 @keyframes rv-pulse { 50% { opacity: .45; } }
 :root[data-theme="dark"] .rv-wait i { background: rgba(255, 255, 255, .09); }
 
+/* A narrow phone: every part's name sits above its stars (all rows alike, not only the long names) */
+@media (max-width: 380px) {
+  .rv-row { flex-direction: column; align-items: flex-start; gap: .1rem; padding: .3rem 0; }
+  .rv-row .rv-pick { margin: 0 0 0 -.3rem; }
+}
 @media (prefers-reduced-motion: reduce) {
   .rv-pick-star svg, .rv-chip-tick path { transition: none; }
-  .rv-qs, .rv-wait i { animation: none; }
+  .rv-wait i { animation: none; }
 }

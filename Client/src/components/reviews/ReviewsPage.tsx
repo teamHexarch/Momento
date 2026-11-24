@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import SiteFooter from '@/components/shared/SiteFooter';
 import ReviewsBoard from './ReviewsBoard';
 
-/** The Reviews page: private feedback for the Momento team (stars and a checklist). Built from the Support page's parts. */
+/** The Reviews page: private feedback for the Momento team, all out of 5 stars. Built from the Support page's parts. */
 export default function ReviewsPage() {
   return (
     <div className="page-wrap" id="pageWrap">
@@ -10,7 +10,7 @@ export default function ReviewsPage() {
       <main className="page">
         <section className="sp-head">
           <span className="mask"><h1 className="sp-title ink rise" data-text="Reviews">Reviews</h1></span>
-          <p className="sp-lede intro" style={{ '--d': '.3s' } as CSSProperties}>Used Momento at an event? Tell us how it went. Tap a star, tick what fits, and you’re done. Only the Momento team sees your answers.</p>
+          <p className="sp-lede intro" style={{ '--d': '.3s' } as CSSProperties}>Used Momento at an event? Give it a few stars. Only the overall rating is needed, and only the Momento team sees your answers.</p>
         </section>
         <ReviewsBoard />
         <SiteFooter />
