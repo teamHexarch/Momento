@@ -3,6 +3,7 @@
 //                               link, say), grown out of `from`; the screen stays awake
 // - Momento.qr.scan()       camera scanner; a Momento QR (or a bare code) joins that album
 // - Momento.qr.mount(el, album)  a small QR tile inside el (the "Album created" screen uses it)
+// (The home page's own code holds hexarch.org/?book, which opens the photobook.)
 // The QR holds the album's invite link (events.html?join=CODE) or a group's (events.html?group=CODE), so a phone's own camera app works too.
 // Libraries are loaded only when needed: qrcode-generator to draw, jsQR to read where the browser
 // has no built-in BarcodeDetector (Firefox, Safari, desktop Chrome on some systems).
@@ -244,6 +245,16 @@
     try { return (new URL(String(text || '').trim()).searchParams.get('group') || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); } catch (e) { return ''; }
   }
 
+  // The code on the home page: an address on this site (or hexarch.org) with ?book. Opens the home page with the photobook open
+  function bookLinkFrom(text) {
+    try {
+      const u = new URL(String(text || '').trim());
+      if (!u.searchParams.has('book')) return '';
+      if (u.host !== location.host && !/(^|\.)hexarch\.org$/.test(u.hostname)) return '';
+      return new URL('./?book', location.href).href;
+    } catch (e) { return ''; }
+  }
+
   // A Momento invite link (any address with ?join=) or a bare 7-character code
   function codeFrom(text) {
     const t = String(text || '').trim();
@@ -342,6 +353,16 @@
       if (!done && stream) timer = setTimeout(tick, 140);
     }
     function found(text) {
+      const book = bookLinkFrom(text);
+      if (book) {
+        done = true;
+        d.classList.add('is-found');
+        say('Album found. Opening…');
+        navigator.vibrate?.(40);
+        stop();
+        setTimeout(() => { d.close(); location.href = book; }, 550);
+        return;
+      }
       const group = groupCodeFrom(text);
       if (group) {
         done = true;

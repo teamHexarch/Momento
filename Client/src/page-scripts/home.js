@@ -34,14 +34,10 @@ export default function start() {
       img.loading = 'lazy';
     }
 
-    // Decorative QR pattern (not a real, scannable code)
+    // The QR card holds a real, scannable code for https://hexarch.org/?book (25 modules, error correction M, drawn
+    // once from assets/vendor/qrcode.js). Scanning it with a phone opens the home page with the photobook already open
     (() => {
-      const N = 25; let cells = '', seed = 7;
-      const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-      const finder = (x, y) => `<path d="M${x} ${y}h7v7h-7zM${x + 1} ${y + 1}v5h5v-5z" fill-rule="evenodd"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3"/>`;
-      const inFinder = (x, y) => (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
-      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!inFinder(x, y) && rand() > 0.52) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
-      const art = `<g fill="#2E2C3A">${finder(0, 0)}${finder(N - 7, 0)}${finder(0, N - 7)}${cells}</g>`;
+      const art = `<g fill="#2E2C3A"><path d="M0 0h7v1h-7zM11 0h1v1h-1zM13 0h1v1h-1zM18 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h3v1h-3zM13 1h1v1h-1zM16 1h1v1h-1zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM8 2h1v1h-1zM10 2h1v1h-1zM12 2h1v1h-1zM16 2h1v1h-1zM18 2h1v1h-1zM20 2h3v1h-3zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h1v1h-1zM12 3h2v1h-2zM15 3h2v1h-2zM18 3h1v1h-1zM20 3h3v1h-3zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM9 4h2v1h-2zM12 4h1v1h-1zM16 4h1v1h-1zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM10 5h2v1h-2zM13 5h2v1h-2zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h7v1h-7zM8 7h1v1h-1zM10 7h3v1h-3zM14 7h3v1h-3zM0 8h1v1h-1zM6 8h1v1h-1zM8 8h4v1h-4zM13 8h1v1h-1zM17 8h2v1h-2zM21 8h3v1h-3zM4 9h2v1h-2zM8 9h1v1h-1zM10 9h2v1h-2zM13 9h4v1h-4zM19 9h5v1h-5zM1 10h1v1h-1zM6 10h1v1h-1zM8 10h1v1h-1zM10 10h1v1h-1zM12 10h4v1h-4zM17 10h2v1h-2zM21 10h1v1h-1zM23 10h2v1h-2zM0 11h2v1h-2zM3 11h2v1h-2zM7 11h1v1h-1zM9 11h2v1h-2zM12 11h1v1h-1zM14 11h1v1h-1zM17 11h2v1h-2zM20 11h2v1h-2zM24 11h1v1h-1zM0 12h1v1h-1zM2 12h3v1h-3zM6 12h2v1h-2zM9 12h2v1h-2zM12 12h1v1h-1zM14 12h1v1h-1zM16 12h1v1h-1zM18 12h2v1h-2zM24 12h1v1h-1zM0 13h1v1h-1zM4 13h1v1h-1zM7 13h1v1h-1zM10 13h1v1h-1zM13 13h5v1h-5zM19 13h1v1h-1zM23 13h1v1h-1zM0 14h1v1h-1zM2 14h1v1h-1zM4 14h1v1h-1zM6 14h1v1h-1zM8 14h1v1h-1zM11 14h6v1h-6zM19 14h3v1h-3zM23 14h2v1h-2zM0 15h1v1h-1zM7 15h5v1h-5zM15 15h2v1h-2zM18 15h2v1h-2zM21 15h2v1h-2zM24 15h1v1h-1zM0 16h1v1h-1zM2 16h1v1h-1zM5 16h3v1h-3zM9 16h1v1h-1zM11 16h10v1h-10zM22 16h1v1h-1zM8 17h1v1h-1zM10 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM20 17h1v1h-1zM0 18h7v1h-7zM9 18h1v1h-1zM11 18h1v1h-1zM14 18h1v1h-1zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h1v1h-1zM24 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM9 19h4v1h-4zM15 19h2v1h-2zM20 19h1v1h-1zM23 19h2v1h-2zM0 20h1v1h-1zM2 20h3v1h-3zM6 20h1v1h-1zM9 20h12v1h-12zM22 20h1v1h-1zM0 21h1v1h-1zM2 21h3v1h-3zM6 21h1v1h-1zM9 21h3v1h-3zM13 21h2v1h-2zM17 21h2v1h-2zM23 21h2v1h-2zM0 22h1v1h-1zM2 22h3v1h-3zM6 22h1v1h-1zM9 22h1v1h-1zM13 22h3v1h-3zM21 22h2v1h-2zM24 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM9 23h3v1h-3zM14 23h3v1h-3zM18 23h3v1h-3zM24 23h1v1h-1zM0 24h7v1h-7zM8 24h3v1h-3zM12 24h1v1h-1zM16 24h1v1h-1zM18 24h1v1h-1zM21 24h1v1h-1zM24 24h1v1h-1z"/></g>`;
       document.getElementById('qrHero').innerHTML = art;
       const qrStep = document.getElementById('qrStep');   // the QR in How it works
       if (qrStep) qrStep.innerHTML = art;
@@ -327,11 +323,13 @@ export default function start() {
                  photos: [{ p: 2, x: 50, y: 56, w: 34, r: '3/4', rot: -4, mount: 'polaroid', caption: 'Your shot is next', by: 'You?', at: 'soon', note: 'this could be yours' }] },
       },
       {
-        // Signed out: empty slots. Signed in, fillYourSpread() swaps in your own album (see the end of this script)
-        left: { type: 'text', no: '05', title: 'This page is yours',
-                body: 'Start an album, put the code out, and every photo your guests take lands right here.',
-                button: 'Start your album', href: 'auth',
-                photos: [{ slot: true, x: 18, y: 64, w: 46, r: '4/3', rot: -3, mount: 'tape', caption: 'your first photo' }] },
+        // Signed out: asks the visitor to sign in (the sign-in window also opens by itself, see askToSignIn). Signed in,
+        // fillYourSpread() swaps in your own album (see the end of this script)
+        left: { type: 'text', no: '05', title: 'Sign in to add your photos',
+                body: 'Everyone at the event can see this album. Sign in to add yours, or create an account if you’re new.',
+                button: 'Sign in', href: 'auth:login',
+                button2: 'New here? Create an account', href2: 'auth:signup',
+                photos: [{ slot: true, x: 20, y: 71, w: 40, r: '4/3', rot: -3, mount: 'tape', caption: 'your first photo' }] },
         right: { type: 'photos', photos: [
                 { slot: true, x: 8, y: 6, w: 54, r: '4/3', rot: -2, mount: 'corners', caption: 'your shot is next' },
                 { slot: true, x: 62, y: 11, w: 31, r: '3/4', rot: 3, mount: 'tape', caption: 'the toast?' },
@@ -409,6 +407,7 @@ export default function start() {
           <p class="reveal" style="--i:2">${esc(p.body)}</p>
           ${p.hint ? `<span class="flip-hint reveal" style="--i:3">${esc(p.hint)}</span>` : ''}
           ${p.button ? `<button class="page-cta reveal" type="button" tabindex="-1" style="--i:3" data-href="${esc(p.href)}">${esc(p.button)}</button>` : ''}
+          ${p.button2 ? `<button class="page-cta is-quiet reveal" type="button" tabindex="-1" style="--i:4" data-href="${esc(p.href2)}">${esc(p.button2)}</button>` : ''}
         </div>`;
     }
 
@@ -719,8 +718,7 @@ export default function start() {
     // page glides on so it flips open onto its first photos
     const qrCard = document.getElementById('qrCard');
     let scanState = 'idle', popAt = 0;
-    // "Album found" is followed by sign up / log in; whatever the visitor chooses (or if
-    // they just close it), the album then pops out
+    // "Album found" is followed straight by the album. Signing in comes later, on its last page
     const wait = (ms) => (still ? 0 : ms);
     function scan() {
       if (scanState !== 'idle') return;
@@ -728,7 +726,7 @@ export default function start() {
       qrCard.classList.add('is-scanning');
       setTimeout(() => {
         qrCard.classList.add('is-found');
-        setTimeout(() => window.openAuth({ fromScan: true, onDone: revealAlbum }), wait(700));
+        setTimeout(revealAlbum, wait(700));
       }, wait(1100));
     }
     function revealAlbum() {
@@ -796,6 +794,16 @@ export default function start() {
       bookTo(rest(i), 1400);
     }
     syncArrows();
+    // The code on the card is a real one for hexarch.org/?book: a phone that scans it lands here with the book
+    // already open (once the intro has played, if it's playing). The address is tidied so a refresh is normal
+    if (new URLSearchParams(location.search).has('book')) {
+      const u = new URL(location.href);
+      u.searchParams.delete('book');
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+      const open = () => { if (scanState === 'idle') revealAlbum(); };
+      if (document.documentElement.classList.contains('intro-on')) document.addEventListener('momento:intro-end', open, { once: true });
+      else open();
+    }
     document.querySelector('.page-arrows').addEventListener('click', (e) => {
       const b = e.target.closest('.pa');
       if (b) goSpread(spread + Number(b.dataset.dir));
@@ -878,7 +886,9 @@ export default function start() {
     function pressButton(btn) {
       if (btn.classList.contains('kb')) return sortTop(btn.dataset.act);
       const href = btn.dataset.href;
-      if (href === 'auth') return window.openAuth?.({ mode: 'signup' });
+      // The sign-in window, worded for someone who has come to add photos to this album
+      if (href === 'auth' || href === 'auth:signup') return window.openAuth?.({ mode: 'signup', fromScan: true });
+      if (href === 'auth:login') return window.openAuth?.({ mode: 'login', fromScan: true });
       if (href.startsWith('#')) {
         const target = document.querySelector(href);
         if (target) scrollTo({ top: target.getBoundingClientRect().top + scrollY, behavior: still ? 'auto' : 'smooth' });
@@ -1060,7 +1070,19 @@ export default function start() {
       if (i === 0) resetArrivals();
       if (i === keepSpread) resetKeep(false);
     }
+    // Reaching the last page signed out opens the sign-in window after a moment, once per visit. Turning away first cancels it
+    let signInTimer = 0, signInAsked = false;
+    async function askToSignIn() {
+      const M = window.Momento;
+      if (signInAsked || activeSpread !== n - 1) return;
+      try { await M.sessionReady; } catch (err) { /* treated as signed out */ }
+      if (signInAsked || activeSpread !== n - 1 || M.account?.get?.() || document.querySelector('dialog[open]')) return;
+      signInAsked = true;
+      window.openAuth?.({ mode: 'login', fromScan: true });
+    }
     function spreadChanged(prev, s) {
+      clearTimeout(signInTimer);
+      if (s === n - 1 && !signInAsked) signInTimer = setTimeout(askToSignIn, wait(1000));
       setHover(null);
       syncFocusable();
       if (prev >= 0) {
@@ -1089,7 +1111,7 @@ export default function start() {
       const count = Number.isFinite(pick.photos) ? pick.photos : shots.length;
       const left = { ...last.left, no: '05', title: pick.name || 'Your album',
                      body: `${count} photo${count === 1 ? '' : 's'} so far, from everyone who was there. Every new one lands right here.`,
-                     button: 'Open album', href: `albums#album=${encodeURIComponent(pick.id)}`,
+                     button: 'Open album', href: `albums#album=${encodeURIComponent(pick.id)}`, button2: '', href2: '',
                      photos: last.left.photos.map(fill) };
       const right = { ...last.right, photos: last.right.photos.map(fill) };
       [left, right].forEach((page, i) => {
