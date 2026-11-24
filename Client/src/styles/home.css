@@ -999,7 +999,7 @@
     .auth-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
     /* reCAPTCHA's picture puzzle, moved into the window (see prepareCaptcha) */
     .auth-dialog > .rc-puzzle { top: 12px !important; left: 0 !important; right: 0 !important; width: 100% !important; }
-    #signupCaptcha { display: flex; justify-content: center; min-height: 78px; margin: .2rem 0 .6rem; }
+    #signupCaptcha { display: flex; justify-content: center; min-height: 78px; }
     .auth-dialog[open] .auth-card { animation: auth-in .45s var(--spring); }
     @keyframes auth-in { from { opacity: 0; scale: .94; translate: 0 12px; } }
     .auth-card {
@@ -1063,12 +1063,18 @@
     .auth-skip:hover { color: var(--dusk); }
 
 
-    /* Agreeing to the Terms and Privacy Policy (sign-up only; the server records it) */
-    .auth-consent { display: flex; align-items: flex-start; gap: .6rem; margin: .3rem 0 .8rem; color: var(--slate); font-size: .85rem; line-height: 1.45; cursor: pointer; }
-    .auth-consent input { flex: none; width: 1.1rem; height: 1.1rem; margin: .1rem 0 0; accent-color: var(--dusk); cursor: pointer; }
-    .auth-consent input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
-    .auth-consent a { color: var(--dusk); text-underline-offset: .2em; }
-    .auth-consent a:hover { text-decoration-thickness: 2px; }
+    /* Agreeing to the Terms and Privacy Policy: one line by each button that can create an account (pressing it is
+       the agreement; the server records it) */
+    .auth-legal { margin: .65rem .4rem 0; color: var(--stone); font-size: .75rem; line-height: 1.45; text-align: center; }
+    .auth-legal a, .auth-note a { color: inherit; text-decoration: underline; text-underline-offset: .2em; text-decoration-color: currentColor; }
+    .auth-legal a:hover, .auth-note a:hover { color: var(--dusk); text-decoration-thickness: 2px; }
+    .auth-legal a:focus-visible, .auth-note a:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; border-radius: 2px; }
+    /* The "I'm not a robot" box: only shown once Create account is pressed, right above the button */
+    .auth-captcha { margin: 0 0 .7rem; animation: auth-captcha-in .35s var(--spring); }
+    .auth-captcha[hidden] { display: none; }
+    .auth-captcha-hint { margin: 0 0 .5rem; color: var(--slate); font-size: .85rem; font-weight: 500; text-align: center; }
+    @keyframes auth-captcha-in { from { opacity: 0; translate: 0 6px; } }
+    @media (prefers-reduced-motion: reduce) { .auth-captcha { animation: none; } }
     .auth-note { margin: .9rem 0 0; color: var(--stone); font-size: .75rem; text-align: center; line-height: 1.45; }
     .auth-body[hidden], .auth-done[hidden], .auth-scan[hidden], .auth-skip[hidden] { display: none; }
     .auth-card { max-height: calc(100dvh - 32px); overflow-y: auto; }
