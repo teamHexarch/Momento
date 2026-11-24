@@ -18,8 +18,14 @@ if (!fs.existsSync(root)) { console.error('No out/ folder. Run `npm run build` f
 
 const isFile = (f) => { try { return fs.statSync(f).isFile(); } catch { return false; } };
 const isDir = (f) => { try { return fs.statSync(f).isDirectory(); } catch { return false; } };
+// Cached like GitHub Pages does (cache-control: max-age=600 and last-modified on every file), so page-to-page timings
+// here match the live site's: a page that's opened next reuses the scripts, styles and fonts it already has
 const send = (res, status, file) => {
-  res.writeHead(status, { 'Content-Type': types[path.extname(file).toLowerCase()] || 'application/octet-stream' });
+  res.writeHead(status, {
+    'Content-Type': types[path.extname(file).toLowerCase()] || 'application/octet-stream',
+    'Cache-Control': 'max-age=600',
+    'Last-Modified': fs.statSync(file).mtime.toUTCString(),
+  });
   fs.createReadStream(file).pipe(res);
 };
 
