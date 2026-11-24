@@ -1,4 +1,79 @@
-# Momento Next.js port: patch notes
+# Momento patch notes
+
+## Version 4.0: Momento on Next.js (21 to 24 November 2026)
+
+Live on https://hexarch.org since 23 November 2026. The website is rebuilt on Next.js and looks and works the way it
+did before. It also adds a better camera, sorting and filtering in albums, zoom in the photo viewer, a Reviews page,
+and a few fixes.
+
+### New for everyone
+
+**Camera**
+- A cleaner camera screen. The picture fills the screen, there's no text over it, and every control is liquid glass.
+  If something goes wrong (for example, camera access is off), a small glass card explains it.
+- Zoom with the 1×, 2× and 3× buttons (plus 0.5× on phones with a wide lens), by pinching with two fingers anywhere on
+  the screen, with the mouse wheel, or with the + and − keys. The selected button shows the exact zoom, such as 1.5×.
+  On phones that support it, the camera itself zooms. Otherwise the photo is cropped to match what you see.
+- Self-timer: off, 3, 5 or 10 seconds. The time shows next to the timer button, and a glass countdown appears in the
+  middle of the screen. Press the shutter again to cancel.
+- Flash (on cameras that have one), grid lines, and a brightness button (brighter, darker, normal) on cameras that
+  support it.
+- Switch between the front and back cameras.
+- Take several photos, then tap the white check button to use them. It shows how many you've taken.
+
+**Uploading photos**
+- More formats: HEIC and HEIF (iPhone), AVIF, JPEG XL, TIFF and camera RAW files, including iPhone ProRAW (DNG). The
+  Add photos button and the upload confirmation list them.
+
+**My albums**
+- Sort an album's photos: newest first, oldest first, file name, largest first, or most reactions. The choice is
+  remembered on your device. File name and Largest first only appear once the server sends that information.
+- Filter: all photos, yours, bookmarked, or photos with reactions.
+- Added by: a menu to show one person's photos.
+- When a filter is on, a line shows how many photos you're seeing, with a Clear button.
+- Viewing a photo full size: zoom in and out with the − and + buttons on a computer, the + − and 0 keys, Ctrl and the
+  mouse wheel, or a trackpad pinch. On phones, a pinch now keeps its zoom level, up to 6×.
+
+**Reviews page** (new, at hexarch.org/reviews)
+- Shows the overall score and how many reviews have each star rating. Press a star rating to see only those reviews.
+- Write, edit or delete your own review (one per person). Sort by newest, highest or lowest.
+- Find it in the home page's menu and in the footer under Product.
+- Needs the server's review feature before it works on the live site (see KNOWN-ISSUES.md).
+
+**Carried over from the HTML site** (added there on 21 and 22 November)
+- Photo checks: your uploads that are still being checked show in a list in the album, with "Request review" for
+  photos the automatic check wasn't sure about.
+- Anyone can now delete photos they added. Hosts can still delete any photo in their album.
+- Staff only: the Photo review page, reached from the account menu.
+
+### Fixes
+- Swiping between photos in the full-size viewer often got stuck and wouldn't move to the next photo. It now works
+  every time, and the next photo shows sooner on slow connections.
+- Social: the map's zoom buttons were stretched into a tall bar across the globe. They're back to normal.
+- Camera timer: the time label no longer overlaps the other buttons or moves around.
+
+### For the team
+- **Where the code is:** `Client/` in the `teamHexarch/Momento` repo is now the Next.js site. Every push to `main`
+  that changes `Client/` builds the site and publishes it to hexarch.org. If the build fails, nothing is published
+  and the site that's already live stays up.
+- **Rolling back:** the old HTML site is kept on the `html-site` branch.
+- **Running it locally:**
+  - `cd Client && npm install && npm run dev` (localhost:3001) for working on it
+  - `npm run build && npm run preview` (localhost:3002) to see exactly what will be published
+- **Backend:** `Server/` is unchanged.
+  - Running the website through the local server: build first, then set `CLIENT_DIR=../Client/out`.
+  - New server routes the front end expects: `Client/BACKEND-NOTES-NEXT.md`.
+- **Old addresses:** links like `albums.html` and `events.html?join=…` keep working, including in emails already sent.
+  New pages use clean addresses such as /albums and /reviews.
+- **Under the hood:**
+  - The header, footer, dialogs, notifications, account menu, login, and light and dark mode are now React
+    components.
+  - All server calls are in one typed file (`src/lib/api.ts`).
+  - Each page's older code is now started by React instead of loading as separate files.
+
+---
+
+# Earlier: the port, stages 1 to 4 (21 November 2026)
 
 **Stage 1 to 4, 21 November 2026.** Every page of the original static site is now a Next.js page that looks and behaves like the
 original. This is the "wrapper" stage: the markup is React and the CSS is byte-for-byte the original, but all behaviour still
