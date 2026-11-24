@@ -174,7 +174,9 @@ export function usePageLeave() {
       if (url.origin !== location.origin || url.pathname === location.pathname) return; // other sites, mailto:, same-page anchors
       e.preventDefault();
       root.classList.add('is-leaving');
-      if (ptFile) { root.classList.add('pt-file'); try { sessionStorage.setItem('momento-pt', '1'); } catch {} }
+      // The next page reads this mark and rises in (headScripts.ts, is-arriving), so the switch is one motion out and in
+      try { sessionStorage.setItem('momento-pt', '1'); } catch {}
+      if (ptFile) root.classList.add('pt-file');
       setTimeout(() => { location.href = url.href; }, 240);
     };
     const onShow = (e: PageTransitionEvent) => { if (e.persisted) root.classList.remove('is-leaving'); }; // back from the page cache

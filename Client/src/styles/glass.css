@@ -788,19 +788,28 @@ body { overflow-wrap: break-word; }
 @view-transition { navigation: auto; }
 :root:not(.intro-on) .header { view-transition-name: site-header; }
 :root:not(.intro-on) .nav-split.active, :root:not(.intro-on) .nav > .nav-item[aria-current="page"] { view-transition-name: nav-current; }
-:root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current) { animation-duration: .5s; animation-timing-function: cubic-bezier(.34, 1.2, .64, 1); }
-:root:not(.theming)::view-transition-old(root) { animation: pt-out .26s cubic-bezier(.5, 0, 1, 1) both; }
-:root:not(.theming)::view-transition-new(root) { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) .06s both; }
-@keyframes pt-out { to { opacity: 0; transform: translateY(-14px) scale(.985); } }
-@keyframes pt-in { from { opacity: 0; transform: translateY(18px); } }
-/* The page rises in as a whole, so its title (.rise on each page) is already in place: one rise, not two */
-:root.vt-in .rise { translate: 0 0; transition: none; }
+/* The header is the same on every page, so it simply stays: no cross-fade of two copies (which ghosts), and no
+   overshoot (which wobbles when the two headers differ by a pixel). The current tab glides to its new place. */
+:root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current) { animation-duration: .42s; animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+:root:not(.theming)::view-transition-old(site-header) { display: none; }
+:root:not(.theming)::view-transition-new(site-header) { animation: none; }
+/* One calm motion: the old page fades away, the new one fades in with a short rise just after */
+:root:not(.theming)::view-transition-old(root) { animation: pt-out .18s cubic-bezier(.4, 0, 1, 1) both; }
+:root:not(.theming)::view-transition-new(root) { animation: pt-in .38s cubic-bezier(.16, 1, .3, 1) .08s both; }
+@keyframes pt-out { to { opacity: 0; } }
+@keyframes pt-in { from { opacity: 0; transform: translateY(8px); } }
+/* The browser takes its picture of the new page before the page scripts mark it .is-ready, while the opening
+   pieces (.intro, .s-group, the title's .rise) are still hidden. Arriving through the page-to-page motion, they
+   start in place instead, so the page rises in once, whole, rather than rising half-empty and then filling in. */
+:root.vt-in :is(.intro, .s-group, .rise) { opacity: 1; translate: 0 0; transition: none; }
 /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
-html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
+html.is-leaving .page-wrap { animation: pt-out .2s cubic-bezier(.4, 0, 1, 1) both; }
 html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
 /* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
 html.pt-file.is-leaving .header { opacity: 1; }
-html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+html.is-arriving .page-wrap { animation: pt-in .38s cubic-bezier(.16, 1, .3, 1) both; }
+/* Pages with and without a scrollbar are the same width, so nothing shifts sideways between them */
+html { scrollbar-gutter: stable; }
 /* Phones: one motion only. The header and the nav are simply there on the next page (the current tab
    swaps straight to its new place, without gliding or resizing across), and the page swaps with a
    single short fade instead of sinking away and rising in */
