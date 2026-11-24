@@ -225,7 +225,7 @@ export default function SettingsPage() {
 
               </section>
 
-              <section className="s-group" style={{ '--d': '.42s' } as CSSProperties} aria-labelledby="g-store" id="storeGroup" hidden>
+              <section className="s-group" style={{ '--d': '.42s' } as CSSProperties} aria-labelledby="g-store" id="storeGroup">
                 <h2 id="g-store">Space on this device</h2>
                 <div className="s-list panel">
                   <div className="s-store" id="store">

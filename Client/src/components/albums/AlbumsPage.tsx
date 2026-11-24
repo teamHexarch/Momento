@@ -10,13 +10,19 @@ export default function AlbumsPage() {
           <section className="hero">
             <div>
               <span className="mask"><h1 className="title ink rise" data-text="My albums">My albums</h1></span>
-              <p className="lede intro" id="lede" style={{ '--d': '.3s' } as CSSProperties}></p>
+              {/* (in the page from the start, so the line is already there: filling it later pushed everything below down) */}
+              <p className="lede intro" id="lede" style={{ '--d': '.3s' } as CSSProperties}>Loading your albums…</p>
               <div className="hero-acts intro" style={{ '--d': '.4s' } as CSSProperties}>
                 <button className="btn btn-dark" type="button" data-create=""><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>New album</button>
                 <a className="btn btn-light" href="events#join"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" /><path d="M10 16l4-4-4-4M14 12H4" /></svg>Join an album</a>
               </div>
             </div>
-            <article className="live panel intro" id="live" style={{ '--d': '.5s' } as CSSProperties} aria-labelledby="liveTitle"></article>
+            {/* Starts as its placeholder (the same markup albums.js gives it), so the hero is its full height from the first
+                paint: empty, the card had no height and everything below moved down when it was filled */}
+            <article className="live panel intro is-pending" id="live" style={{ '--d': '.5s' } as CSSProperties} aria-labelledby="liveTitle">
+              <div className="live-media" aria-hidden="true"></div>
+              <div className="live-actions" aria-hidden="true"><span className="btn live-ghost"></span><span className="btn live-ghost"></span></div>
+            </article>
           </section>
 
           <section className="pulse" aria-label="What's happening">
@@ -46,6 +52,11 @@ export default function AlbumsPage() {
               </div>
             </div>
             <div id="years" className="is-loading"></div>
+            {/* Stand-in cards while the albums load (shown only while #years is loading and empty: albums.css) */}
+            <div className="years-ghost" aria-hidden="true">
+              <span className="ghost-head"></span>
+              <div className="grid">{[0, 1, 2, 3, 4, 5].map((i) => <span className="ghost-card" key={i}><i></i><b></b><b></b></span>)}</div>
+            </div>
             {/* Bookmarked: albums you saved, and photos you bookmarked, from all your albums (the filter is still called "liked" in the code) */}
             <div id="likedView" hidden>
               <section className="lk-block" id="lkAlbumsBlock" aria-labelledby="lkAlbumsTitle" hidden>

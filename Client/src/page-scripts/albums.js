@@ -52,7 +52,11 @@ export default function start() {
     const kept = () => ALBUMS.filter((a) => !a.gone);
     const tally = (st) => kept().filter((a) => a.status === st).length;
     const photos = kept().reduce((t, a) => t + a.photos, 0), mine = kept().reduce((t, a) => t + a.mine, 0);
+    // Until the list has come from the server there is nothing to sum up: the lede keeps saying it's loading (it's in
+    // the page that way) and the tab counts stay empty, rather than flashing "No albums yet" and zeros first
+    let albumsLoaded = false;
     function sumUp(first) {
+      if (!albumsLoaded && !ALBUMS.length) return;
       const list = kept(), p = list.reduce((t, a) => t + a.photos, 0), m = list.reduce((t, a) => t + a.mine, 0), up = tally('new');
       const n = (v) => (first ? `<b data-count="${v}">0</b>` : `<b>${num(v)}</b>`);
       document.getElementById('lede').innerHTML = list.length ? `${n(list.length)} ${list.length === 1 ? 'album' : 'albums'} · ${n(p)} photos · ${n(m)} yours` : 'No albums yet';
@@ -169,6 +173,14 @@ export default function start() {
         </span>`;
       el.cover = el.querySelector('.cover');
       el.img = el.cover.querySelector('img');
+      // The cover fades in once it has loaded and decoded, rather than painting in strips over the grey (albums.css);
+      // one already in the cache (a redrawn card) shows at once
+      if (el.img) {
+        const img = el.img, on = () => img.classList.add('is-loaded');
+        img.decoding = 'async';
+        if (img.complete && img.naturalWidth) on();
+        else { img.addEventListener('load', on, { once: true }); img.addEventListener('error', on, { once: true }); }
+      }
       el.querySelector('.album-hit').addEventListener('click', () => openAlbum(a.id, 0, el.img));
       el.querySelector('.bookmark').addEventListener('click', (e) => { e.stopPropagation(); toggleSave(a); });
       lightUp(el.querySelector('.frame'));
@@ -244,10 +256,14 @@ export default function start() {
     // Filter tabs, with the white pill sliding under the chosen one
     const tabs = [...document.querySelectorAll('.tab')];
     const tabPill = document.querySelector('.tab-pill');
-    function placePill() {
+    // It only slides when a tab is chosen; when the row settles (first placement, the counts arriving, a resize, the
+    // font) it moves straight to its tab instead of growing and gliding in on its own
+    function placePill(slide = false) {
       const t = tabs.find((x) => x.getAttribute('aria-selected') === 'true');
+      if (!slide) tabPill.style.transition = 'none';
       tabPill.style.width = `${t.offsetWidth}px`;
       tabPill.style.translate = `${t.offsetLeft}px 0`;
+      if (!slide) { tabPill.offsetWidth; tabPill.style.transition = ''; }
     }
     // Filtering from far down the page brings the top of the archive back into view
     const toArchive = () => {
@@ -256,18 +272,18 @@ export default function start() {
     };
     tabs.forEach((t) => t.addEventListener('click', () => {
       tabs.forEach((x) => x.setAttribute('aria-selected', x === t));
-      filter = t.dataset.filter; placePill(); render(); toArchive();
+      filter = t.dataset.filter; placePill(true); render(); toArchive();
       if (filter === 'liked') loadLiked();
     }));
-    addEventListener('resize', placePill);
+    addEventListener('resize', () => placePill());
     // The tabs share the row's width, so a count changing size moves its neighbours: keep the pill on its tab
-    if (window.ResizeObserver) { const ro = new ResizeObserver(placePill); tabs.forEach((t) => ro.observe(t)); }
-    document.fonts?.ready.then(placePill);
+    if (window.ResizeObserver) { const ro = new ResizeObserver(() => placePill()); tabs.forEach((t) => ro.observe(t)); }
+    document.fonts?.ready.then(() => placePill());
     const search = document.getElementById('search');
     search.addEventListener('input', () => { query = search.value; render(); });
     document.getElementById('clearSearch').addEventListener('click', () => {
       search.value = query = ''; filter = 'all';
-      tabs.forEach((x) => x.setAttribute('aria-selected', x.dataset.filter === 'all')); placePill(); render(); search.focus();
+      tabs.forEach((x) => x.setAttribute('aria-selected', x.dataset.filter === 'all')); placePill(true); render(); search.focus();
     });
 
     // ---- Bookmarked: albums you saved, then every photo you've bookmarked ----
@@ -2874,6 +2890,7 @@ export default function start() {
       cards.clear();
       const updated = result.albums.map((item) => Object.assign(byId(item.id) || {}, fromStore(item)));
       ALBUMS.splice(0, ALBUMS.length, ...updated);
+      albumsLoaded = true;
       ALBUMS.forEach((a, i) => cards.set(a.id, makeCard(a, i)));
       render(false); sumUp(false); renderLive();
       yearsEl.classList.remove('is-loading');

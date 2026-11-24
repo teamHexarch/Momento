@@ -104,6 +104,18 @@ export default function start() {
     // Every change here is confirmed with the shared toast
     const toast = (title, sub = '') => window.Momento.toast(title, sub);
 
+    // Signed in earlier in this tab: the account rows show its name, email and password row from the start, not "…",
+    // then "Not set" and "not logged in", then the real values once every script has loaded and the server has answered.
+    // (Only for showing; anything that changes the account still waits for the server's answer, below.)
+    let early = null;
+    try { early = JSON.parse(sessionStorage.getItem('momento-account') || 'null'); } catch (e) {}
+    if (early) {
+      document.getElementById('nameNow').textContent = early.name || 'Not set';
+      document.getElementById('emailNow').textContent = early.email || '';
+      document.getElementById('emailVia').textContent = early.providers?.includes('google') ? ' (with Google)' : '';
+      document.getElementById('passwordGroup').hidden = !early.hasPassword;
+    }
+
     // The shared script (theme, account) runs after this one, so everything that needs it waits
     addEventListener('DOMContentLoaded', () => {
       const M = window.Momento;
@@ -180,7 +192,7 @@ export default function start() {
       const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const busy = (f, on) => { const b = f.querySelector('[type="submit"]'); b.disabled = on; f.toggleAttribute('aria-busy', on); };
       const fill = () => {
-        const a = M.account.get();
+        const a = M.account.get() || early;
         if (!form.contains(document.activeElement)) form.name.value = a ? a.name : '';
         document.getElementById('nameNow').textContent = a?.name || 'Not set';
         document.getElementById('emailNow').textContent = a?.email || 'not logged in';
@@ -201,8 +213,11 @@ export default function start() {
       };
       fill();
       M.account.onChange(fill);
-      // This page's account comes from the server (it may be opened in a fresh tab)
-      momentoApi('/api/auth/me').then(({ user }) => { if (user) M.account.set(user); else M.account.clear(); fill(); }, () => {});
+      // This page's account comes from the server (it may be opened in a fresh tab): the page's own session check
+      // (Momento.sessionReady, AccountProvider) has already asked, so its answer is used rather than asking again
+      const answered = (user) => { early = null; if (user) M.account.set(user); else M.account.clear(); fill(); };
+      if (M.sessionReady) M.sessionReady.then(answered, () => { early = null; fill(); });
+      else momentoApi('/api/auth/me').then(({ user }) => answered(user), () => {});
       const needLogin = () => { if (M.account.get()) return false; location.href = '/?login=1'; return true; };
 
       form.addEventListener('submit', async (e) => {

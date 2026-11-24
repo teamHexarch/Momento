@@ -1562,8 +1562,12 @@ export default function start() {
       const check = () => { if (groups && joined) reveal(); };
       if (body) new MutationObserver(() => { if (!body.hasAttribute('aria-busy')) { groups = true; check(); } }).observe(body, { attributes: true, attributeFilter: ['aria-busy'] });
       document.addEventListener('momento:joined-ready', () => { joined = true; check(); }, { once: true });
-      // A link to a part of the page (#events, #needs) shouldn't wait on the rest
-      setTimeout(reveal, /^#(events|join|alerts)/.test(location.hash) ? 0 : 2500);
+      // A link to a part of the page (#events, #needs) shouldn't wait on the rest. Otherwise the 2.5 s are counted
+      // from the page's load (once the scripts that fetch the groups and albums have run), not from this code starting:
+      // counted from here, a slow connection used the wait up on downloading them, and the sections then filled in
+      // one after another in view. (The pattern's \b had become a backspace character, so links never matched.)
+      if (/^#(events|join|alerts)\b/.test(location.hash)) setTimeout(reveal, 0);
+      else addEventListener('load', () => setTimeout(reveal, 2500));
       check();
     })();
 
@@ -1575,6 +1579,8 @@ export default function start() {
       // Watches the rows only (not the heading that holds the count, or it would trigger itself)
       const paintNeed = () => {
         const n = need.querySelectorAll('.gri').length, label = n ? String(n) : '';
+        // Arriving after the page has settled: it fades in rather than appearing at once
+        if (n && need.hidden && !still && !document.querySelector('main.page.is-settling')) need.animate({ opacity: [0, 1] }, { duration: 320, easing: 'ease-out' });
         need.hidden = !n;
         if (count.textContent !== label) count.textContent = label;
       };
@@ -1593,7 +1599,8 @@ export default function start() {
       const show = (name, tries = 0) => {
         const el = sections[name];
         if (!el) return;
-        if (el.hidden) { if (tries < 12) setTimeout(() => show(name, tries + 1), 250); return; }
+        // (also while the page is still settling: "Needs you" takes no room until then, so there'd be nowhere to scroll to)
+        if (el.hidden || el.closest('.is-settling')) { if (tries < 12) setTimeout(() => show(name, tries + 1), 250); return; }
         el.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
       };
       window.socialTab = show;
