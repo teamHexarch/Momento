@@ -340,6 +340,23 @@ html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(
   :is(.nav-social, .nav-settings) { padding-left: .46rem !important; padding-right: .46rem !important; }
   :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
 }
+/* Home page, signed out: Log in and Sign up share one pill (home.css), which is wider than the lone Sign up was,
+   so the header takes its compact size sooner, and below 410px Home's sections arrow goes as it does at 360px.
+   Same declarations as the two blocks above; :where() keeps their specificity, so they cascade the same way */
+@media (max-width: 480px) {
+  :where(.header:has(#authOut:not([hidden]))) { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
+  :where(.header:has(#authOut:not([hidden]))) .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
+  :where(.header:has(#authOut:not([hidden]))) .nav { gap: 0 !important; padding: .22rem !important; }
+  :where(.header:has(#authOut:not([hidden]))) .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
+  :where(.header:has(#authOut:not([hidden]))) .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
+  :where(.header:has(#authOut:not([hidden]))) :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
+}
+@media (max-width: 410px) {
+  :where(.header:has(#authOut:not([hidden]))) :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) { padding-left: .5rem !important; padding-right: .5rem !important; }
+  :where(.header:has(#authOut:not([hidden]))) :is(.nav-home[aria-current="page"], .nav > .nav-item[aria-current="page"]) { padding-left: .6rem !important; padding-right: .7rem !important; gap: .3rem; }
+  :where(.header:has(#authOut:not([hidden]))) .nav-split > .nav-caret { display: none; }
+  :where(.header:has(#authOut:not([hidden]))) .nav-split:has(> .nav-home[aria-current="page"]) > .nav-home { padding-right: .7rem !important; }
+}
 @media (max-width: 340px) {
   .nav-item { padding: .45rem .42rem !important; }
   :is(.nav-social, .nav-settings) { padding-left: .45rem !important; padding-right: .45rem !important; }
