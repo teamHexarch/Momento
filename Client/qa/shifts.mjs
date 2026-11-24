@@ -1,5 +1,6 @@
 // Which elements move while a page loads: every layout shift in the first 8 s, with the elements that moved.
 //   CHROME_PATH=... PERF_URL=http://localhost:3012 node qa/shifts.mjs /albums /events
+// PHONE=1 for a phone-sized screen (390 x 844, touch) instead of 1440 x 900.
 // Same throttling as qa/perf.mjs (Fast 4G, 4x CPU); Home is opened first so the intro has been seen.
 import puppeteer, { PredefinedNetworkConditions } from 'puppeteer';
 
@@ -7,7 +8,7 @@ const BASE = process.env.PERF_URL || 'http://localhost:3012';
 const paths = process.argv.slice(2).length ? process.argv.slice(2) : ['/albums', '/events'];
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || undefined, headless: true });
 const page = await browser.newPage();
-await page.setViewport({ width: 1440, height: 900 });
+await page.setViewport(process.env.PHONE ? { width: 390, height: 844, isMobile: true, hasTouch: true } : { width: 1440, height: 900 });
 await page.emulateNetworkConditions(PredefinedNetworkConditions['Fast 4G']);
 await page.emulateCPUThrottling(4);
 await page.evaluateOnNewDocument(() => {

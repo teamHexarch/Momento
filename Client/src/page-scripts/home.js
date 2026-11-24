@@ -657,10 +657,13 @@ export default function start() {
       for (const f of floaters) { f.cx = f.el.offsetLeft + f.el.offsetWidth / 2; f.cy = f.el.offsetTop + f.el.offsetHeight / 2; }
     }
     // Phones: the headline and the QR card are stacked, so the pair is centred in the space under the header
+    // (Also run before the first paint by FIT_HERO in src/components/home/Hero.tsx: keep the two in step)
     function fitHero() {
       if (innerWidth > 600) { ['--hero-top', '--qr-top', '--qr-ty'].forEach((p) => stage.style.removeProperty(p)); return; }
       const card = document.getElementById('qrCard');
-      const head = document.getElementById('header').getBoundingClientRect().bottom + 8;
+      // The header's layout box, not where it is drawn: measured while the header was still easing in on its entrance, the
+      // hero was placed by wherever the header happened to be at that moment (up to ~20px lower, then never put back)
+      const header = document.getElementById('header'), head = header.offsetTop + header.offsetHeight + 8;
       const h1 = heroLeft.offsetHeight, h2 = card.offsetHeight, gap = 28;
       const avail = stage.clientHeight - head - 16;
       const start = head + Math.max(0, (avail - (h1 + gap + h2)) / 2);

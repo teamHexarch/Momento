@@ -989,8 +989,11 @@
     /* Signed in earlier in this tab (html.has-account, set before the first paint, kept up to date by AccountProvider):
        the chip shows from the start instead of Log in / Sign up first. With the bell's place held (glass.css, .bell-ready) */
     :root.has-account .auth-out { display: none; }
-    :root.has-account .auth-in[hidden] { display: block; }
-    :root.has-account.bell-ready .auth-in[hidden]:not(.has-inbox) { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
+    /* (laid out as the bell and chip are once shown: a row, assets/inbox.js. !important: over the page's [hidden] rule, line 1.
+       The bell can arrive while the area is still marked [hidden]; laid out as a block, it stacked above the chip and the
+       header grew for a moment, moving the hero with it) */
+    :root.has-account .auth-in[hidden] { display: flex !important; align-items: center; justify-content: flex-end; gap: .5rem; }
+    :root.has-account .auth-in.inbox-compact[hidden] { gap: 0; }
     :root.has-account.bell-ready .auth-in[hidden]:not(.has-inbox)::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }
     .auth .btn { min-height: 2.75rem; padding: 0 1.2rem; font-size: .88rem; }
     @media (max-width: 900px) {
@@ -1032,9 +1035,9 @@
     }
     /* Small tablets, signed out: the nav's tabs and Log in sit a little closer so Sign up keeps its margin */
     @media (min-width: 601px) and (max-width: 680px) {
-      :where(.header:has(#authOut:not([hidden]))) { gap: .35rem; }
-      :where(.header:has(#authOut:not([hidden]))) .nav-item { padding-left: .7rem; padding-right: .7rem; }
-      :where(.header:has(#authOut:not([hidden]))) .nav-split .nav-home { padding-right: .3rem; }
+      :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) { gap: .35rem; }
+      :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-item { padding-left: .7rem; padding-right: .7rem; }
+      :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-split .nav-home { padding-right: .3rem; }
       .auth-login { padding-left: .6rem; padding-right: .6rem; }
     }
     @media (max-width: 360px) {

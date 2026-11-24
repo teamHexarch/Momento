@@ -84,4 +84,5 @@ first, like someone arriving and moving around. They need Chrome: `CHROME_PATH="
 - `perf.mjs [runs]`: per page, the median of first paint, largest paint, when the page scripts are ready, layout shifts
   (count and CLS) and when the last one happened, and on a first visit to Home when the intro started.
 - `shifts.mjs /albums /events ...`: every layout shift on those pages, with the elements that moved (from → to).
+  `PHONE=1` for a phone-sized screen.
 - `frames.mjs /albums <folder> 900,1500,2500`: screenshots at those moments after the page started loading.

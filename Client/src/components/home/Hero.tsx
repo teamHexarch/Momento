@@ -1,10 +1,30 @@
 import type { CSSProperties } from 'react';
 
+// Phones: the hero and the QR card are centred in the first screen by measuring them (home.js, fitHero). That used
+// to happen only once the page's code had run, so the heading first painted high and then dropped ~70px into place.
+// The same measurement now also runs here, while the page is still being read, before the first paint: home.js then
+// sets the same values. (Keep the two in step.)
+const FIT_HERO = `
+(() => {
+  if (innerWidth > 600) return;
+  const stage = document.getElementById('stage'), card = document.getElementById('qrCard');
+  const left = document.getElementById('heroLeft'), header = document.getElementById('header');
+  if (!stage || !card || !left || !header) return;
+  const head = header.offsetTop + header.offsetHeight + 8;   // (its layout box: not moved by its entrance animation)
+  const h1 = left.offsetHeight, h2 = card.offsetHeight, gap = 28;
+  const avail = stage.clientHeight - head - 16;
+  const start = head + Math.max(0, (avail - (h1 + gap + h2)) / 2);
+  stage.style.setProperty('--hero-top', start + 'px');
+  if (h1 + gap + h2 <= avail) { stage.style.setProperty('--qr-top', (start + h1 + gap) + 'px'); stage.style.setProperty('--qr-ty', '0%'); }
+})();
+`;
+
 export default function Hero() {
   return (
     <>
       <div className="story" id="home">
-        <div className="stage" id="stage">
+        {/* (its --hero-top / --qr-top are set by FIT_HERO below before React hydrates) */}
+        <div className="stage" id="stage" suppressHydrationWarning>
           <div className="floaters floaters-back" aria-hidden="true"></div>
 
           <section className="hero-left" id="heroLeft">
@@ -48,6 +68,7 @@ export default function Hero() {
 
           <div className="floaters floaters-front" aria-hidden="true"></div>
         </div>
+        <script dangerouslySetInnerHTML={{ __html: FIT_HERO }} suppressHydrationWarning />
       </div>
     </>
   );
