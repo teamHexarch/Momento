@@ -6,7 +6,7 @@
 .ab-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .5rem; margin: 0 0 .75rem; }
 .ab-tools[hidden], .ab-shown[hidden], .ab-who-wrap[hidden], .ab-sort-menu[hidden] { display: none; }
 .ab-sort-wrap { position: relative; }
-.ab-btn.ab-sort { display: inline-flex; align-items: center; gap: .45rem; padding: 0 .95rem 0 .8rem; font-size: .86rem; font-weight: 650; }
+.ab-btn.ab-sort { display: inline-flex; align-items: center; gap: .45rem; padding: 0 .95rem 0 .8rem; font-size: .86rem; font-weight: 650; white-space: nowrap; }
 .ab-sort svg { flex: none; color: var(--slate); }
 .ab-menu.ab-sort-menu { top: calc(100% + .4rem); left: 0; right: auto; min-width: 13.5rem; }
 .ab-sort-menu .ab-item { justify-content: space-between; }
@@ -45,15 +45,18 @@
 :root[data-theme="dark"] .ab-shown { background: rgba(111, 152, 150, .2); }
 :root[data-theme="dark"] .ab-shown-clear:hover { background: rgba(255, 255, 255, .08); }
 
+/* Phones and narrow tablets: two rows, so nothing can sit on top of anything else.
+   Row 1 is Sort and Added by (at the far side); row 2 is the filter chips, which scroll sideways on their own
+   if they're wider than the window. (This used to be one no-wrap row that scrolled as a whole; its chips could
+   shrink and spill out underneath the Added by button.) Nothing here clips, so both menus open as normal dropdowns. */
+@media (max-width: 780px) {
+  .ab-tools { flex-wrap: wrap; }
+  .ab-sort-wrap { flex: none; order: 1; }
+  .ab-who-wrap { flex: none; order: 2; margin: 0; margin-inline-start: auto; }
+  .ab-filters { flex: 1 1 100%; order: 3; }
+}
 @media (max-width: 600px) {
-  .ab-tools { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -.75rem; padding-inline: .75rem; }
-  .ab-tools::-webkit-scrollbar { display: none; }
-  .ab-filters { overflow: visible; }
-  .ab-who-wrap { margin-left: 0; }
   .ab-who-pre { display: none; }
-  .ab-menu.ab-who-menu { left: 1rem; right: 1rem; }
-  /* (the sort menu escapes the scrolling row by sitting below it, fixed to the album window) */
-  .ab-menu.ab-sort-menu { position: fixed; top: auto; left: 1rem; right: 1rem; bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 }
 
 /* ---------- The viewer's zoom ---------- */
