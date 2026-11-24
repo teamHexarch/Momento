@@ -511,6 +511,9 @@
     }
     @media (hover: hover) { .page-cta:hover { transform: translateY(-1px); background: var(--copper); } }
     .page-cta:active { transform: scale(.98); }
+    /* The lesser choice beside a button: a plain link under it */
+    .page-cta.is-quiet { margin-top: 2.2cqw; padding: 1.6cqw 0; background: none; box-shadow: none; border-radius: 0; color: var(--dusk); font-weight: 600; font-size: 3.5cqw; text-decoration: underline; text-underline-offset: .22em; text-decoration-thickness: 1px; }
+    @media (hover: hover) { .page-cta.is-quiet:hover { background: none; color: var(--copper); transform: none; } }
 
     /* Hand-placed photos: corners, washi tape, or a polaroid frame */
     .collage { position: absolute; inset: 0; pointer-events: none; }
