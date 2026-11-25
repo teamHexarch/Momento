@@ -57,6 +57,12 @@
 }
 @media (max-width: 600px) {
   .ab-who-pre { display: none; }
+  /* Both rows span the full width, so their edges line up with each other and with the photos: Sort and
+     Added by share row 1 equally, and the chips grow to fill row 2 (they still scroll if they can't fit) */
+  .ab-tools:has(.ab-who-wrap:not([hidden])) .ab-sort-wrap, .ab-who-wrap { flex: 1 1 0; min-width: 0; }
+  .ab-tools:has(.ab-who-wrap:not([hidden])) .ab-btn.ab-sort { width: 100%; justify-content: center; }
+  .ab-who-btn #abWhoLabel { max-width: none; min-width: 0; }
+  .ab-btn.ab-chip { flex: 1 0 auto; padding: 0 .75rem; }
 }
 
 /* ---------- The viewer's zoom ---------- */
