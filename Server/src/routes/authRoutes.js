@@ -38,6 +38,11 @@ authRoutes.post('/login', signInLimit, loginPerAccount, auth.login);
 authRoutes.post('/devices/code', emailLimit, devices.sendCode);
 authRoutes.post('/devices/verify', approveLimit, devices.verifyCode);
 authRoutes.post('/devices/replace', approveLimit, devices.replaceDevice);
+// Max 3 devices: the 4th login's one-tap choice, and Settings → Active devices
+authRoutes.post('/devices/takeover', approveLimit, devices.takeover);
+authRoutes.get('/devices', requireUser, devices.listMine);
+authRoutes.post('/devices/sign-out-others', requireUser, approveLimit, devices.signOutOthers);
+authRoutes.delete('/devices/:id', requireUser, approveLimit, devices.signOutDevice);
 authRoutes.post('/logout', auth.logout);
 authRoutes.get('/me', auth.me);
 authRoutes.patch('/me', requireUser, auth.updateMe);

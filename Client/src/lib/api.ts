@@ -130,7 +130,7 @@ export async function request<T = unknown>(path: string, init: RequestInit = {})
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new ApiError(data.error || 'The request failed. Please try again.', response.status, {
-      code: data.code, challenge: data.code === 'session_limit' ? data.challenge : undefined, retryAt: data.retryAt,
+      code: data.code, challenge: data.code === 'session_limit' || data.code === 'SESSION_LIMIT_REACHED' ? data.challenge : undefined, retryAt: data.retryAt,
     });
   }
   return data as T;

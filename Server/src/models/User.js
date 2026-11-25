@@ -48,7 +48,9 @@ const userSchema = new mongoose.Schema({
   },
   sessions: {
     // prev/rotatedAt: the token this login had before its latest swap (see utils/session.js)
-    type: [{ _id: false, id: { type: String, required: true }, prev: String, rotatedAt: Date, deviceName: String, loggedInAt: Date, expiresAt: { type: Date, required: true } }],
+    // deviceName: "iPhone • Safari"; ipPrefix: only the start of the IP ("203.0.113.x"); lastActiveAt: saved at most every 5 minutes
+    type: [{ _id: false, id: { type: String, required: true }, prev: String, rotatedAt: Date, deviceName: String, ipPrefix: String,
+      loggedInAt: Date, lastActiveAt: Date, expiresAt: { type: Date, required: true } }],
     default: [],
     select: false,
   },
