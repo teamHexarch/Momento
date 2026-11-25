@@ -117,6 +117,12 @@ export async function takeover(req, res) {
   await startSession(res, user, { filter: { _id: user._id }, deviceId: pick.id });
   const { audit } = await import('./auditService.js');
   await audit('session.replaced', { req, actor: user._id, target: user._id, meta: { replaced: pick.deviceName, oldest: req.body?.oldest === true } });
+  // The password alone got past the limit here (no emailed code), so the owner hears about it at once
+  const { describeDevice } = await import('../utils/session.js');
+  const { deviceReplacedHtml } = await import('./emailTemplates.js');
+  sendEmail({ to: user.email, subject: 'A new device signed in to Momento',
+    html: deviceReplacedHtml(user, describeDevice(req.headers['user-agent']), pick.deviceName) })
+    .catch((err) => console.error(`Device sign-in email failed: ${err.message}`));
   res.json({ user: user.toPublic(), signedOut: { id: pick.id, name: pick.deviceName || null } });
 }
 

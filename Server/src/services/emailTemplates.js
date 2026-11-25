@@ -180,3 +180,16 @@ export function reviewResultHtml(user, albumName, approved, link) {
     footer: 'You’re getting this because you asked for a photo to be reviewed.',
   });
 }
+
+// A new device signed in by signing another one out (the 4th-device choice, services/deviceLogin.js takeover)
+export function deviceReplacedHtml(user, newDevice, signedOut) {
+  const first = firstName(user);
+  return layout({
+    heading: 'A new device signed in to Momento',
+    paragraphs: [
+      `${first ? `Hi ${first}, your` : 'Your'} account was just signed in on ${newDevice || 'a new device'}, and ${signedOut || 'another device'} was signed out to make room.`,
+      'If this was you, there’s nothing else to do.',
+    ],
+    footer: 'If it wasn’t you, use “Forgot your password?” on the Momento log in screen straight away: a new password signs out every device. Then reply to this email so we can help.',
+  });
+}
