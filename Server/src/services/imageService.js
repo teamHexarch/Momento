@@ -103,11 +103,22 @@ export function heicPixels(b) {
   }
   return most;
 }
+// The picture's size comes from the decoder (libheif reads the file's structure without decoding any pixels), checked
+// before decoding; scanning the bytes for 'ispe' boxes (heicPixels) got Samsung Galaxy HEICs wrong and refused them.
+// sharp then writes the JPEG from the decoded pixels (quicker and lighter than a JavaScript JPEG encoder).
+// Up to 60 megapixels (50 MP phone photos): decoding takes 4 bytes a pixel, and the server has 1 GB of memory.
+export const HEIC_MAX_PIXELS = 60_000_000;
 async function heicToJpeg(buffer) {
-  const pixels = heicPixels(buffer);
-  if (!pixels || pixels > MAX_PIXELS) throw new Error('HEIC size missing or too large');
-  const convert = (await import('heic-convert')).default;
-  return Buffer.from(await convert({ buffer, format: 'JPEG', quality: 0.92 }));
+  const decode = (await import('heic-decode')).default;
+  const images = await decode.all({ buffer });
+  try {
+    const first = images[0];
+    if (!first?.width || !first?.height) throw new Error('HEIC has no picture');
+    if (first.width * first.height > HEIC_MAX_PIXELS) throw new Error(`HEIC too large: ${first.width} x ${first.height}`);
+    const { width, height, data } = await first.decode();   // upright already (libheif applies the rotation)
+    return await sharp(Buffer.from(data.buffer, data.byteOffset, data.byteLength), { raw: { width, height, channels: 4 } })
+      .jpeg({ quality: 92 }).toBuffer();
+  } finally { images.dispose?.(); }
 }
 
 // A picture sharp can read, for the cover and profile photos: an iPhone HEIC (HEVC inside, which sharp can't decode)
