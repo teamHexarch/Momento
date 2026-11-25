@@ -4,7 +4,7 @@ import { LIMITS } from '../utils/text.js';
 // Event mini-games (services/gameService.js, routes under /api/albums/:id/games). One GameRound per game the host
 // runs in an album (a poll, a trivia round, ...); one GameResponse per person per question/vote; GameAward for points
 // given by the host (podium places). The leaderboard adds up the points of an album's responses and awards.
-export const GAME_TYPES = ['poll', 'trivia', 'battle', 'bingo', 'crop'];
+export const GAME_TYPES = ['poll', 'trivia', 'battle', 'bingo', 'crop', 'contest'];
 
 const roundSchema = new mongoose.Schema({
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
@@ -19,6 +19,7 @@ const roundSchema = new mongoose.Schema({
   // battle: { maxEntries: Number (photos per person) }
   // bingo: { size: 3 | 4, prompts: [String] (size x size, row by row) }
   // crop: like trivia, each question also has { photo, focus: { x, y } } (the detail the close-up starts on)
+  // contest: { maxEntries, phase: 'entries' | 'judging', finalists: [{ entry, score, reason }], podium: [entryId], ai }
   settings: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { collection: 'game_rounds', timestamps: true, versionKey: false });
 roundSchema.index({ album: 1, createdAt: -1 });
@@ -76,7 +77,27 @@ voteSchema.index({ album: 1 });
 voteSchema.index({ winner: 1 });
 voteSchema.index({ loser: 1 });
 
+// Photo competitions (services/contestService.js): a photo entered for the competition (not an album photo), stored
+// under temp-minigames/ while it runs and minigames-top10/ if it's kept (the top 10); the rest are deleted at the end
+const contestEntrySchema = new mongoose.Schema({
+  round: { type: mongoose.Schema.Types.ObjectId, ref: 'GameRound', required: true },
+  album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  key: { type: String, required: true },
+  thumbKey: String,
+  mime: String,
+  level: { type: Number, default: 0 },   // the nudity check's level (75+ is never shortlisted; 85+ refused)
+  score: Number,
+  reason: String,
+  kept: { type: Boolean, default: false },
+  rank: Number,
+}, { collection: 'game_contest_entries', timestamps: true, versionKey: false });
+contestEntrySchema.index({ round: 1, user: 1 });
+contestEntrySchema.index({ album: 1 });
+contestEntrySchema.index({ user: 1 });
+
 export const GameRound = mongoose.model('GameRound', roundSchema);
+export const ContestEntry = mongoose.model('ContestEntry', contestEntrySchema);
 export const GameEntry = mongoose.model('GameEntry', entrySchema);
 export const GameVote = mongoose.model('GameVote', voteSchema);
 export const GameResponse = mongoose.model('GameResponse', responseSchema);

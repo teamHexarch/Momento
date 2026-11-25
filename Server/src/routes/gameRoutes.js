@@ -1,5 +1,10 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
+import { config } from '../config/env.js';
+import { uploadBudget } from '../middleware/uploadBudget.js';
+import * as contest from '../services/contestService.js';
+import { sendPhoto } from '../services/storageService.js';
 import { HttpError } from '../utils/httpError.js';
 import { membershipOf } from '../controllers/albumController.js';
 import * as games from '../services/gameService.js';
@@ -62,6 +67,32 @@ gameRoutes.post('/:round/vote', playLimit, async (req, res) => {
 gameRoutes.post('/:round/answer', playLimit, async (req, res) => {
   const { album } = await member(req);
   res.json(await games.answer(album, req.user, req.params.round, req.body));
+});
+// Photo competitions: enter a photo (one file, "photo"), take it back, see an entry; the host shortlists and picks
+// the podium
+const entryUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.maxUploadBytes, files: 1 } });
+gameRoutes.post('/:round/submissions', playLimit, uploadBudget, entryUpload.single('photo'), async (req, res) => {
+  const { album } = await member(req);
+  res.status(201).json(await contest.submit(album, req.user, req.params.round, req.file));
+});
+gameRoutes.delete('/:round/submissions/:entry', async (req, res) => {
+  const { album } = await member(req);
+  res.json(await contest.withdraw(album, req.user, req.params.round, req.params.entry));
+});
+gameRoutes.get('/:round/submissions/:entry/image', async (req, res) => {
+  const { album, host } = await member(req);
+  const { key, mime } = await contest.entryImage(album, req.params.round, req.params.entry, req.user._id, host, req.query.size);
+  if (!(await sendPhoto(res, key, mime))) throw new HttpError(404, 'Not found.', 'GAME_NOT_FOUND');
+});
+gameRoutes.post('/:round/shortlist', async (req, res) => {
+  const album = await hostOnly(req);
+  await contest.shortlist(album, req.params.round);
+  res.json({ game: await games.oneGame(album._id, req.params.round, req.user._id, true) });
+});
+gameRoutes.post('/:round/podium', async (req, res) => {
+  const album = await hostOnly(req);
+  await contest.setPodium(album, req.params.round, req.body);
+  res.json({ game: await games.oneGame(album._id, req.params.round, req.user._id, true) });
 });
 // Mystery crop: a guess for the photo on screen, and its picture at the current zoom (never further)
 gameRoutes.post('/:round/guess', playLimit, async (req, res) => {

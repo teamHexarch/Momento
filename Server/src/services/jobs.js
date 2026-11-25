@@ -210,6 +210,8 @@ export async function runJobs() {
   };
   await step('closing-soon emails', () => closingSoon());
   await step('review reminders', () => reviewReminders());
+  // Photo competitions open for more than 24 hours: ended, keeping the top 10 (services/contestService.js)
+  await step('competitions', async () => (await import('./contestService.js')).sweepContests());
   await step('weekly recaps', () => weeklyRecap());
   await step('tidy', () => tidy());
   await step('backup', () => backup());

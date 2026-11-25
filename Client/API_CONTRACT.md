@@ -89,7 +89,7 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
   off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
-## Event mini-games (polls, trivia, photo battle, scavenger bingo, mystery crop)
+## Event mini-games (polls, trivia, photo battle, scavenger bingo, mystery crop, photo competitions)
 
 **Events only** (albums with a time and a place): in a plain photo album `GET …/games` answers `{ enabled: false,
 rounds: [] }` (don't show a games section) and everything else `403 GAMES_EVENTS_ONLY`. In events: album members
@@ -128,10 +128,24 @@ only (404 otherwise); creating and running games is for the host (`403 GAME_HOST
   wider, then the whole photo, each a third of the time; header `X-Crop-Stage`). Guess: `POST …/:round/guess
   { question: index, option: index }`, one each: 150 points on the close-up, 100 on the middle zoom, 50 on the whole
   photo. Refresh the picture when `question.stage` changes (or at `question.nextStageAt`).
+- **Photo competition** (host: `{ type: "contest", title: e.g. "Best dance move", maxEntries?: 1-3 (1), start?: true }`):
+  while entries are open, players upload a photo **for the competition** (not an album photo):
+  `POST …/:round/submissions` (multipart, one file named `photo`; checked like any upload, `422 nsfw` at level 85+,
+  `409 GAME_ENTRY_LIMIT`), take it back with `DELETE …/:round/submissions/:entry`. Entry pictures:
+  `GET …/:round/submissions/:entry/image[?size=thumb]` (while open: only your own and the host's; finalists, the podium
+  and, once ended, the kept top 10 for everyone in the event). **Host:** `POST …/:round/shortlist` closes entries and
+  picks 5-7 finalists with a one-line reason each (Rekognition; level 75+ never; without AI: the sharpest, and
+  `ai: false`); `POST …/:round/podium { first, second, third }` (entry ids, different people: 100 / 60 / 30 points);
+  `POST …/:round/end`: the top 10 are kept (the podium first), every other entry is deleted at once. A competition
+  open for more than 24 hours is ended the same way automatically.
 - `Game` (poll): `{ id, type, title, status: draft|live|ended, question, options: [{ id, text, votes, percent }], total, myChoice }`
 - `Game` (trivia): `{ id, type, title, status, questionCount, current, question: { index, text, options, seconds, endsAt,
   answers, answer (only once time is up) }, myAnswer: { option, correct?, points? }, myScore }`; the host also gets
   `questions` (with the answers).
+- `Game` (contest): `{ id, type, title, status, phase: entries|judging|ended, maxEntries, entries, ai, canEnter,
+  myEntries: [{ id, url, thumbnailUrl }], finalists: [{ entry, score, reason, by, mine, url, thumbnailUrl }],
+  podium: [{ place, entry, by, mine, url, thumbnailUrl }], top (once ended): [{ rank, entry, by, mine, url, thumbnailUrl }] }`;
+  the host also gets `all` (every entry, with its level and score) while it's open.
 - `Game` (crop): like trivia, and `question` also has `{ stage: 0-2, stages: 3, points, image, nextStageAt,
   photo + url, thumbnailUrl, miniUrl (once time is up) }`.
 - `Game` (bingo): `{ id, type, title, status, size, tiles: [{ index, prompt, claims, mine: { photo, url, thumbnailUrl, miniUrl } | null }],
@@ -281,6 +295,11 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/trash/purge |
 | GET | /api/hidden |
 | GET | /api/users/:id/avatar |
+| POST | /api/albums/:id/games/:round/submissions |
+| DELETE | /api/albums/:id/games/:round/submissions/:entry |
+| GET | /api/albums/:id/games/:round/submissions/:entry/image |
+| POST | /api/albums/:id/games/:round/shortlist |
+| POST | /api/albums/:id/games/:round/podium |
 | POST | /api/albums/:id/games/:round/guess |
 | GET | /api/albums/:id/games/:round/image |
 | POST | /api/albums/:id/games/:round/claims |

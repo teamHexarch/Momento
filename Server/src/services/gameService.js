@@ -8,6 +8,7 @@
 //           3rd get 100, 60 and 30 (PODIUM). Photos are ranked by an Elo rating from the head-to-head votes.
 //   bingo:  10 points per tile claimed with a photo, 30 more for each full line (row, column or diagonal), 100 more for
 //           the full card. Line and card points are worked out from the claims, so they always follow them.
+//   contest: a host-judged photo competition (services/contestService.js): the podium gets 100, 60 and 30
 //   crop:   mystery crop: a photo starts as a close-up of one detail and zooms out in 3 stages over its time; a right
 //           guess scores 150 on the close-up, 100 on the middle zoom, 50 once the whole photo shows. One guess each.
 // The leaderboard adds up every response's points and the host's awards (podium places) in the album.
@@ -16,6 +17,7 @@ import { GameRound, GameResponse, GameAward, GameEntry, GameVote, GAME_TYPES } f
 import { User } from '../models/User.js';
 import { Photo } from '../models/Photo.js';
 import { config } from '../config/env.js';
+import * as contest from './contestService.js';
 import { HttpError } from '../utils/httpError.js';
 import { cleanText, LIMITS } from '../utils/text.js';
 
@@ -117,7 +119,7 @@ async function readCrop(b, album) {
   });
   return { questions, current: -1 };
 }
-const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle, bingo: readBingo, crop: readCrop };
+const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle, bingo: readBingo, crop: readCrop, contest: contest.readContest };
 
 export async function createRound(album, user, body = {}) {
   const type = body.type;
@@ -131,7 +133,7 @@ export async function createRound(album, user, body = {}) {
 }
 
 // ---- The host runs a round ----
-async function hostRound(album, roundId) {
+export async function hostRound(album, roundId) {
   if (!mongoose.isValidObjectId(roundId)) throw new HttpError(404, 'Game not found.', 'GAME_NOT_FOUND');
   const round = await GameRound.findOne({ _id: roundId, album: album._id });
   if (!round) throw new HttpError(404, 'Game not found.', 'GAME_NOT_FOUND');
@@ -173,18 +175,21 @@ export async function endRound(album, roundId) {
       await GameAward.updateOne({ round: round._id, user: e.user }, { $setOnInsert: { album: album._id, place: i + 1, points: PODIUM[i] } }, { upsert: true });
     }
   }
+  // A competition: keep the top 10, delete the rest (services/contestService.js)
+  if (ended.modifiedCount && round.type === 'contest') await contest.finishContest(round);
   forget(album._id);
   return GameRound.findById(round._id);
 }
 export async function removeRound(album, roundId) {
   const round = await hostRound(album, roundId);
   await Promise.all([GameResponse.deleteMany({ round: round._id }), GameAward.deleteMany({ round: round._id }),
-    GameEntry.deleteMany({ round: round._id }), GameVote.deleteMany({ round: round._id }), GameRound.deleteOne({ _id: round._id })]);
+    GameEntry.deleteMany({ round: round._id }), GameVote.deleteMany({ round: round._id }), GameRound.deleteOne({ _id: round._id }),
+    contest.removeContestEntries({ round: round._id })]);
   forget(album._id);
 }
 
 // ---- Playing ----
-async function liveRound(album, roundId, type) {
+export async function liveRound(album, roundId, type) {
   if (!mongoose.isValidObjectId(roundId)) throw new HttpError(404, 'Game not found.', 'GAME_NOT_FOUND');
   const round = await GameRound.findOne({ _id: roundId, album: album._id }).lean();
   if (!round || round.type !== type) throw new HttpError(404, 'Game not found.', 'GAME_NOT_FOUND');
@@ -397,6 +402,7 @@ export async function unclaimTile(album, user, roundId, tile, { host = false, of
 // ---- The state pages ask for (built at most every STATE_MS per album) ----
 const states = new Map();
 function forget(albumId) { states.delete(String(albumId)); }
+export const forgetGames = forget;
 export function _clearCache() { states.clear(); }
 async function stateOf(albumId) {
   const key = String(albumId), hit = states.get(key);
@@ -415,6 +421,7 @@ async function build(albumId) {
     GameEntry.find({ album: albumId }).lean(),
     GameVote.find({ album: albumId }, 'round user winner loser at').lean(),
   ]);
+  const contestEntries = await contest.entriesFor(albumId);
   // Battles: entries whose photos are still shown, rated from their votes
   // Photos still shown in the album (battle entries and bingo claims with a binned or hidden photo don't count)
   const photoIds = [...entries.map((e) => e.photo), ...responses.filter((r) => r.photo).map((r) => r.photo)];
@@ -451,15 +458,19 @@ async function build(albumId) {
   }
   const top = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   const bingoPlayers = rounds.filter((x) => x.type === 'bingo').flatMap((r) => (byRound.get(String(r._id)) || []).map((c) => String(c.user)));
-  const wanted = new Set([...top.map(([u]) => u), ...[...battles.values()].flatMap((b) => b.standings.map((e) => e.user)), ...bingoPlayers]);
+  const wanted = new Set([...top.map(([u]) => u), ...[...battles.values()].flatMap((b) => b.standings.map((e) => e.user)), ...bingoPlayers,
+    ...contestEntries.map((e) => String(e.user))]);
   const names = new Map((await User.find({ _id: { $in: [...wanted] } }, 'name').lean()).map((u) => [String(u._id), (u.name || '').trim().split(/\s+/)[0] || 'Guest']));
-  return { rounds, byRound, totals, battles, placesOf, names, board: top.map(([u, points], i) => ({ rank: i + 1, user: u, name: names.get(u) || 'Guest', points })) };
+  return { rounds, byRound, totals, battles, placesOf, names, contestEntries, board: top.map(([u, points], i) => ({ rank: i + 1, user: u, name: names.get(u) || 'Guest', points })) };
 }
 
 // One round as a player (or the host) sees it
 function view(round, responses = [], userId, host, s = {}) {
   const me = String(userId);
   const base = { id: String(round._id), type: round.type, title: round.title, status: round.status, startedAt: round.startedAt || null, endedAt: round.endedAt || null };
+  if (round.type === 'contest') {
+    return { ...base, ...contest.contestView(round, (s.contestEntries || []).filter((e) => String(e.round) === String(round._id)), userId, host, s.names) };
+  }
   if (round.type === 'bingo') {
     const { size, prompts } = round.settings;
     const mineByTile = new Map(), counts = prompts.map(() => 0), per = new Map();
@@ -540,8 +551,9 @@ export async function oneGame(albumId, roundId, userId, host) {
 export async function removeGamesFor({ albums = [], user } = {}) {
   if (albums.length) {
     await Promise.all([GameRound.deleteMany({ album: { $in: albums } }), GameResponse.deleteMany({ album: { $in: albums } }), GameAward.deleteMany({ album: { $in: albums } }),
-      GameEntry.deleteMany({ album: { $in: albums } }), GameVote.deleteMany({ album: { $in: albums } })]);
+      GameEntry.deleteMany({ album: { $in: albums } }), GameVote.deleteMany({ album: { $in: albums } }), contest.removeContestEntries({ album: { $in: albums } })]);
     albums.forEach(forget);
   }
-  if (user) await Promise.all([GameResponse.deleteMany({ user }), GameAward.deleteMany({ user }), GameEntry.deleteMany({ user }), GameVote.deleteMany({ user })]);
+  if (user) await Promise.all([GameResponse.deleteMany({ user }), GameAward.deleteMany({ user }), GameEntry.deleteMany({ user }), GameVote.deleteMany({ user }),
+    contest.removeContestEntries({ user })]);
 }

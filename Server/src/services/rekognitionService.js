@@ -182,3 +182,29 @@ export async function detect(buffer, tries = 4) {
     }
   });
 }
+
+// ---- Describing a photo for competition shortlists (services/contestService.js) ----
+// DetectLabels (what's in it) and DetectFaces (smiles, open eyes, sharpness). Needs rekognition:DetectLabels and
+// rekognition:DetectFaces on the server's IAM user. { labels: [{ name, parents, confidence }], faces: [{ smile, eyesOpen,
+// sharpness, brightness }] }. Tests pass a stand-in with useDescriber.
+let describer = null;
+export function useDescriber(fn) { describer = fn; }
+export async function describe(buffer) {
+  if (describer) return describer(buffer);
+  if (!client) {
+    const { RekognitionClient } = await import('@aws-sdk/client-rekognition');
+    client = new RekognitionClient({ region: process.env.REKOGNITION_REGION || config.aws.region, maxAttempts: 1,
+      requestHandler: { connectionTimeout: 5000, requestTimeout: 20000 } });
+  }
+  const { DetectLabelsCommand, DetectFacesCommand } = await import('@aws-sdk/client-rekognition');
+  const Image = { Bytes: await fit(buffer) };
+  const [l, f] = await Promise.all([
+    client.send(new DetectLabelsCommand({ Image, MaxLabels: 30, MinConfidence: 60 })),
+    client.send(new DetectFacesCommand({ Image, Attributes: ['ALL'] })),
+  ]);
+  return {
+    labels: (l.Labels || []).map((x) => ({ name: x.Name, parents: (x.Parents || []).map((p) => p.Name), confidence: x.Confidence })),
+    faces: (f.FaceDetails || []).map((x) => ({ smile: !!x.Smile?.Value && x.Smile.Confidence > 70, eyesOpen: !!x.EyesOpen?.Value,
+      sharpness: x.Quality?.Sharpness ?? null, brightness: x.Quality?.Brightness ?? null })),
+  };
+}
