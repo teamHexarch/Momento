@@ -6,10 +6,12 @@
 //                               mount() also adds an optional cover photo; it's uploaded once the album exists
 //                               (PUT /api/albums/:id/cover, see COVER-API-NOTES.md)
 // - Momento.event.prepareCover(file)  resolves to a resized cover image (Blob), or rejects with a plain message
-// - Momento.event.camera()      Momento's own camera; resolves to the photos taken (File[]). They
-//                               go straight to the upload and are never saved to the device
+// - Momento.event.camera(keep)  Momento's own camera; resolves to the photos taken (File[]). They
+//                               go straight to the upload and are never saved to the device. keep: photos
+//                               taken before (from a cancelled upload), shown again so they can be used
 // - Momento.event.confirmUpload(album, files)  asks before uploading (and, for guests of an album
-//                               with a zone, gets their location); resolves to { location } or null
+//                               with a zone, gets their location); resolves to { location, files } or null.
+//                               { fromCamera: true }: Cancel reads "Back to camera"
 // Uses the .mq-dlg / .mq-btn / .mq-x styles from assets/qr.js, which every page loads too.
 (() => {
   const Momento = (window.Momento = window.Momento || {});
@@ -404,8 +406,22 @@
     .ev-thumb-x:active { transform: scale(.86); }
     .ev-thumb-x:focus-visible { outline: 2px solid var(--focus-ring, #2E2C3A); outline-offset: 2px; }
     @media (pointer: coarse) { .ev-thumb-x { width: 2rem; height: 2rem; } }
+    /* the ✕ is always shown (touch screens have no hover); on touch its tap area reaches 44px past the visible circle */
+    .ev-thumb-x::after { content: ""; position: absolute; inset: -.375rem; border-radius: 50%; }
+    .ev-thumb img { transition: transform .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    @media (hover: hover) { .ev-thumb:hover img { transform: scale(1.04); } }
+    /* Tablets: bigger previews and more room for them */
+    @media (min-width: 600px) {
+      .ev-ask:has(.ev-thumbs) { width: min(34rem, calc(100vw - 48px)); }
+      .ev-ask .ev-thumbs { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: .55rem; max-height: min(32rem, 45dvh); }
+    }
+    /* Laptops and desktops: a wider window, bigger previews */
+    @media (min-width: 1024px) {
+      .ev-ask:has(.ev-thumbs) { width: min(40rem, calc(100vw - 64px)); padding: 1.7rem; }
+      .ev-ask .ev-thumbs { grid-template-columns: repeat(auto-fill, minmax(6.75rem, 1fr)); gap: .6rem; max-height: min(26rem, 48dvh); }
+    }
     .ev-ask .ev-none { margin-top: 1rem; padding: .9rem 1rem; border-radius: 16px; background: rgba(127, 120, 150, .1); text-align: center; }
-    @media (prefers-reduced-motion: reduce) { .ev-thumb-x { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .ev-thumb-x, .ev-thumb img { transition: none; } }
     .ev-ask .ev-loc { display: flex; gap: .55rem; margin-top: .9rem; padding: .75rem .85rem; border-radius: 16px; background: rgba(111, 152, 150, .14); color: var(--dusk, #2e2c3a); font-size: .88rem; line-height: 1.5; }
     .ev-ask .ev-loc svg { flex: none; margin-top: .15rem; }
     .ev-ask .ev-err { color: #a33a2c; font-weight: 600; }
@@ -1007,7 +1023,7 @@
     undo: svgIcon('<path d="M4 9h11a5 5 0 0 1 0 10H8M8 5 4 9l4 4"/>', 19),
   };
   const CAM_KEY = 'momento-camera';
-  function camera() {
+  function camera(keep = []) {
     return new Promise((resolve) => {
       let prefs = { timer: 0, grid: false };
       try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(CAM_KEY) || '{}') }; } catch (e) {}
@@ -1070,7 +1086,8 @@
       const brightBtn = $('[data-bright]'), countEl = $('.ev-count span');
       let brightLevels = [0], bright = 0;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const shots = [];   // { file (as it will upload), orig (as taken), url (to show it) }
+      // { file (as it will upload), orig (as taken), url (to show it) }; photos kept from a cancelled upload come back first
+      const shots = keep.map((f) => ({ file: f, orig: f, url: URL.createObjectURL(f) }));
       let stream = null, track = null, facing = 'environment', settled = false, front = false;
       // zoom: lens = the camera does it; otherwise digital (the preview scales and the photo is cropped to match)
       let zoom = 1, zMin = 1, zMax = 1, lens = false, torch = false;
@@ -1434,6 +1451,7 @@
       cropBox.addEventListener('pointerup', dragEnd); cropBox.addEventListener('pointercancel', dragEnd);
       // keys: arrows step through the photos (or nudge the frame while cropping)
       rev.addEventListener('keydown', (e) => {
+        if (e.key === 'Delete' && !cropping && e.target.closest?.('.ev-rev')) { e.preventDefault(); $('[data-rev-del]').click(); return; }
         if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
         if (!cropping) { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); step(e.key === 'ArrowRight' ? 1 : -1); } return; }
         if (e.target !== cropBox) return;
@@ -1472,8 +1490,22 @@
       });
       flip.addEventListener('click', () => { facing = facing === 'environment' ? 'user' : 'environment'; start(); });
       use.addEventListener('click', () => finish(shots.map((x) => x.file)));
-      $('[data-close]').addEventListener('click', () => finish([]));
-      d.addEventListener('cancel', (e) => { e.preventDefault(); if (cropping) { endCrop(); return; } if (reviewing()) { closeReview(); return; } if (countdown) { cancelCountdown(); ready(); return; } finish([]); });
+      // Closing throws away the photos taken (they were never saved anywhere), so it asks first when there are any
+      let asking = false;
+      async function closeCamera(from) {
+        if (asking) return;
+        const n = shots.length;
+        if (n && window.Momento?.confirm) {
+          asking = true;
+          const sure = await Momento.confirm({ from, title: n === 1 ? 'Discard this photo?' : `Discard ${n} photos?`, body: `${n === 1 ? 'It hasn’t' : 'They haven’t'} been uploaded or saved to your device, so ${n === 1 ? 'it' : 'they'} can’t be brought back.`, ok: 'Discard' });
+          asking = false;
+          if (!sure) { d.focus({ focusVisible: false }); return; }
+        }
+        finish([]);
+      }
+      $('[data-close]').addEventListener('click', (e) => closeCamera(e.currentTarget));
+      d.addEventListener('cancel', (e) => { e.preventDefault(); if (cropping) { endCrop(); return; } if (reviewing()) { closeReview(); return; } if (countdown) { cancelCountdown(); ready(); return; } closeCamera($('[data-close]')); });
+      if (shots.length) { paintShots(false); ready(); }
       d.showModal();
       d.focus({ focusVisible: false });   // (the camera itself has focus, not a ring on the close button; Tab reaches the buttons)
       start();
@@ -1482,7 +1514,7 @@
 
   // ---- Asking before an upload (and the guest's location, when the album has a zone) ----
   // Resolves to { location, files } (files: the ones still in the list; each has a cross to leave it out), or null
-  function confirmUpload(album, files) {
+  function confirmUpload(album, files, { fromCamera = false } = {}) {
     return new Promise((resolve) => {
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
@@ -1498,8 +1530,8 @@
         <p class="ev-limit">Works with JPEG, PNG, HEIC and HEIF (iPhone), WebP, AVIF, GIF, TIFF, JPEG XL and camera RAW, including iPhone ProRAW (DNG).</p>
         <p class="ev-limit" data-terms></p>
         <ul class="ev-thumbs" aria-label="Photos to upload"></ul>
-        <p class="ev-none" data-none hidden>All the photos were taken out. Cancel and choose again.</p>
-        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
+        <p class="ev-none" data-none hidden>${fromCamera ? 'All the photos were taken out. Go back to the camera to take more.' : 'All the photos were taken out. Cancel and choose again.'}</p>
+        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>${fromCamera ? 'Back to camera' : 'Cancel'}</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
       document.body.append(d);
       const list = d.querySelector('.ev-thumbs'), yes = d.querySelector('[data-yes]');
       for (const it of items) {
@@ -1543,8 +1575,10 @@
       paint();
       let settled = false;
       const done = (v) => { if (settled) return; settled = true; items.forEach((it) => it.url && URL.revokeObjectURL(it.url)); if (d.open) d.close(); d.remove(); resolve(v); };
-      d.querySelector('[data-no]').addEventListener('click', () => done(null));
-      d.addEventListener('cancel', (e) => { e.preventDefault(); done(null); });
+      // (from the camera, the photos still in the list go back with it, so nothing taken is lost)
+      const no = () => done(fromCamera ? { cancelled: true, files: items.map((it) => it.f) } : null);
+      d.querySelector('[data-no]').addEventListener('click', no);
+      d.addEventListener('cancel', (e) => { e.preventDefault(); no(); });
       yes.addEventListener('click', () => { if (items.length) done({ location: '', files: items.map((it) => it.f) }); });
       d.showModal();
     });

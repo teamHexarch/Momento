@@ -872,7 +872,7 @@
           const a = state.albums.find((x) => x.id === (m && m[1]));
           if (a) { a.photos += files.length; a.mine += files.length; save(); }
           this.status = a ? 201 : 404;
-          this.response = a ? { photos: files.length } : { error: 'Album not found.' };
+          this.response = a ? { photos: files.map((f, i) => ({ id: `up-${Date.now()}-${i}`, name: f.name })) } : { error: 'Album not found.' };   // (a list, like the real server's)
           this.dispatchEvent(new Event('load'));
         }, 500);
       }, 180);

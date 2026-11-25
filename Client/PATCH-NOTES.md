@@ -23,11 +23,17 @@ and a few fixes.
 - Press the last photo (bottom left) to look through everything you've taken: swipe or tap the strip to move between
   photos, delete one, or crop it. Cropping has a Free shape or 1:1, 4:3 and 16:9, a frame you drag by its corners, and a
   button to go back to the original photo.
+- Closing the camera after taking photos asks first ("Discard 2 photos?"), since they aren't saved anywhere else. In
+  the photos taken, the Delete key deletes one (it asks first), next to the arrow keys and Esc.
 
 **Uploading photos**
 - More formats: HEIC and HEIF (iPhone), AVIF, JPEG XL, TIFF and camera RAW files, including iPhone ProRAW (DNG). The
   Add photos button and the upload confirmation list them.
 - The upload confirmation shows every photo you picked, each with a cross to leave it out before uploading.
+- After using the camera, the confirmation's Cancel button reads "Back to camera": it reopens the camera with the
+  photos still in the list, so nothing taken is lost.
+- The previews are bigger on tablets and computers (the window is wider there too), and the cross is easy to tap on
+  touch screens.
 
 **My albums**
 - Sort an album's photos: newest first, oldest first, file name, largest first, or most reactions. The choice is

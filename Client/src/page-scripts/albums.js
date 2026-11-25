@@ -906,8 +906,14 @@ export default function start() {
     // Momento's own camera: the photos go straight into the upload, never into the device's gallery
     document.getElementById('albumCamera').addEventListener('click', async () => {
       if (!M.a || !Momento.event || !tryAdd()) return;
-      const files = await Momento.event.camera();
-      if (files.length) uploadFiles(files);
+      // "Back to camera" in the upload confirmation reopens the camera with the photos still there
+      for (let keep = []; ;) {
+        const files = await Momento.event.camera(keep);
+        if (!files.length) return;
+        const res = await uploadFiles(files, { fromCamera: true });
+        if (!res?.back) return;
+        keep = res.files;
+      }
     });
     // fetch can't report upload progress, so photos go up with XMLHttpRequest (same cookie, same errors)
     function sendWithProgress(path, body, onProgress, headers = {}) {
@@ -991,7 +997,8 @@ export default function start() {
     albumFiles.addEventListener('change', () => { const files = [...albumFiles.files]; albumFiles.value = ''; uploadFiles(files); });
     // Any number of photos: sent as small uploads (up to 6 photos or ~48 MB each), three at a time side by
     // side, so a big selection goes up quickly and one problem photo (too big, unreadable) never stops the rest
-    async function uploadFiles(files) {
+    // Resolves to { back: true, files } when "Back to camera" was pressed in the confirmation ({ fromCamera })
+    async function uploadFiles(files, { fromCamera = false } = {}) {
       const a = M.a;
       if (!a || !files.length || uploading) return;
       const note = document.getElementById('albumNote');
@@ -1004,7 +1011,8 @@ export default function start() {
       const bigLine = (names) => `${listNames(names)} ${names.length === 1 ? 'is' : 'are'} over ${LIMITS.maxPhotoMB} MB, so ${names.length === 1 ? 'it was' : 'they were'} left out (the limit is ${LIMITS.maxPhotoMB} MB a photo; camera RAW files can be bigger).`;
       if (!files.length) { note.textContent = bigLine(left.map((f) => f.name)); return; }
       // Ask first (and get the guest's location when the album has a zone): assets/event.js
-      const ok = Momento.event ? await Momento.event.confirmUpload(a, files) : { location: '' };
+      const ok = Momento.event ? await Momento.event.confirmUpload(a, files, { fromCamera }) : { location: '' };
+      if (ok?.cancelled) return M.a === a && !uploading ? { back: true, files: [...ok.files, ...left] } : undefined;
       if (!ok || M.a !== a || uploading) return;
       if (ok.files) files = ok.files;   // (any left out in the confirmation stay out)
       if (!files.length) return;
