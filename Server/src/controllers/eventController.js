@@ -36,12 +36,13 @@ function bearing(from, to) {
 }
 export async function nearby(req, res) {
   const at = readPoint(req.query);
-  // Only two sizes: 1 km, or 5 km for anything bigger (radius in metres, or the older km)
+  // Exactly the distance picked on the page (500 m, 1, 2, 5 or 10 km; radius in metres, or the older km), kept within
+  // 100 m to 10 km. Only events whose venue is within it are shown: an event 3 km away isn't in a 500 m scan, even if
+  // its own sharing zone is big enough to reach you.
   const want = Number(req.query.radius) || (Number(req.query.km) || 1) * 1000;
-  const radiusM = want > 1000 ? 5000 : 1000;
-  // A box first (cheap, on the zone's centre), then the exact distance. The box also reaches 10 km
-  // further, the biggest a sharing zone can be, so a zone you're standing in is never missed
-  const km = radiusM / 1000 + 10;
+  const radiusM = Math.round(Math.min(10000, Math.max(100, want)));
+  // A box first (cheap, on the venue), then the exact distance
+  const km = radiusM / 1000 + 0.1;
   const dLat = km / 111, dLng = km / (111 * Math.max(.2, Math.cos(at.lat * Math.PI / 180)));
   const albums = await Album.find({
     visibility: 'public',
@@ -51,7 +52,7 @@ export async function nearby(req, res) {
   }).limit(300).populate('host', 'name isMinor');
   const found = albums
     .map((a) => ({ a, distanceM: Math.round(distanceM(at, a.zone)) }))
-    .filter((x) => x.distanceM <= radiusM || x.distanceM <= (x.a.zone.radiusM || 0));
+    .filter((x) => x.distanceM <= radiusM);
   const ids = found.map((x) => x.a._id);
   const [stats, members, mine] = await Promise.all([
     Photo.aggregate([

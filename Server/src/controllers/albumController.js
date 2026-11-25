@@ -179,7 +179,7 @@ function summary(album, role, stats = {}) {
     endsAt: album.endsAt || undefined,
     uploadLeadMin: album.startsAt ? album.uploadLeadMin || 0 : undefined,
     role,
-    ...(role === 'host' && { joiningOpen: album.joiningOpen, locationRequired: album.locationRequired, venuePin: album.venuePin || null, joinDeadline: album.joinDeadline, requests: album.requests.filter(r => r.status !== 'declined') }),
+    ...(role === 'host' && { joiningOpen: album.joiningOpen, locationRequired: album.locationRequired, joinDeadline: album.joinDeadline, requests: album.requests.filter(r => r.status !== 'declined') }),
     ...albumLifecycle(album),
     live: albumLifecycle(album).status === 'live',
     // Only the host sees the join code, to print or share
@@ -511,12 +511,6 @@ export async function checkStatus(req, res) {
 }
 export async function show(req, res) {
   const m = await membershipOf(req, req.params.id);
-  // The host's venue PIN, made the first time they open an album with a sharing zone
-  if (m.role === 'host' && m.album.zone?.radiusM && !m.album.venuePin) {
-    const { newVenuePin } = await import('../services/eventAdmission.js');
-    await Album.updateOne({ _id: m.album._id, venuePin: { $in: [null, ''] } }, { $set: { venuePin: newVenuePin() } });
-    m.album.venuePin = (await Album.findById(m.album._id, 'venuePin').lean())?.venuePin;
-  }
   const hidden = m.hidden || [];
   const withHidden = req.query.hidden === '1';
   const [stats, photos, hiddenCount, trashCount] = await Promise.all([

@@ -80,18 +80,14 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
   Previews are up to 2560 px, with no EXIF or GPS. The capture date is kept (`takenAt` on each photo).
 - Direct uploads to S3 (presigned links) are planned; until then uploads go through `POST /api/albums/:id/photos`.
 
-## Joining an event: location and the venue PIN
+## Joining an event: the location check
 
-- `POST /api/albums/join` `{ code, location?: { lat, lng, accuracy, timestamp }, venuePin? }` (and
-  `POST /api/events/:id/join` for public events). When the host requires location, the guest's fix counts when it's
-  within the zone's radius plus its `accuracy`, but at most **100 m** extra (indoor GPS drift). A fix older than
-  2 minutes doesn't count.
-- **Venue PIN:** instead of `location`, a guest whose phone won't share it sends `venuePin` (6 characters; any case;
-  spaces and dashes ignored). Right PIN: in (`201`). `400 VENUE_PIN_WRONG`; after 5 wrong ones in 15 minutes
-  `429 VENUE_PIN_LOCKED`. Neither sent: `409 check-location`.
-- The **host** sees `venuePin` in `GET /api/albums/:id` (album, host only; made the first time they open an album with
-  a zone). New PIN: `PATCH /api/events/:id/policy { newVenuePin: true }` → `{ ok, venuePin }` (the old one stops
-  working). Location check on/off: `PATCH /api/events/:id/policy { locationRequired: true | false }`.
+- `POST /api/albums/join` `{ code, location?: { lat, lng, accuracy, timestamp } }` (and `POST /api/events/:id/join` for
+  public events). When the host requires location, the guest's fix counts when it's within the zone's radius plus its
+  `accuracy`, but at most **100 m** extra (indoor GPS drift). A fix older than 2 minutes doesn't count. No location
+  sent: `409 check-location`; outside the zone: a join request for the host (`202 { pending: true }`).
+- The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
+  off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
 ## Every endpoint
 
