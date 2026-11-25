@@ -33,6 +33,8 @@ export default function Viewer() {
         <p className="vw-swipe" id="vwSwipe" aria-hidden="true" hidden><span className="vw-swipe-ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M14 7l-5 5 5 5" /></svg><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 7l5 5-5 5" /></svg></span>Swipe to see more photos</p>
         <div className="vw-foot" id="vwFoot">
           <button className="vw-btn vw-react" type="button" id="vwReact" aria-haspopup="dialog" aria-expanded="false" aria-controls="vwPicker"><span className="vw-face" id="vwFace"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M8.6 14.2c.8 1.2 2 1.9 3.4 1.9s2.6-.7 3.4-1.9" /><path d="M9.2 9.6h.01M14.8 9.6h.01" strokeWidth="2.6" /></svg></span><span className="vw-react-label">React</span></button>
+          {/* Comments: the number on the photo; opens the comments panel */}
+          <button className="vw-btn vw-react vw-talk" type="button" id="vwTalk" aria-haspopup="dialog" aria-expanded="false" aria-controls="vwComments"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z" /></svg><span className="vw-react-label" id="vwTalkLabel">Comment</span></button>
           {/* Everyone's reactions (tap one to see who) and a star when it's the album's cover; scrolls sideways on a phone */}
           <div className="vw-chips" id="vwChips">
             <span className="pb-cover" id="pbCover" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 3.8l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8Z" /></svg>Album cover</span>
@@ -45,6 +47,19 @@ export default function Viewer() {
           <label className="rx-search"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg><input type="search" id="rxSearch" placeholder="Search emoji" autoComplete="off" autoCapitalize="off" spellCheck="false" enterKeyHint="search" aria-label="Search emoji" aria-controls="vwEmoji" /></label>
           <div className="rx-scroll" id="vwEmoji"></div>
           <p className="rx-none" id="rxNone" role="status" hidden></p>
+        </div>
+        {/* Comments on this photo: a popover on a computer, a sheet from the bottom on a phone. Up to 200 characters each */}
+        <div className="rx-who vw-comments" id="vwComments" role="dialog" aria-label="Comments" tabIndex={-1} hidden>
+          <div className="rx-grab" aria-hidden="true"><i></i></div>
+          <div className="cm-head"><b>Comments</b><span id="cmCount"></span></div>
+          <ul className="cm-list" id="cmList" aria-live="polite"></ul>
+          <p className="cm-empty" id="cmEmpty" hidden>No comments yet. Say something nice.</p>
+          <form className="cm-form" id="cmForm" autoComplete="off">
+            <textarea id="cmText" rows={1} maxLength={200} placeholder="Add a comment…" aria-label="Your comment, up to 200 characters" enterKeyHint="send"></textarea>
+            <div className="cm-row"><span className="cm-left" id="cmLeft" aria-live="polite">0/200</span><button className="cm-send" type="submit" id="cmSend" disabled>Post</button></div>
+            <p className="cm-err" id="cmErr" role="alert" hidden></p>
+          </form>
+          <p className="cm-off" id="cmOff" hidden>The host has turned comments off for this album.</p>
         </div>
         <div className="rx-who" id="pbWho" role="dialog" aria-label="Who reacted" hidden><div className="rx-grab" aria-hidden="true"><i></i></div><div className="rx-who-tabs" id="pbWhoTabs"></div><ul className="rx-who-list" id="pbWhoList" aria-live="polite"></ul></div>
         <p className="vw-hint" id="vwHint">Scroll, pinch or click to zoom. Double-click to react with a ❤️</p>

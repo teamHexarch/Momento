@@ -13,7 +13,7 @@ export default function Faq() {
             </div>
             <div className="qa">
               <button type="button" aria-expanded="false"><span>Who owns the photos?</span><i></i></button>
-              <div className="qa-a"><p>The host does. Every photo saves to the cloud the host chose (Google Drive, iCloud, Dropbox or OneDrive), not to Momento.</p></div>
+              <div className="qa-a"><p>The host does. Photos are kept safe in Momento’s private cloud, and everyone in the album can download them all as a .zip in one click, to keep on a phone, computer or their own cloud.</p></div>
             </div>
             <div className="qa">
               <button type="button" aria-expanded="false"><span>What if a guest is outside the sharing zone?</span><i></i></button>
@@ -21,7 +21,7 @@ export default function Faq() {
             </div>
             <div className="qa">
               <button type="button" aria-expanded="false"><span>Does it work with real cameras?</span><i></i></button>
-              <div className="qa-a"><p>Yes. Sony ARW, Canon CR3, iPhone HEIC and ProRAW files upload as untouched originals, and camera files go first.</p></div>
+              <div className="qa-a"><p>Yes. Sony ARW, Canon CR3, iPhone HEIC and ProRAW files all upload; camera RAW files are kept as full-size, high-quality JPEGs.</p></div>
             </div>
             <div className="qa">
               <button type="button" aria-expanded="false"><span>Will it use up my mobile data?</span><i></i></button>

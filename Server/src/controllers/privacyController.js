@@ -121,7 +121,7 @@ export async function unsubscribe(req, res) {
 <body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#2E2C3A;line-height:1.6">
 <h1 style="font-size:1.4rem">${good ? 'You’re unsubscribed' : 'This link doesn’t work'}</h1>
 <p>${good ? `You won’t get ${KIND_NAME[k]} emails any more. You can turn them back on in Momento’s account settings.` : 'It may have been copied incompletely. You can turn emails off in Momento’s account settings.'}</p>
-<p><a href="${config.frontendUrl}/settings.html">Open settings</a></p></body>`);
+<p><a href="${config.frontendUrl}/settings">Open settings</a></p></body>`);
 }
 
 // ---- POST /api/auth/moderation/:id/review  Ask a person to look at an automatic decision ----

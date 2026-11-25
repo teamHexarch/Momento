@@ -170,7 +170,7 @@ async function tellUploader(d, allow) {
   await sendEmail({
     to: user.email,
     subject: allow ? 'Your photo was approved' : 'Your photo was declined',
-    html: reviewResultHtml(user, album?.name, allow, `${config.frontendUrl}/albums.html${d.album ? `?album=${d.album}` : ''}`),
+    html: reviewResultHtml(user, album?.name, allow, `${config.frontendUrl}/albums${d.album ? `?album=${d.album}` : ''}`),
   });
 }
 

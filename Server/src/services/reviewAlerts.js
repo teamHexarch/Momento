@@ -10,7 +10,7 @@ const KIND = { photo: 'An album photo', cover: 'An album cover picture', avatar:
 // reviewed, with a link to the review page. No picture in the email: staff look at it on review.html.
 export async function tellStaffAboutReview({ decision, fileName, user }) {
   const album = decision.album ? await Album.findById(decision.album, 'name').lean() : null;
-  const link = `${config.frontendUrl}/review.html?id=${decision._id || decision.id}`;
+  const link = `${config.frontendUrl}/review?id=${decision._id || decision.id}`;
   const rows = [
     ['What', KIND[decision.kind] || 'A picture'],
     ['File', fileName ? fixFileName(fileName) : '(not stored)'],

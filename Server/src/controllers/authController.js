@@ -367,9 +367,9 @@ export async function verifyEmail(req, res) {
   const pending = await User.findById(user._id).select('+pendingJoin');
   if (pending?.pendingJoin) {
     await User.updateOne({ _id: user._id }, { $unset: { pendingJoin: 1 } });
-    return res.redirect(303, config.frontendUrl + '/events.html?join=' + encodeURIComponent(pending.pendingJoin));
+    return res.redirect(303, config.frontendUrl + '/events?join=' + encodeURIComponent(pending.pendingJoin));
   }
-  res.redirect(303, config.frontendUrl + '/albums.html?verified=1');
+  res.redirect(303, config.frontendUrl + '/albums?verified=1');
 }
 
 export async function resendVerification(req, res) {

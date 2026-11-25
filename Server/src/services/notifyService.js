@@ -131,9 +131,9 @@ export async function unnotify({ user, type, actor, photo, group }) {
 
 // Where tapping it goes (push notifications; the inbox works this out itself from the fields below)
 export function linkOf(item) {
-  if (item.type === 'invite') return `${config.frontendUrl}/events.html#needs`;
-  if (item.type === 'request' && item.albumId) return `${config.frontendUrl}/albums.html#requests=${item.albumId}${item.actor?.id ? `&guest=${item.actor.id}` : ''}`;
-  return `${config.frontendUrl}/albums.html${item.albumId ? `?album=${item.albumId}` : ''}`;
+  if (item.type === 'invite') return `${config.frontendUrl}/events#needs`;
+  if (item.type === 'request' && item.albumId) return `${config.frontendUrl}/albums#requests=${item.albumId}${item.actor?.id ? `&guest=${item.actor.id}` : ''}`;
+  return `${config.frontendUrl}/albums${item.albumId ? `?album=${item.albumId}` : ''}`;
 }
 
 // The inbox's view of a notification

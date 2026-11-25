@@ -159,7 +159,8 @@
       // name and size (bytes): optional, for the album window's File name / Largest first sorting
       out.push({ id: `${a.id}-p${i}`, name: `IMG_${String(4200 + ((n * 37) % 900)).padStart(4, '0')}.${i % 7 === 3 ? 'HEIC' : 'JPG'}`, size: 1200000 + ((n * 7919) % 5200000), url: picsum(n, 1200, 750), thumbnailUrl: picsum(n, 600, 480), miniUrl: picsum(n, 320, 256), downloadUrl: picsum(n, 1200, 750),
         by: mine ? 'You' : NAMES[(i + 1) % NAMES.length], mine, at: new Date(Date.now() - i * 37 * 60000).toISOString(),
-        likes: so.likes, liked: so.liked, bookmarked: so.bookmarked ?? !!so.liked, reactions: so.reactions, reaction: so.reaction });
+        likes: so.likes, liked: so.liked, bookmarked: so.bookmarked ?? !!so.liked, reactions: so.reactions, reaction: so.reaction,
+        commentCount: state.comments?.[`${a.id}-p${i}`]?.length || 0 });
     }
     return out;
   };
@@ -597,6 +598,33 @@
       }
       photos.sort((x, y) => String(y.likedAt).localeCompare(String(x.likedAt)));
       return { body: { photos } };
+    }
+    // Comments on a photo (like the server's: up to 200 characters, 50 per photo; yours or, as host, any can be deleted)
+    const cm = /^\/api\/photos\/(.+)-p(\d+)\/comments(?:\/([^/]+))?$/.exec(path);
+    if (cm) {
+      const a = state.albums.find((x) => x.id === cm[1]), pid = `${cm[1]}-p${cm[2]}`;
+      if (!a || goneOf(a).has(Number(cm[2]))) return fail(404, 'Photo not found.');
+      state.comments ||= {};
+      const list = state.comments[pid] ||= [];
+      const view = (c) => ({ id: c.id, text: c.text, by: c.mine ? 'You' : c.by, mine: !!c.mine, at: c.at, canDelete: !!c.mine || a.role === 'host' });
+      if (!cm[3] && method === 'GET') return { body: { comments: list.map(view), count: list.length, max: 50, allowComments: a.allowComments !== false, maxLength: 200 } };
+      if (!cm[3] && method === 'POST') {
+        if (a.allowComments === false) return fail(403, 'The host has turned comments off for this album.', 'COMMENTS_OFF');
+        const text = String(body.text ?? '').replace(/[ \t]+/g, ' ').trim();
+        if (!text) return fail(400, 'Your comment can\u2019t be empty.', 'TEXT_EMPTY');
+        if ([...text].length > 200) return fail(400, 'Your comment can be up to 200 characters.', 'TEXT_TOO_LONG');
+        if (list.length >= 50) return fail(409, 'This photo already has 50 comments.', 'COMMENT_LIMIT');
+        const c = { id: 'c' + (++state.seq), text, by: state.user.name, mine: true, at: new Date().toISOString() };
+        list.push(c); save();
+        return { status: 201, body: { comment: view(c), commentCount: list.length } };
+      }
+      if (cm[3] && method === 'DELETE') {
+        const k = list.findIndex((c) => c.id === cm[3]);
+        if (k < 0) return fail(404, 'Comment not found.', 'COMMENT_NOT_FOUND');
+        if (!list[k].mine && a.role !== 'host') return fail(403, 'You can delete your own comments; the host can delete any.', 'COMMENT_NOT_YOURS');
+        list.splice(k, 1); save();
+        return { body: { ok: true, commentCount: list.length } };
+      }
     }
     // Deleting a photo: the host can take down any photo in their album, a guest only their own
     const sm = /^\/api\/photos\/(.+)-p(\d+)\/(like|likes|reaction|reactions|bookmark)$/.exec(path);

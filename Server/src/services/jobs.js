@@ -50,7 +50,7 @@ export async function closingSoon(now = new Date()) {
     for (const u of ids) await notify({ user: u, type: 'closing', album: a._id });
     const people = await User.find({ _id: { $in: ids }, emailVerified: true, 'notify.closing': { $ne: false } }, 'name email').limit(300);
     const hours = Math.max(1, Math.round((a.endsAt - now) / HOUR));
-    const link = `${config.frontendUrl}/albums.html?album=${a.id}`;
+    const link = `${config.frontendUrl}/albums?album=${a.id}`;
     sent += await mail(people.map((p) => {
       const unsubscribe = unsubscribeUrl(p, 'closing');
       return { to: p.email, subject: `Last chance to add your photos to ${a.name}`, html: closingHtml(p, a, hours, link, unsubscribe), unsubscribe };
@@ -79,7 +79,7 @@ export async function weeklyRecap(now = new Date()) {
     const names = new Map((await Album.find({ _id: { $in: rows.slice(0, 5).map((r) => r._id) } }, 'name')).map((a) => [String(a._id), a.name]));
     const top = rows.slice(0, 5).map((r) => ({ name: names.get(String(r._id)) || 'An album', n: r.n }));
     const unsubscribe = unsubscribeUrl(u, 'recap');
-    sent += await mail([{ to: u.email, subject: `${total} new photo${total === 1 ? '' : 's'} in your Momento albums this week`, html: recapHtml(u, total, top, `${config.frontendUrl}/albums.html`, unsubscribe), unsubscribe }]);
+    sent += await mail([{ to: u.email, subject: `${total} new photo${total === 1 ? '' : 's'} in your Momento albums this week`, html: recapHtml(u, total, top, `${config.frontendUrl}/albums`, unsubscribe), unsubscribe }]);
   }
   return sent;
 }
@@ -104,7 +104,7 @@ export async function reviewReminders(now = new Date()) {
     if (!claimed.modifiedCount) continue;
     const job = await UploadCheck.findById(d._id, 'originalName createdAt').lean();
     const album = d.album ? await Album.findById(d.album, 'name').lean() : null;
-    const link = `${config.frontendUrl}/review.html?id=${d._id}`;
+    const link = `${config.frontendUrl}/review?id=${d._id}`;
     const uploaded = new Date(job?.createdAt || d.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: process.env.REVIEW_TIMEZONE || 'Australia/Sydney' });
     const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const headline = flag === 'oneDayReminderSent' ? 'Reminder: You haven’t reviewed this photo yet — 1 working day left' : 'Action Required: Photo review is due today';

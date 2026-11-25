@@ -1350,3 +1350,48 @@
       .m-row2 { grid-template-columns: 1fr; }
       .m-toast { bottom: 1rem; }
     }
+
+    /* ---- Comments on a photo (the viewer's Comments button and panel; always dark, like the reactions) ---- */
+    .viewer .vw-talk .vw-react-label { font-variant-numeric: tabular-nums; }
+    .viewer .vw-comments { width: min(22rem, calc(100vw - 1.5rem)); grid-template-rows: auto auto minmax(0, 1fr) auto; max-height: min(30rem, calc(100dvh - 9rem)); }
+    .cm-head { display: flex; align-items: baseline; gap: .45rem; padding: .25rem .45rem 0; }
+    .cm-head b { font-size: .95rem; letter-spacing: -.01em; }
+    .cm-head span { color: rgba(242, 239, 248, .6); font-size: .82rem; font-variant-numeric: tabular-nums; }
+    .cm-list { display: grid; align-content: start; gap: .15rem; min-height: 0; max-height: 17rem; margin: 0; padding: 0; overflow-y: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
+    .cm-item { display: grid; grid-template-columns: 2.1rem minmax(0, 1fr) auto; gap: .55rem; align-items: start; padding: .4rem .45rem; border-radius: 14px; }
+    .cm-item.is-mine { background: rgba(232, 196, 138, .1); }
+    .cm-item.is-pending { opacity: .6; }
+    .cm-body { display: grid; gap: .1rem; min-width: 0; }
+    .cm-meta { display: flex; align-items: baseline; gap: .4rem; min-width: 0; }
+    .cm-meta b { overflow: hidden; color: #F2EFF8; font-size: .86rem; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+    .cm-meta span { flex: none; color: rgba(242, 239, 248, .55); font-size: .72rem; font-variant-numeric: tabular-nums; }
+    .cm-text { margin: 0; color: rgba(242, 239, 248, .92); font-size: .9rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .cm-del { align-self: center; min-height: 2rem; padding: 0 .6rem; border: none; border-radius: 100px; background: none; color: rgba(242, 239, 248, .6);
+      font: 650 .74rem var(--font-main); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+    .cm-del:hover { background: rgba(255, 255, 255, .08); color: #F2EFF8; }
+    .cm-del:focus-visible { outline: 2px solid #F2EFF8; outline-offset: 1px; }
+    .cm-note, .cm-empty, .cm-off { margin: 0; padding: .9rem .5rem; color: rgba(242, 239, 248, .65); font-size: .88rem; text-align: center; }
+    .cm-form { display: grid; gap: .35rem; padding: .35rem .2rem .2rem; border-top: 1px solid rgba(255, 255, 255, .1); }
+    .cm-form[hidden] { display: none; }
+    .cm-form textarea { box-sizing: border-box; width: 100%; min-height: 2.6rem; max-height: 7.5rem; padding: .6rem .85rem; border: none; border-radius: 16px; resize: none;
+      background: rgba(255, 255, 255, .08); color: #F2EFF8; font: 500 16px/1.4 var(--font-main); transition: background-color .2s ease, box-shadow .2s ease; }
+    .cm-form textarea::placeholder { color: rgba(242, 239, 248, .5); }
+    .cm-form textarea:focus { outline: none; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1.5px rgba(242, 239, 248, .55); }
+    .cm-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .2rem; }
+    .cm-left { color: rgba(242, 239, 248, .55); font-size: .76rem; font-variant-numeric: tabular-nums; transition: color .2s ease; }
+    .cm-left.is-near { color: #E8C48A; }
+    .cm-left.is-over { color: #FF9C8F; font-weight: 700; }
+    .cm-send { min-height: 2.3rem; padding: 0 1.05rem; border: none; border-radius: 100px; background: #F2EFF8; color: #1C1A26; font: 700 .85rem var(--font-main);
+      cursor: pointer; transition: transform .25s cubic-bezier(.34, 1.4, .64, 1), opacity .2s ease; }
+    .cm-send:hover:not(:disabled) { transform: translateY(-1px); }
+    .cm-send:active:not(:disabled) { transform: scale(.96); }
+    .cm-send:focus-visible { outline: 2px solid #F2EFF8; outline-offset: 2px; }
+    .cm-send:disabled { opacity: .4; cursor: default; }
+    .cm-err { margin: 0; padding: 0 .3rem; color: #FF9C8F; font-size: .8rem; }
+    @media (pointer: coarse) { .cm-del { min-height: 2.4rem; } .cm-send { min-height: 2.6rem; } }
+    /* Phones: the full-width sheet along the bottom (above the keyboard while typing), like the reactions */
+    @media (max-width: 600px) { .viewer .vw-comments { width: auto; max-height: min(75dvh, 34rem, calc(var(--vvh, 100dvh) - 4rem)); } .cm-list { max-height: none; } }
+    /* The comment count on a photo in the album grid */
+    .ab-talk { position: absolute; left: .3rem; bottom: .3rem; display: inline-flex; align-items: center; gap: .2rem; padding: .12rem .42rem; border-radius: 100px;
+      background: rgba(30, 26, 40, .72); color: #fff; font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums; pointer-events: none;
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }

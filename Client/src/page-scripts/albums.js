@@ -729,7 +729,9 @@ export default function start() {
       document.getElementById('albumLink').hidden = !isHost;
       document.getElementById('albumQr').hidden = !isHost;
       document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : '', a.group ? `Shared with ${a.group.name}` : ''].filter(Boolean).join(' · ');
-      thumbsEl.innerHTML = (a.photoItems || []).map((p, n) => `<button class="ab-tile" type="button" data-n="${n}" data-id="${esc(p.id)}" aria-label="Photo ${n + 1}${p.by ? ', added by ' + esc(p.by) : ''}"><img ${smallImg(p, pic(p.url, 400, 400))} alt="" loading="lazy" decoding="async"><span class="ab-check" aria-hidden="true"></span></button>`).join('');
+      // A speech-bubble badge with the number of comments, on photos that have any
+      const talk = (p) => (+p.commentCount > 0 ? `<span class="ab-talk" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z"/></svg>${+p.commentCount}</span>` : '');
+      thumbsEl.innerHTML = (a.photoItems || []).map((p, n) => `<button class="ab-tile" type="button" data-n="${n}" data-id="${esc(p.id)}" aria-label="Photo ${n + 1}${p.by ? ', added by ' + esc(p.by) : ''}${+p.commentCount > 0 ? ', ' + plural(+p.commentCount, 'comment', 'comments') : ''}"><img ${smallImg(p, pic(p.url, 400, 400))} alt="" loading="lazy" decoding="async">${talk(p)}<span class="ab-check" aria-hidden="true"></span></button>`).join('');
       albumSel.paint();
       if (M.focus && M.focus.album === a.id) applyFocus(M.focus); else clearFocus();
       document.getElementById('abSelect').hidden = empty;
@@ -1414,6 +1416,7 @@ export default function start() {
       vwReact.classList.toggle('has-mine', !!p.reaction);
       vwReact.querySelector('.vw-react-label').textContent = p.reaction ? 'Reacted' : 'React';
       vwReact.setAttribute('aria-label', `${p.reaction ? `Your reaction: ${REACT_NAME[p.reaction] || p.reaction}. Change or remove it` : 'React to this photo'}, ${plural(total, 'reaction', 'reactions')} so far`);
+      paintTalk(p);
       // "Album cover" on the photo that's the cover now (moving between photos doesn't run renderSocial)
       const cover = coverOf(M.a);
       document.getElementById('pbCover').hidden = !(cover && cover.id === p.id);
@@ -2433,7 +2436,7 @@ export default function start() {
       leaveTimer = setTimeout(() => { if (openPick?.hover) closePicker(false); }, 260);
     });
     // Phones: pull a sheet down by its handle to close it
-    for (const sheet of [picker, document.getElementById('pbWho')]) {
+    for (const sheet of [picker, document.getElementById('pbWho'), document.getElementById('vwComments')]) {
       const grab = sheet.querySelector('.rx-grab');
       let d = null;
       grab.addEventListener('pointerdown', (e) => { d = { y: e.clientY, t: performance.now(), dy: 0, v: 0 }; grab.setPointerCapture(e.pointerId); sheet.getAnimations().forEach((a) => a.cancel()); });
@@ -2544,6 +2547,131 @@ export default function start() {
       panelIn(pbWho);
       (whoTabs.querySelector('[aria-pressed="true"]') || whoTabs.firstChild)?.focus({ preventScroll: true });
     }
+    // ---- Comments on a photo (up to 200 characters each; the server's /api/photos/:id/comments) ----
+    // The Comments button opens a panel: everyone's comments, oldest first, and a box to add yours with a live
+    // counter (0/200). Yours (or any, as the host) can be deleted. Posting shows the comment at once and takes it
+    // back if the server says no.
+    const talkBtn = document.getElementById('vwTalk'), cmPanel = document.getElementById('vwComments'), cmList = document.getElementById('cmList');
+    const cmForm = document.getElementById('cmForm'), cmText = document.getElementById('cmText'), cmLeft = document.getElementById('cmLeft');
+    const cmSend = document.getElementById('cmSend'), cmErr = document.getElementById('cmErr'), cmEmpty = document.getElementById('cmEmpty');
+    const cmOff = document.getElementById('cmOff'), cmCount = document.getElementById('cmCount');
+    const CM_MAX = 200;
+    const cmChars = (s) => [...s].length;
+    function paintTalk(p) {
+      const n = +p.commentCount || 0;
+      document.getElementById('vwTalkLabel').textContent = n ? String(n) : 'Comment';
+      document.getElementById('vwTalk').setAttribute('aria-label', n ? `${plural(n, 'comment', 'comments')}. Read or add one` : 'Add a comment');
+    }
+    function cmAgo(at) {
+      const s = Math.max(0, (Date.now() - new Date(at)) / 1000);
+      return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min` : s < 86400 ? `${Math.floor(s / 3600)} h` : new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    }
+    function cmRow(c) {
+      const li = document.createElement('li');
+      li.className = 'cm-item' + (c.mine ? ' is-mine' : '') + (c.pending ? ' is-pending' : '');
+      li.dataset.id = c.id;
+      const av = document.createElement('span'); av.className = 'rx-av'; av.setAttribute('aria-hidden', 'true');
+      av.textContent = (String(c.by).trim()[0] || '·').toUpperCase(); av.style.setProperty('--c', avColor(c.by));
+      const body = document.createElement('div'); body.className = 'cm-body';
+      const top = document.createElement('div'); top.className = 'cm-meta';
+      const who = document.createElement('b'); who.textContent = c.by;
+      const when = document.createElement('span'); when.textContent = c.pending ? 'Posting…' : cmAgo(c.at);
+      top.append(who, when);
+      const text = document.createElement('p'); text.className = 'cm-text'; text.textContent = c.text;
+      body.append(top, text);
+      li.append(av, body);
+      if (c.canDelete && !c.pending) {
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'cm-del'; del.dataset.id = c.id;
+        del.setAttribute('aria-label', c.mine ? 'Delete your comment' : `Delete ${c.by}’s comment`); del.textContent = 'Delete';
+        li.append(del);
+      }
+      return li;
+    }
+    let cm = { for: null, items: [], allow: true };
+    function paintComments() {
+      cmList.replaceChildren(...cm.items.map(cmRow));
+      cmEmpty.hidden = !!cm.items.length;
+      cmCount.textContent = cm.items.length ? String(cm.items.length) : '';
+      cmForm.hidden = !cm.allow; cmOff.hidden = cm.allow;
+      cmList.scrollTop = cmList.scrollHeight;
+    }
+    function cmCounter() {
+      const n = cmChars(cmText.value), over = n > CM_MAX;
+      cmLeft.textContent = `${n}/${CM_MAX}`;
+      cmLeft.classList.toggle('is-near', n >= CM_MAX - 20);
+      cmLeft.classList.toggle('is-over', over);
+      cmSend.disabled = !cmText.value.trim() || over;
+      // The box grows with the text, up to a few lines
+      cmText.style.height = 'auto'; cmText.style.height = Math.min(cmText.scrollHeight, 120) + 'px';
+    }
+    async function loadComments(p) {
+      cm = { for: p.id, items: [], allow: true };
+      cmList.replaceChildren(Object.assign(document.createElement('li'), { className: 'cm-note', textContent: 'Loading comments…' }));
+      cmEmpty.hidden = true;
+      try {
+        const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments');
+        if (cm.for !== p.id) return;
+        cm.items = r.comments || []; cm.allow = r.allowComments !== false;
+        p.commentCount = cm.items.length; paintTalk(p);
+      } catch (err) {
+        if (cm.for !== p.id) return;
+        cmList.replaceChildren(Object.assign(document.createElement('li'), { className: 'cm-note', textContent: 'Couldn’t load the comments. ' + err.message }));
+        return;
+      }
+      paintComments();
+    }
+    function openComments() {
+      const p = current();
+      if (!p) return;
+      if (openPick) closePicker(false);
+      openPick = { el: cmPanel, trigger: talkBtn, for: p.id };
+      talkBtn.setAttribute('aria-expanded', 'true');
+      cmErr.hidden = true;
+      cmPanel.hidden = false;
+      loadComments(p);
+      placePanel(cmPanel, talkBtn, 'start');
+      panelIn(cmPanel);
+      // A computer goes straight to the box; a phone waits to be asked, so the keyboard doesn't jump up
+      (finePointer ? cmText : cmPanel).focus({ preventScroll: true });
+    }
+    talkBtn.addEventListener('click', () => { if (openPick?.el === cmPanel) closePicker(true); else openComments(); });
+    cmText.addEventListener('input', () => { cmErr.hidden = true; cmCounter(); });
+    // Enter posts; Shift+Enter is a new line
+    cmText.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); cmForm.requestSubmit(); } });
+    cmForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const p = current(), text = cmText.value.replace(/[ \t]+/g, ' ').trim();
+      if (!p || !text || cmChars(text) > CM_MAX) return;
+      const temp = { id: 'pending-' + Date.now(), text, by: 'You', mine: true, pending: true, at: new Date().toISOString() };
+      cm.items.push(temp); paintComments();
+      cmText.value = ''; cmCounter();
+      try {
+        const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments', momentoJson('POST', { text }));
+        cm.items = cm.items.map((c) => (c === temp ? r.comment : c));
+        p.commentCount = r.commentCount ?? cm.items.length;
+      } catch (err) {
+        cm.items = cm.items.filter((c) => c !== temp);
+        cmText.value = text; cmCounter();
+        cmErr.textContent = err.message; cmErr.hidden = false;
+        if (err.code === 'COMMENTS_OFF') cm.allow = false;
+      }
+      if (cm.for === p.id) { paintComments(); paintTalk(p); }
+    });
+    cmList.addEventListener('click', async (e) => {
+      const b = e.target.closest('.cm-del');
+      const p = current();
+      if (!b || !p) return;
+      const gone = cm.items.find((c) => c.id === b.dataset.id);
+      cm.items = cm.items.filter((c) => c !== gone); paintComments();
+      try {
+        const r = await momentoApi('/api/photos/' + encodeURIComponent(p.id) + '/comments/' + encodeURIComponent(gone.id), momentoJson('DELETE', {}));
+        p.commentCount = r.commentCount ?? cm.items.length;
+      } catch (err) {
+        if (gone) cm.items = [...cm.items, gone].sort((x, y) => new Date(x.at) - new Date(y.at));
+        cmErr.textContent = err.message; cmErr.hidden = false;
+      }
+      if (cm.for === p.id) { paintComments(); paintTalk(p); }
+    });
     pbTally.addEventListener('click', (e) => {
       const chip = e.target.closest('.pb-chip');
       if (!chip) return;

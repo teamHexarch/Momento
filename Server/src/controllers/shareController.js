@@ -100,10 +100,10 @@ export async function sharePage(req, res) {
   const code = normaliseCode(raw);
   const groupCode = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
   const self = `${config.publicUrl}/s/${encodeURIComponent(raw)}`;
-  let card = { ...GENERIC }, target = `${config.frontendUrl}/events.html`;
+  let card = { ...GENERIC }, target = `${config.frontendUrl}/events`;
   try {
     if (code.length === 7) {
-      target = `${config.frontendUrl}/events.html?join=${encodeURIComponent(code)}`;
+      target = `${config.frontendUrl}/events?join=${encodeURIComponent(code)}`;
       const album = await Album.findOne({ code });
       if (album && !album.group) {
         const guests = await Membership.countDocuments({ album: album._id, via: { $ne: 'group' } });
@@ -115,7 +115,7 @@ export async function sharePage(req, res) {
         };
       }
     } else if (groupCode.length >= 8) {
-      target = `${config.frontendUrl}/events.html?group=${encodeURIComponent(groupCode)}`;
+      target = `${config.frontendUrl}/events?group=${encodeURIComponent(groupCode)}`;
       const group = await Group.findOne({ inviteCode: groupCode }, 'name');
       if (group) {
         const members = await GroupMember.countDocuments({ group: group._id });

@@ -80,7 +80,7 @@ export default function HowItWorks() {
                 <span className="art-saved">340 photos saved</span>
               </span>
               <span className="hiw-top"><span className="hiw-no">05</span><b className="hiw-title">It all lands in one album</b></span>
-              <span className="hiw-desc">Full quality, grouped by camera and phone, saved to your cloud. Yours to share, print or relive.</span>
+              <span className="hiw-desc">Full quality, grouped by camera and phone, kept in Momento’s private cloud. Yours to download, print or relive.</span>
               <span className="step-timer" aria-hidden="true"></span>
             </button>
           </li>

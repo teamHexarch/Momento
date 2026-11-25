@@ -752,7 +752,7 @@ export async function download(req, res) {
   // A big album: zipped in the background and emailed, rather than making the browser wait
   if (await isBig(m.album._id, m.hidden || [])) {
     await requestZip(m.album, req.user, m.hidden || []);
-    return res.redirect(303, `${config.frontendUrl}/albums.html?album=${m.album.id}&zip=preparing`);
+    return res.redirect(303, `${config.frontendUrl}/albums?album=${m.album.id}&zip=preparing`);
   }
   const photos = await Photo.find({ album: m.album._id, _id: { $nin: m.hidden || [] }, deletedAt: null }).sort({ createdAt: 1 });
   if (!photos.length) throw new HttpError(404, 'This album has no photos yet.');
@@ -820,7 +820,7 @@ export async function remind(req, res) {
   const added = new Set(contributors.map(String));
   const ids = guests.map((g) => g.user).filter((u) => !added.has(String(u))).slice(0, REMIND_MAX);
   const people = await User.find({ _id: { $in: ids } }, 'name email');
-  const link = `${config.frontendUrl}/albums.html?album=${album.id}`;
+  const link = `${config.frontendUrl}/albums?album=${album.id}`;
   const info = { name: album.name, closesLabel: closes && closesLabel(closes) };
   const results = await Promise.allSettled(people.map((p) => sendEmail({
     to: p.email,

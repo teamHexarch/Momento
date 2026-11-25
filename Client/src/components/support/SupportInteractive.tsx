@@ -9,7 +9,7 @@ const QA = [
   ['How do guests join an album?', 'They point their phone camera at the host’s QR code and the album opens. Signing up lets them add their own photos.'],
   ['Who can see the photos?', 'Only the people who joined the album. The host decides whether guests can see the gallery while the event is on.'],
   ['How long does an album stay open?', 'Uploads and downloads stay open for a while after the event, then the album is kept as an archive. Download your photos before it closes.'],
-  ['Does it work with real cameras?', 'Yes. Sony ARW, Canon CR3, iPhone HEIC and ProRAW files upload as untouched originals, and camera files go first.'],
+  ['Does it work with real cameras?', 'Yes. Sony ARW, Canon CR3, iPhone HEIC and ProRAW files all upload; camera RAW files are kept as full-size, high-quality JPEGs.'],
   ['Can I remove a photo I added?', 'Yes. Open the album, choose your photo and pick Delete. You can only remove the photos you added yourself.'],
 ];
 

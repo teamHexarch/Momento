@@ -58,17 +58,17 @@ export default function Features() {
           </div>
           <div className="quality-copy">
             <h2 className="section-title ink" data-text="Every pixel,&#10;as it was shot">Every pixel,<br />as it was shot</h2>
-            <p className="section-lede">Chat apps shrink your photos to save space. Momento keeps the original file, so the album looks as good as the camera that took it.</p>
+            <p className="section-lede">Chat apps shrink your photos to save space. Momento keeps your photos at full quality, so the album looks as good as the camera that took it.</p>
             <span className="grow"></span>
             <div className="qc-files">
-              <b>Untouched originals</b>
+              <b>Full-quality photos</b>
               <ul>
                 <li>ARW<small>Sony</small></li>
                 <li>CR3<small>Canon</small></li>
                 <li>HEIC<small>iPhone</small></li>
                 <li>ProRAW<small>iPhone Pro</small></li>
               </ul>
-              <p>Camera files go first, and nothing is recompressed.</p>
+              <p>Camera RAW files are kept as full-size, high-quality JPEGs.</p>
             </div>
           </div>
         </div>
