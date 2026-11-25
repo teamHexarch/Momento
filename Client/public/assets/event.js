@@ -585,15 +585,24 @@
   // ---- The cover photo: chosen on the form, uploaded once the album has been made ----
   const COVER_MAX = 1600, COVER_BYTES = 25 * 1024 * 1024;
   // Resized here so a phone photo doesn't upload at full size; the server still checks and re-encodes it
+  // iPhone HEIC/HEIF: most browsers (Chrome, Edge, Firefox) can't open them, and on Windows they often have no type
+  const HEIC_BYTES = 15 * 1024 * 1024;   // the server's cover limit
+  const isHeic = (f) => /^image\/hei[cf]/.test(f.type || '') || /\.(heic|heif)$/i.test(f.name || '');
   async function prepareCover(file) {
-    if (!file || !/^image\//.test(file.type || '')) throw new Error('Choose a photo (a JPG, PNG, WebP or HEIC image).');
+    if (!file || !(/^image\//.test(file.type || '') || isHeic(file))) throw new Error('Choose a photo (a JPG, PNG, WebP or HEIC image).');
     if (file.size > COVER_BYTES) throw new Error('That photo is over 25 MB. Choose a smaller one.');
     const img = await new Promise((resolve, reject) => {
       const el = new Image(), u = URL.createObjectURL(file);
       el.onload = () => { URL.revokeObjectURL(u); resolve(el); };
       el.onerror = () => { URL.revokeObjectURL(u); reject(new Error('That file isn’t a photo Momento can read. Try a JPG or PNG.')); };
       el.src = u;
+    }).catch((err) => {
+      // A HEIC this browser can't open goes to the server as it is (it converts it); there's just no preview here
+      if (!isHeic(file)) throw err;
+      if (file.size > HEIC_BYTES) throw new Error('That HEIC photo is over 15 MB. Choose a smaller one, or a JPG.');
+      return null;
     });
+    if (!img) return file;
     const k = Math.min(1, COVER_MAX / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
@@ -620,7 +629,7 @@
           </button>
           <div class="ev-cover-acts" hidden><span>Cover photo</span><button class="ev-cover-btn" type="button" data-cover-change>Change</button><button class="ev-cover-btn is-quiet" type="button" data-cover-remove>Remove</button></div>
         </div>
-        <input class="ev-cover-file" type="file" accept="image/*" tabindex="-1" aria-hidden="true">
+        <input class="ev-cover-file" type="file" accept="image/*,.heic,.heif" tabindex="-1" aria-hidden="true">
         <p class="ev-hint" id="evCoverHint">${COVER_HINT}</p>`;
       // First thing under More options (or, without it, just above the message line)
       const more = view.querySelector('.ev-more-body');
@@ -630,9 +639,10 @@
       const show = (cover) => {
         if (form._cover?.url && form._cover !== cover) URL.revokeObjectURL(form._cover.url);
         form._cover = cover;
-        box.classList.toggle('has-pic', !!cover);
-        img.hidden = shade.hidden = acts.hidden = !cover;
-        if (cover) img.src = cover.url; else img.removeAttribute('src');
+        box.classList.toggle('has-pic', !!cover?.url);
+        img.hidden = shade.hidden = !cover?.url;
+        acts.hidden = !cover;
+        if (cover?.url) img.src = cover.url; else img.removeAttribute('src');
         pick.setAttribute('aria-label', cover ? 'Change the cover photo' : 'Add a cover photo');
       };
       const say = (text, bad) => { hint.textContent = text || COVER_HINT; hint.classList.toggle('is-error', !!bad); };
@@ -647,8 +657,9 @@
         pick.setAttribute('aria-busy', 'true'); say('Getting the photo ready…');
         try {
           const blob = await prepareCover(f);
-          show({ blob, url: URL.createObjectURL(blob) });
-          say();
+          const opens = blob !== f || !isHeic(f);
+          show({ blob, url: opens ? URL.createObjectURL(blob) : '' });
+          say(opens ? '' : `${f.name} chosen. This browser can’t preview HEIC photos, but it will be the cover.`);
           if (!matchMedia('(prefers-reduced-motion: reduce)').matches) img.animate([{ opacity: 0, transform: 'scale(1.04)' }, { opacity: 1, transform: 'none' }], { duration: 520, easing: 'cubic-bezier(.16, 1, .3, 1)' });
         } catch (err) { say(err.message, true); }
         finally { pick.removeAttribute('aria-busy'); }
@@ -668,13 +679,13 @@
     done?.querySelector('.ev-made')?.remove();
     const made = document.createElement('div');
     made.className = 'ev-made';
-    made.innerHTML = `<img src="${esc(cover.url)}" alt=""><span>Adding the cover…</span>`;
+    made.innerHTML = `${cover.url ? `<img src="${esc(cover.url)}" alt="">` : ''}<span>Adding the cover…</span>`;
     // Right under "Album created" and its sentence, above the QR code and guest code
     const sub = done?.querySelector(':scope > .acct-sub');
     if (sub) sub.after(made); else done?.prepend(made);
     const label = made.querySelector('span');
     const fd = new FormData();
-    fd.append('cover', cover.blob, cover.blob.type === 'image/webp' ? 'cover.webp' : 'cover.jpg');
+    fd.append('cover', cover.blob, cover.blob.name || (cover.blob.type === 'image/webp' ? 'cover.webp' : 'cover.jpg'));
     try {
       const r = await momentoApi('/api/albums/' + encodeURIComponent(album.id) + '/cover', { method: 'PUT', body: fd });
       label.textContent = 'Cover photo';

@@ -163,7 +163,7 @@
             <button class="as-ghost" type="button" data-cover-pick>${a.hasHostCover ? 'Change cover' : 'Choose a cover'}</button>
             ${a.hasHostCover ? '<button class="as-ghost" type="button" data-cover-remove>Remove</button>' : ''}
           </div>
-          <input class="as-cover-file" type="file" accept="image/*" tabindex="-1" aria-hidden="true">
+          <input class="as-cover-file" type="file" accept="image/*,.heic,.heif" tabindex="-1" aria-hidden="true">
           ${a.hasHostCover ? sw('keepHostCover', !!a.keepHostCover, 'Keep my cover', 'When off, the photo with the most reactions takes over once the event is live') : ''}
         </section>
 

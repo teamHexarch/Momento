@@ -110,6 +110,18 @@ async function heicToJpeg(buffer) {
   return Buffer.from(await convert({ buffer, format: 'JPEG', quality: 0.92 }));
 }
 
+// A picture sharp can read, for the cover and profile photos: an iPhone HEIC (HEVC inside, which sharp can't decode)
+// becomes a JPEG first; anything else comes back unchanged (sharp checks it next)
+export async function readableImage(buffer) {
+  if (!isHeicBytes(buffer)) return buffer;
+  try {
+    const m = await sharp(buffer).metadata();
+    if (m.format === 'heif') { await sharp(buffer).resize(8).toBuffer(); return buffer; }
+  } catch {}
+  try { return await heicToJpeg(buffer); }
+  catch { throw new HttpError(400, 'This HEIC photo couldn’t be read. Try exporting it as JPEG and uploading again.', 'unreadable'); }
+}
+
 export const PREVIEW_EDGE = 2560;
 export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) {
   const takenAt = await takenAtOf(input);

@@ -5,13 +5,16 @@ import { saveFile, removeFile } from './storageService.js';
 import { HttpError } from '../utils/httpError.js';
 import { assertAllowed } from './nsfwService.js';
 import { assertNotBanned } from './contentSafety.js';
+import { readableImage } from './imageService.js';
 
 // An album's cover picture, chosen by its host. The upload is decoded and re-encoded (so only the
 // picture is kept: no location or camera details), as a large WebP and a small one for cards.
 // Its address carries a random token, so the picture can show on the invite, the Events map and
 // the albums list without logging in, but can't be found by guessing album ids.
 
-export async function saveCover(album, buffer) {
+export async function saveCover(album, upload) {
+  // An iPhone HEIC is turned into a JPEG first (sharp and the photo check can't read HEIC)
+  const buffer = await readableImage(upload);
   await assertNotBanned(buffer);
   await assertAllowed(buffer, 'This cover', { user: album.host, album: album._id, kind: 'cover' });
   let big, small;
