@@ -4,7 +4,6 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { installLogRedaction } from './utils/logRedaction.js';
 import { requestId, securityHeaders, inputGuard } from './middleware/security.js';
 import { adminRoutes } from './routes/adminRoutes.js';
-import { devRoutes } from './routes/devRoutes.js';
 import { supportRoutes } from './routes/supportRoutes.js';
 import { reviewRoutes } from './routes/reviewRoutes.js';
 import mongoose from 'mongoose';
@@ -85,7 +84,6 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/dev', devRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api', trashRoutes);   // /api/trash and /api/hidden

@@ -105,12 +105,7 @@ export const config = {
   age: { required: env.REQUIRE_AGE === 'on', minimum: 13, adult: 18 },
   // Where security alerts go (both optional; they're always in the server log too)
   security: { alertEmail: env.SECURITY_ALERT_EMAIL || '', alertWebhook: env.SECURITY_ALERT_WEBHOOK || '' },
-  // Dev Mode (photo moderation): one shared admin account, unlocked per person with their own access code
-  // (scripts/reviewerCodes.js). Off until DEV_MODE_ADMIN_EMAIL names that account (a staff account, email confirmed).
-  // At most 6 Dev Mode sessions at once; one ends after DEV_MODE_IDLE_MINUTES (20, kept within 15-30) unused.
-  devMode: {
-    adminEmail: (env.DEV_MODE_ADMIN_EMAIL || '').trim().toLowerCase(),
-    maxSessions: 6,
-    idleMinutes: Math.min(30, Math.max(15, Number(env.DEV_MODE_IDLE_MINUTES) || 20)),
-  },
+  // The admin team (photo moderation, reports, thresholds): at most 6 people, each signing in to their own account and
+  // entering their own 6-character code (services/adminStaffService.js). Seeded at start-up from ADMIN_STAFF_JSON, or
+  // ADMIN_OWNER_EMAIL + ADMIN_OWNER_CODE (+ ADMIN_OWNER_NAME); only empty slots are filled.
 };
