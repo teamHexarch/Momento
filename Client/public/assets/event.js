@@ -285,10 +285,77 @@
     .ev-shutter[disabled] { cursor: default; }
     .ev-shutter[disabled] i { opacity: .35; transform: none; }
     .ev-cam.is-counting .ev-shutter i { background: #ff6b5e; transform: scale(.6); border-radius: 30%; }
-    .ev-shots { position: relative; justify-self: start; width: 3.1rem; height: 3.1rem; padding: .2rem; border-radius: 16px; }
-    .ev-shots:empty, .ev-shots:not(:has(img)) { visibility: hidden; }
-    .ev-shots img { display: block; width: 100%; height: 100%; border-radius: 12px; object-fit: cover; animation: ev-pop .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
-    .ev-shots img:not(:last-of-type) { display: none; }
+    /* The last photo taken, bottom left: press it to look through, crop or delete what you've taken */
+    .ev-shots { position: relative; justify-self: start; width: 3.1rem; height: 3.1rem; padding: .2rem; border: 0; border-radius: 16px; cursor: pointer;
+      transition: transform .3s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), opacity .2s ease; }
+    .ev-shots[hidden] { display: none; }
+    .ev-shots:hover { opacity: .88; }
+    .ev-shots:active { transform: scale(.9); }
+    .ev-shots:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+    .ev-shots img { display: block; width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
+    .ev-shots img.is-new { animation: ev-pop .35s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-danger { color: #FFB4B4; }
+
+    /* Looking through the photos taken: full screen over the camera */
+    .ev-rev { position: absolute; inset: 0; z-index: 5; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #0b0a10; }
+    .ev-rev[hidden] { display: none; }
+    .ev-rev-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;
+      padding: max(1rem, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) .6rem max(16px, env(safe-area-inset-left)); }
+    .ev-rev-count { padding: .5rem .85rem; border-radius: 100px; font-size: .84rem; font-weight: 750; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+    .ev-rev-count:empty { visibility: hidden; }
+    .ev-rev-top > :first-child { justify-self: start; }
+    .ev-rev-top > :last-child { justify-self: end; }
+    .ev-rev-stage { position: relative; min-height: 0; overflow: hidden; }
+    .ev-rev-stage > img { position: absolute; inset: 18px; width: calc(100% - 36px); height: calc(100% - 36px); object-fit: contain; user-select: none; -webkit-user-drag: none; }
+    .ev-rev-bottom { display: grid; justify-items: center; gap: .85rem; padding: .7rem 16px max(1.4rem, env(safe-area-inset-bottom)); }
+    .ev-rev-strip { display: flex; gap: .35rem; max-width: 100%; padding: .3rem; overflow-x: auto; border-radius: 18px; scrollbar-width: none; }
+    .ev-rev-strip::-webkit-scrollbar { display: none; }
+    .ev-rev-strip[hidden], .ev-crop-shapes[hidden] { display: none; }
+    .ev-rev-strip button { flex: none; width: 2.9rem; height: 2.9rem; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: none; opacity: .5; cursor: pointer;
+      transition: opacity .2s ease, transform .3s var(--spring, cubic-bezier(.34, 1.4, .64, 1)); }
+    .ev-rev-strip button img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .ev-rev-strip button:hover { opacity: .85; }
+    .ev-rev-strip button:active { transform: scale(.9); }
+    .ev-rev-strip button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .ev-rev-strip button[aria-current="true"] { opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
+    .ev-rev-strip button[aria-current="true"] img { border-radius: 12px; outline: 2px solid #fff; outline-offset: -2px; }
+    .ev-rev-actions { display: flex; align-items: center; justify-content: center; gap: .8rem; min-height: 3.4rem; }
+    .ev-rev-actions .ev-cbtn { width: 3.4rem; height: 3.4rem; }
+    .ev-rev-actions .ev-cbtn[hidden] { display: none; }
+    .ev-crop-shapes { display: flex; gap: .25rem; padding: .25rem; border-radius: 100px; }
+
+    /* Cropping: drag the frame to move it, a corner (or a side, in Free) to resize it */
+    .ev-crop { position: absolute; box-sizing: border-box; border: 1.5px solid rgba(255, 255, 255, .95); box-shadow: 0 0 0 100vmax rgba(8, 7, 12, .62); cursor: move; touch-action: none; }
+    .ev-crop[hidden] { display: none; }
+    .ev-crop-grid { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .2s ease;
+      background: linear-gradient(to right, transparent calc(33.333% - .5px), rgba(255, 255, 255, .5) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .5) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)),
+        linear-gradient(to bottom, transparent calc(33.333% - .5px), rgba(255, 255, 255, .5) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .5) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)); }
+    .ev-crop.is-dragging .ev-crop-grid { opacity: 1; }
+    .ev-crop i { position: absolute; width: 44px; height: 44px; touch-action: none; }
+    .ev-crop i::before { content: ""; position: absolute; width: 20px; height: 20px; border: 0 solid #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45)); }
+    .ev-crop [data-h="nw"] { left: -22px; top: -22px; cursor: nwse-resize; }
+    .ev-crop [data-h="nw"]::before { left: 19px; top: 19px; border-width: 3.5px 0 0 3.5px; }
+    .ev-crop [data-h="ne"] { right: -22px; top: -22px; cursor: nesw-resize; }
+    .ev-crop [data-h="ne"]::before { right: 19px; top: 19px; border-width: 3.5px 3.5px 0 0; }
+    .ev-crop [data-h="sw"] { left: -22px; bottom: -22px; cursor: nesw-resize; }
+    .ev-crop [data-h="sw"]::before { left: 19px; bottom: 19px; border-width: 0 0 3.5px 3.5px; }
+    .ev-crop [data-h="se"] { right: -22px; bottom: -22px; cursor: nwse-resize; }
+    .ev-crop [data-h="se"]::before { right: 19px; bottom: 19px; border-width: 0 3.5px 3.5px 0; }
+    .ev-crop :is([data-h="n"], [data-h="s"]) { left: 22px; right: 22px; width: auto; cursor: ns-resize; }
+    .ev-crop [data-h="n"] { top: -22px; }
+    .ev-crop [data-h="s"] { bottom: -22px; }
+    .ev-crop :is([data-h="n"], [data-h="s"])::before { left: 50%; width: 22px; height: 0; margin-left: -11px; }
+    .ev-crop [data-h="n"]::before { top: 19px; border-top-width: 3.5px; }
+    .ev-crop [data-h="s"]::before { bottom: 19px; border-bottom-width: 3.5px; }
+    .ev-crop :is([data-h="e"], [data-h="w"]) { top: 22px; bottom: 22px; height: auto; cursor: ew-resize; }
+    .ev-crop [data-h="e"] { right: -22px; }
+    .ev-crop [data-h="w"] { left: -22px; }
+    .ev-crop :is([data-h="e"], [data-h="w"])::before { top: 50%; width: 0; height: 22px; margin-top: -11px; }
+    .ev-crop [data-h="e"]::before { right: 19px; border-right-width: 3.5px; }
+    .ev-crop [data-h="w"]::before { left: 19px; border-left-width: 3.5px; }
+    .ev-crop.is-locked :is([data-h="n"], [data-h="s"], [data-h="e"], [data-h="w"]) { display: none; }
+    @media (prefers-reduced-motion: reduce) { .ev-shots, .ev-rev-strip button, .ev-crop-grid { transition: none; } }
+
     @keyframes ev-pop { from { transform: scale(.4); opacity: 0; } }
     .ev-cam-right { display: flex; justify-content: flex-end; align-items: center; gap: .6rem; }
     .ev-use { position: relative; background: #fff; color: #1d1b26; box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .5); }
@@ -324,9 +391,21 @@
     .ev-ask h2 { margin: 0; font-size: 1.4rem; letter-spacing: -.03em; line-height: 1.2; }
     .ev-ask p { margin: .5rem 0 0; color: var(--slate, #5c596b); line-height: 1.55; font-size: .93rem; }
     .ev-ask p.ev-limit { font-size: .8rem; margin-top: .35rem; opacity: .85; }
-    .ev-ask .ev-thumbs { display: flex; gap: .4rem; margin: 1rem 0 .2rem; overflow: hidden; }
-    .ev-ask .ev-thumbs img { width: 3.6rem; height: 3.6rem; flex: none; border-radius: 12px; object-fit: cover; }
-    .ev-ask .ev-thumbs span { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; flex: none; border-radius: 12px; background: rgba(127, 120, 150, .14); font-weight: 700; }
+    /* Every photo about to go up, each with a cross to leave it out */
+    .ev-ask .ev-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.4rem, 1fr)); gap: .45rem; max-height: min(15.5rem, 34dvh); margin: 1rem 0 .2rem; padding: 0; overflow-y: auto; list-style: none; overscroll-behavior: contain; }
+    .ev-thumb { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: rgba(127, 120, 150, .14); }
+    .ev-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .ev-thumb-ext { display: grid; place-items: center; width: 100%; height: 100%; color: var(--slate, #5c596b); font-size: .74rem; font-weight: 800; letter-spacing: .02em; }
+    .ev-thumb-x { position: absolute; top: .25rem; right: .25rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+      color: #fff; background: rgba(24, 22, 32, .62); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 0 0 .5px rgba(0, 0, 0, .3); -webkit-backdrop-filter: blur(8px) saturate(160%); backdrop-filter: blur(8px) saturate(160%);
+      transition: transform .3s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), background-color .2s ease; }
+    .ev-thumb-x svg { width: 14px; height: 14px; }
+    .ev-thumb-x:hover { background: rgba(24, 22, 32, .82); }
+    .ev-thumb-x:active { transform: scale(.86); }
+    .ev-thumb-x:focus-visible { outline: 2px solid var(--focus-ring, #2E2C3A); outline-offset: 2px; }
+    @media (pointer: coarse) { .ev-thumb-x { width: 2rem; height: 2rem; } }
+    .ev-ask .ev-none { margin-top: 1rem; padding: .9rem 1rem; border-radius: 16px; background: rgba(127, 120, 150, .1); text-align: center; }
+    @media (prefers-reduced-motion: reduce) { .ev-thumb-x { transition: none; } }
     .ev-ask .ev-loc { display: flex; gap: .55rem; margin-top: .9rem; padding: .75rem .85rem; border-radius: 16px; background: rgba(111, 152, 150, .14); color: var(--dusk, #2e2c3a); font-size: .88rem; line-height: 1.5; }
     .ev-ask .ev-loc svg { flex: none; margin-top: .15rem; }
     .ev-ask .ev-err { color: #a33a2c; font-weight: 600; }
@@ -922,6 +1001,10 @@
     grid: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/>', 18),
     bright: svgIcon('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>', 18),
     use: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 22),
+    back: svgIcon('<path d="m15 5-7 7 7 7"/>', 20),
+    trash: svgIcon('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 19),
+    crop: svgIcon('<path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/>', 21),
+    undo: svgIcon('<path d="M4 9h11a5 5 0 0 1 0 10H8M8 5 4 9l4 4"/>', 19),
   };
   const CAM_KEY = 'momento-camera';
   function camera() {
@@ -948,11 +1031,34 @@
         </div>
         <div class="ev-camzoom ev-lg" role="group" aria-label="Zoom" hidden></div>
         <div class="ev-cam-bar">
-          <div class="ev-shots ev-lg" aria-hidden="true"></div>
+          <button class="ev-shots ev-lg" type="button" hidden></button>
           <button class="ev-shutter ev-lg" type="button" aria-label="Take photo" disabled><i></i></button>
           <div class="ev-cam-right">
             <button class="ev-cbtn ev-lg" type="button" data-flip hidden aria-label="Switch camera" title="Switch camera">${ICON.flip}</button>
             <button class="ev-cbtn ev-use" type="button" data-use hidden title="Use the photos">${CAM_ICON.use}<span class="ev-badge"></span></button>
+          </div>
+        </div>
+        <div class="ev-rev" hidden role="group" aria-label="Photos taken">
+          <div class="ev-rev-top">
+            <button class="ev-cbtn ev-lg" type="button" data-rev-back aria-label="Back to the camera" title="Back to the camera">${CAM_ICON.back}</button>
+            <span class="ev-rev-count ev-lg" aria-hidden="true"></span>
+            <button class="ev-cbtn ev-lg ev-danger" type="button" data-rev-del aria-label="Delete this photo" title="Delete">${CAM_ICON.trash}</button>
+          </div>
+          <div class="ev-rev-stage">
+            <img alt="">
+            <div class="ev-crop" hidden tabindex="0" role="group" aria-label="Crop frame. Drag it or its corners; arrow keys move it."><span class="ev-crop-grid"></span><i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i></div>
+          </div>
+          <div class="ev-rev-bottom">
+            <div class="ev-rev-strip ev-lg" role="group" aria-label="Choose a photo" hidden></div>
+            <div class="ev-crop-shapes ev-lg" role="group" aria-label="Crop shape" hidden>
+              <button type="button" class="ev-zchip" data-shape="free" aria-pressed="true">Free</button><button type="button" class="ev-zchip" data-shape="1:1" aria-pressed="false" aria-label="Square">1:1</button><button type="button" class="ev-zchip" data-shape="4:3" aria-pressed="false">4:3</button><button type="button" class="ev-zchip" data-shape="16:9" aria-pressed="false">16:9</button>
+            </div>
+            <div class="ev-rev-actions">
+              <button class="ev-cbtn ev-lg" type="button" data-rev-crop aria-label="Crop this photo" title="Crop">${CAM_ICON.crop}</button>
+              <button class="ev-cbtn ev-lg" type="button" data-crop-cancel hidden aria-label="Cancel cropping" title="Cancel">${ICON.close}</button>
+              <button class="ev-cbtn ev-lg" type="button" data-crop-reset hidden aria-label="Back to the original photo" title="Original photo">${CAM_ICON.undo}</button>
+              <button class="ev-cbtn ev-use" type="button" data-crop-done hidden aria-label="Crop" title="Crop">${CAM_ICON.use}</button>
+            </div>
           </div>
         </div>`;
       document.body.append(d);
@@ -964,7 +1070,7 @@
       const brightBtn = $('[data-bright]'), countEl = $('.ev-count span');
       let brightLevels = [0], bright = 0;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const shots = [], urls = [];
+      const shots = [];   // { file (as it will upload), orig (as taken), url (to show it) }
       let stream = null, track = null, facing = 'environment', settled = false, front = false;
       // zoom: lens = the camera does it; otherwise digital (the preview scales and the photo is cropped to match)
       let zoom = 1, zMin = 1, zMax = 1, lens = false, torch = false;
@@ -973,7 +1079,7 @@
       const stop = () => { stream?.getTracks().forEach((t) => t.stop()); stream = null; track = null; video.srcObject = null; };
       const finish = (files) => {
         if (settled) return; settled = true;
-        cancelCountdown(); stop(); urls.forEach(URL.revokeObjectURL);
+        cancelCountdown(); stop(); shots.forEach((x) => URL.revokeObjectURL(x.url)); resized.disconnect();
         removeEventListener('keydown', onKey);
         if (d.open) d.close();
         d.remove();
@@ -1038,7 +1144,7 @@
       // (one finger on a button or slider still uses it; a second finger makes it a pinch, wherever either landed, and
       // both are then held by the camera so lifting them presses nothing underneath)
       d.addEventListener('pointerdown', (e) => {
-        if (e.pointerType === 'mouse') return;
+        if (e.pointerType === 'mouse' || reviewing()) return;
         if (e.isPrimary) fingers.clear();   // a new touch: forget any lift that was missed
         fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (fingers.size === 2) {
@@ -1064,9 +1170,9 @@
       d.addEventListener('pointerup', lift); d.addEventListener('pointercancel', lift);
       for (const t of ['gesturestart', 'gesturechange', 'gestureend']) d.addEventListener(t, (e) => e.preventDefault());
       // The mouse wheel (or a trackpad pinch)
-      d.addEventListener('wheel', (e) => { if (zoomBox.hidden || e.target.closest('.ev-cam-bar, .ev-cam-tools')) return; e.preventDefault(); setZoom(zoom * Math.exp(-e.deltaY * 0.0025)); }, { passive: false });
+      d.addEventListener('wheel', (e) => { if (zoomBox.hidden || reviewing() || e.target.closest('.ev-cam-bar, .ev-cam-tools')) return; e.preventDefault(); setZoom(zoom * Math.exp(-e.deltaY * 0.0025)); }, { passive: false });
       function onKey(e) {
-        if (!d.open || e.target.matches?.('input')) return;
+        if (!d.open || e.target.matches?.('input') || reviewing()) return;
         if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zoom + 0.5); }
         else if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoom(zoom - 0.5); }
       }
@@ -1131,17 +1237,215 @@
         c.toBlob((blob) => {
           if (!blob) return;
           const file = new File([blob], `momento-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
-          shots.push(file);
-          const url = URL.createObjectURL(blob); urls.push(url);
-          const img = new Image(); img.src = url; img.alt = '';
-          shotsEl.append(img);
-          while (shotsEl.children.length > 2) shotsEl.firstChild.remove();
-          use.hidden = false;
-          use.querySelector('.ev-badge').textContent = shots.length > 1 ? String(shots.length) : '';
-          use.setAttribute('aria-label', shots.length === 1 ? 'Use photo' : `Use ${shots.length} photos`);
-          say(`${shots.length} taken. Take more, or use ${shots.length === 1 ? 'it' : 'them'}.`);
+          shots.push({ file, orig: file, url: URL.createObjectURL(blob) });
+          paintShots(true);
+          say(`${shots.length} taken. Take more, look at them, or use ${shots.length === 1 ? 'it' : 'them'}.`);
         }, 'image/jpeg', .92);
       }
+      // ---- the photos taken: the last one bottom left; pressed, they open full screen to look through, crop or delete ----
+      function paintShots(isNew) {
+        const last = shots[shots.length - 1];
+        shotsEl.hidden = !last;
+        shotsEl.replaceChildren();
+        if (last) {
+          const img = new Image(); img.src = last.url; img.alt = '';
+          if (isNew) img.className = 'is-new';
+          shotsEl.append(img);
+          shotsEl.setAttribute('aria-label', shots.length === 1 ? 'Look at the photo taken' : `Look at the ${shots.length} photos taken`);
+        }
+        use.hidden = !shots.length;
+        use.querySelector('.ev-badge').textContent = shots.length > 1 ? String(shots.length) : '';
+        use.setAttribute('aria-label', shots.length === 1 ? 'Use photo' : `Use ${shots.length} photos`);
+      }
+      const rev = $('.ev-rev'), stage = $('.ev-rev-stage'), revImg = $('.ev-rev-stage > img'), revStrip = $('.ev-rev-strip');
+      const revCount = $('.ev-rev-count'), cropBox = $('.ev-crop'), shapes = $('.ev-crop-shapes');
+      const cropBtn = $('[data-rev-crop]'), cropCancel = $('[data-crop-cancel]'), cropReset = $('[data-crop-reset]'), cropDone = $('[data-crop-done]');
+      const reviewing = () => !rev.hidden;
+      let ri = 0, cropping = null;   // cropping: { r: { x, y, w, h } as parts of the photo, aspect: width/height or 0 }
+      function openReview(i) {
+        if (!shots.length) return;
+        cancelCountdown();
+        ri = i; rev.hidden = false;
+        paintReview();
+        $('[data-rev-back]').focus({ focusVisible: false });
+      }
+      function closeReview() {
+        if (cropping) endCrop();
+        rev.hidden = true;
+        paintShots(false); ready();
+        (shots.length ? shotsEl : shutter).focus({ focusVisible: false });
+      }
+      function paintReview() {
+        if (!shots.length) { closeReview(); return; }
+        ri = Math.max(0, Math.min(shots.length - 1, ri));
+        revImg.src = shots[ri].url;
+        revImg.alt = shots.length === 1 ? 'The photo taken' : `Photo ${ri + 1} of ${shots.length}`;
+        revCount.textContent = shots.length > 1 ? `${ri + 1} / ${shots.length}` : '';
+        revStrip.hidden = shots.length < 2 || !!cropping;
+        revStrip.replaceChildren(...shots.map((s, i) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.dataset.i = String(i);
+          b.setAttribute('aria-label', `Photo ${i + 1}`);
+          b.setAttribute('aria-current', String(i === ri));
+          const img = new Image(); img.src = s.url; img.alt = '';
+          b.append(img);
+          return b;
+        }));
+        revStrip.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+      const step = (by) => { if (cropping || shots.length < 2) return; ri = (ri + by + shots.length) % shots.length; paintReview(); };
+      shotsEl.addEventListener('click', () => openReview(shots.length - 1));
+      $('[data-rev-back]').addEventListener('click', closeReview);
+      revStrip.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) { ri = +b.dataset.i; paintReview(); } });
+      $('[data-rev-del]').addEventListener('click', async (e) => {
+        const from = e.currentTarget;
+        if (window.Momento?.confirm && !await Momento.confirm({ from, title: 'Delete this photo?', body: 'It hasn’t been uploaded, so it can’t be brought back.', ok: 'Delete' })) return;
+        if (cropping) endCrop();
+        const [gone] = shots.splice(ri, 1);
+        URL.revokeObjectURL(gone.url);
+        say('Photo deleted.');
+        if (!shots.length) { closeReview(); return; }
+        paintReview();
+      });
+      // a swipe across the photo goes to the next or previous one
+      let swipe = null;
+      stage.addEventListener('pointerdown', (e) => { if (!cropping && e.isPrimary) swipe = { x: e.clientX, y: e.clientY }; });
+      stage.addEventListener('pointerup', (e) => {
+        if (!swipe) return;
+        const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y; swipe = null;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) step(dx < 0 ? 1 : -1);
+      });
+      stage.addEventListener('pointercancel', () => { swipe = null; });
+
+      // ---- cropping ----
+      const MIN = 0.08;
+      function photoBox() {   // where the photo is drawn inside the stage, in pixels
+        const W = revImg.naturalWidth || 1, H = revImg.naturalHeight || 1;
+        const aw = stage.clientWidth - 36, ah = stage.clientHeight - 36, s = Math.min(aw / W, ah / H);
+        const w = W * s, h = H * s;
+        return { x: 18 + (aw - w) / 2, y: 18 + (ah - h) / 2, w, h, W, H };
+      }
+      function paintCrop() {
+        if (!cropping) return;
+        const b = photoBox(), r = cropping.r;
+        Object.assign(cropBox.style, { left: `${b.x + r.x * b.w}px`, top: `${b.y + r.y * b.h}px`, width: `${r.w * b.w}px`, height: `${r.h * b.h}px` });
+        cropBox.classList.toggle('is-locked', !!cropping.aspect);
+        shapes.querySelectorAll('[data-shape]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.shape === cropping.shape)));
+        cropReset.hidden = shots[ri].file === shots[ri].orig;
+      }
+      const resized = new ResizeObserver(() => paintCrop());
+      function setShape(shape) {
+        const b = photoBox(), portrait = b.H > b.W;
+        const ratio = { free: 0, '1:1': 1, '4:3': 4 / 3, '16:9': 16 / 9 }[shape];
+        cropping.shape = shape;
+        cropping.aspect = ratio && portrait && ratio !== 1 ? 1 / ratio : ratio;
+        if (cropping.aspect) {
+          // the biggest frame of that shape, in the middle of the photo
+          let w = b.W, h = b.W / cropping.aspect;
+          if (h > b.H) { h = b.H; w = b.H * cropping.aspect; }
+          cropping.r = { w: w / b.W, h: h / b.H, x: (1 - w / b.W) / 2, y: (1 - h / b.H) / 2 };
+        }
+        paintCrop();
+      }
+      async function startCrop() {
+        try { await revImg.decode(); } catch (e) {}
+        cropping = { r: { x: 0, y: 0, w: 1, h: 1 }, aspect: 0, shape: 'free' };
+        rev.classList.add('is-cropping');
+        cropBox.hidden = false; shapes.hidden = false; revStrip.hidden = true;
+        cropBtn.hidden = true; $('[data-rev-del]').hidden = true;
+        cropCancel.hidden = false; cropDone.hidden = false;
+        resized.observe(stage);
+        paintCrop();
+        cropDone.focus({ focusVisible: false });
+      }
+      function endCrop() {
+        cropping = null;
+        rev.classList.remove('is-cropping');
+        resized.disconnect();
+        cropBox.hidden = true; shapes.hidden = true; cropCancel.hidden = true; cropDone.hidden = true; cropReset.hidden = true;
+        cropBtn.hidden = false; $('[data-rev-del]').hidden = false;
+        paintReview();
+      }
+      async function replaceShot(s, file) {
+        URL.revokeObjectURL(s.url);
+        s.file = file; s.url = URL.createObjectURL(file);
+        revImg.src = s.url;
+        try { await revImg.decode(); } catch (e) {}
+      }
+      async function applyCrop() {
+        const s = shots[ri], r = cropping.r;
+        if (r.x < 0.002 && r.y < 0.002 && r.w > 0.996 && r.h > 0.996) { endCrop(); return; }   // nothing cut off
+        const W = revImg.naturalWidth, H = revImg.naturalHeight;
+        const sx = Math.round(r.x * W), sy = Math.round(r.y * H), sw = Math.max(1, Math.round(r.w * W)), sh = Math.max(1, Math.round(r.h * H));
+        const c = document.createElement('canvas');
+        c.width = sw; c.height = sh;
+        c.getContext('2d').drawImage(revImg, sx, sy, sw, sh, 0, 0, sw, sh);
+        const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', .92));
+        if (!blob) { endCrop(); return; }
+        await replaceShot(s, new File([blob], s.orig.name, { type: 'image/jpeg', lastModified: Date.now() }));
+        say('Photo cropped.');
+        endCrop();
+      }
+      cropBtn.addEventListener('click', startCrop);
+      cropCancel.addEventListener('click', endCrop);
+      cropDone.addEventListener('click', applyCrop);
+      cropReset.addEventListener('click', async () => {   // back to the photo as it was taken
+        const s = shots[ri];
+        await replaceShot(s, s.orig);
+        cropping.r = { x: 0, y: 0, w: 1, h: 1 };
+        setShape(cropping.shape);
+        say('Back to the original photo.');
+      });
+      shapes.addEventListener('click', (e) => { const c = e.target.closest('[data-shape]'); if (c && cropping) setShape(c.dataset.shape); });
+      let drag = null;
+      cropBox.addEventListener('pointerdown', (e) => {
+        if (!cropping || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        e.preventDefault(); e.stopPropagation();
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, r: { ...cropping.r }, h: e.target.dataset.h || 'move' };
+        try { cropBox.setPointerCapture(e.pointerId); } catch (err) {}
+        cropBox.classList.add('is-dragging');
+      });
+      cropBox.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const b = photoBox(), dx = (e.clientX - drag.x) / b.w, dy = (e.clientY - drag.y) / b.h, h = drag.h;
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+        let { x, y, w, h: hh } = drag.r;
+        if (h === 'move') { x = clamp(x + dx, 0, 1 - w); y = clamp(y + dy, 0, 1 - hh); }
+        else {
+          let L = x, T = y, R = x + w, B = y + hh;
+          if (h.includes('w')) L = clamp(L + dx, 0, R - MIN);
+          if (h.includes('e')) R = clamp(R + dx, L + MIN, 1);
+          if (h.includes('n')) T = clamp(T + dy, 0, B - MIN);
+          if (h.includes('s')) B = clamp(B + dy, T + MIN, 1);
+          if (cropping.aspect) {
+            // keep the shape: shrink whichever side is too long, from the corner being dragged
+            const k = cropping.aspect * b.H / b.W;
+            let nw = R - L, nh = B - T;
+            if (nw / nh > k) nw = nh * k; else nh = nw / k;
+            if (h.includes('w')) L = R - nw; else R = L + nw;
+            if (h.includes('n')) T = B - nh; else B = T + nh;
+          }
+          x = L; y = T; w = R - L; hh = B - T;
+        }
+        cropping.r = { x, y, w, h: hh };
+        paintCrop();
+      });
+      const dragEnd = (e) => { if (drag && e.pointerId === drag.id) { drag = null; cropBox.classList.remove('is-dragging'); } };
+      cropBox.addEventListener('pointerup', dragEnd); cropBox.addEventListener('pointercancel', dragEnd);
+      // keys: arrows step through the photos (or nudge the frame while cropping)
+      rev.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+        if (!cropping) { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); step(e.key === 'ArrowRight' ? 1 : -1); } return; }
+        if (e.target !== cropBox) return;
+        e.preventDefault();
+        const r = cropping.r, by = 0.01;
+        if (e.key === 'ArrowLeft') r.x = Math.max(0, r.x - by);
+        if (e.key === 'ArrowRight') r.x = Math.min(1 - r.w, r.x + by);
+        if (e.key === 'ArrowUp') r.y = Math.max(0, r.y - by);
+        if (e.key === 'ArrowDown') r.y = Math.min(1 - r.h, r.y + by);
+        paintCrop();
+      });
+
       function cancelCountdown() {
         if (!countdown) return;
         clearInterval(countdown.timer); countdown = null;
@@ -1167,9 +1471,9 @@
         }, 1000);
       });
       flip.addEventListener('click', () => { facing = facing === 'environment' ? 'user' : 'environment'; start(); });
-      use.addEventListener('click', () => finish(shots.slice()));
+      use.addEventListener('click', () => finish(shots.map((x) => x.file)));
       $('[data-close]').addEventListener('click', () => finish([]));
-      d.addEventListener('cancel', (e) => { e.preventDefault(); if (countdown) { cancelCountdown(); ready(); return; } finish([]); });
+      d.addEventListener('cancel', (e) => { e.preventDefault(); if (cropping) { endCrop(); return; } if (reviewing()) { closeReview(); return; } if (countdown) { cancelCountdown(); ready(); return; } finish([]); });
       d.showModal();
       d.focus({ focusVisible: false });   // (the camera itself has focus, not a ring on the close button; Tab reaches the buttons)
       start();
@@ -1177,30 +1481,71 @@
   }
 
   // ---- Asking before an upload (and the guest's location, when the album has a zone) ----
+  // Resolves to { location, files } (files: the ones still in the list; each has a cross to leave it out), or null
   function confirmUpload(album, files) {
     return new Promise((resolve) => {
-      const n = files.length, what = n === 1 ? 'this photo' : `these ${n} photos`;
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
       d.setAttribute('aria-labelledby', 'evAskTitle');
-      // (camera RAW files can't be shown by the browser, so the little previews skip them)
-      const urls = files.filter((f) => !Momento.isRawFile?.(f)).slice(0, 5).map((f) => URL.createObjectURL(f));
       const limits = Momento.uploadLimits?.() || { maxPhotoMB: 50 };
+      // (camera RAW files, and HEIC on most browsers, can't be shown, so their tile shows the file type instead)
+      const items = files.map((f) => ({ f, url: Momento.isRawFile?.(f) ? null : URL.createObjectURL(f) }));
+      const ext = (f) => (f.name.split('.').pop() || 'photo').slice(0, 5).toUpperCase();
       d.innerHTML = `
-        <h2 id="evAskTitle">Upload ${n === 1 ? '1 photo' : `${n} photos`}?</h2>
-        <p>Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.</p>
+        <h2 id="evAskTitle"></h2>
+        <p data-what></p>
         <p class="ev-limit">Up to ${Number(limits.maxPhotoMB) || 50} MB a photo. Camera RAW files (CR3, NEF, ARW, RAF, DNG and more) can be bigger.</p>
         <p class="ev-limit">Works with JPEG, PNG, HEIC and HEIF (iPhone), WebP, AVIF, GIF, TIFF, JPEG XL and camera RAW, including iPhone ProRAW (DNG).</p>
-        <p class="ev-limit">By uploading, you confirm you took ${n === 1 ? 'this photo' : 'these photos'} or have permission to share ${n === 1 ? 'it' : 'them'} (<a href="terms" target="_blank" rel="noopener">Terms</a>).</p>
-        <div class="ev-thumbs">${urls.map((u) => `<img src="${u}" alt="">`).join('')}${n > urls.length ? `<span>+${n - urls.length}</span>` : ''}</div>
+        <p class="ev-limit" data-terms></p>
+        <ul class="ev-thumbs" aria-label="Photos to upload"></ul>
+        <p class="ev-none" data-none hidden>All the photos were taken out. Cancel and choose again.</p>
         <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>Cancel</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
       document.body.append(d);
-      const yes = d.querySelector('[data-yes]');
+      const list = d.querySelector('.ev-thumbs'), yes = d.querySelector('[data-yes]');
+      for (const it of items) {
+        const li = document.createElement('li');
+        li.className = 'ev-thumb';
+        const showExt = () => { const t = document.createElement('span'); t.className = 'ev-thumb-ext'; t.textContent = ext(it.f); li.prepend(t); };
+        if (it.url) {
+          const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.src = it.url;
+          img.addEventListener('error', () => { img.remove(); showExt(); }, { once: true });
+          li.append(img);
+        } else showExt();
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'ev-thumb-x'; x.title = 'Leave this photo out';
+        x.setAttribute('aria-label', 'Leave out ' + it.f.name);
+        x.innerHTML = ICON.close;
+        x.addEventListener('click', () => {
+          const at = items.indexOf(it);
+          items.splice(at, 1);
+          if (it.url) URL.revokeObjectURL(it.url);
+          li.remove();
+          paint();
+          // focus moves to the next cross (or the one before, or Cancel when none are left)
+          const xs = list.querySelectorAll('.ev-thumb-x');
+          (xs[Math.min(at, xs.length - 1)] || d.querySelector('[data-no]')).focus();
+        });
+        li.append(x);
+        it.li = li;
+        list.append(li);
+      }
+      function paint() {
+        const n = items.length, what = n === 1 ? 'this photo' : `these ${n} photos`;
+        d.querySelector('#evAskTitle').textContent = n ? `Upload ${n === 1 ? '1 photo' : `${n} photos`}?` : 'No photos to upload';
+        const p = d.querySelector('[data-what]');
+        p.innerHTML = `Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.`;
+        d.querySelector('[data-terms]').innerHTML = `By uploading, you confirm you took ${n === 1 ? 'this photo' : 'these photos'} or have permission to share ${n === 1 ? 'it' : 'them'} (<a href="terms" target="_blank" rel="noopener">Terms</a>).`;
+        for (const el of [p, d.querySelector('[data-terms]'), list]) el.hidden = !n;
+        d.querySelector('[data-none]').hidden = !!n;
+        yes.disabled = !n;
+        yes.textContent = n > 1 ? `Upload ${n}` : 'Upload';
+      }
+      paint();
       let settled = false;
-      const done = (v) => { if (settled) return; settled = true; urls.forEach(URL.revokeObjectURL); if (d.open) d.close(); d.remove(); resolve(v); };
+      const done = (v) => { if (settled) return; settled = true; items.forEach((it) => it.url && URL.revokeObjectURL(it.url)); if (d.open) d.close(); d.remove(); resolve(v); };
       d.querySelector('[data-no]').addEventListener('click', () => done(null));
       d.addEventListener('cancel', (e) => { e.preventDefault(); done(null); });
-      yes.addEventListener('click', () => done({ location: '' }));
+      yes.addEventListener('click', () => { if (items.length) done({ location: '', files: items.map((it) => it.f) }); });
       d.showModal();
     });
   }
