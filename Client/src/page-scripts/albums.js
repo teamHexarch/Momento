@@ -940,6 +940,21 @@ export default function start() {
     const uploadEl = document.getElementById('upload'), uploadLabel = document.getElementById('uploadLabel');
     const uploadPct = document.getElementById('uploadPct'), uploadTrack = document.getElementById('uploadTrack'), uploadFill = document.getElementById('uploadFill');
     let uploadHide = 0;
+    // After a finished upload the bar and the note under it stay 5 seconds, then fade away (a failed one stays put).
+    // A new upload, or a different message in the note, keeps them.
+    function fadeUploadSoon(note) {
+      clearTimeout(uploadHide);
+      const said = note.textContent;
+      uploadHide = setTimeout(async () => {
+        if (uploading) return;
+        const els = [uploadEl, ...(said && note.textContent === said ? [note] : [])].filter((el) => !el.hidden);
+        if (!still) await Promise.all(els.map((el) => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, easing: 'ease', fill: 'forwards' }).finished.catch(() => {})));
+        els.forEach((el) => el.getAnimations().forEach((x) => x.cancel()));
+        if (uploading) return;
+        setUpload('off');
+        if (said && note.textContent === said) note.textContent = '';
+      }, 5000);
+    }
     function setUpload(state, p = 0, label = '') {
       clearTimeout(uploadHide);
       uploadEl.hidden = state === 'off';
@@ -1101,7 +1116,7 @@ export default function start() {
         await gpsCheck;
         if (hadGps && r.added) lines.push(r.added === 1 ? 'Location data was removed from this photo.' : 'Location data was removed from these photos.');
         note.textContent = lines.join(' ');
-        if (r.added || r.queued || r.unsure) uploadHide = setTimeout(() => setUpload('off'), 2500);
+        if (r.added || r.queued || r.unsure) fadeUploadSoon(note);
       } catch (err) {
         setUpload('failed', 1, 'Upload didn’t finish');
         uploadPct.textContent = '';
@@ -2817,10 +2832,43 @@ export default function start() {
     }
 
     let checkTimer;
+    // Several checks fold into one line ("3 of your photos: 1 waiting for our team, 2 declined") that opens into the
+    // list, so they never crowd out the photos. Open or closed is remembered per album until the page reloads.
+    const checksOpen = new Set();
+    const checksBox = document.getElementById('albumChecks'), checksSum = document.getElementById('albumChecksSum');
+    const checkList = document.getElementById('albumCheckList');
+    function paintChecksOpen() {
+      const n = checkList.children.length, open = n === 1 || (!!M.a && checksOpen.has(M.a.id));
+      checksBox.classList.toggle('is-single', n === 1);
+      checksBox.classList.toggle('is-open', open);
+      checkList.hidden = !open;
+      checksSum.setAttribute('aria-expanded', String(open));
+      albumCard.classList.toggle('has-checks-open', open && n > 1);
+    }
+    checksSum.addEventListener('click', () => {
+      if (!M.a) return;
+      if (checksOpen.has(M.a.id)) checksOpen.delete(M.a.id); else checksOpen.add(M.a.id);
+      paintChecksOpen();
+      if (!still && !checkList.hidden) checkList.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+    });
+    function checksSummary(checks) {
+      const n = (k) => checks.filter(k).length;
+      const unsure = (c) => c.state === 'rejected' && !c.reviewed && !c.explicit;
+      const parts = [
+        [n((c) => c.state === 'checking' || c.state === 'publish'), 'being checked', 'is-checking'],
+        [n((c) => c.state === 'review'), 'waiting for our team', 'is-review'],
+        [n(unsure), n(unsure) === 1 ? 'needs a review' : 'need a review', 'is-unsure'],
+        [n((c) => c.state === 'rejected' && !unsure(c)), 'declined', 'is-rejected'],
+        [n((c) => c.state === 'failed'), 'couldn’t be read', 'is-failed'],
+      ].filter(([k]) => k);
+      // the dot takes the colour of the most pressing one: declined or unreadable, then waiting, then checking
+      const worst = ['is-rejected', 'is-failed', 'is-unsure', 'is-review', 'is-checking'].find((c) => parts.some((p) => p[2] === c)) || '';
+      return { text: `${checks.length} of your photos: ${parts.map(([k, w]) => `${k} ${w}`).join(', ')}`, worst };
+    }
     function showChecks(a, checks) {
       if (M.a && M.a.id !== a.id && albumModal.open) return;
       clearTimeout(checkTimer);
-      const box = document.getElementById('albumChecks');
+      const box = checkList;
       // Each of your photos still on its way: "IMG_204.jpg · Declined" with Request review, and so on
       const labels = {
         checking: 'Checking…', publish: 'Passed: adding it to the album…', review: 'Waiting for our team (within 1–2 working days)',
@@ -2867,7 +2915,11 @@ export default function start() {
         }
         return line;
       }));
-      box.hidden = !checks.length;
+      checksBox.hidden = !checks.length;
+      const sum = checksSummary(checks);
+      checksSum.querySelector('.checks-sum-text').textContent = sum.text;
+      checksSum.className = 'checks-sum ' + sum.worst;
+      paintChecksOpen();
       if (!checks.some(c => ['checking', 'publish', 'review'].includes(c.state))) return;
       const poll = async () => {
         if (!albumModal.open || M.a?.id !== a.id) return;

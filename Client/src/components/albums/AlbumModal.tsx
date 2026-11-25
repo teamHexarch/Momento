@@ -74,7 +74,11 @@ export default function AlbumModal() {
             <div className="upload-track" id="uploadTrack" role="progressbar" aria-labelledby="uploadLabel" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}><i id="uploadFill"></i></div>
           </div>
           <p className="note" id="albumNote" role="status"></p>
-          <ul className="checks" id="albumChecks" aria-label="Your photos being checked" aria-live="polite" hidden></ul>
+          {/* Your photos still being checked or declined: one line that opens into the list (albums.js showChecks) */}
+          <div className="checks" id="albumChecks" hidden>
+            <button className="checks-sum" type="button" id="albumChecksSum" aria-expanded="false" aria-controls="albumCheckList"><span className="check-dot" aria-hidden="true"></span><span className="checks-sum-text" aria-live="polite"></span><svg className="checks-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></button>
+            <ul className="checks-list" id="albumCheckList" aria-label="Your photos being checked"></ul>
+          </div>
           <footer className="ab-bar" id="abBar">
             <button className="btn btn-dark" type="button" id="albumAdd" title="JPEG, PNG, HEIC, WebP, AVIF, TIFF and camera RAW (including iPhone ProRAW). Up to 50 MB a photo; RAW files can be bigger.">Add photos</button>
             <button className="btn btn-light btn-icon" type="button" id="albumCamera" aria-label="Take a photo" title="Take a photo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg></button>

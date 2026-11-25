@@ -32,6 +32,11 @@ and a few fixes.
 - The upload confirmation shows every photo you picked, each with a cross to leave it out before uploading.
 - After using the camera, the confirmation's Cancel button reads "Back to camera": it reopens the camera with the
   photos still in the list, so nothing taken is lost.
+- When an upload finishes, the progress bar and its message stay for 5 seconds, then fade away. If nothing could be
+  uploaded, the message stays so you can read why.
+- Your photos still being checked or declined fold into one line under the album ("3 of your photos: 1 waiting for
+  our team, 2 declined"). Press it to see the list, with the cross and Request review as before. One photo shows on
+  its own. The album's photos keep their room.
 - The previews are bigger on tablets and computers (the window is wider there too), and the cross is easy to tap on
   touch screens.
 
