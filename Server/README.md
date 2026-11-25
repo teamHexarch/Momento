@@ -347,9 +347,9 @@ Every hour (src/services/jobs.js), each job claiming its work first so nothing h
 - **Weekly recap emails** to people who turned them on, only when there are new photos.
 - **Tidying**: sign-ups never confirmed after 7 days (with no albums or photos), join requests left
   unanswered for 30 days, background zips older than 3 days.
-- **A daily backup** of every collection into the photo storage: `backups/day-Mon` … `day-Sun` (the last
-  week) and `backups/month-YYYY-MM` (one per month). Restore with
-  `node --env-file=.env scripts/restoreBackup.js day-Mon` (add `--apply` to really restore).
+- **A daily backup** of every collection into the photo storage (S3): `backups/day-YYYY-MM-DD` for each of the
+  last 14 days, and `backups/month-YYYY-MM` (one per month, kept 12 months). Restore with
+  `node --env-file=.env scripts/restoreBackup.js day-2026-11-25` (add `--apply` to really restore).
 
 Every 6 hours: photos more than 30 days in the Recently deleted bin are removed for good.
 

@@ -37,7 +37,7 @@ await loadLearned().catch((error) => console.error('Photo check learning:', erro
 startUploadChecks();
 startRefusalCleanup();
 if (usesRekognition()) {
-  console.log('Photo checks: AWS Rekognition (7 levels). 0-50 publish, 75 goes to staff, 85-95 stay private (the uploader may '
+  console.log('Photo checks: AWS Rekognition (7 levels). 0-75 publish, 85-95 stay private (the uploader may '
     + 'ask for a review), 100 is never published. Thresholds learn from staff decisions.');
 } else {
   const { source } = activeTable(), bins = calibratedBins();

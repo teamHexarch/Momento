@@ -7,7 +7,7 @@ import { config } from '../config/env.js';
 //    0  General              everyday photos, non-sexual affection                   → published
 //   25  Contextual exposure  swimwear, bare male chest, bare back, a kiss             → published
 //   50  Mildly sexy          underwear or sexy clothing, no clear sexual intent       → published
-//   75  Clearly suggestive   covered, but sexual intent; part of a breast showing     → held for staff (review page)
+//   75  Clearly suggestive   covered, but sexual intent; part of a breast showing     → published (since 2026-11-25)
 //   85  Near-nude            covered only by hands/hair/objects; thong-bare buttocks  → private (uploader may ask for a review)
 //   95  Nude, key areas hid  nude, but nipples and genitals hidden                    → private (uploader may ask for a review)
 //  100  Nudity / explicit    visible nipples or genitals, any sexual activity, toys    → private for good (never published)
@@ -19,7 +19,7 @@ import { config } from '../config/env.js';
 // rekognition:DetectModerationLabels. No model runs on this server.
 
 export const LEVELS = [0, 25, 50, 75, 85, 95, 100];
-export const PUBLISH_MAX = 50;
+export const PUBLISH_MAX = 75;
 export const SCORE_VERSION = 'rekognition-1';
 export const MODEL_NAME = 'AWS Rekognition DetectModerationLabels';
 
@@ -50,7 +50,8 @@ export const LABELS = {
 };
 const key = (name) => String(name || '').trim().toLowerCase();
 
-// What happens to a photo at each level: 'publish' | 'staff' (held for the review page) | 'private' | 'locked'
+// What happens to a photo at each level: 'publish' (0-75) | 'private' (85, 95) | 'locked' (100).
+// ('staff', holding a photo for the review page, isn't used since 75 publishes.)
 export function actionOf(level) {
   if (level <= PUBLISH_MAX) return 'publish';
   if (level === 75) return 'staff';
@@ -103,8 +104,8 @@ export function levelOf(labels) {
 
 // ---- Learning from staff ("learn from us") ----
 // staffLevel: the level staff chose on the review page; scores: what Rekognition said when the photo was checked.
-//   staff publish (level 0-50) what was held back (75+) → each label that held it back needs to be a little surer (+STEP)
-//   staff keep private (75+) what was let through (0-50) → each recognised label on it counts a little sooner (-STEP)
+//   staff publish (level 0-75) what was held back (85+) → each label that held it back needs to be a little surer (+STEP)
+//   staff keep private (85+) what was let through (0-75) → each recognised label on it counts a little sooner (-STEP)
 // Level 100 labels never move. Returns the changes made: { label: [before, after] }.
 const STEP = 2;
 export async function learnFromReview(scores, staffLevel) {

@@ -27,8 +27,7 @@ import { sanitizePhoto } from './imageService.js';
 // A photo is never published because the model failed: after 3 tries it's declined like an uncertain one.
 
 // ---- With AWS Rekognition (NSFW_ENGINE=rekognition, the default) the level decides (services/rekognitionService.js):
-//   0-50  published at once
-//   75    held for staff: it goes straight to the review page (staff emailed, due in 2 working days), no asking needed
+//   0-75  published at once (75 since 2026-11-25; before that it was held for staff)
 //   85/95 private; the uploader can ask for a review
 //   100   private for good: no Request review, and staff can't publish it
 // The NSFW.js notes below apply only with NSFW_ENGINE=nsfwjs.
@@ -198,7 +197,7 @@ async function decline(job, owns, { scores, reason, entry, explicit = false, sta
   if (staff) await holdForStaff(job);
 }
 
-// Level 75: straight to staff, as if the uploader had asked (privacyController.requestReview): due 2 working days
+// (Not used since level 75 publishes.) Level 75 used to go straight to staff, as if the uploader had asked (privacyController.requestReview): due 2 working days
 // after the upload, and staff are emailed with a link to it
 async function holdForStaff(job) {
   const { dueDay } = await import('../utils/workingDays.js');

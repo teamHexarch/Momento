@@ -18,7 +18,7 @@ import { notify } from './notifyService.js';
 //  - "An album is about to close" emails (the switch under "Email me when")
 //  - The weekly recap emails (the same, off by default)
 //  - Tidying up: unconfirmed sign-ups after 7 days, join requests left waiting for 30 days
-//  - A daily backup of the database, kept for a week, plus one per month (in the photo bucket)
+//  - A daily backup of the database, kept 14 days, plus one per month for a year (in the photo bucket)
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const gzip = promisify(zlib.gzip);
@@ -157,8 +157,9 @@ export async function tidy(now = new Date()) {
 }
 
 // ---- Daily backup: every collection, as compressed JSON lines, into the photo storage ----
-// backups/day-<Mon..Sun>/ is overwritten each week (the last 7 days); backups/month-<YYYY-MM>/ keeps
-// the last one of every month. Restore with scripts/restoreBackup.js.
+// backups/day-<YYYY-MM-DD>/ for each of the last 14 days (BACKUP_DAYS); backups/month-<YYYY-MM>/ keeps the last one
+// of every month, for 12 months. Restore with scripts/restoreBackup.js.
+export const BACKUP_DAYS = 14;
 const JobState = mongoose.models.JobState || mongoose.model('JobState', new mongoose.Schema({ _id: String, at: Date }, { versionKey: false }));
 export async function backup(now = new Date()) {
   const day = now.toISOString().slice(0, 10);
@@ -168,7 +169,6 @@ export async function backup(now = new Date()) {
     try { await JobState.create({ _id: 'backup', at: now }); claimed = true; } catch { /* another run got there first */ }
   }
   if (!claimed) return null;
-  const weekday = now.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
   const month = now.toISOString().slice(0, 7);
   const { EJSON } = mongoose.mongo.BSON;
   const db = mongoose.connection.db;
@@ -178,18 +178,26 @@ export async function backup(now = new Date()) {
     const lines = [];
     for await (const d of db.collection(name).find({})) { lines.push(EJSON.stringify(d, { relaxed: false })); docs++; }
     const file = await gzip(Buffer.from(lines.join('\n')));
-    await saveFile(`backups/day-${weekday}/${name}.jsonl.gz`, file, 'application/gzip');
+    await saveFile(`backups/day-${day}/${name}.jsonl.gz`, file, 'application/gzip');
     await saveFile(`backups/month-${month}/${name}.jsonl.gz`, file, 'application/gzip');
   }
-  await saveFile(`backups/day-${weekday}/_info.json`, Buffer.from(JSON.stringify({ at: now, collections: names, documents: docs }, null, 2)), 'application/json');
+  await saveFile(`backups/day-${day}/_info.json`, Buffer.from(JSON.stringify({ at: now, collections: names, documents: docs }, null, 2)), 'application/json');
   // Monthly backups are kept 12 months, so a deleted account is gone from every backup within a year
   const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1)).toISOString().slice(0, 7);
-  let expired = 0;
-  for (const folder of await listFolders('backups/')) {
+  // Daily backups go after BACKUP_DAYS days. The older weekday folders (day-Mon … day-Sun, before 2026-11-25) go once
+  // a week of dated ones exists, so there's never a gap.
+  const firstKept = new Date(Date.parse(day) - (BACKUP_DAYS - 1) * DAY).toISOString().slice(0, 10);
+  const folders = await listFolders('backups/');
+  const dated = folders.filter((f) => /backups\/day-\d{4}-\d{2}-\d{2}\/$/.test(f)).length;
+  let expired = 0, expiredDays = 0;
+  for (const folder of folders) {
     const m = /backups\/month-(\d{4}-\d{2})\/$/.exec(folder);
     if (m && m[1] < oldest) { await removePrefix(folder); expired++; }
+    const d = /backups\/day-(\d{4}-\d{2}-\d{2})\/$/.exec(folder);
+    if (d && d[1] < firstKept) { await removePrefix(folder); expiredDays++; }
+    if (/backups\/day-[A-Z][a-z]{2}\/$/.test(folder) && dated >= 7) { await removePrefix(folder); expiredDays++; }
   }
-  return { collections: names.length, documents: docs, expiredMonths: expired };
+  return { collections: names.length, documents: docs, expiredMonths: expired, expiredDays };
 }
 
 // Runs every job once (each catches its own errors)
