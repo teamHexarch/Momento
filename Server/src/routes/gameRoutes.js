@@ -63,3 +63,20 @@ gameRoutes.post('/:round/answer', playLimit, async (req, res) => {
   const { album } = await member(req);
   res.json(await games.answer(album, req.user, req.params.round, req.body));
 });
+// Photo battle: enter or withdraw your own photo, get two photos to choose between, pick the better one
+gameRoutes.post('/:round/entries', playLimit, async (req, res) => {
+  const { album } = await member(req);
+  res.status(201).json(await games.enterPhoto(album, req.user, req.params.round, req.body));
+});
+gameRoutes.delete('/:round/entries/:photo', async (req, res) => {
+  const { album } = await member(req);
+  res.json(await games.withdrawPhoto(album, req.user, req.params.round, req.params.photo));
+});
+gameRoutes.get('/:round/pair', async (req, res) => {
+  const { album } = await member(req);
+  noStore(res).json(await games.nextPair(album, req.user, req.params.round));
+});
+gameRoutes.post('/:round/pick', playLimit, async (req, res) => {
+  const { album } = await member(req);
+  res.json(await games.battleVote(album, req.user, req.params.round, req.body));
+});

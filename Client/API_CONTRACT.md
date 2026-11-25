@@ -89,7 +89,7 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
   off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
-## Event mini-games (polls and trivia; more game types to come)
+## Event mini-games (polls, trivia, photo battle; more game types to come)
 
 **Events only** (albums with a time and a place): in a plain photo album `GET …/games` answers `{ enabled: false,
 rounds: [] }` (don't show a games section) and everything else `403 GAMES_EVENTS_ONLY`. In events: album members
@@ -107,10 +107,19 @@ only (404 otherwise); creating and running games is for the host (`403 GAME_HOST
   Trivia `POST …/:round/answer { question: index, option: index }`: only the question on screen, before its time is
   up, once (`409 GAME_STATE` / `GAME_TIME_UP` / `GAME_ANSWERED`); right answers score 100 + up to 50 for speed.
   `409 GAME_NOT_LIVE` before the start or after the end. 60 votes/answers a minute (`429 GAME_RATE_LIMIT`).
+- **Photo battle** (host: `{ type: "battle", title, maxEntries?: 1-5 (1), start?: true }`): while it's live, players enter
+  their own photos from the event: `POST …/:round/entries { photo: photoId }` (`403 GAME_PHOTO_NOT_YOURS`,
+  `409 GAME_ENTRY_LIMIT`), withdraw with `DELETE …/:round/entries/:photo`. Voting: `GET …/:round/pair` →
+  `{ pair: [{ photo, url, thumbnailUrl, miniUrl }, …] }` (never your own photos, never a pair you've voted on) or
+  `{ pair: null, reason: "all-voted" | "not-enough-photos" }`; then `POST …/:round/pick { winner, loser }`
+  (`403 GAME_OWN_PHOTO`, `409 GAME_ANSWERED`). 2 points per vote for the first 10 votes; when the host ends it, the
+  owners of the 1st, 2nd and 3rd photos get 100, 60 and 30 (one place per person). Deleted photos drop out.
 - `Game` (poll): `{ id, type, title, status: draft|live|ended, question, options: [{ id, text, votes, percent }], total, myChoice }`
 - `Game` (trivia): `{ id, type, title, status, questionCount, current, question: { index, text, options, seconds, endsAt,
   answers, answer (only once time is up) }, myAnswer: { option, correct?, points? }, myScore }`; the host also gets
   `questions` (with the answers).
+- `Game` (battle): `{ id, type, title, status, maxEntries, entries, standings: [{ rank, photo, url, thumbnailUrl, miniUrl, by,
+  mine, wins, losses, rating, place? (once ended) }], myEntries: [photoId], myVotes, canEnter, canVote }`
 
 ## Every endpoint
 
@@ -253,6 +262,10 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/trash/purge |
 | GET | /api/hidden |
 | GET | /api/users/:id/avatar |
+| POST | /api/albums/:id/games/:round/entries |
+| DELETE | /api/albums/:id/games/:round/entries/:photo |
+| GET | /api/albums/:id/games/:round/pair |
+| POST | /api/albums/:id/games/:round/pick |
 | POST | /api/albums/:id/games/:round/start |
 | POST | /api/albums/:id/games/:round/next |
 | POST | /api/albums/:id/games/:round/end |
