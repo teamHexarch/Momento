@@ -1,3 +1,9 @@
+/*
+ * CRITICAL FRONTEND RULE: Any UI, styling, or feature modifications made to this client MUST work strictly with the
+ * existing Node.js backend endpoints, request/response schemas, authentication headers, and WebSocket events documented
+ * in API_CONTRACT.md. Do not invent, rename, or alter backend routes or payload structures without updating the
+ * backend together.
+ */
 /**
  * The Momento API, typed. One client for every call the site makes to the server.
  *

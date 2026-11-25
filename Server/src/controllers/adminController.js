@@ -103,21 +103,22 @@ export async function decisions(req, res) {
   const albumName = new Map(albums.map((a) => [String(a._id), a.name]));
   res.json({ decisions: rows.map((d) => {
     const job = jobOf.get(String(d._id));
-    return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, reason: d.reason, status: d.status, severity: d.severity ?? null, reasons: d.reasons || [], at: d.at,
+    return { id: String(d._id), user: String(d.user), kind: d.kind, model: d.model, threshold: d.threshold, scores: d.scores, autoLevel: d.autoLevel ?? null, reason: d.reason, status: d.status, severity: d.severity ?? null, reasons: d.reasons || [], at: d.at,
       dueDay: d.dueDay || null, album: d.album ? String(d.album) : null, albumName: (d.album && albumName.get(String(d.album))) || null, fileName: job?.originalName ? fixFileName(job.originalName) : null,
       preview: !!job && ['review', 'rejected'].includes(job.state) };
   }) });
 }
-// POST /api/admin/moderation/:id  { allow: true|false, severity: 0|15|25|50|75|100, reasons?: ['clothed', ...] }
+// POST /api/admin/moderation/:id  { allow: true|false, severity: 0|25|50|75|85|95|100, reasons?: ['clothed', ...] }
 // Allowed: that exact file passes the check next time. The severity (Momento's content level) is always required.
 // Keeping a photo private also needs at least one reason (utils/reviewReasons.js: what is shown, what is happening,
 // the context); publishing needs none. The check learns from both (services/reviewCalibration.js). Staff may keep any
 // level private (a clothed photo of a sexual act, say), but level 100, or a possible minor, is never published.
-const SEVERITIES = [0, 15, 25, 50, 75, 100];
+// The 7 levels (services/rekognitionService.js); 15 is still accepted from an older review page
+const SEVERITIES = [0, 15, 25, 50, 75, 85, 95, 100];
 export async function decide(req, res) {
   if (typeof req.body?.allow !== 'boolean') throw new HttpError(400, 'Choose approve or uphold.');
   const severity = req.body?.severity;
-  if (!SEVERITIES.includes(severity)) throw new HttpError(400, 'Choose a level: 0, 15, 25, 50, 75 or 100.');
+  if (!SEVERITIES.includes(severity)) throw new HttpError(400, 'Choose a level: 0, 25, 50, 75, 85, 95 or 100.');
   const allow = req.body?.allow === true;
   const reasons = req.body?.reasons ?? [];
   if (!Array.isArray(reasons) || reasons.length > REASON_KEYS.length || !reasons.every((r) => REASON_KEYS.includes(r))) {
@@ -127,6 +128,10 @@ export async function decide(req, res) {
   if (allow && severity === 100) throw new HttpError(400, 'Level 100 can’t be published.');
   if (allow && reasons.some((r) => MUST_STAY_PRIVATE.includes(r))) throw new HttpError(400, 'A photo that may show someone under 18 can’t be published.');
   const why = [...new Set(reasons)];
+  // Rekognition was sure it's level 100 (nudity or explicit): it can't be published, whatever the rating
+  if (allow && (await ModerationDecision.findById(id(req.params.id), 'autoLevel').lean())?.autoLevel === 100) {
+    throw new HttpError(400, 'The automatic check found level 100 content, so this photo can’t be published.', 'level-100-locked');
+  }
   const job = await UploadCheck.findById(id(req.params.id));
   if (job) {
     const result = await UploadCheck.updateOne({ _id: job._id, state: { $in: ['review', 'rejected'] } },
@@ -139,8 +144,13 @@ export async function decide(req, res) {
     ...(req.dev && { reviewer: req.dev.reviewerLabel, reviewerSession: req.dev.sessionId }) } }, { returnDocument: 'after' });
   if (!d) throw new HttpError(404, 'Not found.');
   await audit('moderation.reviewed', { req, target: d._id, meta: { allow, severity, reasons: why } });
-  // The automatic check learns from this rating within a minute (services/stageOneLearning.js)
-  if (d.kind === 'photo') relearnSoon();
+  // The automatic check learns from this rating: Rekognition's label thresholds at once (services/rekognitionService.js),
+  // the older NSFW.js table within a minute (services/stageOneLearning.js)
+  if (d.scores?.engine === 'rekognition') {
+    const { learnFromReview } = await import('../services/rekognitionService.js');
+    const changes = await learnFromReview(d.scores, severity).catch((error) => { console.error('Rekognition learning: %s', error.message); return {}; });
+    if (Object.keys(changes).length) await audit('moderation.thresholds-learned', { req, target: d._id, meta: { changes } });
+  } else if (d.kind === 'photo') relearnSoon();
   // The rating becomes a labelled example for Momento's own decision layer (models/TrainingSample.js)
   if (d.kind === 'photo') await TrainingSample.updateOne({ _id: d._id }, {
     $set: { level: severity, allowed: allow, reasons: why, labelledAt: new Date(), reviewer: req.dev?.reviewerLabel,
@@ -182,7 +192,17 @@ async function learningStatus() {
       ranges: (doc.table?.[1]?.allow || []).length, lastAttemptAt: doc.lastAttemptAt || null, lastError: doc.lastError || null,
       // Why staff keep photos private, and how often the model had thought those photos were safe
       reasons: doc.reasons || {} } : null,
+    // AWS Rekognition (the default check): each label's level and threshold now, against its default and guardrails
+    ...(await rekognitionStatus()),
   };
+}
+async function rekognitionStatus() {
+  const { usesRekognition } = await import('../services/nsfwService.js');
+  if (!usesRekognition()) return { engine: 'nsfwjs' };
+  const rk = await import('../services/rekognitionService.js');
+  await rk.loadLearned();
+  const doc = await ModerationCalibration.findById('rekognition', 'builtAt').lean();
+  return { engine: 'rekognition', levels: rk.LEVELS, rekognition: { learnedAt: doc?.builtAt || null, labels: rk.thresholds() } };
 }
 export async function moderationStatus(req, res) {
   res.json(await learningStatus());

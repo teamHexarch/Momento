@@ -1,8 +1,16 @@
 import sharp from 'sharp';
 import { HttpError } from '../utils/httpError.js';
 import { sha256 } from './contentSafety.js';
+import * as rekognition from './rekognitionService.js';
 
-// The nudity check's model, for everything people upload. Album photos go through the private check queue
+// The nudity check, for everything people upload. NSFW_ENGINE picks it:
+//   rekognition (the default): AWS Rekognition on AWS's computers (services/rekognitionService.js, the 7 levels);
+//     nothing heavy runs here, and the server never freezes while a photo is checked
+//   nsfwjs: the older free model below, on this server's CPU (about 0.6-3 s per photo, blocking other requests)
+// Tests use nsfwjs unless they set NSFW_ENGINE, as their stand-in models answer with NSFW.js's classes.
+// With Rekognition, a cover or profile picture is refused at level 85 or more (near-nude, nude or explicit).
+//
+// The older model's notes: Album photos go through the private check queue
 // (services/uploadChecks.js, using scan); cover pictures and profile pictures are checked here (assertAllowed).
 // A free, open-source model (NSFW.js, MobileNetV2) runs right here on the server, in plain JavaScript:
 // about 120 MB of memory once it's loaded, and roughly half a second per photo. Photos are checked one
@@ -16,6 +24,10 @@ const THRESHOLD = Number(process.env.NSFW_THRESHOLD) || 0.6;
 const enabled = process.env.NSFW_CHECK !== 'off';
 // Tests never load the real model (slow); they pass a stand-in with useClassifier
 const testing = process.env.NODE_ENV === 'test';
+export const ENGINE = (process.env.NSFW_ENGINE || (testing ? 'nsfwjs' : 'rekognition')).toLowerCase() === 'nsfwjs' ? 'nsfwjs' : 'rekognition';
+export const usesRekognition = () => ENGINE === 'rekognition';
+// Covers and profile pictures: refused at this Rekognition level or more
+export const REFUSE_LEVEL = 85;
 
 let classifier = null, featurer = null, loading = null;
 // The layer just before MobileNetV2 decides: 1280 numbers describing what is in the picture (no picture can be
@@ -60,7 +72,7 @@ export function useFeaturer(fn) { featurer = fn; }
 
 // The photo's 1280 features (Float32Array), or null when the check is off or unavailable. Never blocks an upload.
 export async function features(buffer) {
-  if (!enabled || (testing && !featurer)) return null;
+  if (usesRekognition() || !enabled || (testing && !featurer)) return null;
   try {
     if (!featurer) await load();
     const out = await oneAtATime(() => featurer(buffer));
@@ -76,12 +88,13 @@ let chain = Promise.resolve();
 const oneAtATime = (fn) => { const run = chain.then(fn, fn); chain = run.catch(() => {}); return run; };
 
 // The check is switched off (NSFW_CHECK=off), or this is a test with no stand-in model: every picture passes
-export const checkIsOff = () => !enabled || (testing && !classifier);
+export const checkIsOff = () => !enabled || (testing && (usesRekognition() ? !rekognition.hasDetector() : !classifier));
 
 // The scores for one photo, or null when the check is off or unavailable
 export async function scan(buffer) {
-  if (!enabled || (testing && !classifier)) return null;
+  if (checkIsOff()) return null;
   try {
+    if (usesRekognition()) return await rekognition.detect(buffer);
     const classify = await load();
     return await oneAtATime(() => classify(buffer));
   } catch (err) {
@@ -91,14 +104,15 @@ export async function scan(buffer) {
 }
 
 export function isExplicit(scores) {
+  if (scores?.engine === 'rekognition') return scores.level >= REFUSE_LEVEL;
   return !!scores && ((scores.Porn || 0) + (scores.Hentai || 0)) >= THRESHOLD;
 }
 
 // ---- Automatic decisions are recorded (models/ModerationDecision.js) ----
 // Which model and threshold refused what, with its scores; the person can ask a human to review it,
 // and a file staff allowed passes next time.
-export const MODEL_NAME = 'nsfwjs 4.4.0 / MobileNetV2';
-export const threshold = () => THRESHOLD;
+export const MODEL_NAME = usesRekognition() ? rekognition.MODEL_NAME : 'nsfwjs 4.4.0 / MobileNetV2';
+export const threshold = () => (usesRekognition() ? REFUSE_LEVEL : THRESHOLD);
 export async function isAllowedFile(hash) {
   const { ModerationDecision } = await import('../models/ModerationDecision.js');
   return Boolean(await ModerationDecision.exists({ hash, status: 'allowed' }));
@@ -115,7 +129,8 @@ export async function judge(buffer, ctx) {
   const hash = ctx.hash || sha256(buffer);
   if (await isAllowedFile(hash)) return { blocked: false };
   const { ModerationDecision } = await import('../models/ModerationDecision.js');
-  const d = await ModerationDecision.create({ user: ctx.user, album: ctx.album, kind: ctx.kind, hash, model: MODEL_NAME, threshold: THRESHOLD, scores });
+  const d = await ModerationDecision.create({ user: ctx.user, album: ctx.album, kind: ctx.kind, hash, model: MODEL_NAME, threshold: threshold(), scores,
+    ...(scores?.engine === 'rekognition' && { autoLevel: scores.level }) });
   return { blocked: true, decisionId: d.id };
 }
 
@@ -129,5 +144,6 @@ export async function assertAllowed(buffer, what = 'This photo', ctx = {}) {
 
 // Loads the model in the background at start-up, so the first upload isn't slow
 export function warmUp() {
+  if (usesRekognition()) { rekognition.loadLearned().catch((err) => console.error(`Rekognition thresholds not loaded: ${err.message}`)); return; }
   if (enabled && !testing && !classifier) load().catch((err) => console.error(`Nudity check unavailable: ${err.message}`));
 }

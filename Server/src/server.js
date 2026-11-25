@@ -5,7 +5,7 @@ import { initStorage, storageName } from './services/storageService.js';
 import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
-import { warmUp } from './services/nsfwService.js';
+import { warmUp, usesRekognition } from './services/nsfwService.js';
 import { startUploadChecks, calibratedBins, calibrationError, activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from './services/uploadChecks.js';
 import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
@@ -36,7 +36,10 @@ setTimeout(warmUp, 5000).unref();
 await loadLearned().catch((error) => console.error('Photo check learning:', error.message));
 startUploadChecks();
 startRefusalCleanup();
-{
+if (usesRekognition()) {
+  console.log('Photo checks: AWS Rekognition (7 levels). 0-50 publish, 75 goes to staff, 85-95 stay private (the uploader may '
+    + 'ask for a review), 100 is never published. Thresholds learn from staff decisions.');
+} else {
   const { source } = activeTable(), bins = calibratedBins();
   console.log(`Photo checks: NSFW.js MobileNetV2 on this server. Risk under ${Math.round(PUBLISH_BELOW * 100)}% publishes; `
     + `Porn or Hentai ${Math.round(HARD_DECLINE_AT * 100)}%+ is declined for good; the rest waits for the uploader's Request review`

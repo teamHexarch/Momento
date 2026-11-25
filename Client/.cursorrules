@@ -1,0 +1,10 @@
+# Momento front end: rules for AI coding assistants
+
+CRITICAL FRONTEND RULE: Any UI, styling, or feature modifications made to this client MUST work strictly with the
+existing Node.js backend endpoints, request/response schemas, authentication headers, and WebSocket events documented
+in API_CONTRACT.md. Do not invent, rename, or alter backend routes or payload structures without updating the backend
+together.
+
+- Read API_CONTRACT.md, BACKEND-NOTES.md, BACKEND-NOTES-NEXT.md and src/lib/api.ts before calling the server.
+- Every server call goes through src/lib/api.ts (or window.momentoFetch from public/assets/api.js).
+- Read AGENTS.md: this Next.js version has breaking changes; check node_modules/next/dist/docs/ first.

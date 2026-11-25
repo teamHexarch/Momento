@@ -9,7 +9,8 @@ import { User } from '../models/User.js';
 import { Membership } from '../models/Membership.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { notifyPhotos } from './notifyService.js';
-import { scan, checkIsOff, isAllowedFile, features, FEATURE_LAYER } from './nsfwService.js';
+import { scan, checkIsOff, isAllowedFile, features, FEATURE_LAYER, usesRekognition } from './nsfwService.js';
+import * as rekognition from './rekognitionService.js';
 import { TrainingSample, packFeatures, UNLABELLED_DAYS } from '../models/TrainingSample.js';
 import { isBanned } from './contentSafety.js';
 import { storePhoto, openPhoto, deletePhoto, removeFile } from './storageService.js';
@@ -25,8 +26,15 @@ import { sanitizePhoto } from './imageService.js';
 //      A declined photo nobody asks about is deleted after 30 days (expireRefusals).
 // A photo is never published because the model failed: after 3 tries it's declined like an uncertain one.
 
+// ---- With AWS Rekognition (NSFW_ENGINE=rekognition, the default) the level decides (services/rekognitionService.js):
+//   0-50  published at once
+//   75    held for staff: it goes straight to the review page (staff emailed, due in 2 working days), no asking needed
+//   85/95 private; the uploader can ask for a review
+//   100   private for good: no Request review, and staff can't publish it
+// The NSFW.js notes below apply only with NSFW_ENGINE=nsfwjs.
+
 // The model's name, kept with each decision
-export const MODEL_NAME = 'NSFW.js MobileNetV2';
+export const MODEL_NAME = usesRekognition() ? rekognition.MODEL_NAME : 'NSFW.js MobileNetV2';
 // How sure a score range must be before it publishes on its own (the agreed standard for one model)
 export const CONFIDENCE = 0.85;
 // The score definition (stageOneScores, below); every calibration table records the version it was built with
@@ -92,6 +100,14 @@ export function stageOneScores(classes) {
 
 // What happens to a photo: { action: 'allow' | 'decline', explicit?, risk?, learned? }
 export function routeScore(scores, table = activeTable().table) {
+  if (scores?.engine === 'rekognition') {
+    const level = Number(scores.level);
+    if (!rekognition.LEVELS.includes(level)) return { action: 'decline' };   // no usable answer: never publish
+    const action = rekognition.actionOf(level);
+    if (action === 'publish') return { action: 'allow', level };
+    if (action === 'staff') return { action: 'decline', staff: true, level };
+    return { action: 'decline', explicit: action === 'locked', level };
+  }
   const c = scores?.classes;
   const p = (name) => (Number.isFinite(c?.[name]) ? c[name] : NaN);
   const porn = p('Porn'), hentai = p('Hentai'), sexy = p('Sexy');
@@ -144,10 +160,10 @@ export async function expireRefusals() {
 // The model's scores for one image (its thumbnail: the model only looks at 224×224 pixels)
 export async function classify(image) {
   // Check switched off: every photo passes, as it always has
-  if (checkIsOff()) return stageOneScores({ Neutral: 1 });
+  if (checkIsOff()) return usesRekognition() ? { engine: 'rekognition', version: rekognition.SCORE_VERSION, labels: [], level: 0, drivers: [] } : stageOneScores({ Neutral: 1 });
   const result = await scan(image);
   if (!result) throw new Error('The nudity check is unavailable');
-  return stageOneScores(result);
+  return result.engine === 'rekognition' ? result : stageOneScores(result);
 }
 
 async function publish(job) {
@@ -171,13 +187,28 @@ async function publish(job) {
 
 // Declined: private, and recorded. If the check was unsure, the uploader can ask a person to look (status 'final'
 // until they do); a hard decline (Porn or Hentai at HARD_DECLINE_AT or more) has no review (explicit: true)
-async function decline(job, owns, { scores, reason, entry, explicit = false }) {
+async function decline(job, owns, { scores, reason, entry, explicit = false, staff = false }) {
+  const level = scores?.engine === 'rekognition' ? scores.level : undefined;
   await ModerationDecision.updateOne({ _id: job._id }, { $setOnInsert: {
-    user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: MODEL_NAME, threshold: PUBLISH_BELOW,
-    ...(scores && { scores }), status: 'final', reason,
+    user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: MODEL_NAME, threshold: scores?.engine === 'rekognition' ? 75 : PUBLISH_BELOW,
+    ...(scores && { scores }), ...(level !== undefined && { autoLevel: level }), status: 'final', reason,
   } }, { upsert: true });
-  await UploadCheck.updateOne(owns, { $set: { state: 'rejected', attempts: 0, explicit }, $unset: { claim: 1 },
+  await UploadCheck.updateOne(owns, { $set: { state: staff ? 'review' : 'rejected', attempts: 0, explicit }, $unset: { claim: 1 },
     ...(entry && { $push: { history: entry } }) });
+  if (staff) await holdForStaff(job);
+}
+
+// Level 75: straight to staff, as if the uploader had asked (privacyController.requestReview): due 2 working days
+// after the upload, and staff are emailed with a link to it
+async function holdForStaff(job) {
+  const { dueDay } = await import('../utils/workingDays.js');
+  const before = await ModerationDecision.findOneAndUpdate({ _id: job._id, status: 'final' },
+    { $set: { status: 'review-requested', requestedAt: new Date(), dueDay: dueDay(job.createdAt || new Date()) } }, { returnDocument: 'after' });
+  if (!before) return;
+  const user = await User.findById(job.user, 'name email');
+  const { tellStaffAboutReview } = await import('./reviewAlerts.js');
+  tellStaffAboutReview({ decision: { ...before.toObject(), id: before.id }, fileName: job.originalName, user })
+    .catch((err) => console.error(`Photo ${job.id} is held for staff, but the staff email failed: ${err.message}`));
 }
 
 // Keeps the photo's 1280 features (models/TrainingSample.js) for training later; staff's rating is added on review.
@@ -240,15 +271,20 @@ export async function processCheck(step, infer = classify, table = activeTable()
     // read swimwear and stage outfits as Porn (a denim crop top: 30% on the preview, 64% on the thumbnail)
     const image = await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey));
     const scores = await infer(image);
-    const { action, explicit = false, risk, learned: byLearning, confidence } = routeScore(scores, table);
+    const { action, explicit = false, staff = false, level, risk, learned: byLearning, confidence } = routeScore(scores, table);
     // Training data for Momento's own decision layer (never affects this photo)
     await recordSample(job, image, scores, action, explicit);
-    const entry = { stage: 1, model: MODEL_NAME, scores, action, risk, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT,
-      ...(byLearning && { rule: 'learned', confidence }) };
+    const entry = scores?.engine === 'rekognition'
+      ? { stage: 1, model: MODEL_NAME, scores, action, level, ...(staff && { rule: 'staff' }) }
+      : { stage: 1, model: MODEL_NAME, scores, action, risk, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT,
+        ...(byLearning && { rule: 'learned', confidence }) };
     if (action === 'allow') {
       await UploadCheck.updateOne(owns, { $set: { state: 'publish', attempts: 0, due: new Date() }, $unset: { claim: 1 }, $push: { history: entry } });
     } else {
-      await decline(job, owns, { scores, entry, explicit, reason: explicit ? 'The automatic check is sure this photo contains nudity' : 'The automatic check wasn’t sure about this photo' });
+      const reason = scores?.engine === 'rekognition'
+        ? (explicit ? 'Level 100: nudity or explicit content' : staff ? 'Level 75: clearly suggestive, waiting for staff' : `Level ${level}: near-nude or nude, kept private`)
+        : explicit ? 'The automatic check is sure this photo contains nudity' : 'The automatic check wasn’t sure about this photo';
+      await decline(job, owns, { scores, entry, explicit, staff, reason });
     }
   } catch (error) {
     const attempts = job.attempts + 1;

@@ -12,6 +12,8 @@ const decisionSchema = new mongoose.Schema({
   model: { type: String, required: true },
   threshold: Number,
   scores: { type: mongoose.Schema.Types.Mixed },
+  // AWS Rekognition's level for it (0/25/50/75/85/95/100, services/rekognitionService.js). Level 100 is never published.
+  autoLevel: Number,
   decision: { type: String, enum: ['blocked'], default: 'blocked' },
   reason: { type: String, default: 'Looks like it contains nudity' },
   status: { type: String, enum: ['final', 'review-requested', 'allowed', 'upheld'], default: 'final' },
@@ -20,7 +22,7 @@ const decisionSchema = new mongoose.Schema({
   reviewer: String,
   reviewerSession: String,
   reviewedAt: Date,
-  // Staff's content level when reviewing (0/15/25/50/75/100), used by scripts/calibrateFromReviews.js
+  // Staff's content level when reviewing (0/25/50/75/85/95/100; 15 on older reviews), which Rekognition learns from
   severity: Number,
   // Why staff chose that level: tick boxes on review.html (utils/reviewReasons.js), e.g. ['clothed', 'touching']
   reasons: { type: [String], default: undefined },
