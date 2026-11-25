@@ -7,7 +7,7 @@ import { pageMetadata } from '@/lib/metadata';
 export const metadata: Metadata = pageMetadata({
   title: 'Terms of Service | Momento',
   description: "The rules for using Momento: your account, your photos, what isn't allowed, copyright complaints and accessibility.",
-  url: 'https://hexarch.org/terms',
+  url: 'https://momento.hexarch.org/terms',
 });
 
 // No page scripts. LegacyScripts only lets the language file (assets/i18n.js) start once the page is ready.

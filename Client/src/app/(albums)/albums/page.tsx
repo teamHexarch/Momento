@@ -19,7 +19,7 @@ import AlbumsScripts from '@/page-scripts/AlbumsScripts';
 export const metadata: Metadata = pageMetadata({
   title: 'My albums | Momento',
   description: "Every Momento album you've joined or hosted, in one place.",
-  url: 'https://hexarch.org/albums',
+  url: 'https://momento.hexarch.org/albums',
 });
 
 // Page behaviour is the original code, run in the original order: the emoji list (a plain script in the body),

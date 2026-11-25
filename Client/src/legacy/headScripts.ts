@@ -152,8 +152,8 @@ export const JSON_LD = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'WebSite',
   name: 'Momento',
-  alternateName: ['Momento by Hexarch', 'hexarch.org'],
-  url: 'https://hexarch.org/',
+  alternateName: ['Momento by Hexarch', 'momento.hexarch.org'],
+  url: 'https://momento.hexarch.org/',
 });
 
 // The intro veil. index.html's copy of this block tests `page &&`; albums.html's copy tests `page === 'home' &&`

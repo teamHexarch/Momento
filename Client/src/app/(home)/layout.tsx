@@ -13,7 +13,7 @@ export const metadata: Metadata = pageMetadata({
   title: 'Momento | Moments, kept.',
   description:
     'One shared album for every event. Guests join with a code or QR code and add their photos, so every picture ends up in one place.',
-  url: 'https://hexarch.org/',
+  url: 'https://momento.hexarch.org/',
   shareTitle: 'Momento: every photo from your event, in one album',
 });
 

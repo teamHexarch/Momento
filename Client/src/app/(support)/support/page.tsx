@@ -15,7 +15,7 @@ import LegacyScripts from '@/legacy/LegacyScripts';
 export const metadata: Metadata = pageMetadata({
   title: 'Support | Momento',
   description: 'Quick answers, and a way to contact the Momento team.',
-  url: 'https://hexarch.org/support',
+  url: 'https://momento.hexarch.org/support',
 });
 
 // Page behaviour is the original code, run in the original order: the two inline blocks of support.html, then the scripts

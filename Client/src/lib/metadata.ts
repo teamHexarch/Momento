@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 
-const OG_IMAGE = 'https://hexarch.org/assets/og-momento.jpg';
+const OG_IMAGE = 'https://momento.hexarch.org/assets/og-momento.jpg';
 
 /** The favicon set and the link-preview image every page uses (the 404 page builds its own head from these) */
 export const siteIcons: Metadata['icons'] = {
@@ -40,7 +40,7 @@ export function pageMetadata({
   shareDescription?: string;
 }): Metadata {
   return {
-    metadataBase: new URL('https://hexarch.org'),
+    metadataBase: new URL('https://momento.hexarch.org'),
     title,
     description,
     referrer: 'strict-origin-when-cross-origin',

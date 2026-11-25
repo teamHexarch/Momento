@@ -14,7 +14,7 @@ import SettingsScripts from '@/page-scripts/SettingsScripts';
 export const metadata: Metadata = pageMetadata({
   title: 'Settings | Momento',
   description: 'Upload rules, cloud destination, privacy and appearance for your Momento account.',
-  url: 'https://hexarch.org/settings',
+  url: 'https://momento.hexarch.org/settings',
 });
 
 // Page behaviour is the original code, run in the original order: the language menu script that sat inside the markup,
