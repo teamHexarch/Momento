@@ -251,6 +251,8 @@ export default function start() {
       const empty = !shown.length;
       document.getElementById('empty').hidden = !empty;
       if (empty) document.getElementById('emptyTitle').textContent = q ? `No albums match “${query.trim()}”` : 'No albums here yet';
+      // "Try another name… / Clear search" only after a search
+      document.getElementById('emptyHint').hidden = document.getElementById('clearSearch').hidden = !q;
     }
 
     // Filter tabs, with the white pill sliding under the chosen one
@@ -3021,14 +3023,9 @@ export default function start() {
         </li>`;
       // Only real to-dos are shown. With none, there's no block at all (every album is in the list below);
       // with no albums yet, the block is the way to make the first one
-      const quiet = !todos.length && list.length > 0;
+      const quiet = !todos.length;
       document.querySelector('.pulse').classList.toggle('is-quiet', quiet);
-      todoEl.innerHTML = todos.length ? todos.map(row).join('') : quiet ? '' : `
-        <li class="todo-empty">
-          <b>No albums yet</b>
-          <p>Create an album for your event, or join one with its code. Reminders and albums about to close show up here.</p>
-          <span class="todo-empty-acts"><button class="todo-act" type="button" data-empty="create">Create an album</button></span>
-        </li>`;
+      todoEl.innerHTML = todos.map(row).join('');
     }
     todoEl.addEventListener('click', (e) => {
       const b = e.target.closest('.todo-act');

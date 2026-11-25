@@ -5,7 +5,6 @@ import { momento, type ThemePref } from '@/lib/legacy';
 import { useAccount } from './AccountProvider';
 import { useTheme } from './ThemeProvider';
 
-const SUPPORT = 'support@hexarch.org'; // placeholder address (same as the old shared script)
 
 /** The 24x24 line icon every Momento script draws (the old `svg()` helper) */
 function Icon({ size = 18, children }: { size?: number; children: React.ReactNode }) {
@@ -105,7 +104,6 @@ export default function SiteFooter({ home = false }: { home?: boolean }) {
           <li><button className="sf-link" type="button" data-foot-act="help" onClick={(e) => momento()?.openHelp?.(e.currentTarget)}>Help and support</button></li>
           <li><a className="sf-link" href="support">Contact support</a></li>
           <li><a className="sf-link" href={`${P}#faq`}>FAQ</a></li>
-          <li><a className="sf-link" href={`mailto:${SUPPORT}`}>Email support</a></li>
           <li><a className="sf-link" href="privacy">Privacy policy</a></li>
           <li><a className="sf-link" href="terms">Terms of Service</a></li>
           <li data-foot-account="" hidden={!signedIn}><button className="sf-link" type="button" data-foot-act="settings" onClick={(e) => momento()?.openSettings?.(e.currentTarget)}>Account settings</button></li>

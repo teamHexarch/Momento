@@ -80,7 +80,7 @@ export default function AlbumsPage() {
             </div>
             <div className="empty panel" id="empty" hidden>
               <b id="emptyTitle">No albums match</b>
-              <span>Try another name or place, or clear the search.</span>
+              <span id="emptyHint">Try another name or place, or clear the search.</span>
               <button className="btn btn-light" type="button" id="clearSearch">Clear search</button>
             </div>
           </section>

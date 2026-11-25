@@ -1519,7 +1519,7 @@ export default function start() {
         } catch (err) { Momento.toast('Couldn’t remove them', err.message); }
       }
 
-      $('grNew').addEventListener('click', (e) => (Momento.account?.get?.() ? newGroup(e.currentTarget) : Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events#groups' })));
+      $('grNew')?.addEventListener('click', (e) => (Momento.account?.get?.() ? newGroup(e.currentTarget) : Momento.needLogin({ action: 'groups', from: e.currentTarget, next: 'events#groups' })));
       // An album made from here (Share another album) shows up in its group straight away
       document.addEventListener('momento:albums', () => load(true));
 

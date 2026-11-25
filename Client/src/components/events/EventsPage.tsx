@@ -10,7 +10,6 @@ export default function EventsPage() {
 
             <section className="so-head">
               <span className="mask"><h1 className="so-title ink rise" data-text="Social">Social</h1></span>
-              <p className="so-lede intro" style={{ '--d': '.25s' } as CSSProperties}>Share albums with the people you see most, or find public events happening near you.</p>
               <nav className="so-jump intro" style={{ '--d': '.35s' } as CSSProperties} aria-label="On this page">
                 <a className="so-jump-item glass" href="#groups">
                   <span className="so-jump-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" /><circle cx="16.8" cy="9.5" r="2.5" /><path d="M15.6 14.6c2.4-.2 4.3 1.3 4.9 4.4" /></svg></span>
@@ -37,9 +36,7 @@ export default function EventsPage() {
               <div className="so-sec-head">
                 <div>
                   <h2 className="so-h2" id="soGroupsTitle">Your groups</h2>
-                  <p className="so-sec-lede">People you share albums with again and again. Everyone in a group sees every album shared with it, and can add their own photos.</p>
                 </div>
-                <button className="btn btn-dark" type="button" id="grNew">New group</button>
               </div>
               <p className="gr-status" id="grStatus" role="status"></p>
               <div className="gr-body" id="grBody" aria-label="Your groups" aria-busy="true">
@@ -51,7 +48,6 @@ export default function EventsPage() {
               <div className="so-sec-head ev-top">
                 <div className="ev-top-copy">
                   <h2 className="so-h2" id="soEventsTitle">Events near you</h2>
-                  <p className="so-sec-lede">Public albums happening around you. Open one to see its photos and join in.</p>
                 </div>
                 <div className="ev-actions">
                   <button className="btn btn-light" type="button" id="joinOpen">Join with a code</button>
