@@ -23,6 +23,20 @@
 - **Payload shapes:** `BACKEND-NOTES.md`, `BACKEND-NOTES-NEXT.md`, `SERVER-TRASH-API.md` and the typed client
   `src/lib/api.ts`. Keep them in step with the server when either side changes.
 
+## Max 3 devices (Settings → Active devices, and the 4th login)
+
+- **A 4th login** (free and plus plans; admin and staff plans have no limit) answers `409`:
+  `{ "code": "SESSION_LIMIT_REACHED", "error": "…", "max": 3, "devices": [Device, …] (least recently active first),
+  "pendingLoginToken": "…" (10 minutes, one use), "challenge": "…" (the older emailed-code way, still works) }`
+- **`POST /api/auth/devices/takeover`** `{ pendingLoginToken, oldest: true }` ("Sign out oldest device & continue") or
+  `{ pendingLoginToken, deviceId }` (sign out that one): logs in here, `{ user, signedOut: { id, name } }`.
+  `403 PENDING_LOGIN_EXPIRED` (expired, used, or the password changed), `404 DEVICE_NOT_FOUND`.
+- **`GET /api/auth/devices`** (signed in): `{ devices: [Device], max: 3 | null (no limit), count }`, this device first.
+- **`DELETE /api/auth/devices/:id`**: signs that device out at once (`400 DEVICE_IS_CURRENT` for this one: use log out).
+- **`POST /api/auth/devices/sign-out-others`**: `{ ok, signedOut: n }`.
+- `Device`: `{ id, name: "iPhone • Safari", ipPrefix: "203.0.113.x" | null, loggedInAt, lastActiveAt, expiresAt, current }`
+  (lastActiveAt is updated at most every 5 minutes).
+
 ## Every endpoint
 
 Paths are full paths. Generated from the server's route files on 2026-11-25; regenerate when routes change.
@@ -77,6 +91,10 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/auth/devices/code |
 | POST | /api/auth/devices/verify |
 | POST | /api/auth/devices/replace |
+| POST | /api/auth/devices/takeover |
+| GET | /api/auth/devices |
+| POST | /api/auth/devices/sign-out-others |
+| DELETE | /api/auth/devices/:id |
 | POST | /api/auth/logout |
 | GET | /api/auth/me |
 | PATCH | /api/auth/me |

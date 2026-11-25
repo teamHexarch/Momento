@@ -1,5 +1,5 @@
 import { User } from '../models/User.js';
-import { readSession, rotateSession, ROTATE_MS, GRACE_MS } from '../utils/session.js';
+import { readSession, rotateSession, ROTATE_MS, GRACE_MS, ACTIVE_EVERY_MS, ipPrefix } from '../utils/session.js';
 import { HttpError } from '../utils/httpError.js';
 import { isStaffPlan } from '../utils/plans.js';
 import { switches } from '../services/switches.js';
@@ -40,6 +40,11 @@ export async function loadUser(req, res, next) {
     }
   } else if (now - session.iat * 1000 > ROTATE_MS) {
     await rotateSession(res, user._id, session.jti);
+  }
+  // "Last active" for the device list, at most every 5 minutes
+  if (!record.lastActiveAt || now - record.lastActiveAt > ACTIVE_EVERY_MS) {
+    await User.updateOne({ _id: user._id, 'sessions.id': record.id },
+      { $set: { 'sessions.$.lastActiveAt': now, 'sessions.$.ipPrefix': ipPrefix(req.ip) || record.ipPrefix } });
   }
   req.user = user;
   next();

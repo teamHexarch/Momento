@@ -1,4 +1,3 @@
-import { deviceLoginChallenge } from '../services/deviceLogin.js';
 import crypto from 'node:crypto';
 import { verifySignupCaptcha } from '../services/captchaService.js';
 import bcrypt from 'bcryptjs';
@@ -6,7 +5,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env.js';
 import { User } from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
-import { startSession, endSession, maxSessionsFor } from '../utils/session.js';
+import { startSession, endSession } from '../utils/session.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, peekEmailApproval, approveEmailChange, cancelEmailChange, finishEmailChange, dropEmailChange, deleteAccount } from '../services/accountService.js';
@@ -64,7 +63,9 @@ async function signedIn(res, user, status = 200) {
     await startSession(res, user);
   } catch (error) {
     if (error.code !== 'session_limit') throw error;
-    return res.status(409).json({ code: 'session_limit', error: `${maxSessionsFor(user.plan)} devices are logged in. Verify your email to replace one.`, challenge: deviceLoginChallenge(user) });
+    // No dead end: the devices already logged in, and a one-tap way to sign one out (services/deviceLogin.js)
+    const { sessionLimitReached } = await import('../services/deviceLogin.js');
+    return res.status(409).json(await sessionLimitReached(user));
   }
   res.status(status).json({ user: user.toPublic() });
 }

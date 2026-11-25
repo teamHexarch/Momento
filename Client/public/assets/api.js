@@ -56,7 +56,7 @@ for (const type of ['pageswap', 'pagereveal']) {
       const error = new Error(data.error || 'The request failed. Please try again.');
       error.status = response.status;
       error.code = data.code;
-      if (data.code === 'session_limit') error.challenge = data.challenge;
+      if (data.code === 'session_limit' || data.code === 'SESSION_LIMIT_REACHED') { error.challenge = data.challenge; error.devices = data.devices; error.pendingLoginToken = data.pendingLoginToken; }
       error.retryAt = data.retryAt;
       throw error;
     }

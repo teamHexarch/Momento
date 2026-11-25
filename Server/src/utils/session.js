@@ -33,12 +33,28 @@ const cookieOptions = () => ({
   path: '/',
 });
 
-function describeDevice(agent = '') {
+// "iPhone • Safari", "Windows • Chrome": what the device list shows
+export function describeDevice(agent = '') {
   const browser = /Edg/i.test(agent) ? 'Edge' : /Firefox|FxiOS/i.test(agent) ? 'Firefox'
     : /Chrome|CriOS/i.test(agent) ? 'Chrome' : /Safari/i.test(agent) ? 'Safari' : 'Browser';
   const platform = ['iPad', 'iPhone', 'Android', 'Windows', 'Mac', 'Linux'].find(name => agent.includes(name));
-  return platform ? browser + ' on ' + platform : browser;
+  return platform ? platform + ' • ' + browser : browser;
 }
+// Only the start of the IP address is kept with a login ("203.0.113.x"), to help tell devices apart
+export function ipPrefix(ip) {
+  const s = String(ip || '').replace(/^::ffff:/, '');
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(s)) return s.split('.').slice(0, 3).join('.') + '.x';
+  if (s.includes(':')) return s.split(':').slice(0, 3).join(':') + '::x';
+  return undefined;
+}
+// "Last active" is saved at most every 5 minutes per login (loadUser), so busy pages don't write on every request
+export const ACTIVE_EVERY_MS = 5 * 60000;
+// One login as the device list shows it (never the token)
+export const deviceView = (s, currentId) => ({
+  id: s.id, name: s.deviceName || 'Previously signed-in device', ipPrefix: s.ipPrefix || null,
+  loggedInAt: s.loggedInAt || null, lastActiveAt: s.lastActiveAt || s.loggedInAt || null, expiresAt: s.expiresAt,
+  current: !!currentId && (s.id === currentId || s.prev === currentId),
+});
 
 function sign(userId, jti) {
   const token = jwt.sign({ sub: String(userId), jti }, config.jwtSecret, { algorithm: 'HS256', expiresIn: Math.floor(tokenMs() / 1000), issuer: ISSUER, audience: AUDIENCE });
@@ -49,7 +65,9 @@ const setCookie = (res, token) => res.cookie(SESSION_COOKIE, token, { ...cookieO
 export async function startSession(res, user, replacement) {
   const id = crypto.randomUUID();
   const { token, expiresAt } = sign(user.id, id);
-  const session = { id, deviceName: describeDevice(res.req?.headers['user-agent']), loggedInAt: new Date(), expiresAt };
+  const now = new Date();
+  const session = { id, deviceName: describeDevice(res.req?.headers['user-agent']), ipPrefix: ipPrefix(res.req?.ip),
+    loggedInAt: now, lastActiveAt: now, expiresAt };
   if (replacement) {
     const result = await User.updateOne({
       ...replacement.filter, sessions: { $elemMatch: { id: replacement.deviceId, expiresAt: { $gt: new Date() } } },
