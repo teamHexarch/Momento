@@ -119,7 +119,9 @@ export async function readableImage(buffer) {
     if (m.format === 'heif') { await sharp(buffer).resize(8).toBuffer(); return buffer; }
   } catch {}
   try { return await heicToJpeg(buffer); }
-  catch { throw new HttpError(400, 'This HEIC photo couldn’t be read. Try exporting it as JPEG and uploading again.', 'unreadable'); }
+  catch (error) {
+    console.warn('HEIC unreadable (%d bytes, brand %s): %s', buffer.length, buffer.toString('latin1', 8, 12), error.message);
+    throw new HttpError(400, 'This HEIC photo couldn’t be read. Try exporting it as JPEG and uploading again.', 'unreadable'); }
 }
 
 export const PREVIEW_EDGE = 2560;
@@ -143,7 +145,9 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
       }
       // No preview inside (rare, e.g. some DNGs): the TIFF reader may still manage
     }
-    const image = sharp(source, { animated: !raw, limitInputPixels: MAX_PIXELS, failOn: raw ? 'none' : 'warning' });
+    // failOn 'error', not 'warning': many phone cameras (Samsung Galaxy especially) write JPEGs that make libjpeg warn
+    // ("Invalid SOS parameters for sequential JPEG") yet decode perfectly; 'warning' refused every one of them
+    const image = sharp(source, { animated: !raw, limitInputPixels: MAX_PIXELS, failOn: raw ? 'none' : 'error' });
     const metadata = await image.metadata();
     if (!raw && !TYPES[metadata.format] && metadata.format !== 'heif' && source === buffer) throw new Error('Unsupported format');
     const animated = !raw && metadata.pages > 1;
@@ -161,7 +165,10 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
     if (raw) return { buffer: preview, mimeType: 'image/jpeg', size: preview.length, thumbnail, mini, preview, previewMimeType: TYPES[format], raw, rawDropped: true, ext: '.jpg', takenAt };
     const mimeType = source !== buffer ? 'image/heif' : TYPES[metadata.format] || (metadata.compression === 'av1' ? 'image/avif' : 'image/heif');
     return { buffer, mimeType, size: buffer.length, thumbnail, mini, preview, previewMimeType: TYPES[format], raw, ext: '', takenAt };
-  } catch {
+  } catch (error) {
+    // Logged (not the file name: it can be personal), so a kind of photo that keeps failing can be found and fixed
+    console.warn('Photo unreadable (%s, %d bytes, header %s): %s', extOf(name) || 'no extension', input.length,
+      input.subarray(4, 12).toString('latin1').replace(/[^ -~]/g, '.'), error.message);
     throw new HttpError(400, raw
       ? 'This RAW file could not be read. Try exporting it as JPEG and uploading again.'
       : 'This photo could not be processed safely. Try exporting it as JPEG or PNG and uploading again.', 'unreadable');

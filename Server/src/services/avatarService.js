@@ -33,7 +33,7 @@ export async function saveAvatar(user, upload) {
   await assertAllowed(buffer, 'This profile photo', { user: user._id, kind: 'avatar' });
   let webp;
   try {
-    webp = await sharp(buffer, { limitInputPixels: 50_000_000 })
+    webp = await sharp(buffer, { limitInputPixels: 50_000_000, failOn: 'error' })
       .autoOrient()
       .resize(256, 256, { fit: 'cover', position: 'attention' })
       .webp({ quality: 82 })

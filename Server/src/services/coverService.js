@@ -19,7 +19,7 @@ export async function saveCover(album, upload) {
   await assertAllowed(buffer, 'This cover', { user: album.host, album: album._id, kind: 'cover' });
   let big, small;
   try {
-    const img = sharp(buffer, { limitInputPixels: 100_000_000 }).autoOrient();
+    const img = sharp(buffer, { limitInputPixels: 100_000_000, failOn: 'error' }).autoOrient();
     big = await img.clone().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
     small = await img.clone().resize(640, 640, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
   } catch {
