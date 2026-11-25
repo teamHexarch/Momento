@@ -62,8 +62,8 @@ try {
   const staffUser = await User.create({ name: 'Staff', email: 'staff@example.invalid', passwordHash: await bcrypt.hash(password, 4), emailVerified: true, plan: 'staff' });
   const login = async (u) => (await request('/api/auth/login', 200, '', 'POST', { email: u.email, password })).headers.get('set-cookie').split(';')[0];
   const cookie = await login(user), staffLogin = await login(staffUser);
-  // Moderation needs Dev Mode: the shared admin account plus a personal access code
-  await request('/api/admin/moderation', 401, staffLogin);
+  // Moderation needs the admin team: their own account, then their own 6-character code
+  await request('/api/admin/moderation', 404, staffLogin);   // not on the admin team yet: it doesn't even exist
   const { withDevMode } = await import('./devModeTestKit.js');
   const staff = await withDevMode(origin, staffLogin);
   const { album } = await (await request('/api/albums', 201, cookie, 'POST', { kind: 'album', name: 'Moderation test', date: '2026-11-21' })).json();
@@ -257,7 +257,7 @@ try {
       await page.goto('http://localhost:4000/' + link);
       await page.locator('#stage:not([hidden])').waitFor();
       await page.waitForFunction(() => document.getElementById('photo').naturalWidth > 0);
-      const shown = await page.evaluate(() => { const i = document.getElementById('photo'); const r = i.getBoundingClientRect(), f = i.parentElement.getBoundingClientRect();
+      const shown = await page.evaluate(() => { const i = document.getElementById('photo'); i.style.transition = 'none'; i.style.transform = 'none'; void i.offsetWidth; const r = i.getBoundingClientRect(), f = i.parentElement.getBoundingClientRect();
         return { w: i.naturalWidth, h: i.naturalHeight, name: document.getElementById('name').textContent, inside: r.bottom <= f.bottom + 1 && r.right <= f.right + 1,
           scroll: document.documentElement.scrollHeight - innerHeight, scrollX: document.documentElement.scrollWidth - innerWidth,
           levels: [...document.querySelectorAll('#levels .lv')].map((x) => x.dataset.value).join(','), levelsOnScreen: document.getElementById('levels').getBoundingClientRect().bottom <= innerHeight }; });
@@ -265,10 +265,10 @@ try {
       assert.ok(shown.inside, 'the picture fits inside its frame');
       assert.equal(shown.scroll, 0, 'one screen: no vertical scrolling');
       assert.equal(shown.scrollX, 0, 'no sideways scrolling');
-      assert.equal(shown.levels, '0,15,25,50,75,100', 'the six levels, so the check learns from each rating');
+      assert.equal(shown.levels, '0,25,50,75,85,95,100', 'the seven levels, so the check learns from each rating');
       assert.ok(shown.levelsOnScreen, 'the levels are on screen without scrolling');
       assert.match(shown.name, /portrait\.jpg/);
-      console.log('Browser verified: the email link opens that photo, on one screen with no scrolling, with the six levels.');
+      console.log('Browser verified: the email link opens that photo, on one screen with no scrolling, with the seven levels.');
       if (process.env.REVIEW_SHOT) { await page.setViewportSize({ width: 1366, height: 768 }); await page.waitForTimeout(400); await page.screenshot({ path: process.env.REVIEW_SHOT }); await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400); await page.screenshot({ path: process.env.REVIEW_SHOT.replace('.png', '-phone.png') }); await page.setViewportSize({ width: 1280, height: 720 }); }
       // Rating the last one: it leaves the queue, and the empty-queue pop-up offers the way home
       await page.locator('#levels .lv[data-value="0"]').click();

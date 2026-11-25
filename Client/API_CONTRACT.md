@@ -12,7 +12,11 @@
   The address is set in one place, `public/assets/api.js`.
 - **Auth:** an HttpOnly login cookie set by `POST /api/auth/login` (or signup / Google). Requests send it with
   `credentials: 'include'`; there is no Authorization header. Writes are checked as same-origin (`sameOriginWrites`).
-- **Staff moderation** (`/api/admin/*` moderation routes) also needs a Dev Mode session cookie from `POST /api/dev/enter`.
+- **Admin** (`/api/admin/*`): only the admin team's accounts (at most 6) see these (404 for everyone else). Everything except
+  `GET /api/admin/session`, `POST /api/admin/verify-code` `{ email, code }` and `POST /api/admin/lock` also needs the
+  4-hour pass that `verify-code` sets (an httpOnly cookie); without it: `403` with `code: "ADMIN_CODE_REQUIRED"`.
+  5 wrong codes in 15 minutes: `429` with `code: "ADMIN_CODE_LOCKED"`. Team management (`/api/admin/team*`,
+  `/api/admin/audit`) is for owners (`403 ADMIN_OWNER_ONLY` otherwise).
 - **Errors:** `{ "error": "Message to show as written", "code"?: "machine-code" }` with a 4xx/5xx status. Rate limits
   answer `429` with the same shape.
 - **WebSockets:** none yet. If any are added, list every event here before the front end uses it.
@@ -27,6 +31,9 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 |---|---|
 | GET | /api/config |
 | GET | /api/health |
+| GET | /api/admin/session |
+| POST | /api/admin/verify-code |
+| POST | /api/admin/lock |
 | GET | /api/admin/reports |
 | GET | /api/admin/reports/:id/preview |
 | POST | /api/admin/reports/:id/dismiss |
@@ -41,6 +48,11 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | GET | /api/admin/switches |
 | PATCH | /api/admin/switches |
 | POST | /api/admin/sessions/revoke-all |
+| GET | /api/admin/team |
+| PUT | /api/admin/team/:slot |
+| POST | /api/admin/team/:slot/rotate |
+| DELETE | /api/admin/team/:slot |
+| GET | /api/admin/audit |
 | GET | /api/albums/preview/:code |
 | GET | /api/albums/:id/cover/:token |
 | GET | /api/albums |
@@ -90,10 +102,6 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/auth/unsubscribe |
 | POST | /api/auth/moderation/:id/review |
 | DELETE | /api/auth/avatar |
-| GET | /api/dev/status |
-| POST | /api/dev/enter |
-| POST | /api/dev/heartbeat |
-| POST | /api/dev/exit |
 | GET | /api/events/nearby |
 | GET | /api/events/requests |
 | PATCH | /api/events/:id/policy |

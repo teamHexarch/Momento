@@ -10,7 +10,7 @@ import { startUploadChecks, calibratedBins, calibrationError, activeTable, PUBLI
 import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
 import { moveStaffRoleToPlan } from './services/planMigration.js';
-import { devModeEnabled, ensureSlots, sweepIdle } from './services/devModeService.js';
+import { seedFromEnv, listTeam, MAX_ADMIN_STAFF } from './services/adminStaffService.js';
 
 await connectDb();
 await moveStaffRoleToPlan();
@@ -49,12 +49,13 @@ if (usesRekognition()) {
   if (calibrationError) console.error('The calibration table file could not be read: only the thresholds apply until it is fixed.');
 }
 startLearning();
-// Dev Mode (photo moderation on the shared admin account): the 6 session slots, and every minute idle sessions end
-if (devModeEnabled()) {
-  await ensureSlots();
-  console.log(`Dev Mode: admin account ${config.devMode.adminEmail}, up to ${config.devMode.maxSessions} sessions, ${config.devMode.idleMinutes} min idle limit.`);
-} else console.log('Dev Mode: off (set DEV_MODE_ADMIN_EMAIL); photo moderation is unavailable until it is on.');
-setInterval(() => sweepIdle().catch((err) => console.error(`Dev Mode idle check failed: ${err.message}`)), 60000).unref();
+// The admin team (at most 6, each with their own code): empty slots filled from ADMIN_STAFF_JSON / ADMIN_OWNER_* at start-up
+try {
+  const added = await seedFromEnv();
+  const { used } = await listTeam();
+  console.log(`Admin team: ${used} of ${MAX_ADMIN_STAFF} slots used${added ? ` (${added} added from the env)` : ''}.`
+    + (used ? '' : ' Set ADMIN_OWNER_EMAIL and ADMIN_OWNER_CODE to add the owner; until then /api/admin is closed.'));
+} catch (error) { console.error(`Admin team: ${error.message}`); }
 const server = app.listen(config.port, () => console.log(`Momento running at ${config.publicUrl} (port ${config.port})`));
 
 // ---- Stopping cleanly (an update or restart sends SIGTERM) ----

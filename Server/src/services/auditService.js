@@ -22,6 +22,11 @@ export async function audit(event, { req, actor, target, meta, reviewer, devSess
       // Dev Mode: the person behind the shared admin account (req.dev, from middleware/devMode.js)
       reviewer: reviewer ?? req?.dev?.reviewerLabel, devSession: devSession ?? req?.dev?.sessionId,
     });
+    // Admin team actions are also logged against the person (models/AdminAuditLog.js)
+    if (req?.admin) {
+      const { logAdmin } = await import('./adminStaffService.js');
+      await logAdmin(event, { req, target, meta });
+    }
   } catch (err) {
     console.error(`Audit log failed (${event}): ${err.message}`);
   }

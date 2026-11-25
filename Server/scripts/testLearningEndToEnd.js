@@ -17,7 +17,6 @@ const { app } = await import('../src/app.js');
 const { User } = await import('../src/models/User.js');
 const { ModerationDecision } = await import('../src/models/ModerationDecision.js');
 const { ModerationCalibration } = await import('../src/models/ModerationCalibration.js');
-const { ensureSlots } = await import('../src/services/devModeService.js');
 const { routeScore, activeTable } = await import('../src/services/uploadChecks.js');
 const { withDevMode } = await import('./devModeTestKit.js');
 const server = app.listen(4118);
@@ -29,7 +28,6 @@ const route = () => routeScore({ classes: photo(.18) });
 
 try {
   await User.create({ name: 'Admin', email: 'admin@example.invalid', passwordHash: await bcrypt.hash('Correct-horse-9', 4), emailVerified: true, plan: 'staff' });
-  await ensureSlots();
   const login = await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'admin@example.invalid', password: 'Correct-horse-9' }) });
   const cookie = await withDevMode(BASE, login.headers.get('set-cookie').split(';')[0], 'Reviewer_A');

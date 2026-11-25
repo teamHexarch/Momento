@@ -88,23 +88,25 @@ Open **http://localhost:4000**. You can also run `node serve.mjs` in `Client/` a
 
 To try everything before Atlas is set up, run `npm run dev:memory`. It uses a temporary database that is wiped when it stops.
 
-## Dev Mode (photo moderation)
+## The admin team (photo moderation)
 
-Photo review (`review.html`, and the moderation, report and takedown APIs) needs **Dev Mode**: staff sign in with one
-shared admin account (`DEV_MODE_ADMIN_EMAIL`, a staff account with a confirmed email), then each person unlocks Dev
-Mode with their **own access code**, so every session and decision names who did it.
+Photo review (`review.html`) and every `/api/admin` endpoint (moderation, reports, takedowns, thresholds, switches, the
+team) are for the **admin team: at most 6 people** (`admin_staff`, slots 1-6; a 7th can't be added).
 
-- Codes: `npm run reviewer-codes -- add Reviewer_A "Name"` (prints the code once; only a bcrypt hash is kept),
-  `reset Reviewer_A`, `revoke Reviewer_A`, `list`. On Lightsail run `node scripts/reviewerCodes.js ...` inside the api container.
-- At most **6 sessions** at once; a 7th is refused (nobody is pushed out). **Exit Dev Mode** ends that session only.
-  A session ends after `DEV_MODE_IDLE_MINUTES` (20, within 15-30) without use; the page only keeps it alive while the
-  person is clicking or typing.
-- Wrong codes: 5 per address per 15 minutes, 20 per account per hour.
-- Audit log: `devmode.login`, `devmode.logout`, `devmode.timeout`, `devmode.code-failed`, `devmode.full` and every
-  moderation action carry `reviewer` and `devSession`. Decisions also store `reviewer` and `reviewerSession`.
-- Photos stay blurred until the reviewer presses Reveal (R). Moderation responses are `Cache-Control: no-store`.
-- Try it locally: `node scripts/reviewPreview.js` (throwaway database; test admin and reviewer codes are in that file).
-  Tests: `npm run test:devmode`.
+- Each person signs in to **their own Momento account** (the slot's email, confirmed), then enters that email and their
+  **own 6-character code** (A-Z and 0-9, at least one of each; only a salted scrypt hash is kept). That unlocks the
+  browser for **4 hours** (httpOnly cookie). Without it every admin endpoint answers `403 ADMIN_CODE_REQUIRED`;
+  accounts not on the team get a plain 404.
+- **5 wrong codes in 15 minutes** (per IP address and per email) lock code entry for the rest of those 15 minutes.
+- Owners manage the slots: `GET /api/admin/team`, `PUT /api/admin/team/:slot` (assign; the new code is in the answer
+  once), `POST /api/admin/team/:slot/rotate`, `DELETE /api/admin/team/:slot`, and the log at `GET /api/admin/audit`.
+  Changing a code or removing someone ends their access at once. From the server:
+  `npm run admin-team -- list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot>`
+  (on Lightsail inside the api container).
+- First owner: `ADMIN_OWNER_EMAIL` + `ADMIN_OWNER_CODE` (or `ADMIN_STAFF_JSON`) fill empty slots at start-up.
+- Every code entry, lock-out, decision, threshold change and team change is in `admin_audit_logs` with the person's
+  slot, name and email and the start of their IP address (append-only, kept 2 years).
+- Try it locally: `node scripts/reviewPreview.js` (throwaway database; the test admin and code are in that file).
 
 ## Settings (.env)
 
