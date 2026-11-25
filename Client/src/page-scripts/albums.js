@@ -5,8 +5,10 @@
 /* eslint-disable */
 import { createPageEffects } from '@/components/effects/pageEffects.js';
 import installEmoji from './emoji.js';
+import installGames from './games.js';
 
 export default function start() {
+  installGames(); // the Games button and window in event albums (./games.js)
   installEmoji(); // window.MomentoEmoji, the reaction list: read as this code starts (it was the script before it)
   // ======== from albums-1.js ========
     const still =matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -406,6 +408,7 @@ export default function start() {
     const albumFiles = document.getElementById('albumFiles');
     const albumRemove = document.getElementById('albumRemove');
     const M = { a: null, i: 0, closing: false, shareOpen: false };
+    window.momentoAlbum = () => M.a; // the open album, for the games window (./games.js)
 
     function showModal(m) {
       // The custom cursor can't draw above a modal, so the normal cursor comes back
@@ -527,6 +530,7 @@ export default function start() {
       }
       showModal(albumModal);
       syncAddress();
+      document.dispatchEvent(new CustomEvent('momento:album', { detail: a }));
       albumModal.querySelector('.album-scroll').scrollTop = 0;
       paintMore();
       if (!still && !abMore.hidden) abMore.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 600, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' });

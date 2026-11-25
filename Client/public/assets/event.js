@@ -147,6 +147,9 @@
     .ev-more-body .ev-cover-empty svg { margin: 0; }
     .ev-cover .ev-hint:empty { display: none; }
     details.ev-more { margin-bottom: .2rem; }
+    /* More options spans the whole form, and so does everything inside it (cover photo, Uploads open, the distance) */
+    details.ev-more { display: block; width: 100%; max-width: none; box-sizing: border-box; justify-self: stretch; align-self: stretch; }
+    .ev-more-body > *, .ev-more-body :is(.ev-cover, .ev-cover-box, .ev-cover-pick, .ev-lead, .ev-lead select, .ev-range) { width: 100%; max-width: none; box-sizing: border-box; }
     /* No empty line saved for a message that isn't there */
     #mCreate .acct-status:empty { min-height: 0; margin: 0; }
     .ev-sec[hidden] { display: none; }

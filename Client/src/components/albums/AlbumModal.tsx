@@ -10,6 +10,7 @@ export default function AlbumModal() {
               <p className="album-stats"><span id="albumStats"></span><span className="album-open" id="albumWindow" hidden></span></p>
             </div>
             <div className="ab-acts">
+              <button className="ab-btn ab-games" type="button" id="abGames" hidden aria-haspopup="dialog" aria-controls="gamesModal"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5" /><path d="M7.5 10.5v4M5.5 12.5h4" /><circle cx="15.5" cy="11.5" r=".6" fill="currentColor" /><circle cx="17.5" cy="13.5" r=".6" fill="currentColor" /></svg>Games<span className="ab-games-dot" aria-hidden="true"></span></button>
               <button className="ab-btn" type="button" id="abSelect">Select</button>
               <button className="ab-icon ab-bell" type="button" id="abBell" hidden aria-haspopup="dialog" aria-expanded="false" aria-controls="abPulse" aria-label="Activity" title="Activity"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7.5 2 7.5H4S6 15 6 9Z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg><span className="ab-pip" id="abBellPip" hidden aria-hidden="true">0</span></button>
               <button className="ab-icon" type="button" id="albumSave" aria-pressed="false" title="Save album"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z" /></svg><span className="sr">Save</span></button>
@@ -88,6 +89,17 @@ export default function AlbumModal() {
             <button className="ab-tool" type="button" id="abHide"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-10-8-10-8a17 17 0 0 1 4.1-5.4M9.9 4.2A9.1 9.1 0 0 1 12 4c7 0 10 8 10 8a17 17 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M2 2l20 20" /></svg><span>Hide</span></button>
             <button className="ab-tool is-danger" type="button" id="abDel"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg><span>Delete</span></button>
           </footer>
+        </div>
+      </dialog>
+      {/* Event games (src/page-scripts/games.js fills it): the list, the leaderboard, one game, the host's New game form */}
+      <dialog className="modal" id="gamesModal" aria-labelledby="gmTitle">
+        <div className="modal-card gm-card">
+          <header className="gm-head">
+            <button className="ab-icon" type="button" id="gmBack" hidden aria-label="Back" title="Back"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+            <h2 id="gmTitle">Games</h2>
+            <button className="ab-icon" type="button" data-gm-close="" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+          </header>
+          <div className="gm-body" id="gmBody" aria-live="polite"></div>
         </div>
       </dialog>
     </>
