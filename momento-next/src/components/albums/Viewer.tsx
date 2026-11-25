@@ -47,7 +47,7 @@ export default function Viewer() {
           <p className="rx-none" id="rxNone" role="status" hidden></p>
         </div>
         <div className="rx-who" id="pbWho" role="dialog" aria-label="Who reacted" hidden><div className="rx-grab" aria-hidden="true"><i></i></div><div className="rx-who-tabs" id="pbWhoTabs"></div><ul className="rx-who-list" id="pbWhoList" aria-live="polite"></ul></div>
-        <p className="vw-hint" id="vwHint">Click to zoom in. Double-click to react with a ❤️</p>
+        <p className="vw-hint" id="vwHint">Scroll, pinch or click to zoom. Double-click to react with a ❤️</p>
       </dialog>
     </>
   );

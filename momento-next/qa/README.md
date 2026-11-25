@@ -72,3 +72,17 @@ Screenshots and diff images are written to the folder you name (`out/...`, git-i
 
 Copy the closest script, and make it drive the thing you changed on both sites (same steps, same selectors), then compare screenshots
 **and state** (open dialogs, `aria-*` values, input values, text of status lines). State catches what pixels can't.
+
+## Loading speed and pop-ins
+
+Three scripts for how the pages load (not comparisons with the original). Run them against the production build, served
+the way GitHub Pages serves it: `npm run build && PORT=3012 npm run preview` (it sends GitHub's `cache-control:
+max-age=600`, so pages reuse what earlier pages downloaded). They throttle to Fast 4G and a 4x slower CPU, and open Home
+first, like someone arriving and moving around. They need Chrome: `CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`
+(or the Windows path), and `PERF_URL` if the preview isn't on :3012.
+
+- `perf.mjs [runs]`: per page, the median of first paint, largest paint, when the page scripts are ready, layout shifts
+  (count and CLS) and when the last one happened, and on a first visit to Home when the intro started.
+- `shifts.mjs /albums /events ...`: every layout shift on those pages, with the elements that moved (from → to).
+  `PHONE=1` for a phone-sized screen.
+- `frames.mjs /albums <folder> 900,1500,2500`: screenshots at those moments after the page started loading.

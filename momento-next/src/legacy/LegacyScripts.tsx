@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { preload } from 'react-dom';
 import { markLegacyReady } from '@/lib/legacy';
 
 /**
@@ -24,6 +25,14 @@ export type LegacyScript = string | { src: string; integrity: string; crossOrigi
  * in order) and before the shared asset scripts are added.
  */
 export default function LegacyScripts({ scripts, start }: { scripts: LegacyScript[]; start?: () => void }) {
+  // Start downloading the scripts with the page itself (a <link rel="preload"> in <head>), not once React has
+  // hydrated: when the effect below adds them, they are already in the cache, so they run straight away.
+  // Only the download moves earlier; when and in what order they run is unchanged.
+  for (const item of scripts) {
+    if (typeof item === 'string') preload(item, { as: 'script', fetchPriority: 'low' });
+    else preload(item.src, { as: 'script', integrity: item.integrity, crossOrigin: item.crossOrigin, fetchPriority: 'low' });
+  }
+
   useEffect(() => {
     const w = window as unknown as { __momentoLegacy?: boolean };
     if (w.__momentoLegacy) return; // run once per page load
@@ -68,19 +77,14 @@ export default function LegacyScripts({ scripts, start }: { scripts: LegacyScrip
       return winAdd(type, fn as EventListener, opts);
     }) as typeof window.addEventListener;
 
-    // ---- the page's own code first, as on the original page ----
-    if (start) { try { start(); } catch (err) { console.error(err); } }
-
-    // ---- load the scripts: downloaded together, executed in order ----
-    const restore = () => {
-      // The language file's start-up goes first, as it did on the original page (it was the first script there)
+    // ---- the language file's start-up first (it was the first script on the original page) ----
+    // It translates the page as hydrated and then keeps translating whatever the scripts add (its MutationObserver),
+    // so the page can be shown in its language now, instead of staying hidden until every script below has loaded.
+    {
       const englishTitle = document.title;
       (window as unknown as { __momentoI18n?: { release(): void } }).__momentoI18n?.release();
-      flush();
-      // React components that talk to the old scripts (window.Momento) start listening now: see lib/legacy.ts
-      markLegacyReady();
-      // i18n.js translates the tab title once, when the page is ready. Next.js refreshes its own <title> a moment
-      // later and puts the English one back, so if the title was translated, keep it that way for a few seconds.
+      // i18n.js translates the tab title once. Next.js refreshes its own <title> a moment later and puts the English
+      // one back, so if the title was translated, keep it that way for a few seconds.
       const translatedTitle = document.title;
       if (translatedTitle !== englishTitle) {
         const keep = new MutationObserver(() => {
@@ -90,6 +94,16 @@ export default function LegacyScripts({ scripts, start }: { scripts: LegacyScrip
         setTimeout(() => keep.disconnect(), 10000);
       }
       document.documentElement.classList.remove('i18n-pending'); // translated: show the page
+    }
+
+    // ---- the page's own code, as on the original page ----
+    if (start) { try { start(); } catch (err) { console.error(err); } }
+
+    // ---- load the scripts: downloaded together, executed in order ----
+    const restore = () => {
+      flush();
+      // React components that talk to the old scripts (window.Momento) start listening now: see lib/legacy.ts
+      markLegacyReady();
       // keep the shim a moment longer so listeners added from inside the scripts' own timers are covered too
       setTimeout(() => {
         document.addEventListener = docAdd as typeof document.addEventListener;

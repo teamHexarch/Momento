@@ -549,6 +549,9 @@
        appear together, so "Needs you" never arrives late and pushes Groups and Events down the page. The
        groups' loading panel holds the place meanwhile. (Never longer than 2.5s: see "Settling" in the script) */
     .page.is-settling :is(#soNeed, #groups, #events) { visibility: hidden; }
+    /* "Needs you" takes no room at all until then: hidden but still in the flow, its invites arriving first pushed the
+       groups' loading panel (the one thing showing) down the page */
+    .page.is-settling #soNeed { display: none; }
     .page.is-settling #groups .gr-loading { visibility: visible; }
 
     :root[data-theme="dark"] .gr-status.is-error { color: #F0A3A3; }

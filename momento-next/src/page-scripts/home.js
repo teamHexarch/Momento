@@ -34,14 +34,10 @@ export default function start() {
       img.loading = 'lazy';
     }
 
-    // Decorative QR pattern (not a real, scannable code)
+    // The QR card holds a real, scannable code for https://hexarch.org/?book (25 modules, error correction M, drawn
+    // once from assets/vendor/qrcode.js). Scanning it with a phone opens the home page with the photobook already open
     (() => {
-      const N = 25; let cells = '', seed = 7;
-      const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-      const finder = (x, y) => `<path d="M${x} ${y}h7v7h-7zM${x + 1} ${y + 1}v5h5v-5z" fill-rule="evenodd"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3"/>`;
-      const inFinder = (x, y) => (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
-      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!inFinder(x, y) && rand() > 0.52) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
-      const art = `<g fill="#2E2C3A">${finder(0, 0)}${finder(N - 7, 0)}${finder(0, N - 7)}${cells}</g>`;
+      const art = `<g fill="#2E2C3A"><path d="M0 0h7v1h-7zM11 0h1v1h-1zM13 0h1v1h-1zM18 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h3v1h-3zM13 1h1v1h-1zM16 1h1v1h-1zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM8 2h1v1h-1zM10 2h1v1h-1zM12 2h1v1h-1zM16 2h1v1h-1zM18 2h1v1h-1zM20 2h3v1h-3zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h1v1h-1zM12 3h2v1h-2zM15 3h2v1h-2zM18 3h1v1h-1zM20 3h3v1h-3zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM9 4h2v1h-2zM12 4h1v1h-1zM16 4h1v1h-1zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM10 5h2v1h-2zM13 5h2v1h-2zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h7v1h-7zM8 7h1v1h-1zM10 7h3v1h-3zM14 7h3v1h-3zM0 8h1v1h-1zM6 8h1v1h-1zM8 8h4v1h-4zM13 8h1v1h-1zM17 8h2v1h-2zM21 8h3v1h-3zM4 9h2v1h-2zM8 9h1v1h-1zM10 9h2v1h-2zM13 9h4v1h-4zM19 9h5v1h-5zM1 10h1v1h-1zM6 10h1v1h-1zM8 10h1v1h-1zM10 10h1v1h-1zM12 10h4v1h-4zM17 10h2v1h-2zM21 10h1v1h-1zM23 10h2v1h-2zM0 11h2v1h-2zM3 11h2v1h-2zM7 11h1v1h-1zM9 11h2v1h-2zM12 11h1v1h-1zM14 11h1v1h-1zM17 11h2v1h-2zM20 11h2v1h-2zM24 11h1v1h-1zM0 12h1v1h-1zM2 12h3v1h-3zM6 12h2v1h-2zM9 12h2v1h-2zM12 12h1v1h-1zM14 12h1v1h-1zM16 12h1v1h-1zM18 12h2v1h-2zM24 12h1v1h-1zM0 13h1v1h-1zM4 13h1v1h-1zM7 13h1v1h-1zM10 13h1v1h-1zM13 13h5v1h-5zM19 13h1v1h-1zM23 13h1v1h-1zM0 14h1v1h-1zM2 14h1v1h-1zM4 14h1v1h-1zM6 14h1v1h-1zM8 14h1v1h-1zM11 14h6v1h-6zM19 14h3v1h-3zM23 14h2v1h-2zM0 15h1v1h-1zM7 15h5v1h-5zM15 15h2v1h-2zM18 15h2v1h-2zM21 15h2v1h-2zM24 15h1v1h-1zM0 16h1v1h-1zM2 16h1v1h-1zM5 16h3v1h-3zM9 16h1v1h-1zM11 16h10v1h-10zM22 16h1v1h-1zM8 17h1v1h-1zM10 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM20 17h1v1h-1zM0 18h7v1h-7zM9 18h1v1h-1zM11 18h1v1h-1zM14 18h1v1h-1zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h1v1h-1zM24 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM9 19h4v1h-4zM15 19h2v1h-2zM20 19h1v1h-1zM23 19h2v1h-2zM0 20h1v1h-1zM2 20h3v1h-3zM6 20h1v1h-1zM9 20h12v1h-12zM22 20h1v1h-1zM0 21h1v1h-1zM2 21h3v1h-3zM6 21h1v1h-1zM9 21h3v1h-3zM13 21h2v1h-2zM17 21h2v1h-2zM23 21h2v1h-2zM0 22h1v1h-1zM2 22h3v1h-3zM6 22h1v1h-1zM9 22h1v1h-1zM13 22h3v1h-3zM21 22h2v1h-2zM24 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM9 23h3v1h-3zM14 23h3v1h-3zM18 23h3v1h-3zM24 23h1v1h-1zM0 24h7v1h-7zM8 24h3v1h-3zM12 24h1v1h-1zM16 24h1v1h-1zM18 24h1v1h-1zM21 24h1v1h-1zM24 24h1v1h-1z"/></g>`;
       document.getElementById('qrHero').innerHTML = art;
       const qrStep = document.getElementById('qrStep');   // the QR in How it works
       if (qrStep) qrStep.innerHTML = art;
@@ -151,8 +147,16 @@ export default function start() {
             sizeCanvas();
           }, 150);
         });
+        // While the page scrolls, the silk holds still (it's behind everything, so nobody sees it pause): the frame goes
+        // to the scrolling instead, and it carries on from the same place ~150 ms after scrolling stops
+        let scrolling = false, scrollTimer = 0, drawn = false;
+        addEventListener('scroll', () => {
+          scrolling = true; clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(() => { scrolling = false; }, 150);
+        }, { passive: true });
         renderFluid = (dt) => {
           const k = (rate) => 1 - Math.exp(-dt * rate);
+          if (scrolling && drawn && !flow.dirty && Math.abs(THEME.target - THEME.a) <= .002 && Math.abs(THEME.target - THEME.b) <= .002) return;
           if (!still) flow.t += dt * 0.6;
           // Ease toward the chosen theme (instantly with reduced motion)
           const fade = still ? 1 : k(3.2), glow = still ? 1 : k(1.5);
@@ -172,6 +176,8 @@ export default function start() {
           gl.uniform3fv(u.c0, mixPal(0, THEME.a)); gl.uniform3fv(u.c1, mixPal(1, THEME.a));
           gl.uniform3fv(u.c2, mixPal(2, THEME.a)); gl.uniform3fv(u.c3, mixPal(3, THEME.b));
           gl.drawArrays(gl.TRIANGLES, 0, 3);
+          // Shown once there is something drawn: before that an opaque canvas is blank (glass.css, canvas.bg)
+          if (!drawn) { drawn = true; canvas.classList.add('is-drawn'); }
         };
       }
     }
@@ -327,11 +333,13 @@ export default function start() {
                  photos: [{ p: 2, x: 50, y: 56, w: 34, r: '3/4', rot: -4, mount: 'polaroid', caption: 'Your shot is next', by: 'You?', at: 'soon', note: 'this could be yours' }] },
       },
       {
-        // Signed out: empty slots. Signed in, fillYourSpread() swaps in your own album (see the end of this script)
-        left: { type: 'text', no: '05', title: 'This page is yours',
-                body: 'Start an album, put the code out, and every photo your guests take lands right here.',
-                button: 'Start your album', href: 'auth',
-                photos: [{ slot: true, x: 18, y: 64, w: 46, r: '4/3', rot: -3, mount: 'tape', caption: 'your first photo' }] },
+        // Signed out: asks the visitor to sign in (the sign-in window also opens by itself, see askToSignIn). Signed in,
+        // fillYourSpread() swaps in your own album (see the end of this script)
+        left: { type: 'text', no: '05', title: 'Sign in to add your photos',
+                body: 'Everyone at the event can see this album. Sign in to add yours, or create an account if you’re new.',
+                button: 'Sign in', href: 'auth:login',
+                button2: 'New here? Create an account', href2: 'auth:signup',
+                photos: [{ slot: true, x: 20, y: 71, w: 40, r: '4/3', rot: -3, mount: 'tape', caption: 'your first photo' }] },
         right: { type: 'photos', photos: [
                 { slot: true, x: 8, y: 6, w: 54, r: '4/3', rot: -2, mount: 'corners', caption: 'your shot is next' },
                 { slot: true, x: 62, y: 11, w: 31, r: '3/4', rot: 3, mount: 'tape', caption: 'the toast?' },
@@ -409,6 +417,7 @@ export default function start() {
           <p class="reveal" style="--i:2">${esc(p.body)}</p>
           ${p.hint ? `<span class="flip-hint reveal" style="--i:3">${esc(p.hint)}</span>` : ''}
           ${p.button ? `<button class="page-cta reveal" type="button" tabindex="-1" style="--i:3" data-href="${esc(p.href)}">${esc(p.button)}</button>` : ''}
+          ${p.button2 ? `<button class="page-cta is-quiet reveal" type="button" tabindex="-1" style="--i:4" data-href="${esc(p.href2)}">${esc(p.button2)}</button>` : ''}
         </div>`;
     }
 
@@ -648,10 +657,13 @@ export default function start() {
       for (const f of floaters) { f.cx = f.el.offsetLeft + f.el.offsetWidth / 2; f.cy = f.el.offsetTop + f.el.offsetHeight / 2; }
     }
     // Phones: the headline and the QR card are stacked, so the pair is centred in the space under the header
+    // (Also run before the first paint by FIT_HERO in src/components/home/Hero.tsx: keep the two in step)
     function fitHero() {
       if (innerWidth > 600) { ['--hero-top', '--qr-top', '--qr-ty'].forEach((p) => stage.style.removeProperty(p)); return; }
       const card = document.getElementById('qrCard');
-      const head = document.getElementById('header').getBoundingClientRect().bottom + 8;
+      // The header's layout box, not where it is drawn: measured while the header was still easing in on its entrance, the
+      // hero was placed by wherever the header happened to be at that moment (up to ~20px lower, then never put back)
+      const header = document.getElementById('header'), head = header.offsetTop + header.offsetHeight + 8;
       const h1 = heroLeft.offsetHeight, h2 = card.offsetHeight, gap = 28;
       const avail = stage.clientHeight - head - 16;
       const start = head + Math.max(0, (avail - (h1 + gap + h2)) / 2);
@@ -719,8 +731,7 @@ export default function start() {
     // page glides on so it flips open onto its first photos
     const qrCard = document.getElementById('qrCard');
     let scanState = 'idle', popAt = 0;
-    // "Album found" is followed by sign up / log in; whatever the visitor chooses (or if
-    // they just close it), the album then pops out
+    // "Album found" is followed straight by the album. Signing in comes later, on its last page
     const wait = (ms) => (still ? 0 : ms);
     function scan() {
       if (scanState !== 'idle') return;
@@ -728,7 +739,7 @@ export default function start() {
       qrCard.classList.add('is-scanning');
       setTimeout(() => {
         qrCard.classList.add('is-found');
-        setTimeout(() => window.openAuth({ fromScan: true, onDone: revealAlbum }), wait(700));
+        setTimeout(revealAlbum, wait(700));
       }, wait(1100));
     }
     function revealAlbum() {
@@ -796,6 +807,16 @@ export default function start() {
       bookTo(rest(i), 1400);
     }
     syncArrows();
+    // The code on the card is a real one for hexarch.org/?book: a phone that scans it lands here with the book
+    // already open (once the intro has played, if it's playing). The address is tidied so a refresh is normal
+    if (new URLSearchParams(location.search).has('book')) {
+      const u = new URL(location.href);
+      u.searchParams.delete('book');
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+      const open = () => { if (scanState === 'idle') revealAlbum(); };
+      if (document.documentElement.classList.contains('intro-on')) document.addEventListener('momento:intro-end', open, { once: true });
+      else open();
+    }
     document.querySelector('.page-arrows').addEventListener('click', (e) => {
       const b = e.target.closest('.pa');
       if (b) goSpread(spread + Number(b.dataset.dir));
@@ -824,15 +845,17 @@ export default function start() {
     // pages on show (the hidden ones still have boxes). Buttons first, then prints; a click anywhere else on
     // the open book turns the page toward the side that was clicked.
     const shownFaces = () => (stage.classList.contains('is-reading') && activeSpread >= 0 ? spreadFaces[activeSpread] : []);
-    const inBox = (el, x, y) => { const r = el.getBoundingClientRect(); return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
-    function hitAt(x, y, sel) {
+    const inBox = (el, x, y, m = 0) => { const r = el.getBoundingClientRect(); return r.width > 0 && x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m; };
+    // `give`: extra room around the element that is already hovered, so a button that bobs or tilts under a steady
+    // cursor (or rises when hovered) doesn't drop the hover at its edge
+    function hitAt(x, y, sel, give = 0) {
       let hit = null;   // (the last match is the one drawn on top)
-      for (const face of shownFaces()) for (const el of face.querySelectorAll(sel)) if (inBox(el, x, y)) hit = el;
+      for (const face of shownFaces()) for (const el of face.querySelectorAll(sel)) if (inBox(el, x, y, el === hoverEl ? give : 0)) hit = el;
       return hit;
     }
     const BTN = '.page-cta, .keep:not(.is-empty) .ks-btns .kb, .keep.is-empty .ks-done .kb';
     const PRINT = '[data-flip]:not(.is-pending)';
-    const pick = (x, y) => hitAt(x, y, BTN) || hitAt(x, y, PRINT);
+    const pick = (x, y, give = 0) => hitAt(x, y, BTN, give) || hitAt(x, y, PRINT, give);
 
     // Only what's on the open spread can be tabbed to
     function syncFocusable() {
@@ -849,14 +872,21 @@ export default function start() {
       el?.classList.add('is-hover');
       stage.style.cursor = el ? 'pointer' : '';
     }
+    // The book drifts and tilts toward the pointer, so what is under a steady cursor keeps changing: look again a few
+    // times a second while the mouse is over it. Only this matching drives the hover look (the buttons have no CSS
+    // :hover of their own, which flickers at their edge as they move)
+    const HOVER_GIVE = 8;
+    let mouseOver = false;
+    const lookUnderMouse = () => setHover(drag ? null : pick(hx, hy, HOVER_GIVE));
     stage.addEventListener('pointermove', (e) => {
       if (e.pointerType !== 'mouse') return;
-      hx = e.clientX; hy = e.clientY;
+      hx = e.clientX; hy = e.clientY; mouseOver = true;
       if (hoverQueued) return;
       hoverQueued = true;
-      requestAnimationFrame(() => { hoverQueued = false; setHover(drag ? null : pick(hx, hy)); });
+      requestAnimationFrame(() => { hoverQueued = false; lookUnderMouse(); });
     });
-    stage.addEventListener('pointerleave', () => setHover(null));
+    stage.addEventListener('pointerleave', () => { mouseOver = false; setHover(null); });
+    setInterval(() => { if (mouseOver && !document.hidden && stage.classList.contains('is-reading')) lookUnderMouse(); }, 120);
 
     // Turning a print over: it squeezes to its edge, swaps to the other side and springs back
     function flipPhoto(fig, to = !fig.classList.contains('is-flipped')) {
@@ -878,7 +908,9 @@ export default function start() {
     function pressButton(btn) {
       if (btn.classList.contains('kb')) return sortTop(btn.dataset.act);
       const href = btn.dataset.href;
-      if (href === 'auth') return window.openAuth?.({ mode: 'signup' });
+      // The sign-in window, worded for someone who has come to add photos to this album
+      if (href === 'auth' || href === 'auth:signup') return window.openAuth?.({ mode: 'signup', fromScan: true });
+      if (href === 'auth:login') return window.openAuth?.({ mode: 'login', fromScan: true });
       if (href.startsWith('#')) {
         const target = document.querySelector(href);
         if (target) scrollTo({ top: target.getBoundingClientRect().top + scrollY, behavior: still ? 'auto' : 'smooth' });
@@ -1060,7 +1092,19 @@ export default function start() {
       if (i === 0) resetArrivals();
       if (i === keepSpread) resetKeep(false);
     }
+    // Reaching the last page signed out opens the sign-in window after a moment, once per visit. Turning away first cancels it
+    let signInTimer = 0, signInAsked = false;
+    async function askToSignIn() {
+      const M = window.Momento;
+      if (signInAsked || activeSpread !== n - 1) return;
+      try { await M.sessionReady; } catch (err) { /* treated as signed out */ }
+      if (signInAsked || activeSpread !== n - 1 || M.account?.get?.() || document.querySelector('dialog[open]')) return;
+      signInAsked = true;
+      window.openAuth?.({ mode: 'login', fromScan: true });
+    }
     function spreadChanged(prev, s) {
+      clearTimeout(signInTimer);
+      if (s === n - 1 && !signInAsked) signInTimer = setTimeout(askToSignIn, wait(1000));
       setHover(null);
       syncFocusable();
       if (prev >= 0) {
@@ -1089,7 +1133,7 @@ export default function start() {
       const count = Number.isFinite(pick.photos) ? pick.photos : shots.length;
       const left = { ...last.left, no: '05', title: pick.name || 'Your album',
                      body: `${count} photo${count === 1 ? '' : 's'} so far, from everyone who was there. Every new one lands right here.`,
-                     button: 'Open album', href: `albums#album=${encodeURIComponent(pick.id)}`,
+                     button: 'Open album', href: `albums#album=${encodeURIComponent(pick.id)}`, button2: '', href2: '',
                      photos: last.left.photos.map(fill) };
       const right = { ...last.right, photos: last.right.photos.map(fill) };
       [left, right].forEach((page, i) => {
@@ -1593,7 +1637,10 @@ export default function start() {
     // ---- Intro (once per tab): the glyph appears, the sunset "o" rises and slides along, and the letters
     // of the name appear behind it. The logo then lands in the header, the QR code settles in on its own
     // (its code blooming out from the middle), and the headline rises ----
-    document.addEventListener('DOMContentLoaded', () => window.Momento.intro(async (I) => {
+    // It starts as soon as this code runs (right after hydration), not on the replayed DOMContentLoaded, which only
+    // comes once every shared script has downloaded: on a slow connection the veil sat there, blank, until then.
+    // It only drives its own elements, so it needs nothing from those scripts.
+    const runIntro = () => window.Momento.intro(async (I) => {
       const $ = (s, r = document) => r.querySelector(s);
       const lock = $('#introLock'), glyph = $('#ilGlyph'), word = $('#ilWord'), sun = $('#ilSun');
       const letters = [...word.querySelectorAll('.ltr')];
@@ -1664,5 +1711,6 @@ export default function start() {
       await I.wait(1000); qr.classList.add('is-scanning');   // once the code has drawn in, the viewfinder closes in, like a lock
       await I.wait(420); qr.classList.remove('is-scanning');
       await Promise.all(flights);
-    }));
+    });
+    if (window.Momento?.intro) runIntro(); else document.addEventListener('DOMContentLoaded', runIntro);
 }

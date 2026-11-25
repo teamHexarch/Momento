@@ -1,4 +1,8 @@
-# momento-next
+# Momento website (Next.js)
+
+> **In this repo:** `Client/` is the Next.js source. GitHub builds it and publishes `Client/out` to hexarch.org
+> (`.github/workflows/pages.yml`). The old HTML site is on the `html-site` branch. To run the website through the
+> local server (port 4000), build it first (`npm run build` here) and start the server with `CLIENT_DIR=../Client/out`.
 
 The Momento website, ported page by page to Next.js (App Router, TypeScript, plain CSS).
 The goal of the port is that every page looks and behaves exactly like the original static site.

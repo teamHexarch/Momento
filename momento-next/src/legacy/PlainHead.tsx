@@ -1,4 +1,4 @@
-import { EXTENSION_ATTR_GUARD, THEME_COLOR_SYNC, i18nLoader } from './headScripts';
+import { EXTENSION_ATTR_GUARD, SPECULATION_RULES, THEME_COLOR_SYNC, i18nLoader } from './headScripts';
 
 // "Same theme choice as the rest of the site" (the small script Terms, Privacy and the 404 page carry)
 const PLAIN_THEME = `
@@ -25,6 +25,7 @@ export default function PlainHead({ translates }: { translates: boolean }) {
       <script dangerouslySetInnerHTML={{ __html: PLAIN_THEME }} suppressHydrationWarning />
       {/* The tags are made by this script, at the end of <head> (see SharedHead) */}
       <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SYNC }} suppressHydrationWarning />
+      <script type="speculationrules" dangerouslySetInnerHTML={{ __html: SPECULATION_RULES }} suppressHydrationWarning />
       {translates && <script dangerouslySetInnerHTML={{ __html: i18nLoader(false) }} suppressHydrationWarning />}
     </>
   );

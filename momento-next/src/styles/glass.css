@@ -246,6 +246,11 @@ html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(
 :root:root { background-color: #E7EAF4; }
 :root:root[data-theme="dark"] { background-color: #0C0B12; }
 :root[data-theme="dark"] .grain { opacity: .14; }
+/* The silk background fades in over the page colour once its first frame is drawn (the page scripts add .is-drawn),
+   instead of the plain colour switching to silk at once, or a blank canvas showing for a frame */
+canvas.bg { opacity: 0; transition: opacity .5s ease; }
+canvas.bg.is-drawn { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { canvas.bg { transition: none; } }
 
 /* The soft veil behind the fixed header (each page decides when it shows; this is only its colour).
    Eased over five stops so it melts into the page with no visible bottom edge, in both themes. */
@@ -339,6 +344,25 @@ html[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, rgba(
   .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
   :is(.nav-social, .nav-settings) { padding-left: .46rem !important; padding-right: .46rem !important; }
   :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
+}
+/* Home page, signed out: Log in and Sign up share one pill (home.css), which is wider than the lone Sign up was,
+   so the header takes its compact size sooner, and below 410px Home's sections arrow goes as it does at 360px.
+   Same declarations as the two blocks above; :where() keeps their specificity, so they cascade the same way.
+   Not with html.has-account (signed in earlier in this tab): the pill is already hidden from the first paint (home.css)
+   before React marks it [hidden], and the header would otherwise shrink and then spring back */
+@media (max-width: 480px) {
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) { padding-left: 8px !important; padding-right: 8px !important; gap: .25rem !important; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .brand svg.glyph { width: 1.45rem; height: 1.45rem; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav { gap: 0 !important; padding: .22rem !important; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-item { padding: .45rem .55rem !important; font-size: .78rem !important; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-caret { width: 1.55rem; height: 1.55rem; margin-right: .05rem; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) :is(.nav-social, .nav-settings) svg { width: 16px; height: 16px; }
+}
+@media (max-width: 410px) {
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) :is(.nav-home, .nav-albums, .nav-social, .nav-settings):not([aria-current="page"]) { padding-left: .5rem !important; padding-right: .5rem !important; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) :is(.nav-home[aria-current="page"], .nav > .nav-item[aria-current="page"]) { padding-left: .6rem !important; padding-right: .7rem !important; gap: .3rem; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-split > .nav-caret { display: none; }
+  :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-split:has(> .nav-home[aria-current="page"]) > .nav-home { padding-right: .7rem !important; }
 }
 @media (max-width: 340px) {
   .nav-item { padding: .45rem .42rem !important; }
@@ -669,6 +693,10 @@ html.intro-on #intro { display: block; }
   position: absolute; top: .25rem; bottom: .25rem; left: .25rem; width: calc((100% - .5rem) / 3); border-radius: var(--r-pill);
   translate: calc(var(--i, 0) * 100%) 0; transition: translate .5s var(--out);
 }
+/* Until the page has drawn the choice (no --i yet), the pill already sits on the saved theme (data-theme-pref is set
+   before the first paint), so it doesn't slide across from Light on every page load. (Every switch: Light, Dark, System) */
+:root[data-theme-pref="dark"] .acct-seg:not([style*="--i"]) > .acct-seg-pill { translate: 100% 0; }
+:root[data-theme-pref="system"] .acct-seg:not([style*="--i"]) > .acct-seg-pill { translate: 200% 0; }
 .acct-seg button {
   position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: .35rem; padding: .5rem .2rem; border: none; border-radius: 100px;
   background: none; color: var(--slate); font: 600 .8rem var(--font-main); cursor: pointer; transition: color .25s ease;
@@ -788,19 +816,28 @@ body { overflow-wrap: break-word; }
 @view-transition { navigation: auto; }
 :root:not(.intro-on) .header { view-transition-name: site-header; }
 :root:not(.intro-on) .nav-split.active, :root:not(.intro-on) .nav > .nav-item[aria-current="page"] { view-transition-name: nav-current; }
-:root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current) { animation-duration: .5s; animation-timing-function: cubic-bezier(.34, 1.2, .64, 1); }
-:root:not(.theming)::view-transition-old(root) { animation: pt-out .26s cubic-bezier(.5, 0, 1, 1) both; }
-:root:not(.theming)::view-transition-new(root) { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) .06s both; }
-@keyframes pt-out { to { opacity: 0; transform: translateY(-14px) scale(.985); } }
-@keyframes pt-in { from { opacity: 0; transform: translateY(18px); } }
-/* The page rises in as a whole, so its title (.rise on each page) is already in place: one rise, not two */
-:root.vt-in .rise { translate: 0 0; transition: none; }
+/* The header is the same on every page, so it simply stays: no cross-fade of two copies (which ghosts), and no
+   overshoot (which wobbles when the two headers differ by a pixel). The current tab glides to its new place. */
+:root:not(.theming)::view-transition-group(site-header), :root:not(.theming)::view-transition-group(nav-current) { animation-duration: .42s; animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+:root:not(.theming)::view-transition-old(site-header) { display: none; }
+:root:not(.theming)::view-transition-new(site-header) { animation: none; }
+/* One calm motion: the old page fades away, the new one fades in with a short rise just after */
+:root:not(.theming)::view-transition-old(root) { animation: pt-out .18s cubic-bezier(.4, 0, 1, 1) both; }
+:root:not(.theming)::view-transition-new(root) { animation: pt-in .38s cubic-bezier(.16, 1, .3, 1) .08s both; }
+@keyframes pt-out { to { opacity: 0; } }
+@keyframes pt-in { from { opacity: 0; transform: translateY(8px); } }
+/* The browser takes its picture of the new page before the page scripts mark it .is-ready, while the opening
+   pieces (.intro, .s-group, the title's .rise) are still hidden. Arriving through the page-to-page motion, they
+   start in place instead, so the page rises in once, whole, rather than rising half-empty and then filling in. */
+:root.vt-in :is(.intro, .s-group, .rise) { opacity: 1; translate: 0 0; transition: none; }
 /* Where that isn't available, the page fades and lifts away just before the next one loads (see shared.js) */
-html.is-leaving .page-wrap { animation: pt-out .24s cubic-bezier(.5, 0, 1, 1) both; }
+html.is-leaving .page-wrap { animation: pt-out .2s cubic-bezier(.4, 0, 1, 1) both; }
 html.is-leaving .header { opacity: 0; transition: opacity .22s ease; }
 /* Pages opened as files: the header (the same on every page) stays put, and the next page rises in */
 html.pt-file.is-leaving .header { opacity: 1; }
-html.is-arriving .page-wrap { animation: pt-in .55s cubic-bezier(.16, 1, .3, 1) both; }
+html.is-arriving .page-wrap { animation: pt-in .38s cubic-bezier(.16, 1, .3, 1) both; }
+/* Pages with and without a scrollbar are the same width, so nothing shifts sideways between them */
+html { scrollbar-gutter: stable; }
 /* Phones: one motion only. The header and the nav are simply there on the next page (the current tab
    swaps straight to its new place, without gliding or resizing across), and the page swaps with a
    single short fade instead of sinking away and rising in */
@@ -1298,3 +1335,9 @@ html .header { top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-lef
    assets/inbox.js puts the bell in (.has-inbox), an empty space the bell's size keeps the chip where it will be */
 :root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden]) { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
 :root.bell-ready [data-acct-host]:not(.has-inbox):not([hidden])::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }
+
+/* Known to be signed out this tab (html.is-guest, set before the first paint): the empty "You" chip isn't shown first,
+   only to be swapped for "Log in" (assets/extras.js, guestHeader) a moment later. The button fades in when it arrives */
+:root.is-guest .me-slot[data-acct-always] > .acct { visibility: hidden; }
+.me-slot > .nl-login { animation: slot-in .3s ease both; }
+@keyframes slot-in { from { opacity: 0; } }

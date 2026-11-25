@@ -509,8 +509,12 @@
       box-shadow: 0 6px 16px rgba(46,44,58,.3);
       transition: transform .35s var(--spring), background-color .3s ease;
     }
-    @media (hover: hover) { .page-cta:hover { transform: translateY(-1px); background: var(--copper); } }
+    /* Hover is the script's own (.is-hover, matched to the page's moving box), not :hover, which flickers as the book moves */
+    .page-cta.is-hover { transform: translateY(-1px); background: var(--copper); }
     .page-cta:active { transform: scale(.98); }
+    /* The lesser choice beside a button: a plain link under it */
+    .page-cta.is-quiet { margin-top: 2.2cqw; padding: 1.6cqw 0; background: none; box-shadow: none; border-radius: 0; color: var(--dusk); font-weight: 600; font-size: 3.5cqw; text-decoration: underline; text-underline-offset: .22em; text-decoration-thickness: 1px; }
+    .page-cta.is-quiet.is-hover { background: none; color: var(--copper); transform: none; }
 
     /* Hand-placed photos: corners, washi tape, or a polaroid frame */
     .collage { position: absolute; inset: 0; pointer-events: none; }
@@ -593,8 +597,7 @@
     }
     .kb svg { width: 45%; height: 45%; }
     .kb.is-hover { transform: translateY(-.5cqw) scale(1.06); }
-    @media (hover: hover) { .kb:hover { transform: translateY(-.5cqw) scale(1.06); } }
-    .kb-keep.is-hover, .kb-keep:hover { background: var(--dusk); color: #fff; }
+    .kb-keep.is-hover { background: var(--dusk); color: #fff; }
     .kb:active, .kb.is-press { transform: scale(.92); }
     .kb:focus { outline: none; }
     .kb:focus-visible { outline: 2px solid var(--dusk); outline-offset: .8cqw; }
@@ -983,20 +986,68 @@
     .auth > * { flex: none; white-space: nowrap; }
     .auth-out { display: flex; align-items: center; gap: .35rem; }
     .auth-out[hidden], .auth-in[hidden] { display: none; }
+    /* Signed in earlier in this tab (html.has-account, set before the first paint, kept up to date by AccountProvider):
+       the chip shows from the start instead of Log in / Sign up first. With the bell's place held (glass.css, .bell-ready) */
+    :root.has-account .auth-out { display: none; }
+    /* (laid out as the bell and chip are once shown: a row, assets/inbox.js. !important: over the page's [hidden] rule, line 1.
+       The bell can arrive while the area is still marked [hidden]; laid out as a block, it stacked above the chip and the
+       header grew for a moment, moving the hero with it) */
+    :root.has-account .auth-in[hidden] { display: flex !important; align-items: center; justify-content: flex-end; gap: .5rem; }
+    :root.has-account .auth-in.inbox-compact[hidden] { gap: 0; }
+    :root.has-account.bell-ready .auth-in[hidden]:not(.has-inbox)::before { content: ""; flex: none; width: 2.7rem; height: 2.7rem; }
     .auth .btn { min-height: 2.75rem; padding: 0 1.2rem; font-size: .88rem; }
     @media (max-width: 900px) {
-      .auth-login { display: none; }
+      .auth-login { padding: .6rem .85rem; }
       .auth .btn { min-height: 2.6rem; padding: 0 1.2rem; font-size: .9rem; line-height: 1; }   /* the label sits comfortably inside, not pressed to the edges */
     }
+    /* Tablets and desktops: Log in is a pane of clear glass beside the Sign up pearl, the same height
+       (on phones the pill they share is the glass) */
+    @media (min-width: 601px) {
+      .auth-login { display: inline-flex; align-items: center; min-height: 2.75rem; padding-top: 0; padding-bottom: 0;
+        --gb-sheen: var(--gb-clear-sheen); --gb-fill: var(--gb-clear-fill); --gb-rim: var(--gb-clear-rim);
+        --gb-shadow: var(--gb-clear-shadow); --gb-ink: var(--dusk); --gb-lift: var(--gb-clear-lift); }
+    }
+    @media (min-width: 601px) and (max-width: 900px) { .auth-login { min-height: 2.6rem; } }
+    @media (min-width: 681px) { .auth-out { gap: .5rem; } }
+    /* Phones, signed out: Log in and Sign up share one glass pill, split like Home and its arrow,
+       and the same height as the nav beside it */
+    @media (max-width: 600px) {
+      .auth-out { gap: 0; padding: .22rem; border: 1.5px solid transparent; border-radius: var(--r-pill);
+        background: var(--g-regular) padding-box, var(--g-rim) border-box; box-shadow: var(--g-sh-pill); }
+      .auth-out .auth-login { display: inline-flex; align-items: center; min-height: 2.35rem; padding: 0 .6rem 0 .75rem; font-size: .82rem; }
+      .auth-out .btn { min-height: 2.35rem; padding: 0 .8rem; font-size: .82rem; }
+    }
+    /* (the header goes compact for it at the same widths: see "Home page, signed out" in glass.css) */
+    @media (max-width: 480px) {
+      .auth-out .auth-login { min-height: 2.05rem; padding: 0 .4rem 0 .6rem; font-size: .78rem; }
+      .auth-out .btn { min-height: 2.05rem; padding: 0 .6rem; font-size: .78rem; }
+    }
+    @media (max-width: 370px) {
+      .auth-out { padding: .18rem; }
+      .auth-out .auth-login { padding: 0 .3rem 0 .5rem; font-size: .76rem; }
+      .auth-out .btn { padding: 0 .5rem; font-size: .76rem; }
+    }
+    /* Under 360px there's no room for both: Sign up alone, as before (its window has a Log in tab) */
+    @media (max-width: 359px) {
+      .auth-out { padding: 0; border: 0; background: none; box-shadow: none; }
+      .auth-out .auth-login { display: none; }
+      .auth-out .btn { min-height: 2.5rem; padding: 0 .85rem; font-size: .85rem; }
+    }
+    /* Small tablets, signed out: the nav's tabs and Log in sit a little closer so Sign up keeps its margin */
+    @media (min-width: 601px) and (max-width: 680px) {
+      :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) { gap: .35rem; }
+      :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-item { padding-left: .7rem; padding-right: .7rem; }
+      :where(:root:not(.has-account) .header:has(#authOut:not([hidden]))) .nav-split .nav-home { padding-right: .3rem; }
+      .auth-login { padding-left: .6rem; padding-right: .6rem; }
+    }
     @media (max-width: 360px) {
-      .auth .btn { min-height: 2.5rem; padding: 0 .85rem; font-size: .85rem; }
       .hero-left .hero-cta .btn { padding-left: .55rem; padding-right: .55rem; font-size: .84rem; white-space: nowrap; }   /* both labels whole on the narrowest phones */
     }
 
     .auth-dialog { padding: 0; border: none; background: none; overflow: visible; max-width: none; max-height: none; }
     /* reCAPTCHA's picture puzzle, moved into the window (see prepareCaptcha) */
     .auth-dialog > .rc-puzzle { top: 12px !important; left: 0 !important; right: 0 !important; width: 100% !important; }
-    #signupCaptcha { display: flex; justify-content: center; min-height: 78px; margin: .2rem 0 .6rem; }
+    #signupCaptcha { display: flex; justify-content: center; min-height: 78px; }
     .auth-dialog[open] .auth-card { animation: auth-in .45s var(--spring); }
     @keyframes auth-in { from { opacity: 0; scale: .94; translate: 0 12px; } }
     .auth-card {
@@ -1060,12 +1111,18 @@
     .auth-skip:hover { color: var(--dusk); }
 
 
-    /* Agreeing to the Terms and Privacy Policy (sign-up only; the server records it) */
-    .auth-consent { display: flex; align-items: flex-start; gap: .6rem; margin: .3rem 0 .8rem; color: var(--slate); font-size: .85rem; line-height: 1.45; cursor: pointer; }
-    .auth-consent input { flex: none; width: 1.1rem; height: 1.1rem; margin: .1rem 0 0; accent-color: var(--dusk); cursor: pointer; }
-    .auth-consent input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
-    .auth-consent a { color: var(--dusk); text-underline-offset: .2em; }
-    .auth-consent a:hover { text-decoration-thickness: 2px; }
+    /* Agreeing to the Terms and Privacy Policy: one line by each button that can create an account (pressing it is
+       the agreement; the server records it) */
+    .auth-legal { margin: .65rem .4rem 0; color: var(--stone); font-size: .75rem; line-height: 1.45; text-align: center; }
+    .auth-legal a, .auth-note a { color: inherit; text-decoration: underline; text-underline-offset: .2em; text-decoration-color: currentColor; }
+    .auth-legal a:hover, .auth-note a:hover { color: var(--dusk); text-decoration-thickness: 2px; }
+    .auth-legal a:focus-visible, .auth-note a:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; border-radius: 2px; }
+    /* The "I'm not a robot" box: only shown once Create account is pressed, right above the button */
+    .auth-captcha { margin: 0 0 .7rem; animation: auth-captcha-in .35s var(--spring); }
+    .auth-captcha[hidden] { display: none; }
+    .auth-captcha-hint { margin: 0 0 .5rem; color: var(--slate); font-size: .85rem; font-weight: 500; text-align: center; }
+    @keyframes auth-captcha-in { from { opacity: 0; translate: 0 6px; } }
+    @media (prefers-reduced-motion: reduce) { .auth-captcha { animation: none; } }
     .auth-note { margin: .9rem 0 0; color: var(--stone); font-size: .75rem; text-align: center; line-height: 1.45; }
     .auth-body[hidden], .auth-done[hidden], .auth-scan[hidden], .auth-skip[hidden] { display: none; }
     .auth-card { max-height: calc(100dvh - 32px); overflow-y: auto; }

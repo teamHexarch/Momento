@@ -4,6 +4,7 @@ import { pageViewport } from '@/lib/metadata';
 
 // Same order as the original page: the page's styles, then the shared glass + touch sheets
 import '@/styles/support.css';
+import '@/styles/fonts.css';   // the site's own web fonts (Inter, and Caveat on Home)
 import '@/styles/glass.css';
 import '@/styles/touch.css';
 import '@/styles/nav-extra.css';   // the header menu's Reviews link
@@ -18,7 +19,6 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
         <SharedHead
           variant="inner"
           momentoStore
-          fontsHref="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
         />
       </head>
       <body>{children}</body>

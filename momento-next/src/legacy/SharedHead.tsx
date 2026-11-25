@@ -1,6 +1,9 @@
+import { preload } from 'react-dom';
 import {
   EXTENSION_ATTR_GUARD,
+  INTER_PRELOAD,
   JSON_LD,
+  SPECULATION_RULES,
   THEME_COLOR_SYNC,
   bootScript,
   i18nLoader,
@@ -16,15 +19,15 @@ import {
  */
 export default function SharedHead({
   variant,
-  fontsHref,
+  handwriting = false,
   jsonLd = false,
   momentoStore = false,
   i18nAlways = false,
 }: {
   /** 'home' plays the intro veil on a first visit; every other page ('inner') does not */
   variant: 'home' | 'inner';
-  /** the Google Fonts stylesheet this page asks for */
-  fontsHref: string;
+  /** Home: its cards use the handwriting font (Caveat) as well as Inter (src/styles/fonts.css) */
+  handwriting?: boolean;
   /** the home page declares itself as a WebSite for search engines */
   jsonLd?: boolean;
   /** Settings and Support: the browser-side album list (window.MomentoStore) is made in <head> */
@@ -32,6 +35,9 @@ export default function SharedHead({
   /** Settings: assets/i18n.js is loaded in English too (its language menu is built from it) */
   i18nAlways?: boolean;
 }) {
+  // The fonts are this site's own files (src/styles/fonts.css); the Latin ones start downloading straight away
+  // (Inter: INTER_PRELOAD below, which skips Apple devices, where it's never used)
+  if (handwriting) preload('/assets/fonts/caveat-latin.woff2', { as: 'font', type: 'font/woff2', crossOrigin: '' });
   return (
     <>
       {process.env.NODE_ENV !== 'production' && (
@@ -42,12 +48,11 @@ export default function SharedHead({
       <script dangerouslySetInnerHTML={{ __html: bootScript(variant) }} suppressHydrationWarning />
       {momentoStore && <script src="/legacy/momento-store.js" suppressHydrationWarning />}
       {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON_LD }} suppressHydrationWarning />}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      <link href={fontsHref} rel="stylesheet" />
+      <script type="speculationrules" dangerouslySetInnerHTML={{ __html: SPECULATION_RULES }} suppressHydrationWarning />
       {/* Browser bar colour: the tags are made (and kept in step with the chosen theme) by this script, which sits
           at the end of <head> so they land after everything React rendered. */}
       <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SYNC }} suppressHydrationWarning />
+      <script dangerouslySetInnerHTML={{ __html: INTER_PRELOAD }} suppressHydrationWarning />
       {/* Last in <head> on purpose: i18n.js and its language file are written in right after this script, so they
           land after everything React rendered and can't shift it. */}
       <script dangerouslySetInnerHTML={{ __html: i18nLoader(i18nAlways) }} suppressHydrationWarning />

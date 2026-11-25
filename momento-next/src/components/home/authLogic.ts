@@ -28,58 +28,77 @@ export function setUpAuth(): () => void {
   const skip = $<HTMLButtonElement>('authSkip');
   const error = $('authError');
   const submit = $<HTMLButtonElement>('authSubmit');
-  let captchaWidget: any = null, captchaToken = '', captchaLoading: Promise<void> | null = null;
+  let captchaWidget: any = null, captchaToken = '', captchaReady: Promise<string> | null = null;
+  // Set when Create account is pressed before the box is ticked: ticking it then sends the form
+  let pendingSubmit = false;
+  const captchaStep = $('captchaStep');
   const captchaStatus = $('captchaStatus');
-  async function prepareCaptcha() {
-    if (captchaWidget !== null) return;
-    if (captchaLoading) return captchaLoading;
-    captchaLoading = (async () => {
-      captchaStatus.textContent = 'Loading security check…';
-      try {
-        // Google reCAPTCHA's "I'm not a robot" box. The public site key comes from the server.
-        const { captcha } = await api.config();
-        if (!captcha?.siteKey) throw new Error('Sign-up is temporarily unavailable. Please try again later.');
-        if (!W().grecaptcha?.render) await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script');
-          const fail = () => { clearTimeout(timer); script.remove(); reject(new Error('Security check could not load. Reopen sign-up to retry.')); };
-          const timer = setTimeout(fail, 15000);
-          W().__momentoRecaptchaReady = () => { clearTimeout(timer); resolve(); };
-          script.src = 'https://www.google.com/recaptcha/api.js?render=explicit&onload=__momentoRecaptchaReady';
-          script.async = true;
-          script.onerror = fail;
-          document.head.append(script);
-        });
-        // Its picture puzzle opens at the end of the page, which this (modal) window would cover: move it into the
-        // window as soon as it appears
-        const adopt = new MutationObserver(() => {
-          const frame = document.querySelector('body > div iframe[src*="/recaptcha/"][src*="bframe"]');
-          if (!frame) return;
-          let box: Element = frame;
-          while (box.parentElement && box.parentElement !== document.body) box = box.parentElement;
-          if (box.parentElement === document.body) { box.classList.add('rc-puzzle'); dialog.append(box); adopt.disconnect(); }
-        });
-        adopt.observe(document.body, { childList: true, subtree: true });
-        cleanup.push(() => adopt.disconnect());
-        captchaWidget = W().grecaptcha.render('signupCaptcha', {
-          sitekey: captcha.siteKey,
-          theme: M().theme?.resolved === 'dark' ? 'dark' : 'light',
-          callback: (token: string) => { captchaToken = token; captchaStatus.textContent = ''; },
-          'expired-callback': () => { captchaToken = ''; captchaStatus.textContent = 'Security check expired. Please tick the box again.'; },
-          'error-callback': () => { captchaToken = ''; captchaStatus.textContent = 'Security check failed. Please retry or reload the page.'; },
-        });
-        captchaStatus.textContent = '';
-      } catch (err) { captchaStatus.textContent = (err as Error).message; }
-    })();
-    await captchaLoading;
-    captchaLoading = null;
+  // Google reCAPTCHA's "I'm not a robot" box. Its script loads as soon as Sign up shows, but the box itself only
+  // appears when Create account is pressed, right above the button. The public site key comes from the server.
+  function loadCaptcha(): Promise<string> {
+    return (captchaReady ||= (async () => {
+      const { captcha } = await api.config();
+      if (!captcha?.siteKey) throw new Error('Sign-up is temporarily unavailable. Please try again later.');
+      if (!W().grecaptcha?.render) await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        const fail = () => { clearTimeout(timer); script.remove(); reject(new Error('Security check could not load. Reopen sign-up to retry.')); };
+        const timer = setTimeout(fail, 15000);
+        W().__momentoRecaptchaReady = () => { clearTimeout(timer); resolve(); };
+        script.src = 'https://www.google.com/recaptcha/api.js?render=explicit&onload=__momentoRecaptchaReady';
+        script.async = true;
+        script.onerror = fail;
+        document.head.append(script);
+      });
+      return captcha.siteKey as string;
+    })().catch((err) => { captchaReady = null; throw err; })); // pressing Create account again retries
   }
+  const reveal = (el: Element) => el.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+  async function showCaptcha() {
+    captchaStep.hidden = false;
+    // Scrolled to the button under it, so the box and Create account are both on screen
+    reveal(submit);
+    if (captchaWidget !== null) return;
+    captchaStatus.textContent = 'Loading security check…';
+    try {
+      const siteKey = await loadCaptcha();
+      if (captchaWidget !== null || captchaStep.hidden) return;
+      // Its picture puzzle opens at the end of the page, which this (modal) window would cover: move it into the
+      // window as soon as it appears
+      const adopt = new MutationObserver(() => {
+        const frame = document.querySelector('body > div iframe[src*="/recaptcha/"][src*="bframe"]');
+        if (!frame) return;
+        let box: Element = frame;
+        while (box.parentElement && box.parentElement !== document.body) box = box.parentElement;
+        if (box.parentElement === document.body) { box.classList.add('rc-puzzle'); dialog.append(box); adopt.disconnect(); }
+      });
+      adopt.observe(document.body, { childList: true, subtree: true });
+      cleanup.push(() => adopt.disconnect());
+      captchaWidget = W().grecaptcha.render('signupCaptcha', {
+        sitekey: siteKey,
+        theme: M().theme?.resolved === 'dark' ? 'dark' : 'light',
+        callback: (token: string) => {
+          captchaToken = token; captchaStatus.textContent = '';
+          // Ticking the box finishes what Create account started
+          if (pendingSubmit) { pendingSubmit = false; form.requestSubmit(); }
+        },
+        'expired-callback': () => { captchaToken = ''; captchaStatus.textContent = 'Security check expired. Please tick the box again.'; },
+        'error-callback': () => { captchaToken = ''; captchaStatus.textContent = 'Security check failed. Please retry or reload the page.'; },
+      });
+      captchaStatus.textContent = '';
+    } catch (err) { captchaStatus.textContent = (err as Error).message; }
+    reveal(submit); // it just grew
+  }
+  function hideCaptcha() { captchaStep.hidden = true; pendingSubmit = false; }
   const tabs = [...form.querySelectorAll<HTMLElement>('[role="tab"]')];
   let onDone: (() => void) | null = null, fromScan = false;
 
   const field = (n: string) => form.querySelector(`[name="${n}"]`) as HTMLInputElement;
-  // Sent with sign-up so the server keeps a consent record: what was agreed to, and which version
+  // Sent with sign-up and Google so the server keeps a consent record: what was agreed to, and which version. Pressing
+  // Create account or Continue with Google is the agreement (the line next to each button says so).
   const TERMS_VERSION = '2026-11-07'; // the Privacy Policy's "Last updated" date (privacy)
-  const consent = () => ({ acceptTerms: field('acceptTerms').checked, termsVersion: TERMS_VERSION });
+  const consent = () => ({ acceptTerms: true, termsVersion: TERMS_VERSION });
+  // An error the person can see: the dialog scrolls to it (on a phone it can sit below the fold)
+  const showError = (msg: string) => { error.textContent = msg; if (msg) reveal(error); };
   const setLabel = (btn: Element, text: string) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
   // Busy: a turning ring and what's happening ("Logging in…"); null puts the normal label back
   function setBusy(text: string | null, idleText?: string) {
@@ -101,7 +120,7 @@ export function setUpAuth(): () => void {
   on(window, 'pageshow', (e: PageTransitionEvent) => { if (e.persisted && submit.classList.contains('is-busy')) { submit.disabled = false; setBusy(null, form.dataset.mode === 'signup' ? 'Create account' : 'Log in'); } });
   function setMode(mode: string) {
     form.dataset.mode = mode;
-    if (mode === 'signup') void prepareCaptcha();
+    if (mode === 'signup') loadCaptcha().catch(() => {}); else hideCaptcha();
     tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.mode === mode)));
     field('password').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
     error.textContent = '';
@@ -187,7 +206,7 @@ export function setUpAuth(): () => void {
   const deviceError = $('deviceError');
   let challenge: string | null = null, ticket: string | null = null;
   function loginError(err: Err) {
-    if (!err.challenge || !dialog.open) { error.textContent = err.message; return; }
+    if (!err.challenge || !dialog.open) { showError(err.message); return; }
     challenge = err.challenge;
     ticket = null;
     field('password').value = deviceCode.value = '';
@@ -203,6 +222,7 @@ export function setUpAuth(): () => void {
     deviceAction.focus();
   }
   on(dialog, 'close', () => {
+    hideCaptcha();
     challenge = ticket = null;
     deviceStep.hidden = true;
     dialog.setAttribute('aria-labelledby', 'authTitle');
@@ -262,22 +282,21 @@ export function setUpAuth(): () => void {
   api.config().then((c) => { googleId = c.googleClientId || null; if (googleId) loadGsi().catch(() => {}); }).catch(() => {});
   on(googleBtn, 'click', async () => {
     error.textContent = '';
-    // A new Google account is a sign-up too, so it needs the same agreement
-    if (form.dataset.mode === 'signup' && !field('acceptTerms').checked) { error.textContent = 'Confirm you’re 13 or older and agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
-    if (!googleId) { error.textContent = 'Google sign-in isn’t switched on yet. Use your email for now.'; return; }
-    try { await loadGsi(); } catch (err) { error.textContent = (err as Error).message; return; }
+    if (!googleId) { showError('Google sign-in isn’t switched on yet. Use your email for now.'); return; }
+    try { await loadGsi(); } catch (err) { showError((err as Error).message); return; }
     const idle = () => (form.dataset.mode === 'signup' ? 'Create account' : 'Log in');
     W().google.accounts.oauth2.initCodeClient({
       client_id: googleId,
       scope: 'openid email profile',
       ux_mode: 'popup',
       callback: async (resp: { error?: string; code?: string }) => {
-        if (resp.error || !resp.code) { error.textContent = 'Google sign-in was cancelled.'; return; }
+        if (resp.error || !resp.code) { showError('Google sign-in was cancelled.'); return; }
         googleBtn.disabled = submit.disabled = true;
         setBusy('Signing in with Google…');
         try {
           const newAccount = form.dataset.mode === 'signup';
-          const { user } = await api.auth.google({ code: resp.code!, ...(newAccount ? consent() : {}) });
+          // Always sent: a new Google account can start from Log in too (the server ignores it for existing ones)
+          const { user } = await api.auth.google({ code: resp.code!, ...consent() });
           M().account.set(user);
           // A new account picks its language before going in
           if (newAccount) await M().chooseLanguage?.();
@@ -286,17 +305,10 @@ export function setUpAuth(): () => void {
         } catch (err) {
           googleBtn.disabled = submit.disabled = false;
           setBusy(null, idle());
-          // A new Google account, started from Log in: Momento needs the Terms agreed first, which is on Sign up
-          if ((err as Err).code === 'terms-required') {
-            setMode('signup');
-            error.textContent = 'This Google account is new to Momento. Agree to the Terms and Privacy Policy, then press Continue with Google again.';
-            field('acceptTerms')?.focus();
-            return;
-          }
           loginError(err as Err);
         }
       },
-      error_callback: (e: { type?: string }) => { if (e?.type !== 'popup_closed') error.textContent = 'Google’s window didn’t open. Allow pop-ups for this site and try again.'; },
+      error_callback: (e: { type?: string }) => { if (e?.type !== 'popup_closed') showError('Google’s window didn’t open. Allow pop-ups for this site and try again.'); },
     }).requestCode();
   });
   on(form, 'submit', async (e: Event) => {
@@ -308,8 +320,8 @@ export function setUpAuth(): () => void {
     if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
     if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
-    if (signup && !field('acceptTerms').checked) { error.textContent = 'Confirm you’re 13 or older and agree to the Terms and Privacy Policy to create an account.'; field('acceptTerms').focus(); return; }
-    if (signup && !captchaToken) { error.textContent = 'Complete the security check before signing up.'; return; }
+    // Fields are fine: the robot box appears above the button, and ticking it sends the form
+    if (signup && !captchaToken) { error.textContent = ''; pendingSubmit = true; void showCaptcha(); return; }
     submit.disabled = true;
     error.textContent = '';
     const idle = signup ? 'Create account' : 'Log in';
@@ -330,7 +342,8 @@ export function setUpAuth(): () => void {
     } catch (err) { loginError(err as Err); }
     finally {
       if (!leaving) { submit.disabled = false; setBusy(null, idle); }
-      if (signup && captchaWidget !== null) { captchaToken = ''; W().grecaptcha.reset(captchaWidget); }
+      // A token works once: the box is cleared, and ticking it again sends the corrected form
+      if (signup && captchaWidget !== null) { captchaToken = ''; W().grecaptcha.reset(captchaWidget); pendingSubmit = !leaving; }
     }
   });
   document.querySelectorAll<HTMLElement>('[data-auth]').forEach((b) => on(b, 'click', () => openAuth({ mode: b.dataset.auth })));

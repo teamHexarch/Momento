@@ -5,6 +5,7 @@ import { pageViewport } from '@/lib/metadata';
 // Same order as the original page: the page's own styles first, then the shared glass + touch sheets, then the
 // join-here sheet (the "join with a code" helper that albums.html adds)
 import '@/styles/albums.css';
+import '@/styles/fonts.css';   // the site's own web fonts (Inter, and Caveat on Home)
 import '@/styles/glass.css';
 import '@/styles/touch.css';
 import '@/styles/nav-extra.css';   // the header menu's Reviews link
@@ -39,7 +40,6 @@ export default function AlbumsLayout({ children }: { children: React.ReactNode }
         <script dangerouslySetInnerHTML={{ __html: EMBED }} suppressHydrationWarning />
         <SharedHead
           variant="inner"
-          fontsHref="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
         />
       </head>
       <body>{children}</body>

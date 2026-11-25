@@ -14,6 +14,8 @@ export type Account = { name: string; email: string; notify: Notify; [k: string]
 const NOTIFY: Notify = { photos: true, closing: true, recap: false };
 
 const AKEY = 'momento-account';
+/** Set while the server has said nobody is signed in (this tab), so the next page can start with the guest header */
+const GKEY = 'momento-guest';
 const AccountContext = createContext<Account | null>(null);
 
 /** The signed-in person, or null (also while the page is still asking the server) */
@@ -39,11 +41,24 @@ export default function AccountProvider({ activity = false, children }: { activi
     let current: Account | null = null;
     const persist = () => {
       try {
-        if (current) sessionStorage.setItem(AKEY, JSON.stringify(current));
-        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); }
+        if (current) { sessionStorage.setItem(AKEY, JSON.stringify(current)); sessionStorage.removeItem(GKEY); }
+        else { sessionStorage.removeItem(AKEY); sessionStorage.removeItem('momento-user'); sessionStorage.setItem(GKEY, '1'); }
       } catch {}
     };
-    const emit = () => { setAccount(current); listeners.forEach((fn) => fn(current)); };
+    const root = document.documentElement;
+    const emit = () => {
+      root.classList.toggle('has-account', !!current);
+      root.classList.toggle('is-guest', !current);
+      setAccount(current); listeners.forEach((fn) => fn(current));
+    };
+
+    // Signed in earlier in this tab: the header and the page show that account now, as the first paint already did
+    // (html.has-account, headScripts.ts), rather than "signed out" until the server answers below. Only what React
+    // draws uses it; the old scripts still get the account when the server has confirmed it, as before.
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(AKEY) || 'null');
+      if (saved) setAccount(norm(saved));
+    } catch {}
     const store = {
       get: () => current,
       set(patch: Partial<Account>) {
