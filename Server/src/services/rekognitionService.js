@@ -77,17 +77,28 @@ export async function loadLearned() {
   return learned;
 }
 
+// ---- Swimwear in context ----
+// On an ordinary beach or pool photo Rekognition sees the swimwear, and often also "partially exposed" breast or
+// buttocks: that's what a bikini or swimsuit shows. So when swimwear (or underwear) is clearly seen, those labels count
+// as level 25 (published), not 75/85. Labels for real nudity (implied nudity, obstructed or exposed intimate parts,
+// anything explicit) and sexual situations still count in full.
+const SWIMWEAR = new Set(['swimwear or underwear', 'female swimwear or underwear', 'male swimwear or underwear']);
+const SWIMWEAR_SURE = 70;
+const EXPECTED_WITH_SWIMWEAR = new Set(['partially exposed female breast', 'partially exposed buttocks', 'partial nudity', 'bare back', 'exposed male nipple', 'barechested male']);
+
 // The level from Rekognition's labels: the highest level among labels at or over their threshold.
-// drivers: the labels that set it (what staff decisions teach about).
+// drivers: the labels that set it (what staff decisions teach about). swimwear: the swimwear rule applied.
 export function levelOf(labels) {
+  const swimwear = (labels || []).some((l) => SWIMWEAR.has(key(l.name)) && Number(l.confidence) >= SWIMWEAR_SURE);
   let level = 0, drivers = [];
   for (const l of labels || []) {
     const rule = LABELS[key(l.name)];
     if (!rule || !(Number(l.confidence) >= thresholdOf(l.name))) continue;
-    if (rule.level > level) { level = rule.level; drivers = [key(l.name)]; }
-    else if (rule.level === level && level > 0) drivers.push(key(l.name));
+    const ruleLevel = swimwear && EXPECTED_WITH_SWIMWEAR.has(key(l.name)) ? Math.min(rule.level, 25) : rule.level;
+    if (ruleLevel > level) { level = ruleLevel; drivers = [key(l.name)]; }
+    else if (ruleLevel === level && level > 0) drivers.push(key(l.name));
   }
-  return { level, drivers };
+  return { level, drivers, ...(swimwear && { swimwear: true }) };
 }
 
 // ---- Learning from staff ("learn from us") ----

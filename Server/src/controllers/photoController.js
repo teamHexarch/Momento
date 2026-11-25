@@ -88,7 +88,9 @@ export async function report(req, res) {
   }
   const { audit } = await import('../services/auditService.js');
   await audit('photo.reported', { req, target: photo._id, meta: { reason, reports, hiddenForEveryone } });
-  res.status(201).json({ reported: true, hidden: true, message: 'Thanks for telling us. You won’t see this photo any more, and we’ll take a look.' });
+  // What really happens: it's gone from the reporter's view now, and from everyone's once REPORTS_TO_HIDE people report it
+  // (no promise of a review here)
+  res.status(201).json({ reported: true, hidden: true, message: 'Thanks for telling us. You won’t see this photo any more.' });
 }
 
 // ---- Bookmarks: private, just for you (they replaced likes; reactions show love in public now) ----
