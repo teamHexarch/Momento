@@ -89,7 +89,7 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
   off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
-## Event mini-games (polls, trivia, photo battle; more game types to come)
+## Event mini-games (polls, trivia, photo battle, scavenger bingo; more game types to come)
 
 **Events only** (albums with a time and a place): in a plain photo album `GET …/games` answers `{ enabled: false,
 rounds: [] }` (don't show a games section) and everything else `403 GAMES_EVENTS_ONLY`. In events: album members
@@ -114,10 +114,19 @@ only (404 otherwise); creating and running games is for the host (`403 GAME_HOST
   `{ pair: null, reason: "all-voted" | "not-enough-photos" }`; then `POST …/:round/pick { winner, loser }`
   (`403 GAME_OWN_PHOTO`, `409 GAME_ANSWERED`). 2 points per vote for the first 10 votes; when the host ends it, the
   owners of the 1st, 2nd and 3rd photos get 100, 60 and 30 (one place per person). Deleted photos drop out.
+- **Scavenger bingo** (host: `{ type: "bingo", title, size?: 3 | 4 (3), prompts?: [size x size texts, up to 160 characters,
+  row by row] (a ready-made card if left out), start?: true }`): while live, claim a tile with one of your own event photos:
+  `POST …/:round/claims { tile: index, photo: photoId }` (again on the same tile swaps the photo; each photo counts once:
+  `409 GAME_PHOTO_USED`; `403 GAME_PHOTO_NOT_YOURS`). Take it back: `DELETE …/:round/claims/:tile`; the host removes
+  anyone's: `DELETE …/:round/claims/:tile?user=<userId>`. 10 points a tile, 30 per full row/column/diagonal, 100 for
+  the full card (they follow the claims: a removed claim or deleted photo takes its points away).
 - `Game` (poll): `{ id, type, title, status: draft|live|ended, question, options: [{ id, text, votes, percent }], total, myChoice }`
 - `Game` (trivia): `{ id, type, title, status, questionCount, current, question: { index, text, options, seconds, endsAt,
   answers, answer (only once time is up) }, myAnswer: { option, correct?, points? }, myScore }`; the host also gets
   `questions` (with the answers).
+- `Game` (bingo): `{ id, type, title, status, size, tiles: [{ index, prompt, claims, mine: { photo, url, thumbnailUrl, miniUrl } | null }],
+  myTiles, myLines, fullCard, myScore, leaders: [{ rank, name, mine, tiles, lines, full, points }] (top 5) }`; the host also
+  gets `claims: [{ tile, user, name, photo, … }]`.
 - `Game` (battle): `{ id, type, title, status, maxEntries, entries, standings: [{ rank, photo, url, thumbnailUrl, miniUrl, by,
   mine, wins, losses, rating, place? (once ended) }], myEntries: [photoId], myVotes, canEnter, canVote }`
 
@@ -262,6 +271,8 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/trash/purge |
 | GET | /api/hidden |
 | GET | /api/users/:id/avatar |
+| POST | /api/albums/:id/games/:round/claims |
+| DELETE | /api/albums/:id/games/:round/claims/:tile |
 | POST | /api/albums/:id/games/:round/entries |
 | DELETE | /api/albums/:id/games/:round/entries/:photo |
 | GET | /api/albums/:id/games/:round/pair |

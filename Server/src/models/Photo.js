@@ -46,10 +46,10 @@ photoSchema.index({ hash: 1 }, { partialFilterExpression: { hash: { $type: 'stri
 async function idsOf(query) { return query.model.find(query.getFilter(), '_id').lean().then((rows) => rows.map((r) => r._id)); }
 const dropComments = async (ids) => {
   if (!ids?.length) return;
-  const [{ PhotoComment }, { GameEntry, GameVote }] = await Promise.all([import('./PhotoComment.js'), import('./Game.js')]);
-  // Their comments, and their place in any photo battle (with the votes on them)
+  const [{ PhotoComment }, { GameEntry, GameVote, GameResponse }] = await Promise.all([import('./PhotoComment.js'), import('./Game.js')]);
+  // Their comments, their place in any photo battle (with the votes on them), and any bingo tile they claimed
   await Promise.all([PhotoComment.deleteMany({ photo: { $in: ids } }), GameEntry.deleteMany({ photo: { $in: ids } }),
-    GameVote.deleteMany({ $or: [{ winner: { $in: ids } }, { loser: { $in: ids } }] })]);
+    GameVote.deleteMany({ $or: [{ winner: { $in: ids } }, { loser: { $in: ids } }] }), GameResponse.deleteMany({ photo: { $in: ids } })]);
 };
 photoSchema.pre(['deleteOne', 'deleteMany'], { query: true, document: false }, async function () { this._goneIds = await idsOf(this); });
 photoSchema.post(['deleteOne', 'deleteMany'], { query: true, document: false }, async function () { await dropComments(this._goneIds); });

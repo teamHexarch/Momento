@@ -6,6 +6,8 @@
 //   trivia: 100 points for a right answer, plus up to 50 for answering quickly; one answer per question
 //   battle: 2 points per vote (the first 10 votes in a battle); when it ends, the people whose photos came 1st, 2nd and
 //           3rd get 100, 60 and 30 (PODIUM). Photos are ranked by an Elo rating from the head-to-head votes.
+//   bingo:  10 points per tile claimed with a photo, 30 more for each full line (row, column or diagonal), 100 more for
+//           the full card. Line and card points are worked out from the claims, so they always follow them.
 // The leaderboard adds up every response's points and the host's awards (podium places) in the album.
 import mongoose from 'mongoose';
 import { GameRound, GameResponse, GameAward, GameEntry, GameVote, GAME_TYPES } from '../models/Game.js';
@@ -18,6 +20,11 @@ import { cleanText, LIMITS } from '../utils/text.js';
 export const STATE_MS = 2000;
 export const POLL_POINTS = 10, RIGHT_POINTS = 100, SPEED_POINTS = 50;
 export const VOTE_POINTS = 2, POINTED_VOTES = 10, PODIUM = [100, 60, 30];
+export const TILE_POINTS = 10, LINE_POINTS = 30, CARD_POINTS = 100;
+// Prompts for a card the host doesn't write themselves
+export const DEFAULT_PROMPTS = ['Candid laugh', 'Group toast', 'Best dance move', 'The cake', 'A selfie with the host', 'Someone mid-speech',
+  'Matching outfits', 'The venue from outside', 'A happy tear', 'Three generations', 'The best shoes', 'A photo-bomb', 'Something blue',
+  'The first dance', 'A group hug', 'The last ones standing'];
 const MAX_ROUNDS_PER_ALBUM = 100;
 
 // ---- Reading what the host sends ----
@@ -49,7 +56,16 @@ function readBattle(b) {
   if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 5) throw new HttpError(400, 'Allow 1 to 5 photos per person.', 'GAME_INVALID');
   return { maxEntries };
 }
-const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle };
+function readBingo(b) {
+  const size = b.size === undefined ? 3 : Number(b.size);
+  if (size !== 3 && size !== 4) throw new HttpError(400, 'A bingo card is 3 x 3 or 4 x 4.', 'GAME_INVALID');
+  const n = size * size;
+  if (b.prompts === undefined) return { size, prompts: DEFAULT_PROMPTS.slice(0, n) };
+  if (!Array.isArray(b.prompts) || b.prompts.length !== n) throw new HttpError(400, `A ${size} x ${size} card needs ${n} prompts.`, 'GAME_INVALID');
+  const prompts = b.prompts.map((t, i) => cleanText(t, { max: LIMITS.description, what: `Prompt ${i + 1}`, required: true }));
+  return { size, prompts };
+}
+const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle, bingo: readBingo };
 
 export async function createRound(album, user, body = {}) {
   const type = body.type;
@@ -246,6 +262,47 @@ export async function battleVote(album, user, roundId, body = {}) {
   return { voted: true, votes: n, points: n <= POINTED_VOTES ? VOTE_POINTS : 0 };
 }
 
+// ---- Scavenger bingo ----
+// Every line on a card: rows, columns and the two diagonals (tile numbers, row by row)
+export function linesOf(size) {
+  const rows = [], cols = [];
+  for (let i = 0; i < size; i++) { rows.push([]); cols.push([]); for (let j = 0; j < size; j++) { rows[i].push(i * size + j); cols[i].push(j * size + i); } }
+  return [...rows, ...cols, Array.from({ length: size }, (_, i) => i * size + i), Array.from({ length: size }, (_, i) => i * size + size - 1 - i)];
+}
+// Points for one person's tiles: per tile, per full line, and the full card
+export function bingoScore(size, tiles) {
+  const have = new Set(tiles);
+  const lines = linesOf(size).filter((l) => l.every((t) => have.has(t))).length;
+  const full = have.size === size * size;
+  return { tiles: have.size, lines, full, points: have.size * TILE_POINTS + lines * LINE_POINTS + (full ? CARD_POINTS : 0) };
+}
+// Claim a tile with one of your own event photos (or swap the photo on a tile you've claimed). A photo counts once.
+export async function claimTile(album, user, roundId, body = {}) {
+  const round = await liveRound(album, roundId, 'bingo');
+  const tile = Number(body.tile);
+  if (!Number.isInteger(tile) || tile < 0 || tile >= round.settings.size ** 2) throw new HttpError(400, 'Choose a tile on the card.', 'GAME_INVALID');
+  if (!mongoose.isValidObjectId(body.photo)) throw new HttpError(400, 'Choose one of your photos.', 'GAME_INVALID');
+  const photo = await Photo.findOne({ _id: body.photo, album: album._id, ...SHOWN }, 'uploader').lean();
+  if (!photo) throw new HttpError(404, 'That photo isn’t in this event.', 'GAME_PHOTO_NOT_FOUND');
+  if (!photo.uploader?.equals(user._id)) throw new HttpError(403, 'You can use the photos you added.', 'GAME_PHOTO_NOT_YOURS');
+  const used = await GameResponse.findOne({ round: round._id, user: user._id, photo: photo._id }, 'q').lean();
+  if (used && used.q !== tile) throw new HttpError(409, 'That photo already claims another tile.', 'GAME_PHOTO_USED');
+  await GameResponse.updateOne({ round: round._id, user: user._id, q: tile },
+    { $set: { photo: photo._id, choice: 0, points: TILE_POINTS }, $setOnInsert: { album: album._id } }, { upsert: true });
+  forget(album._id);
+  return { tile, photo: String(photo._id) };
+}
+// Take a claim back (yours), or, for the host, remove anyone's claim (an off-topic photo)
+export async function unclaimTile(album, user, roundId, tile, { host = false, of } = {}) {
+  const round = await liveRound(album, roundId, 'bingo');
+  const who = host && of ? of : user._id;
+  if (host && of && !mongoose.isValidObjectId(of)) throw new HttpError(404, 'That claim isn’t on the card.', 'GAME_NOT_FOUND');
+  const gone = await GameResponse.deleteOne({ round: round._id, user: who, q: Number(tile) });
+  if (!gone.deletedCount) throw new HttpError(404, 'That claim isn’t on the card.', 'GAME_NOT_FOUND');
+  forget(album._id);
+  return { ok: true };
+}
+
 // ---- The state pages ask for (built at most every STATE_MS per album) ----
 const states = new Map();
 function forget(albumId) { states.delete(String(albumId)); }
@@ -262,7 +319,7 @@ async function stateOf(albumId) {
 async function build(albumId) {
   const [rounds, responses, awards, entries, votes] = await Promise.all([
     GameRound.find({ album: albumId }).sort({ createdAt: -1 }).lean(),
-    GameResponse.find({ album: albumId }, 'round user q choice points correct').lean(),
+    GameResponse.find({ album: albumId }, 'round user q choice points correct photo').lean(),
     GameAward.find({ album: albumId }, 'round user points place').lean(),
     GameEntry.find({ album: albumId }).lean(),
     GameVote.find({ album: albumId }, 'round user winner loser at').lean(),
@@ -286,8 +343,21 @@ async function build(albumId) {
     totals.set(String(r.user), (totals.get(String(r.user)) || 0) + (r.points || 0));
   }
   for (const a of awards) totals.set(String(a.user), (totals.get(String(a.user)) || 0) + a.points);
+  // Bingo: line and full-card points, worked out from each person's claimed tiles
+  for (const r of rounds.filter((x) => x.type === 'bingo')) {
+    const per = new Map();
+    for (const c of byRound.get(String(r._id)) || []) {
+      if (!per.has(String(c.user))) per.set(String(c.user), []);
+      per.get(String(c.user)).push(c.q);
+    }
+    for (const [u, tiles] of per) {
+      const s2 = bingoScore(r.settings.size, tiles);
+      totals.set(u, (totals.get(u) || 0) + s2.points - s2.tiles * TILE_POINTS);
+    }
+  }
   const top = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const wanted = new Set([...top.map(([u]) => u), ...[...battles.values()].flatMap((b) => b.standings.map((e) => e.user))]);
+  const bingoPlayers = rounds.filter((x) => x.type === 'bingo').flatMap((r) => (byRound.get(String(r._id)) || []).map((c) => String(c.user)));
+  const wanted = new Set([...top.map(([u]) => u), ...[...battles.values()].flatMap((b) => b.standings.map((e) => e.user)), ...bingoPlayers]);
   const names = new Map((await User.find({ _id: { $in: [...wanted] } }, 'name').lean()).map((u) => [String(u._id), (u.name || '').trim().split(/\s+/)[0] || 'Guest']));
   return { rounds, byRound, totals, battles, placesOf, names, board: top.map(([u, points], i) => ({ rank: i + 1, user: u, name: names.get(u) || 'Guest', points })) };
 }
@@ -296,6 +366,24 @@ async function build(albumId) {
 function view(round, responses = [], userId, host, s = {}) {
   const me = String(userId);
   const base = { id: String(round._id), type: round.type, title: round.title, status: round.status, startedAt: round.startedAt || null, endedAt: round.endedAt || null };
+  if (round.type === 'bingo') {
+    const { size, prompts } = round.settings;
+    const mineByTile = new Map(), counts = prompts.map(() => 0), per = new Map();
+    for (const c of responses) {
+      if (counts[c.q] !== undefined) counts[c.q]++;
+      if (String(c.user) === me) mineByTile.set(c.q, c);
+      if (!per.has(String(c.user))) per.set(String(c.user), []);
+      per.get(String(c.user)).push(c.q);
+    }
+    const mine = bingoScore(size, [...mineByTile.keys()]);
+    const leaders = [...per.entries()].map(([u, tiles]) => ({ u, ...bingoScore(size, tiles) }))
+      .sort((a, b) => (b.points - a.points)).slice(0, 5)
+      .map((x, i) => ({ rank: i + 1, name: x.u === me ? 'You' : (s.names?.get(x.u) || 'Guest'), mine: x.u === me, tiles: x.tiles, lines: x.lines, full: x.full, points: x.points }));
+    return { ...base, size, tiles: prompts.map((prompt, i) => ({ index: i, prompt, claims: counts[i],
+      mine: mineByTile.has(i) ? { photo: String(mineByTile.get(i).photo), ...photoLinks(mineByTile.get(i).photo) } : null })),
+    myTiles: mine.tiles, myLines: mine.lines, fullCard: mine.full, myScore: mine.points, leaders,
+    ...(host && { claims: responses.map((c) => ({ tile: c.q, user: String(c.user), name: s.names?.get(String(c.user)) || 'Guest', photo: String(c.photo), ...photoLinks(c.photo) })) }) };
+  }
   if (round.type === 'battle') {
     const b = s.battles?.get(String(round._id)) || { standings: [], votesBy: new Map() };
     const standings = b.standings.map((e) => ({ rank: e.rank, photo: String(e.photo), ...photoLinks(e.photo), by: e.user === me ? 'You' : (s.names?.get(e.user) || 'Guest'),

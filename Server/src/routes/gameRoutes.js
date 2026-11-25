@@ -63,6 +63,15 @@ gameRoutes.post('/:round/answer', playLimit, async (req, res) => {
   const { album } = await member(req);
   res.json(await games.answer(album, req.user, req.params.round, req.body));
 });
+// Scavenger bingo: claim a tile with your photo, take it back; the host can remove anyone's claim (?user=)
+gameRoutes.post('/:round/claims', playLimit, async (req, res) => {
+  const { album } = await member(req);
+  res.status(201).json(await games.claimTile(album, req.user, req.params.round, req.body));
+});
+gameRoutes.delete('/:round/claims/:tile', async (req, res) => {
+  const { album, host } = await member(req);
+  res.json(await games.unclaimTile(album, req.user, req.params.round, req.params.tile, { host, of: host ? req.query.user : undefined }));
+});
 // Photo battle: enter or withdraw your own photo, get two photos to choose between, pick the better one
 gameRoutes.post('/:round/entries', playLimit, async (req, res) => {
   const { album } = await member(req);

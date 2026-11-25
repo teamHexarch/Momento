@@ -4,7 +4,7 @@ import { LIMITS } from '../utils/text.js';
 // Event mini-games (services/gameService.js, routes under /api/albums/:id/games). One GameRound per game the host
 // runs in an album (a poll, a trivia round, ...); one GameResponse per person per question/vote; GameAward for points
 // given by the host (podium places). The leaderboard adds up the points of an album's responses and awards.
-export const GAME_TYPES = ['poll', 'trivia', 'battle'];
+export const GAME_TYPES = ['poll', 'trivia', 'battle', 'bingo'];
 
 const roundSchema = new mongoose.Schema({
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
@@ -17,6 +17,7 @@ const roundSchema = new mongoose.Schema({
   // poll: { question, options: [{ id, text }] }
   // trivia: { questions: [{ text, options: [String], answer: Number, seconds }], current: Number, currentAt: Date }
   // battle: { maxEntries: Number (photos per person) }
+  // bingo: { size: 3 | 4, prompts: [String] (size x size, row by row) }
   settings: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { collection: 'game_rounds', timestamps: true, versionKey: false });
 roundSchema.index({ album: 1, createdAt: -1 });
@@ -28,11 +29,14 @@ const responseSchema = new mongoose.Schema({
   // Which question (trivia) or 0 (a poll vote)
   q: { type: Number, default: 0 },
   choice: { type: Number, required: true },
+  // Bingo: the photo that claims tile q
+  photo: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo' },
   correct: Boolean,
   points: { type: Number, default: 0 },
 }, { collection: 'game_responses', timestamps: { createdAt: 'at', updatedAt: false }, versionKey: false });
 responseSchema.index({ round: 1, user: 1, q: 1 }, { unique: true });
 responseSchema.index({ album: 1, user: 1 });
+responseSchema.index({ photo: 1 }, { partialFilterExpression: { photo: { $exists: true } } });
 
 const awardSchema = new mongoose.Schema({
   round: { type: mongoose.Schema.Types.ObjectId, ref: 'GameRound', required: true },
