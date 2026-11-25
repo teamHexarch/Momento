@@ -50,6 +50,11 @@ const albumSchema = new mongoose.Schema({
   keepHostCover: { type: Boolean, default: false },
   // The host can turn photo comments off for this album (on by default)
   allowComments: { type: Boolean, default: true },
+  // Upload caps the host can change: photos per guest (the host has no per-person cap) and for the whole album
+  uploadLimits: {
+    perGuest: { type: Number, min: 1, max: 1000, default: 150 },
+    total: { type: Number, min: 1, max: 10000, default: 1500 },
+  },
   // When a host last emailed guests who haven't added photos (one reminder a day per album)
   lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.

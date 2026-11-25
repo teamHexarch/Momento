@@ -6,8 +6,8 @@ const TYPES = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: '
 const MAX_PIXELS = 100_000_000;
 
 // ---- Camera RAW files (Canon, Nikon, Sony, Fujifilm, Olympus/OM, Panasonic, Pentax, Leica, Hasselblad...) ----
-// The original RAW is kept byte for byte (minus GPS) so "download the original" gives back the RAW. What
-// people see in the album comes from the full-size JPEG every camera stores inside its RAW files.
+// What people see comes from the full-size JPEG every camera stores inside its RAW files. Since 2026-11-25 the RAW
+// itself isn't kept: that JPEG (up to 2560 px) is stored as the photo, and the 30-50 MB RAW is deleted after checking.
 export const RAW_TYPES = {
   cr2: 'image/x-canon-cr2', cr3: 'image/x-canon-cr3', crw: 'image/x-canon-crw',
   nef: 'image/x-nikon-nef', nrw: 'image/x-nikon-nrw',
@@ -80,12 +80,37 @@ export const makeMini = (input) => sharp(input, { limitInputPixels: MAX_PIXELS }
 // fails here before the caller is allowed to persist anything.
 // opts.name: the file's name (for RAW files); opts.inPlace: the buffer is ours to change (uploads), so
 // removing GPS doesn't need a second copy of a big file in memory.
+// When it was taken (the camera's DateTimeOriginal, else CreateDate), or undefined. Never fails an upload.
+export async function takenAtOf(buffer) {
+  try {
+    const exifr = (await import('exifr')).default;
+    const tags = await exifr.parse(buffer, { pick: ['DateTimeOriginal', 'CreateDate'], gps: false, xmp: false, icc: false, iptc: false });
+    const at = tags?.DateTimeOriginal || tags?.CreateDate;
+    return at instanceof Date && !Number.isNaN(at.getTime()) && at.getFullYear() > 1990 && at <= new Date(Date.now() + 86400000) ? at : undefined;
+  } catch { return undefined; }
+}
+
+// HEIC/HEIF from iPhones (HEVC inside): sharp's built-in HEIF support only reads AVIF, so these are turned into a
+// JPEG first (heic-convert, pure JavaScript) to make the preview and thumbnails. The HEIC itself is kept as the original.
+const isHeicBytes = (b) => b.length > 12 && b.toString('latin1', 4, 8) === 'ftyp' && /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(b.toString('latin1', 8, 12));
+async function heicToJpeg(buffer) {
+  const convert = (await import('heic-convert')).default;
+  return Buffer.from(await convert({ buffer, format: 'JPEG', quality: 0.92 }));
+}
+
+export const PREVIEW_EDGE = 2560;
 export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) {
+  const takenAt = await takenAtOf(input);
   // The original is kept as uploaded, minus where it was taken (GPS); see utils/gpsStrip.js
   const { buffer } = stripLocation(input, { inPlace });
   const raw = isRawName(name) && looksRaw(buffer);
   try {
     let source = buffer, rotate = 0;
+    // An iPhone HEIC sharp can't read: decoded to JPEG first (it keeps the photo's orientation in its pixels)
+    if (!raw && isHeicBytes(buffer)) {
+      try { await sharp(buffer).metadata().then((m) => { if (m.format !== 'heif') throw new Error('not heif'); return sharp(buffer).resize(8).toBuffer(); }); }
+      catch { source = await heicToJpeg(buffer); }
+    }
     if (raw) {
       const found = await embeddedJpeg(buffer);
       if (found) {
@@ -96,11 +121,11 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
     }
     const image = sharp(source, { animated: !raw, limitInputPixels: MAX_PIXELS, failOn: raw ? 'none' : 'warning' });
     const metadata = await image.metadata();
-    if (!raw && !TYPES[metadata.format] && metadata.format !== 'heif') throw new Error('Unsupported format');
+    if (!raw && !TYPES[metadata.format] && metadata.format !== 'heif' && source === buffer) throw new Error('Unsupported format');
     const animated = !raw && metadata.pages > 1;
     const format = !raw && (metadata.hasAlpha || animated || metadata.format === 'webp') ? 'webp' : 'jpeg';
     const output = (rotate ? image.rotate(rotate) : image.autoOrient())
-      .resize({ width: 2500, height: 2500, fit: 'inside', withoutEnlargement: true });
+      .resize({ width: PREVIEW_EDGE, height: PREVIEW_EDGE, fit: 'inside', withoutEnlargement: true });
     if (format === 'jpeg') output.jpeg({ quality: 82, mozjpeg: true });
     else output.webp({ quality: 82 });
     const preview = await output.toBuffer();
@@ -108,8 +133,10 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
     const thumbnail = await sharp(preview).resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 75 }).toBuffer();
     // The mini (320px wide, same shape) for grids and strips, where the 600px thumbnail is far bigger than shown
     const mini = await makeMini(preview);
-    const mimeType = raw ? RAW_TYPES[extOf(name)] : TYPES[metadata.format] || (metadata.compression === 'av1' ? 'image/avif' : 'image/heif');
-    return { buffer, mimeType, size: buffer.length, thumbnail, mini, preview, previewMimeType: TYPES[format], raw, ext: raw ? `.${extOf(name)}` : '' };
+    // A camera RAW: the JPEG preview becomes the photo itself (the RAW is not kept)
+    if (raw) return { buffer: preview, mimeType: 'image/jpeg', size: preview.length, thumbnail, mini, preview, previewMimeType: TYPES[format], raw, rawDropped: true, ext: '.jpg', takenAt };
+    const mimeType = source !== buffer ? 'image/heif' : TYPES[metadata.format] || (metadata.compression === 'av1' ? 'image/avif' : 'image/heif');
+    return { buffer, mimeType, size: buffer.length, thumbnail, mini, preview, previewMimeType: TYPES[format], raw, ext: '', takenAt };
   } catch {
     throw new HttpError(400, raw
       ? 'This RAW file could not be read. Try exporting it as JPEG and uploading again.'

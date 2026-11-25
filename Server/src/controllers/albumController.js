@@ -192,6 +192,7 @@ function summary(album, role, stats = {}) {
     hasHostCover: !!album.cover?.key,
     keepHostCover: !!album.keepHostCover,
     allowComments: album.allowComments !== false,
+    uploadLimits: { perGuest: album.uploadLimits?.perGuest ?? 150, total: album.uploadLimits?.total ?? 1500 },
     ...shown,
   };
 }
@@ -573,6 +574,14 @@ export async function update(req, res) {
   if (typeof req.body?.keepHostCover === 'boolean') m.album.keepHostCover = req.body.keepHostCover;
   // Photo comments on or off for the whole album
   if (typeof req.body?.allowComments === 'boolean') m.album.allowComments = req.body.allowComments;
+  // Upload caps: photos per guest (1-1000) and for the album (1-10000)
+  if (req.body?.uploadLimits !== undefined) {
+    const { perGuest, total } = req.body.uploadLimits || {};
+    const ok = (n, max) => n === undefined || (Number.isInteger(n) && n >= 1 && n <= max);
+    if (!ok(perGuest, 1000) || !ok(total, 10000)) throw new HttpError(400, 'Upload limits: 1-1000 photos per guest, 1-10000 for the album.', 'UPLOAD_LIMITS_INVALID');
+    if (perGuest !== undefined) m.album.set('uploadLimits.perGuest', perGuest);
+    if (total !== undefined) m.album.set('uploadLimits.total', total);
+  }
   // groupId: a friend group the host is in, or null to stop sharing it with its group
   if (req.body && 'groupId' in req.body) {
     const before = m.album.group;
@@ -647,6 +656,20 @@ async function acceptPhotoBatch(req, res) {
   const there = new Set((await Photo.find({ album: album._id, hash: { $in: hashes }, deletedAt: null }, 'hash')).map((p) => p.hash));
   let skipped = 0, banned = 0;
   const tooBig = [];
+  // Upload caps (Album.uploadLimits): photos in the album plus those still being checked or waiting for review.
+  // Guests have their own cap too; the host only the album's. Photos over a cap are left out and named in overLimit.
+  const pending = { state: { $in: ['checking', 'publish', 'review'] } };
+  const host = req.membership.role === 'host';
+  const [inAlbum, waitingAll, mineIn, mineWaiting] = await Promise.all([
+    Photo.countDocuments({ album: album._id, deletedAt: null }),
+    UploadCheck.countDocuments({ album: album._id, ...pending }),
+    host ? 0 : Photo.countDocuments({ album: album._id, uploader: req.user._id, deletedAt: null }),
+    host ? 0 : UploadCheck.countDocuments({ album: album._id, user: req.user._id, ...pending }),
+  ]);
+  const caps = { perGuest: album.uploadLimits?.perGuest ?? 150, total: album.uploadLimits?.total ?? 1500 };
+  let roomAlbum = caps.total - inAlbum - waitingAll;
+  let roomMine = host ? Infinity : caps.perGuest - mineIn - mineWaiting;
+  const overLimit = [];
   const checks = [];
   // One photo, start to finish. Anything wrong with it skips just that photo; the rest still go in.
   async function one(f, i) {
@@ -656,8 +679,11 @@ async function acceptPhotoBatch(req, res) {
     // Up to MAX_UPLOAD_MB a photo; camera RAW files only have the much higher safety ceiling
     const limit = isRawName(name) ? config.maxRawUploadBytes : config.maxUploadBytes;
     if (f.size > limit) { tooBig.push(name); there.delete(hash); return; }
+    // Over a cap: decided before any waiting, so it's always the later photos of an upload that are left out
+    if (roomAlbum <= 0 || roomMine <= 0) { overLimit.push(name); there.delete(hash); return; }
+    roomAlbum--; roomMine--;
     // Files taken down after a complaint can't come back
-    if (await isBanned(hash)) { banned++; return; }
+    if (await isBanned(hash)) { banned++; roomAlbum++; roomMine++; return; }
     // Queued for the nudity check (services/uploadChecks.js): published once it passes, otherwise declined and
     // kept private, with a "Request review" for the uploader. Unreadable files are reported there too.
     const job = await queueUpload(album._id, req.user._id, hash, name, f);
@@ -673,6 +699,10 @@ async function acceptPhotoBatch(req, res) {
     throw new HttpError(413, `Photos can be up to ${Math.round(config.maxUploadBytes / 1048576)} MB each (camera RAW files can be bigger).`, 'too-big', { tooBig });
   }
   if (banned && !checks.length && !skipped) throw new HttpError(422, BANNED_MESSAGE, 'removed-content');
+  if (!checks.length && overLimit.length) {
+    const whose = roomMine <= 0 && roomAlbum > 0 ? `You can add up to ${caps.perGuest} photos to this album.` : `This album can hold up to ${caps.total} photos.`;
+    throw new HttpError(409, `${whose} Ask the host if you need more.`, 'UPLOAD_LIMIT', { overLimit, uploadLimits: caps });
+  }
   // Up to 10 photos are checked right away, so they appear at once; bigger uploads carry on in the background
   if (checks.length && checks.length <= 10) await checkNow(checks.map(c => c.id));
   const now = checks.length ? await UploadCheck.find({ _id: { $in: checks.map(c => c.id) } }, 'state explicit').lean() : [];
@@ -688,7 +718,7 @@ async function acceptPhotoBatch(req, res) {
   // 202 while some photos are still being checked; 201 once every photo is decided (published, declined, unreadable)
   res.status(waiting.some(c => ['checking', 'publish'].includes(c.state)) ? 202 : 201).json({
     photos: photos.map((p) => ({ id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), by: 'You', mine: true, at: p.createdAt })),
-    checks: waiting, skipped, banned, tooBig,
+    checks: waiting, skipped, banned, tooBig, overLimit, uploadLimits: caps,
     declined: waiting.filter(c => c.state === 'rejected').length, blocked: waiting.filter(c => c.state === 'rejected').length,
     decisionIds: waiting.filter(c => c.state === 'rejected').map(c => c.id), failed: waiting.filter(c => c.state === 'failed').map(c => c.name),
   });
@@ -780,3 +810,19 @@ export async function remind(req, res) {
   res.json({ ok: true, sent });
 }
 
+// POST /api/albums/:id/photos/known  { hashes: ['<sha256 hex>', ...] (up to 500) } → { known: [...] }
+// Which of these files the album already has (not in the bin), so the page can skip them before uploading: no
+// upload time, storage or photo check spent on a duplicate. The page computes each file's SHA-256 (crypto.subtle).
+export async function knownHashes(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  const raw = Array.isArray(req.body?.hashes) ? req.body.hashes : null;
+  if (!raw || raw.length > 500 || !raw.every((h) => typeof h === 'string' && /^[0-9a-f]{64}$/i.test(h))) {
+    throw new HttpError(400, 'Send up to 500 SHA-256 hashes (64 hex characters each).', 'HASHES_INVALID');
+  }
+  const hashes = [...new Set(raw.map((h) => h.toLowerCase()))];
+  const [inAlbum, waiting] = await Promise.all([
+    Photo.find({ album: m.album._id, hash: { $in: hashes }, deletedAt: null }, 'hash').lean(),
+    UploadCheck.find({ album: m.album._id, user: req.user._id, hash: { $in: hashes }, state: { $in: ['checking', 'publish', 'review'] } }, 'hash').lean(),
+  ]);
+  res.json({ known: [...new Set([...inAlbum, ...waiting].map((p) => p.hash))] });
+}

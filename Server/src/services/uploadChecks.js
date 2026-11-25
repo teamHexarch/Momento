@@ -253,7 +253,8 @@ export async function processCheck(step, infer = classify, table = activeTable()
           $unset: { rawKey: 1, claim: 1 } });
         return true;
       }
-      job.files = await storePhoto(String(job.album), clean);
+      // (a camera RAW is stored as its JPEG; the RAW goes with the quarantine copy below)
+      job.files = { ...await storePhoto(String(job.album), clean), ...(clean.takenAt && { takenAt: clean.takenAt }) };
       const assigned = await UploadCheck.updateOne(owns, { $set: { files: job.files } });
       if (!assigned.matchedCount) { await deletePhoto(job.files.storageKey); return true; }
     }

@@ -75,6 +75,8 @@ albumRoutes.patch('/:id', albums.update);
 albumRoutes.delete('/:id', albums.remove);
 albumRoutes.delete('/:id/membership', albums.leave);
 
+// Which files the album already has (by SHA-256), so the page skips them before uploading
+albumRoutes.post('/:id/photos/known', albums.knownHashes);
 albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', downloadLimit, albums.download);
 // The emailed link to a big album's zip (made in the background)

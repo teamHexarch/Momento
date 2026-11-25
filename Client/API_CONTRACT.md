@@ -66,6 +66,20 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - Each photo in `GET /api/albums/:id` now also has `name` (original file name), `size` (bytes) and `takenAt`
   (capture date or null), for sorting in the browser too.
 
+## Uploads
+
+- **Before uploading:** `POST /api/albums/:id/photos/known` `{ hashes: [sha256 hex, …] }` (up to 500; compute each
+  file's SHA-256 with `crypto.subtle.digest`) → `{ known: [hash, …] }`: files the album already has (or that you have
+  waiting), so the page can skip them. Uploading one anyway is still skipped (`skipped` in the answer).
+- **Caps:** each album has `uploadLimits: { perGuest, total }` (defaults 150 and 1,500; the host has no per-person cap).
+  The host changes them with `PATCH /api/albums/:id { uploadLimits: { perGuest?: 1-1000, total?: 1-10000 } }`.
+  An upload answer now has `overLimit: [names]` (left out, later photos first) and `uploadLimits`; when nothing could
+  be added for that reason: `409 { code: "UPLOAD_LIMIT", overLimit, uploadLimits }`.
+- **What's stored:** iPhone HEIC/HEIF photos work (kept as HEIC, shown from a JPEG preview). Camera RAW files
+  (.NEF, .CR3, .ARW, …) are stored as a JPEG of up to 2560 px; the RAW itself is not kept, so Download gives the JPEG.
+  Previews are up to 2560 px, with no EXIF or GPS. The capture date is kept (`takenAt` on each photo).
+- Direct uploads to S3 (presigned links) are planned; until then uploads go through `POST /api/albums/:id/photos`.
+
 ## Every endpoint
 
 Paths are full paths. Generated from the server's route files on 2026-11-25; regenerate when routes change.
@@ -108,6 +122,7 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | PATCH | /api/albums/:id |
 | DELETE | /api/albums/:id |
 | DELETE | /api/albums/:id/membership |
+| POST | /api/albums/:id/photos/known |
 | POST | /api/albums/:id/photos |
 | GET | /api/albums/:id/download |
 | GET | /api/albums/:id/zip/:token |
