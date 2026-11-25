@@ -606,6 +606,8 @@ export async function remove(req, res) {
   const photos = await Photo.find({ album: m.album._id }, 'storageKey');
   await deletePhotos(photos.map((p) => p.storageKey));
   await removeCoverFiles([m.album.cover?.key, m.album.cover?.thumbKey]);
+  const { removeGamesFor } = await import('../services/gameService.js');
+  await removeGamesFor({ albums: [m.album._id] });
   await Promise.all([
     Photo.deleteMany({ album: m.album._id }),
     Membership.deleteMany({ album: m.album._id }),

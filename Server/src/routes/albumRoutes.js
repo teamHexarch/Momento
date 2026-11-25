@@ -5,6 +5,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
+import { gameRoutes } from './gameRoutes.js';
 import { whenOpen } from '../services/switches.js';
 import { uploadBudget } from '../middleware/uploadBudget.js';
 
@@ -91,3 +92,5 @@ albumRoutes.put('/:id/cover', uploadLimit, whenOpen('uploads'), uploadBudget, co
 albumRoutes.delete('/:id/cover', albums.deleteCover);
 
 albumRoutes.post('/:id/remind', albums.remind);
+// Event mini-games (routes/gameRoutes.js)
+albumRoutes.use('/:id/games', gameRoutes);

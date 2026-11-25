@@ -119,6 +119,9 @@ export async function deleteAccount(user) {
   // Their likes and reactions come off other people's photos
   await Photo.updateMany({ likes: user._id }, { $pull: { likes: user._id, likeLog: { user: user._id } }, $inc: { likeCount: -1 } });
   await Photo.updateMany({ 'reactions.user': user._id }, { $pull: { reactions: { user: user._id } } });
+  // Games: those in albums they host, and their own answers and points elsewhere
+  const { removeGamesFor } = await import('./gameService.js');
+  await removeGamesFor({ albums: hostedIds, user: user._id });
   // Their comments on other people's photos (the counts go down with them)
   const { PhotoComment } = await import('../models/PhotoComment.js');
   const written = await PhotoComment.aggregate([{ $match: { author: user._id } }, { $group: { _id: '$photo', n: { $sum: 1 } } }]);

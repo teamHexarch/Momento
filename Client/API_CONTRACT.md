@@ -89,6 +89,29 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
   off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
+## Event mini-games (polls and trivia; more game types to come)
+
+**Events only** (albums with a time and a place): in a plain photo album `GET …/games` answers `{ enabled: false,
+rounds: [] }` (don't show a games section) and everything else `403 GAMES_EVENTS_ONLY`. In events: album members
+only (404 otherwise); creating and running games is for the host (`403 GAME_HOST_ONLY`).
+**Poll the state every `pollEveryMs` (3 s)**: the server builds it at most every 2 s per album, so polling is cheap.
+
+- `GET /api/albums/:id/games` → `{ enabled: true, rounds: [Game], leaderboard: [{ rank, name, points, mine }] (top 10), myPoints, host, pollEveryMs }`
+- `GET /api/albums/:id/games/:round` → `{ game: Game }`
+- **Host:** `POST /api/albums/:id/games` with
+  `{ type: "poll", title, question, options: [2-6 texts], start?: true }` or
+  `{ type: "trivia", title, questions: [{ text, options: [2-4], answer: index, seconds?: 5-120 (20) }] (1-20), start?: true }`
+  → `201 { game }` (a draft unless `start`). Then `POST …/:round/start`, `…/:round/next` (trivia: next question; after
+  the last one it ends), `…/:round/end`, `DELETE …/:round`. Titles and options up to 60 characters, questions 160.
+- **Players:** poll `POST …/:round/vote { option: id }` (can be changed while live; 10 points for taking part).
+  Trivia `POST …/:round/answer { question: index, option: index }`: only the question on screen, before its time is
+  up, once (`409 GAME_STATE` / `GAME_TIME_UP` / `GAME_ANSWERED`); right answers score 100 + up to 50 for speed.
+  `409 GAME_NOT_LIVE` before the start or after the end. 60 votes/answers a minute (`429 GAME_RATE_LIMIT`).
+- `Game` (poll): `{ id, type, title, status: draft|live|ended, question, options: [{ id, text, votes, percent }], total, myChoice }`
+- `Game` (trivia): `{ id, type, title, status, questionCount, current, question: { index, text, options, seconds, endsAt,
+  answers, answer (only once time is up) }, myAnswer: { option, correct?, points? }, myScore }`; the host also gets
+  `questions` (with the answers).
+
 ## Every endpoint
 
 Paths are full paths. Generated from the server's route files on 2026-11-25; regenerate when routes change.
@@ -179,6 +202,12 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | PATCH | /api/events/:id/policy |
 | POST | /api/events/:id/requests/:guest |
 | POST | /api/events/:id/join |
+| GET | /api/albums/:id/games |
+| GET | /api/albums/:id/games/:round |
+| POST | /api/albums/:id/games |
+| DELETE | /api/albums/:id/games/:round |
+| POST | /api/albums/:id/games/:round/vote |
+| POST | /api/albums/:id/games/:round/answer |
 | GET | /api/groups/preview/:code |
 | GET | /api/groups |
 | POST | /api/groups/join |
@@ -224,3 +253,6 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/trash/purge |
 | GET | /api/hidden |
 | GET | /api/users/:id/avatar |
+| POST | /api/albums/:id/games/:round/start |
+| POST | /api/albums/:id/games/:round/next |
+| POST | /api/albums/:id/games/:round/end |
