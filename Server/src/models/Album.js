@@ -40,6 +40,9 @@ const albumSchema = new mongoose.Schema({
   joiningOpen: { type: Boolean, default: true },
   joinDeadline: Date,
   locationRequired: { type: Boolean, default: true },
+  // The venue PIN: 6 characters the host shows at the venue; a guest whose phone won't share its location types it
+  // instead of the location check (services/eventAdmission.js). Made when the host first sees it; the host can change it.
+  venuePin: { type: String, maxlength: 6 },
   requests: [{ _id: false, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: { type: String, enum: ['pending', 'approving', 'declined'] }, name: String, at: { type: Date, default: Date.now } }],
   // When the "closes soon" email went out (once per album)
