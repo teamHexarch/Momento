@@ -93,7 +93,19 @@ export async function takenAtOf(buffer) {
 // HEIC/HEIF from iPhones (HEVC inside): sharp's built-in HEIF support only reads AVIF, so these are turned into a
 // JPEG first (heic-convert, pure JavaScript) to make the preview and thumbnails. The HEIC itself is kept as the original.
 const isHeicBytes = (b) => b.length > 12 && b.toString('latin1', 4, 8) === 'ftyp' && /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(b.toString('latin1', 8, 12));
+// The picture's size from its 'ispe' boxes (one per image or tile; the biggest is the whole picture), read before
+// decoding so a file claiming a gigantic image is refused instead of filling memory. 0 when there's none.
+export function heicPixels(b) {
+  let most = 0;
+  for (let i = b.indexOf('ispe', 4, 'latin1'); i !== -1 && i + 16 <= b.length; i = b.indexOf('ispe', i + 4, 'latin1')) {
+    const w = b.readUInt32BE(i + 8), h = b.readUInt32BE(i + 12);
+    most = Math.max(most, w * h);
+  }
+  return most;
+}
 async function heicToJpeg(buffer) {
+  const pixels = heicPixels(buffer);
+  if (!pixels || pixels > MAX_PIXELS) throw new Error('HEIC size missing or too large');
   const convert = (await import('heic-convert')).default;
   return Buffer.from(await convert({ buffer, format: 'JPEG', quality: 0.92 }));
 }

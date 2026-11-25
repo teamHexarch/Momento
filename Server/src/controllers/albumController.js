@@ -647,9 +647,27 @@ export async function addPhotos(req, res) {
   }
 }
 
+// Uploads into one album take turns from counting against the caps until their photos are queued, so uploads sent
+// side by side (the page sends 3 at once) can't each see the same free room and together go over a cap.
+// (In this process: the API runs as one instance.)
+const albumTurns = new Map();
+function inTurn(key, fn) {
+  const before = albumTurns.get(key) || Promise.resolve();
+  const run = before.then(fn, fn);
+  const tail = run.catch(() => {});
+  albumTurns.set(key, tail);
+  tail.then(() => { if (albumTurns.get(key) === tail) albumTurns.delete(key); });
+  return run;
+}
+
 async function acceptPhotoBatch(req, res) {
   const files = req.files || [];
   if (!files.length) throw new HttpError(400, 'Choose at least one photo.');
+  // The turn covers counting and queuing only; the photo checks below run side by side again
+  const batch = await inTurn(String(req.membership.album._id), () => queueBatch(req, files));
+  return answerBatch(req, res, batch);
+}
+async function queueBatch(req, files) {
   const album = req.membership.album;
   // The same file twice (in this upload, or already in the album and not deleted): skipped
   const hashes = files.map((f) => f.hash);
@@ -694,6 +712,9 @@ async function acceptPhotoBatch(req, res) {
   const workers = await Promise.allSettled([0, 1].map(async () => { while (next < files.length) { const i = next++; await one(files[i], i); } }));
   const failure = workers.find(worker => worker.status === 'rejected');
   if (failure) throw failure.reason;
+  return { checks, skipped, banned, tooBig, overLimit, caps, roomMine, roomAlbum };
+}
+async function answerBatch(req, res, { checks, skipped, banned, tooBig, overLimit, caps, roomMine, roomAlbum }) {
   // Nothing could be added, only because of size: say why
   if (!checks.length && !skipped && !banned && tooBig.length) {
     throw new HttpError(413, `Photos can be up to ${Math.round(config.maxUploadBytes / 1048576)} MB each (camera RAW files can be bigger).`, 'too-big', { tooBig });
