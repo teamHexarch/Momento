@@ -15,7 +15,7 @@
 
   const css = `
     /* The field keeps its look; the browser's own picker button gives way to a small icon */
-    input.mp-on { cursor: pointer; caret-color: transparent; padding-right: 2.6rem !important; background-repeat: no-repeat !important; background-position: right .95rem center !important; background-size: 17px !important; }
+    input.mp-on { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: pointer; caret-color: transparent; padding-right: 2.6rem !important; background-repeat: no-repeat !important; background-position: right .95rem center !important; background-size: 17px !important; }
     input.mp-on::-webkit-calendar-picker-indicator { display: none; }
     /* Empty with a placeholder: the calendar icon stays, so it still reads as a date field */
     input.mp-on.mp-empty { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
@@ -26,10 +26,10 @@
     input.mp-on { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
     input.mp-on::-webkit-date-and-time-value { min-height: 1.4em; margin: 0; text-align: left; }
     input.mp-on::-webkit-datetime-edit { padding: 0; }
-    input.mp-on[type="date"], input.mp-on[type="datetime-local"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
-    input.mp-on[type="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
-    :root[data-theme="dark"] input.mp-on[type="date"], :root[data-theme="dark"] input.mp-on[type="datetime-local"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
-    :root[data-theme="dark"] input.mp-on[type="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
+    input.mp-on[data-mp-kind="date"], input.mp-on[data-mp-kind="datetime-local"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
+    input.mp-on[data-mp-kind="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C596B' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
+    :root[data-theme="dark"] input.mp-on[data-mp-kind="date"], :root[data-theme="dark"] input.mp-on[data-mp-kind="datetime-local"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E"); }
+    :root[data-theme="dark"] input.mp-on[data-mp-kind="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9C4D8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E"); }
 
     .mp {
       position: fixed; inset: auto; margin: 0; z-index: 2147483000; box-sizing: border-box; max-width: calc(100vw - 16px); padding: .7rem; overflow: visible;
@@ -86,6 +86,15 @@
   document.head.append(style);
 
   const valueDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  // 2026-11-25 → "Wed 25 Nov 2026"; 19:00 → "7:00 pm"; 2026-11-25T19:00 → "Wed 25 Nov 2026, 7:00 pm"
+  function fmtValue(kind, v) {
+    if (!v) return '';
+    const d = kind === 'time' ? null : parseDate(v);
+    const t = kind === 'date' ? null : parseTime(kind === 'time' ? v : v.split('T')[1]);
+    const day = d ? d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    const time = t ? new Date(2000, 0, 1, t.h, t.m).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+    return [day, time].filter(Boolean).join(', ') || v;
+  }
   let cur = null;   // { input, el, kind, view, date, time }
 
   function emit(input, v) {
@@ -295,34 +304,37 @@
   // ---- Wiring each input ----
   function enhance(input) {
     if (input.dataset.mp || !TYPES.includes(input.type)) return;
+    const kind = input.type;
     input.dataset.mp = '1';
-    input.dataset.mpKind = input.type;
+    input.dataset.mpKind = kind;
     input.classList.add('mp-on');
-    // An empty field with a placeholder ("Enter a date") shows it: date fields can't show a placeholder, so
-    // while empty it's a plain (read-only) text field, and it turns back into a date field once it has a value.
-    // Forms read and set .value exactly as before.
-    if (input.placeholder) {
-      const kind = input.type;
-      const show = () => {
-        const want = valueDesc.get.call(input) ? kind : 'text';
-        if (input.type !== want) input.type = want;
-        input.classList.toggle('mp-empty', want === 'text');
-      };
-      Object.defineProperty(input, 'value', {
-        configurable: true,
-        get() { return valueDesc.get.call(this); },
-        set(v) {
-          v = v == null ? '' : String(v);
-          if (v && this.type !== kind) this.type = kind;
-          valueDesc.set.call(this, v);
-          show();
-        },
-      });
-      input.form?.addEventListener('reset', () => setTimeout(show));
-      show();
-    }
-    // Read-only stops the phone's own wheel or calendar from opening; the forms check these fields themselves
-    input.readOnly = true;
+    // The field becomes a plain read-only text field that shows the choice in words ("Wed 25 Nov 2026"). A real
+    // date field let iPhones open Apple's own picker as well as this one, and made browsers highlight the day,
+    // month and year one part at a time. .value still reads and sets the usual format (2026-11-21, 19:00,
+    // 2026-11-21T19:00), so forms work exactly as before; the placeholder ("Enter a date") shows while it's empty.
+    let held = valueDesc.get.call(input);
+    input.type = 'text';
+    input.readOnly = true;   // no keyboard, and the forms check these fields themselves
+    input.inputMode = 'none';
+    input.autocomplete = 'off';
+    const show = () => { valueDesc.set.call(input, fmtValue(kind, held)); input.classList.toggle('mp-empty', !held); };
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      get() { return held; },
+      set(v) { held = v == null ? '' : String(v); reset = false; show(); },
+    });
+    // A form reset puts the field back to its starting value (the value attribute) once the reset is done,
+    // unless the form's own code has already set a new one by then
+    let reset = false;
+    input.form?.addEventListener('reset', () => {
+      held = input.getAttribute('value') || ''; reset = true;
+      setTimeout(() => { if (reset) { reset = false; show(); } });
+    });
+    show();
+    // Nothing in it is ever highlighted (tabbing in or double-clicking would select the words)
+    const unselect = () => { try { if (input.selectionStart !== input.selectionEnd) input.setSelectionRange(0, 0); } catch (e) {} };
+    input.addEventListener('select', unselect);
+    input.addEventListener('focus', () => requestAnimationFrame(unselect));
     input.setAttribute('aria-haspopup', 'dialog');
     input.setAttribute('aria-expanded', 'false');
     input.addEventListener('click', (e) => { e.preventDefault(); cur?.input === input ? close(false) : open(input); });

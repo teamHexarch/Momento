@@ -51,7 +51,7 @@
     .as-row small { color: var(--slate, #5c596b); font-size: .82rem; line-height: 1.45; }
     .as-row .acct-sw:disabled { opacity: .4; cursor: not-allowed; }
     .as-row.is-wrap { flex-wrap: wrap; }
-    .as-row input[type="datetime-local"] { height: 2.6rem; padding: 0 .8rem; font: 600 .9rem var(--font-main, inherit); }   /* the well: GlassInput in assets/glass.css */
+    .as-row input:is([type="datetime-local"], [data-mp-kind="datetime-local"]) { height: 2.6rem; padding: 0 .8rem; font: 600 .9rem var(--font-main, inherit); }   /* the well: GlassInput in assets/glass.css */
     :root[data-theme="dark"] .as-row input[type="datetime-local"] { color-scheme: dark; }
     .as-details .acct-field { margin-bottom: .7rem; }
     .as-details .acct-field span i { font-style: normal; font-weight: 500; color: var(--stone, #A9A5B4); }
