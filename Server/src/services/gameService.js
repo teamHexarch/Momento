@@ -287,8 +287,14 @@ export async function claimTile(album, user, roundId, body = {}) {
   if (!photo.uploader?.equals(user._id)) throw new HttpError(403, 'You can use the photos you added.', 'GAME_PHOTO_NOT_YOURS');
   const used = await GameResponse.findOne({ round: round._id, user: user._id, photo: photo._id }, 'q').lean();
   if (used && used.q !== tile) throw new HttpError(409, 'That photo already claims another tile.', 'GAME_PHOTO_USED');
-  await GameResponse.updateOne({ round: round._id, user: user._id, q: tile },
-    { $set: { photo: photo._id, choice: 0, points: TILE_POINTS }, $setOnInsert: { album: album._id } }, { upsert: true });
+  try {
+    await GameResponse.updateOne({ round: round._id, user: user._id, q: tile },
+      { $set: { photo: photo._id, choice: 0, points: TILE_POINTS }, $setOnInsert: { album: album._id } }, { upsert: true });
+  } catch (error) {
+    // Two claims at the same moment: the database lets one photo hold one tile only
+    if (error.code === 11000) throw new HttpError(409, 'That photo already claims another tile.', 'GAME_PHOTO_USED');
+    throw error;
+  }
   forget(album._id);
   return { tile, photo: String(photo._id) };
 }
@@ -325,7 +331,9 @@ async function build(albumId) {
     GameVote.find({ album: albumId }, 'round user winner loser at').lean(),
   ]);
   // Battles: entries whose photos are still shown, rated from their votes
-  const shown = new Set((await Photo.find({ _id: { $in: entries.map((e) => e.photo) }, ...SHOWN }, '_id').lean()).map((p) => String(p._id)));
+  // Photos still shown in the album (battle entries and bingo claims with a binned or hidden photo don't count)
+  const photoIds = [...entries.map((e) => e.photo), ...responses.filter((r) => r.photo).map((r) => r.photo)];
+  const shown = new Set((await Photo.find({ _id: { $in: photoIds }, ...SHOWN }, '_id').lean()).map((p) => String(p._id)));
   const battles = new Map();
   for (const r of rounds.filter((x) => x.type === 'battle')) {
     const these = entries.filter((e) => String(e.round) === String(r._id) && shown.has(String(e.photo)));
@@ -337,6 +345,7 @@ async function build(albumId) {
   const byRound = new Map();
   const totals = new Map();
   for (const r of responses) {
+    if (r.photo && !shown.has(String(r.photo))) continue;
     const k = String(r.round);
     if (!byRound.has(k)) byRound.set(k, []);
     byRound.get(k).push(r);

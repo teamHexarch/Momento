@@ -37,6 +37,8 @@ const responseSchema = new mongoose.Schema({
 responseSchema.index({ round: 1, user: 1, q: 1 }, { unique: true });
 responseSchema.index({ album: 1, user: 1 });
 responseSchema.index({ photo: 1 }, { partialFilterExpression: { photo: { $exists: true } } });
+// Bingo: a photo claims one tile per person per card (enforced by the database, even for claims sent at the same moment)
+responseSchema.index({ round: 1, user: 1, photo: 1 }, { unique: true, partialFilterExpression: { photo: { $exists: true } } });
 
 const awardSchema = new mongoose.Schema({
   round: { type: mongoose.Schema.Types.ObjectId, ref: 'GameRound', required: true },
