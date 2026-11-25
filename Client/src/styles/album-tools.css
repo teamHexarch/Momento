@@ -63,6 +63,7 @@
   .ab-tools:has(.ab-who-wrap:not([hidden])) .ab-btn.ab-sort { width: 100%; justify-content: center; }
   .ab-who-btn #abWhoLabel { max-width: none; min-width: 0; }
   .ab-btn.ab-chip { flex: 1 0 auto; padding: 0 .75rem; }
+  .ab-tools, .ab-filters { gap: .4rem; }   /* the same gap between every button, across and down */
 }
 
 /* ---------- The viewer's zoom ---------- */
