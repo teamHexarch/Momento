@@ -686,8 +686,8 @@
     .ev-side-head { display: grid; gap: var(--ev-gap); min-width: 0; }
     .ev-side-head .ev-status { min-height: 0; margin: 0; padding: 0 .4rem; font-size: .88rem; line-height: 1.45; }
     .ev-side-head .ev-status:empty { display: none; }
-    .ev-side-head .ev-notify { justify-content: space-between; margin: 0; padding: .35rem .5rem .35rem 1rem; box-sizing: border-box; background: rgba(46, 44, 58, .045); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .06); }
-    :root[data-theme="dark"] .ev-side-head .ev-notify { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+    :is(.ev-side-head, .ev-side-foot) .ev-notify { width: 100%; justify-content: space-between; margin: 0; padding: .35rem .5rem .35rem 1rem; box-sizing: border-box; background: rgba(46, 44, 58, .045); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .06); }
+    :root[data-theme="dark"] :is(.ev-side-head, .ev-side-foot) .ev-notify { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
     .ev-side { display: grid; align-content: start; gap: var(--ev-gap, .9rem); min-width: 0; }
     @media (max-width: 900px) { .ev-list:not(.is-all) > .evc:nth-of-type(n + 4) { display: none; } }   /* phones: the closest three until "Show all" (on desktop the list scrolls instead) */
     @media (min-width: 901px) {

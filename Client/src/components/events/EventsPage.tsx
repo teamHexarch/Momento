@@ -55,7 +55,6 @@ export default function EventsPage() {
                 </div>
                 <div className="ev-actions">
                   <button className="btn btn-light" type="button" id="joinOpen">Join with a code</button>
-                  <button className="btn btn-light" type="button" id="scanOpen" data-qr-scan="">Scan a QR code</button>
                   <a className="btn btn-light" href="/#how-it-works" data-create="" data-create-kind="event"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Create an event</a>
                 </div>
               </div>
@@ -81,23 +80,25 @@ export default function EventsPage() {
                 <div className="ev-mapbox">
                   <span className="ev-halo" aria-hidden="true"><i></i><b></b></span>
                   <div id="evMap" role="region" aria-label="Globe showing events near you"></div>
-                  <button className="ev-map-scan" id="evMapScan" type="button"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>Scan to see events near you</button>
+                  <button className="ev-map-scan" id="evMapScan" type="button" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>Scan to see events near you</button>
                   <p className="ev-map-note" id="evMapNote" hidden></p>
                 </div>
                 <div className="ev-side">
                   <div className="ev-side-head">
                     <p className="ev-status" id="evStatus" role="status"></p>
-                    <label className="ev-notify" htmlFor="evNotify"><span>Alert me about events nearby</span><button className="acct-sw" type="button" role="switch" id="evNotify" aria-checked="false"></button></label>
                   </div>
                   <div className="ev-list" id="evList">
                     <div className="ev-empty ev-scan ev-scan--cta is-idle panel">
                       <span className="ev-radar" aria-hidden="true"><i></i><i></i><i></i><span className="ev-radar-pin"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></svg></span></span>
                       <h2>Scan to see the events near you</h2>
                       <p>Pick how far to look, then scan to see public events within <b data-range-label="">1 km</b>. Momento asks for your location first, and only uses it when you scan.</p>
-                      <button className="btn btn-dark ev-scan-go" type="button" data-rescan=""><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>Scan nearby</button>
                     </div>
                   </div>
                   <button className="ev-more glass" type="button" id="evMore" hidden></button>
+                  {/* Under the results, not above them: a setting, not the next step */}
+                  <div className="ev-side-foot">
+                    <label className="ev-notify" htmlFor="evNotify"><span>Alert me about events nearby</span><button className="acct-sw" type="button" role="switch" id="evNotify" aria-checked="false"></button></label>
+                  </div>
                 </div>
               </div>
             </section>

@@ -35,11 +35,15 @@ const CreateMarkup = memo(function CreateMarkup() {
         <i className="m-done-ic" aria-hidden="true">{ICON.bigCheck()}</i>
         <h2 tabIndex={-1}>Album created</h2>
         <p className="acct-sub"></p>
+        {/* One obvious next step (share), one after it (open the album); the QR tile above enlarges when tapped
+            (assets/qr.js) and the rarely used extras sit quietly at the foot */}
         <div className="m-code"><span><small>Guest code</small><b></b></span><button className="m-copy" type="button">Copy code</button></div>
-        <div className="m-code"><span><small>Invite link</small><em className="m-link"></em></span><button className="m-copy" type="button" data-copy-link="">Copy link</button></div>
-        <div className="acct-actions m-showqr"><button className="acct-primary" type="button" data-show-qr="">Show QR code</button></div>
-        <div className="acct-actions"><button className="acct-ghost" type="button" data-close="">Done</button><button className="acct-primary" type="button" data-view-album="">View album</button></div>
-        <button className="m-del" type="button" data-delete="">Delete this album</button>
+        <div className="acct-actions m-next"><button className="acct-primary" type="button" data-copy-link="">Share link</button></div>
+        <div className="acct-actions m-next"><button className="acct-ghost" type="button" data-view-album="">View album</button></div>
+        <div className="m-more">
+          <button className="m-quiet" type="button" data-album-settings="" hidden>Album settings</button>
+          <button className="m-quiet is-danger" type="button" data-delete="">Delete this album</button>
+        </div>
       </div>
     </form>
   );
@@ -183,8 +187,7 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
       d.querySelector('.m-done .acct-sub')!.textContent = `“${name}” is ready for ${when}${place ? ` in ${place}` : ''}.${groupName ? ` Everyone in ${groupName} can see it already. Share this code with anyone else you want in.` : ' Share this code so guests can join and add their photos.'}`;
       d.querySelector('.m-code b')!.textContent = made!.code || '';
       d.querySelector('.m-copy')!.textContent = 'Copy code';
-      d.querySelector('.m-link')!.textContent = M.inviteLink(made!.code);
-      d.querySelector('[data-copy-link]')!.textContent = 'Copy link';
+      d.querySelector('[data-copy-link]')!.textContent = 'Share link';
       showView('done');
       if (!reducedMotion()) [...d.querySelector('.m-done')!.children].forEach((el, i) => el.animate(
         [{ opacity: 0, transform: i ? 'translateY(10px)' : 'scale(.4)' }, { opacity: 1, transform: 'none' }],
@@ -196,15 +199,16 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
       try { await navigator.clipboard.writeText(made!.code || ''); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
       setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
     });
-    d.querySelector('[data-copy-link]')!.addEventListener('click', (e) => M.shareInvite(made, e.currentTarget, 'Copy link'));
+    // A phone opens its share sheet; a computer copies the link (and says so on the button)
+    d.querySelector('[data-copy-link]')!.addEventListener('click', (e) => M.shareInvite(made, e.currentTarget, 'Share link'));
     d.querySelector('[data-view-album]')!.addEventListener('click', async () => { const id = made!.id; await dlg.current!.dismiss(); viewRef.current(id); });
-    d.querySelector('[data-show-qr]')!.addEventListener('click', (e) => { if (made) M.qr?.show(made, e.currentTarget); });
     d.querySelector('[data-delete]')!.addEventListener('click', async (e) => {
       if (await M.removeAlbum({ ...made, photos: 0 }, e.currentTarget)) dlg.current!.dismiss();
     });
 
     openRef.current = (opts: CreateOpts = {}) => {
       form.reset(); made = null; say('');
+      d.querySelector<HTMLElement>('[data-album-settings]')!.hidden = true; // (album-settings.js shows it for the new album)
       loadGroups(opts.groupId, opts.groupName);
       // (the date starts empty: the field says "Enter a date" and its calendar opens on today)
       // "Create an event" opens with Event chosen, "Create an album" with Album
