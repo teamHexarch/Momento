@@ -15,7 +15,7 @@ const MEANING = ['', 'It didn’t work for us', 'We had problems', 'It was okay'
 // The parts of Momento people use at an event, each rated out of 5 (same keys as the server's REVIEW_PARTS)
 const PARTS: [ReviewPart, string][] = [['join', 'Joining the album'], ['upload', 'Adding photos'], ['quality', 'Photo quality'], ['find', 'Finding photos']];
 const ROLES: [ReviewRole, string][] = [['host', 'The host'], ['guest', 'A guest']];
-const MAX_BODY = 1500;
+const MAX_BODY = 300;   // the server's limit (Server/src/utils/text.js LIMITS.reviewBody)
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const when = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;

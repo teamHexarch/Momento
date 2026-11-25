@@ -48,6 +48,8 @@ const albumSchema = new mongoose.Schema({
   // event starts (otherwise the most loved photo takes over)
   cover: { key: String, thumbKey: String, token: String, at: Date },
   keepHostCover: { type: Boolean, default: false },
+  // The host can turn photo comments off for this album (on by default)
+  allowComments: { type: Boolean, default: true },
   // When a host last emailed guests who haven't added photos (one reminder a day per album)
   lastReminderAt: Date,
   // Where photos are kept. Only 'momento' (this server's disk) exists so far.

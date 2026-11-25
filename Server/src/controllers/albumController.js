@@ -1,4 +1,5 @@
 import { admit } from '../services/eventAdmission.js';
+import { tidy, lengthOf, LIMITS } from '../utils/text.js';
 import { once } from 'node:events';
 import mongoose from 'mongoose';
 import { ZipArchive } from 'archiver';
@@ -190,6 +191,7 @@ function summary(album, role, stats = {}) {
     cover: coverOf(album, stats),
     hasHostCover: !!album.cover?.key,
     keepHostCover: !!album.keepHostCover,
+    allowComments: album.allowComments !== false,
     ...shown,
   };
 }
@@ -201,12 +203,13 @@ export async function albumSummaries(albums, userId) {
   return albums.map((a) => summary(a, a.host.equals(userId) ? 'host' : 'guest', stats.get(String(a._id))));
 }
 
-function readAlbumFields(body) {
-  const name = String(body?.name ?? '').trim();
+// nameIsNew: the name was typed now (an album named before the 60-character limit keeps its longer name until renamed)
+function readAlbumFields(body, { nameIsNew = true } = {}) {
+  const name = tidy(body?.name);
   const date = String(body?.date ?? '').trim();
   const place = String(body?.place ?? '').trim();
   if (!name) throw new HttpError(400, 'Give the album a name.');
-  if (name.length > 100) throw new HttpError(400, 'Keep the name under 100 characters.');
+  if (lengthOf(name) > (nameIsNew ? LIMITS.title : 100)) throw new HttpError(400, `Keep the name to ${LIMITS.title} characters.`, 'TEXT_TOO_LONG', { max: LIMITS.title });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) throw new HttpError(400, 'Pick the date of the event.');
   if (place.length > 120) throw new HttpError(400, 'Keep the place under 120 characters.');
   let zone;
@@ -279,6 +282,18 @@ async function waitingGuests(albumIds) {
   return waiting;
 }
 
+// ---- Sorting (?sort_by=&order=), so paged or server-built lists come back in the order the page asks for ----
+// Albums: sort_by name | date (default date, newest first). Photos in an album: sort_by name (file name) | uploader |
+// taken (capture date, falling back to upload date) | uploaded (default, newest first). order: asc | desc.
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function sortOrder(req, allowed, fallback) {
+  const by = allowed.includes(req.query.sort_by) ? req.query.sort_by : fallback;
+  const order = req.query.order === 'asc' || req.query.order === 'desc' ? req.query.order
+    : (by === 'name' || by === 'uploader') ? 'asc' : 'desc';
+  return { by, dir: order === 'asc' ? 1 : -1 };
+}
+const byTime = (a, b) => new Date(a || 0) - new Date(b || 0);
+
 export async function list(req, res) {
   const mine = await albumsOf(req.user._id);
   const ids = mine.map((m) => m.album._id);
@@ -299,7 +314,9 @@ export async function list(req, res) {
       saved: saved.has(String(m.album._id)),
       ...(m.role === 'host' && { waiting: waiting.get(String(m.album._id)) || 0, trashCount: trash.get(String(m.album._id)) || 0 }),
     }))
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort(((s) => (a, b) => s.dir * (s.by === 'name'
+      ? collator.compare(a.name || '', b.name || '') || a.date.localeCompare(b.date)
+      : a.date.localeCompare(b.date) || byTime(a.startsAt, b.startsAt)))(sortOrder(req, ['name', 'date'], 'date')));
   res.json({
     albums,
     // The bin (photos in albums you host) and the photos you've hidden, across all albums
@@ -502,6 +519,13 @@ export async function show(req, res) {
     m.role === 'host' ? Photo.countDocuments({ album: m.album._id, deletedAt: { $ne: null } }) : 0,
   ]);
   const hiddenSet = new Set(hidden.map(String));
+  const s = sortOrder(req, ['name', 'uploader', 'taken', 'uploaded'], 'uploaded');
+  const nameOf = (p) => fixFileName(p.originalName || '');
+  photos.sort((a, b) => s.dir * (
+    s.by === 'name' ? collator.compare(nameOf(a), nameOf(b))
+      : s.by === 'uploader' ? collator.compare(a.uploader?.name || '', b.uploader?.name || '')
+        : s.by === 'taken' ? byTime(a.takenAt || a.createdAt, b.takenAt || b.createdAt)
+          : 0) || s.dir * byTime(a.createdAt, b.createdAt));
   res.json({
     checks: await checksFor(m.album._id, req.user._id),
     album: { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)) },
@@ -512,6 +536,8 @@ export async function show(req, res) {
         // Bookmarked: private, just yours (liked is its old name)
         bookmarked: (p.likes || []).some((id) => id.equals(req.user._id)), liked: (p.likes || []).some((id) => id.equals(req.user._id)),
         reactions: reactionCounts(p), reaction: myReaction(p, req.user._id),
+        // For sorting and the comment badge: the original file name and size, when it was taken, how many comments
+        name: nameOf(p) || undefined, size: p.size, takenAt: p.takenAt || null, commentCount: p.commentCount || 0,
         ...(withHidden && hiddenSet.has(p.id) && { hidden: true }),
       };
     }),
@@ -541,9 +567,12 @@ export async function setHidden(req, res) {
 export async function update(req, res) {
   const m = await membershipOf(req, req.params.id);
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can change the album.');
-  const fields = readAlbumFields({ name: m.album.name, date: m.album.date, place: m.album.place, zone: m.album.zone, ...req.body });
+  const fields = readAlbumFields({ name: m.album.name, date: m.album.date, place: m.album.place, zone: m.album.zone, ...req.body },
+    { nameIsNew: req.body?.name !== undefined && tidy(req.body.name) !== m.album.name });
   Object.assign(m.album, fields);
   if (typeof req.body?.keepHostCover === 'boolean') m.album.keepHostCover = req.body.keepHostCover;
+  // Photo comments on or off for the whole album
+  if (typeof req.body?.allowComments === 'boolean') m.album.allowComments = req.body.allowComments;
   // groupId: a friend group the host is in, or null to stop sharing it with its group
   if (req.body && 'groupId' in req.body) {
     const before = m.album.group;

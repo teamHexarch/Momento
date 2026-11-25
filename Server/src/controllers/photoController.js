@@ -9,6 +9,8 @@ import { avatarOf, AVATAR_FIELDS } from '../services/avatarService.js';
 import { config } from '../config/env.js';
 import { notify, unnotify } from '../services/notifyService.js';
 import { sendPhoto, deletePhoto, ensureThumbnail } from '../services/storageService.js';
+import { PhotoComment, MAX_COMMENTS_PER_PHOTO } from '../models/PhotoComment.js';
+import { cleanText, LIMITS } from '../utils/text.js';
 
 // A photo plus the caller's membership of its album; anyone outside the album gets a 404
 // (publicPreview: a small version may also be shown to anyone when the album is a public event)
@@ -167,4 +169,58 @@ export async function liked(req, res) {
     bookmarkedAt: p.likeLog.find((l) => l.user?.equals(req.user._id))?.at,
   })).sort((a, b) => (b.bookmarkedAt || 0) - (a.bookmarkedAt || 0));
   res.json({ photos: req.path.endsWith('/liked') ? out.map(({ bookmarkedAt, ...p }) => ({ ...p, likedAt: bookmarkedAt })) : out });
+}
+
+// ---- Comments: GET/POST /api/photos/:id/comments · DELETE /api/photos/:id/comments/:commentId ----
+// Anyone in the album can read and write them (not on photos in the bin). Up to 200 characters, at most 50 per photo
+// (the photo's commentCount is reserved first, so two people can't both take the 50th). The author, the album's host,
+// or the admin team (DELETE /api/admin/comments/:id) can delete one. The host can turn comments off (allowComments).
+
+const commentView = (c, userId, canDelete) => ({
+  id: String(c._id), text: c.text, by: c.author?.equals?.(userId) ? 'You' : (c.authorName || 'Someone'),
+  mine: !!c.author?.equals?.(userId), at: c.createdAt, canDelete,
+});
+
+export async function comments(req, res) {
+  const { photo, m } = await photoFor(req, { react: true });
+  const [rows, album] = await Promise.all([
+    PhotoComment.find({ photo: photo._id }).sort({ createdAt: 1 }).limit(MAX_COMMENTS_PER_PHOTO).lean(),
+    Album.findById(photo.album, 'allowComments').lean(),
+  ]);
+  const host = m.role === 'host';
+  res.json({
+    comments: rows.map((c) => commentView({ ...c, author: c.author }, req.user._id, host || c.author.equals(req.user._id))),
+    count: rows.length, max: MAX_COMMENTS_PER_PHOTO, allowComments: album?.allowComments !== false, maxLength: LIMITS.comment,
+  });
+}
+
+export async function addComment(req, res) {
+  const { photo, m } = await photoFor(req, { react: true });
+  const album = await Album.findById(photo.album, 'allowComments').lean();
+  if (album?.allowComments === false) throw new HttpError(403, 'The host has turned comments off for this album.', 'COMMENTS_OFF');
+  const text = cleanText(req.body?.text, { max: LIMITS.comment, what: 'Your comment', required: true, multiline: true });
+  const reserved = await Photo.updateOne({ _id: photo._id, deletedAt: null, commentCount: { $lt: MAX_COMMENTS_PER_PHOTO } }, { $inc: { commentCount: 1 } });
+  if (!reserved.modifiedCount) throw new HttpError(409, `This photo already has ${MAX_COMMENTS_PER_PHOTO} comments.`, 'COMMENT_LIMIT');
+  let c;
+  try {
+    c = await PhotoComment.create({ photo: photo._id, album: photo.album, author: req.user._id, authorName: (req.user.name || '').trim().split(/\s+/)[0] || 'Someone', text });
+  } catch (error) {
+    await Photo.updateOne({ _id: photo._id, commentCount: { $gt: 0 } }, { $inc: { commentCount: -1 } });
+    throw error;
+  }
+  const count = (await Photo.findById(photo._id, 'commentCount').lean())?.commentCount ?? 0;
+  res.status(201).json({ comment: commentView(c, req.user._id, true), commentCount: count, host: m.role === 'host' });
+}
+
+export async function removeComment(req, res) {
+  const { photo, m } = await photoFor(req);
+  if (!mongoose.isValidObjectId(req.params.commentId)) throw new HttpError(404, 'Comment not found.', 'COMMENT_NOT_FOUND');
+  const c = await PhotoComment.findOne({ _id: req.params.commentId, photo: photo._id });
+  if (!c) throw new HttpError(404, 'Comment not found.', 'COMMENT_NOT_FOUND');
+  if (m.role !== 'host' && !c.author.equals(req.user._id)) throw new HttpError(403, 'You can delete your own comments; the host can delete any.', 'COMMENT_NOT_YOURS');
+  if ((await PhotoComment.deleteOne({ _id: c._id })).deletedCount) {
+    await Photo.updateOne({ _id: photo._id, commentCount: { $gt: 0 } }, { $inc: { commentCount: -1 } });
+  }
+  const count = (await Photo.findById(photo._id, 'commentCount').lean())?.commentCount ?? 0;
+  res.json({ ok: true, commentCount: count });
 }

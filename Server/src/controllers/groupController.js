@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { tidy, lengthOf, LIMITS } from '../utils/text.js';
 import mongoose from 'mongoose';
 import { config } from '../config/env.js';
 import { Album } from '../models/Album.js';
@@ -41,9 +42,9 @@ async function ensureCode(group) {
 const notFound = () => new HttpError(404, 'Group not found.');
 
 function readName(body) {
-  const name = String(body?.name ?? '').trim();
+  const name = tidy(body?.name);
   if (!name) throw new HttpError(400, 'Give the group a name.');
-  if (name.length > 60) throw new HttpError(400, 'Keep the name under 60 characters.');
+  if (lengthOf(name) > LIMITS.title) throw new HttpError(400, `Keep the name to ${LIMITS.title} characters.`, 'TEXT_TOO_LONG', { max: LIMITS.title });
   return name;
 }
 

@@ -275,3 +275,15 @@ export async function revokeAll(req, res) {
   forgetSwitches();
   res.json({ signedOut: r.modifiedCount, at: now });
 }
+
+// DELETE /api/admin/comments/:id: the admin team removes any photo comment (logged against the person)
+export async function removeComment(req, res) {
+  const { PhotoComment } = await import('../models/PhotoComment.js');
+  const c = await PhotoComment.findById(id(req.params.id));
+  if (!c) throw new HttpError(404, 'Comment not found.', 'COMMENT_NOT_FOUND');
+  if ((await PhotoComment.deleteOne({ _id: c._id })).deletedCount) {
+    await Photo.updateOne({ _id: c.photo, commentCount: { $gt: 0 } }, { $inc: { commentCount: -1 } });
+  }
+  await audit('comment.removed', { req, target: c._id, meta: { photo: String(c.photo), author: String(c.author) } });
+  res.json({ ok: true });
+}

@@ -29,6 +29,10 @@ const photoSchema = new mongoose.Schema({
   flaggedAt: Date,
   // Hidden by an automated album audit (no longer run; kept so any photo it hid stays hidden until staff decide)
   auditHidden: Boolean,
+  // How many comments it has (models/PhotoComment.js), kept up to date so grids don't count
+  commentCount: { type: Number, default: 0 },
+  // When it was taken (the camera's own date), for sorting by capture date; uploads without one sort by upload date
+  takenAt: Date,
 }, { timestamps: true });
 
 photoSchema.index({ album: 1, createdAt: -1 });
@@ -37,5 +41,16 @@ photoSchema.index({ deletedAt: 1 }, { partialFilterExpression: { deletedAt: { $t
 photoSchema.index({ 'likeLog.user': 1 });
 photoSchema.index({ album: 1, hash: 1 }, { partialFilterExpression: { hash: { $type: 'string' } } });
 photoSchema.index({ hash: 1 }, { partialFilterExpression: { hash: { $type: 'string' } } });
+
+// Deleting photos, however it happens (bin, host, takedown, account deletion), removes their comments too
+async function idsOf(query) { return query.model.find(query.getFilter(), '_id').lean().then((rows) => rows.map((r) => r._id)); }
+const dropComments = async (ids) => {
+  if (!ids?.length) return;
+  const { PhotoComment } = await import('./PhotoComment.js');
+  await PhotoComment.deleteMany({ photo: { $in: ids } });
+};
+photoSchema.pre(['deleteOne', 'deleteMany'], { query: true, document: false }, async function () { this._goneIds = await idsOf(this); });
+photoSchema.post(['deleteOne', 'deleteMany'], { query: true, document: false }, async function () { await dropComments(this._goneIds); });
+photoSchema.post('deleteOne', { document: true, query: false }, async function () { await dropComments([this._id]); });
 
 export const Photo = mongoose.model('Photo', photoSchema);

@@ -79,7 +79,7 @@ reviewRoutes.post('/', requireUser, postLimit, async (req, res) => {
   const rating = Number(b.rating);
   if (!isStar(rating)) throw new HttpError(400, 'Choose from one to five stars.');
   const body = typeof b.body === 'string' ? b.body.trim() : '';
-  if (body.length > MAX_REVIEW_BODY) throw new HttpError(400, 'Keep your comment under 1,500 characters.');
+  if ([...body].length > MAX_REVIEW_BODY) throw new HttpError(400, `Keep your comment to ${MAX_REVIEW_BODY} characters.`, 'TEXT_TOO_LONG', { max: MAX_REVIEW_BODY });
   const role = typeof b.role === 'string' && REVIEW_ROLES.includes(b.role) ? b.role : undefined;
   // Each part: a whole number of stars from 1 to 5, or left out (anything else is dropped)
   const given = b.scores && typeof b.scores === 'object' && !Array.isArray(b.scores) ? b.scores : {};

@@ -27,6 +27,7 @@
     "test:security": "node scripts/testSecurity.js",
     "test:admin": "node scripts/testAdminTeam.js",
     "test:devices": "node scripts/testDevices.js",
+    "test:comments": "node scripts/testComments.js",
     "test:learning": "node scripts/testLearningEndToEnd.js",
     "preview:review": "node scripts/reviewPreview.js",
     "admin-team": "node --env-file-if-exists=.env scripts/adminTeam.js",
@@ -34,7 +35,7 @@
     "test:e2e": "playwright test -c tests/e2e",
     "test:e2e:watch": "playwright test -c tests/e2e --headed",
     "clean:old-data": "node --env-file=.env scripts/cleanOldData.js",
-    "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js && node scripts/testAdminTeam.js && node scripts/testRekognition.js && node scripts/testDevices.js && node scripts/testAttack.js"
+    "test": "node scripts/testGuest.js && node scripts/testGroups.js && node scripts/testPhotos.js && node scripts/testCover.js && node scripts/testNotify.js && node scripts/testJobs.js && node scripts/testStorage.js && node scripts/testEvents.js && node scripts/testFlows.js && node scripts/testPhotoPrivacy.js && node scripts/testNsfw.js && node scripts/testSecurity.js && node scripts/testAdminTeam.js && node scripts/testRekognition.js && node scripts/testDevices.js && node scripts/testComments.js && node scripts/testAttack.js"
   },
   "engines": {
     "node": ">=22"

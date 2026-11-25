@@ -6,6 +6,7 @@ import { config } from '../config/env.js';
 import { User } from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
 import { startSession, endSession } from '../utils/session.js';
+import { cleanText, tidy, lengthOf, LIMITS } from '../utils/text.js';
 import { sendVerificationEmail, confirmEmail } from '../services/verificationService.js';
 import { sendResetEmail, resetPassword as applyNewPassword } from '../services/passwordResetService.js';
 import { startEmailChange, peekEmailApproval, approveEmailChange, cancelEmailChange, finishEmailChange, dropEmailChange, deleteAccount } from '../services/accountService.js';
@@ -41,11 +42,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 12);
 
 function readCredentials(body, { needName }) {
-  const name = String(body?.name ?? '').trim();
+  const name = tidy(body?.name);
   const email = String(body?.email ?? '').trim().toLowerCase();
   const password = String(body?.password ?? '');
   if (needName && !name) throw new HttpError(400, 'Enter your name so guests know who added each photo.');
-  if (name.length > 80) throw new HttpError(400, 'Keep your name under 80 characters.');
+  if (lengthOf(name) > LIMITS.displayName) throw new HttpError(400, `Keep your name to ${LIMITS.displayName} characters.`, 'TEXT_TOO_LONG', { max: LIMITS.displayName });
   if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'Enter an email address like name@example.com.');
   if (password.length < 8) throw new HttpError(400, 'Use at least 8 characters for your password.');
   if (password.length > 128) throw new HttpError(400, 'Keep your password under 128 characters.');
@@ -150,9 +151,7 @@ export function me(req, res) {
 export async function updateMe(req, res) {
   const name = req.body?.name;
   if (name !== undefined) {
-    const n = String(name).trim();
-    if (!n || n.length > 80) throw new HttpError(400, 'Enter a name up to 80 characters.');
-    req.user.name = n;
+    req.user.name = cleanText(name, { max: LIMITS.displayName, what: 'Your name', required: true });
   }
   // Notification choices: only the known switches, only true/false
   const notify = req.body?.notify;
@@ -486,7 +485,8 @@ export async function google(req, res) {
     providerId: payload.sub,
     email: payload.email?.toLowerCase(),
     emailVerified: payload.email_verified === true,
-    name: payload.name,
+    // Google names can be long: kept to the display-name limit
+    name: [...tidy(payload.name)].slice(0, LIMITS.displayName).join('').trim(),
     avatarUrl: payload.picture,
     req,
   });

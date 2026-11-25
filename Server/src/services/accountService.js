@@ -119,6 +119,14 @@ export async function deleteAccount(user) {
   // Their likes and reactions come off other people's photos
   await Photo.updateMany({ likes: user._id }, { $pull: { likes: user._id, likeLog: { user: user._id } }, $inc: { likeCount: -1 } });
   await Photo.updateMany({ 'reactions.user': user._id }, { $pull: { reactions: { user: user._id } } });
+  // Their comments on other people's photos (the counts go down with them)
+  const { PhotoComment } = await import('../models/PhotoComment.js');
+  const written = await PhotoComment.aggregate([{ $match: { author: user._id } }, { $group: { _id: '$photo', n: { $sum: 1 } } }]);
+  for (const w of written) {
+    await Photo.updateOne({ _id: w._id }, { $inc: { commentCount: -w.n } });
+    await Photo.updateOne({ _id: w._id, commentCount: { $lt: 0 } }, { $set: { commentCount: 0 } });
+  }
+  await PhotoComment.deleteMany({ author: user._id });
   // Zips they asked for, and zips of the albums they host
   const { ZipFile } = await import('./zipService.js');
   const zips = await ZipFile.find({ $or: [{ user: user._id }, { album: { $in: hostedIds } }] }, 'key');

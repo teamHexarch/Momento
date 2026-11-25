@@ -26,5 +26,13 @@ photoRoutes.post('/:id/like', socialLimit, photos.like);
 photoRoutes.get('/:id/likes', photos.likes);
 photoRoutes.post('/:id/reaction', socialLimit, photos.react);
 photoRoutes.get('/:id/reactions', photos.reactions);
+// Comments: 10 a minute per person, so a script can't flood a photo (each photo holds at most 50)
+const commentLimit = rateLimit({
+  windowMs: 60000, limit: 10, keyGenerator: (req) => `comment:${req.user.id}`, standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: 'That’s a lot of comments at once. Wait a minute, then try again.', code: 'COMMENT_RATE_LIMIT' },
+});
+photoRoutes.get('/:id/comments', photos.comments);
+photoRoutes.post('/:id/comments', commentLimit, photos.addComment);
+photoRoutes.delete('/:id/comments/:commentId', socialLimit, photos.removeComment);
 // Report a photo (nudity, abuse, private information, copyright...)
 photoRoutes.post('/:id/report', socialLimit, photos.report);

@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 // (Reviews sent before November 2026 may also hold worked / better / event from the earlier checklist; no longer read.)
 export const REVIEW_PARTS = ['join', 'upload', 'quality', 'find'];
 export const REVIEW_ROLES = ['host', 'guest'];
-export const MAX_REVIEW_BODY = 1500;
+export const MAX_REVIEW_BODY = 300;   // utils/text.js LIMITS.reviewBody
 
 const star = { type: Number, min: 1, max: 5 };
 const reviewSchema = new mongoose.Schema({

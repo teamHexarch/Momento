@@ -37,6 +37,35 @@
 - `Device`: `{ id, name: "iPhone • Safari", ipPrefix: "203.0.113.x" | null, loggedInAt, lastActiveAt, expiresAt, current }`
   (lastActiveAt is updated at most every 5 minutes).
 
+## Photo comments
+
+- **`GET /api/photos/:id/comments`** (album members): `{ comments: [Comment] (oldest first), count, max: 50, allowComments, maxLength: 200 }`
+- **`POST /api/photos/:id/comments`** `{ text }` (1-200 characters, trimmed, spaces collapsed): `201 { comment, commentCount }`.
+  `403 COMMENTS_OFF` (the host turned them off), `409 COMMENT_LIMIT` (50 already), `429 COMMENT_RATE_LIMIT` (10 a minute),
+  `400 TEXT_TOO_LONG` / `TEXT_EMPTY`. 404 for anyone outside the album or a photo in the bin.
+- **`DELETE /api/photos/:id/comments/:commentId`**: the author or the album's host: `{ ok, commentCount }`
+  (`403 COMMENT_NOT_YOURS`). The admin team: `DELETE /api/admin/comments/:id`.
+- `Comment`: `{ id, text, by: "You" | first name, mine, at, canDelete }`
+- Each photo in `GET /api/albums/:id` has `commentCount` (for the badge); the album has `allowComments`, which the host
+  changes with `PATCH /api/albums/:id { allowComments: true | false }`.
+- Comments go with their photo (any deletion) and with their author's account.
+
+## Text limits (server-enforced; show a live counter)
+
+Text is trimmed and runs of spaces collapsed; over the limit: `400 { code: "TEXT_TOO_LONG", max }`.
+Photo comment 200 · review comment 300 · review "Other" feature request 100 · a person's name 40 ·
+album, event and group names 60 (an older, longer album name is kept until it's renamed) · descriptions, trivia
+questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
+
+## Sorting
+
+- **`GET /api/albums?sort_by=name|date&order=asc|desc`** (default: date, newest first).
+- **`GET /api/albums/:id?sort_by=uploaded|taken|name|uploader&order=asc|desc`** (default: uploaded, newest first; name
+  and uploader default to A→Z; name uses natural order, so img_2 comes before IMG_10; taken = capture date, falling
+  back to the upload date).
+- Each photo in `GET /api/albums/:id` now also has `name` (original file name), `size` (bytes) and `takenAt`
+  (capture date or null), for sorting in the browser too.
+
 ## Every endpoint
 
 Paths are full paths. Generated from the server's route files on 2026-11-25; regenerate when routes change.
@@ -52,6 +81,7 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | GET | /api/admin/reports/:id/preview |
 | POST | /api/admin/reports/:id/dismiss |
 | POST | /api/admin/photos/:id/takedown |
+| DELETE | /api/admin/comments/:id |
 | POST | /api/admin/users/:id/unsuspend |
 | GET | /api/admin/moderation |
 | GET | /api/admin/moderation-status |
@@ -155,6 +185,9 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | GET | /api/photos/:id/likes |
 | POST | /api/photos/:id/reaction |
 | GET | /api/photos/:id/reactions |
+| GET | /api/photos/:id/comments |
+| POST | /api/photos/:id/comments |
+| DELETE | /api/photos/:id/comments/:commentId |
 | POST | /api/photos/:id/report |
 | GET | /api/reviews |
 | GET | /api/reviews/stats |

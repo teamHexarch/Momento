@@ -33,6 +33,7 @@ adminRoutes.get('/reports', admin.reports);
 adminRoutes.get('/reports/:id/preview', admin.reportPreview);
 adminRoutes.post('/reports/:id/dismiss', admin.dismissReport);
 adminRoutes.post('/photos/:id/takedown', admin.takedown);
+adminRoutes.delete('/comments/:id', admin.removeComment);
 adminRoutes.post('/users/:id/unsuspend', admin.unsuspend);
 adminRoutes.get('/moderation', admin.decisions);
 adminRoutes.get('/moderation-status', admin.moderationStatus);
