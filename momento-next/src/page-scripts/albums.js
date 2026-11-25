@@ -1006,6 +1006,8 @@ export default function start() {
       // Ask first (and get the guest's location when the album has a zone): assets/event.js
       const ok = Momento.event ? await Momento.event.confirmUpload(a, files) : { location: '' };
       if (!ok || M.a !== a || uploading) return;
+      if (ok.files) files = ok.files;   // (any left out in the confirmation stay out)
+      if (!files.length) return;
       uploading = true;
       const add = document.getElementById('albumAdd'); add.disabled = true; document.getElementById('albumCamera').disabled = true;
       note.textContent = left.length ? bigLine(left.map((f) => f.name)) : '';

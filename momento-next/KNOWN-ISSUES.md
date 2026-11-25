@@ -13,6 +13,14 @@ website (`Client/`), and "backend" means the server (`Server/`).
 - Until then, the Reviews links in the home page's menu and the footer lead to a page that doesn't work. They could be
   hidden until the routes exist.
 
+**Photo viewer: a swipe is sometimes ignored, and the arrow keys don't change photo** (front end)
+- Since the viewer change of 24 November ("fast swiping never repeats a photo"), the first swipe after opening a photo
+  or after changing direction often does nothing.
+- In testing on a phone-sized screen, with swipes 2.5 seconds apart: left, left, right, right, left went to photos
+  2, 3, 3, 2, 2. It should have been 2, 3, 2, 1, 2. The arrow keys didn't move at all.
+- The likely cause is the new queue for swipes made mid-slide. It adds queued swipes together, so one left over from
+  a finished gesture cancels the next swipe. `qa/touch-check.mjs` shows it, and it passed before that change.
+
 ## 2. Needs checking on a real phone and with real accounts
 
 Everything below was tested only in a desktop browser pretending to be a phone, with a fake camera and sample data.
