@@ -4,7 +4,7 @@ import { LIMITS } from '../utils/text.js';
 // Event mini-games (services/gameService.js, routes under /api/albums/:id/games). One GameRound per game the host
 // runs in an album (a poll, a trivia round, ...); one GameResponse per person per question/vote; GameAward for points
 // given by the host (podium places). The leaderboard adds up the points of an album's responses and awards.
-export const GAME_TYPES = ['poll', 'trivia', 'battle', 'bingo'];
+export const GAME_TYPES = ['poll', 'trivia', 'battle', 'bingo', 'crop'];
 
 const roundSchema = new mongoose.Schema({
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
@@ -18,6 +18,7 @@ const roundSchema = new mongoose.Schema({
   // trivia: { questions: [{ text, options: [String], answer: Number, seconds }], current: Number, currentAt: Date }
   // battle: { maxEntries: Number (photos per person) }
   // bingo: { size: 3 | 4, prompts: [String] (size x size, row by row) }
+  // crop: like trivia, each question also has { photo, focus: { x, y } } (the detail the close-up starts on)
   settings: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { collection: 'game_rounds', timestamps: true, versionKey: false });
 roundSchema.index({ album: 1, createdAt: -1 });

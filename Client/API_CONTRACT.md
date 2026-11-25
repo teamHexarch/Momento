@@ -89,7 +89,7 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
   off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
-## Event mini-games (polls, trivia, photo battle, scavenger bingo; more game types to come)
+## Event mini-games (polls, trivia, photo battle, scavenger bingo, mystery crop)
 
 **Events only** (albums with a time and a place): in a plain photo album `GET …/games` answers `{ enabled: false,
 rounds: [] }` (don't show a games section) and everything else `403 GAMES_EVENTS_ONLY`. In events: album members
@@ -120,10 +120,20 @@ only (404 otherwise); creating and running games is for the host (`403 GAME_HOST
   `409 GAME_PHOTO_USED`; `403 GAME_PHOTO_NOT_YOURS`). Take it back: `DELETE …/:round/claims/:tile`; the host removes
   anyone's: `DELETE …/:round/claims/:tile?user=<userId>`. 10 points a tile, 30 per full row/column/diagonal, 100 for
   the full card (they follow the claims: a removed claim or deleted photo takes its points away).
+- **Mystery crop** (host: `{ type: "crop", title, photos: [photoId | { photo, question, options: [2-4], answer }] (1-10)
+  or auto: 1-10 (random event photos), seconds?: 15-120 (30), start?: true }`). Without a question, each photo asks
+  "Whose photo is this?" with the photographer and up to 3 other people with photos in the event (made automatically;
+  `409 GAME_NOT_ENOUGH_PEOPLE` if only one person has photos). It runs like trivia (`…/next`, the last one ends it).
+  The picture: `GET …/:round/image` (a JPEG of the photo on screen at its **current** zoom only: a close-up, then
+  wider, then the whole photo, each a third of the time; header `X-Crop-Stage`). Guess: `POST …/:round/guess
+  { question: index, option: index }`, one each: 150 points on the close-up, 100 on the middle zoom, 50 on the whole
+  photo. Refresh the picture when `question.stage` changes (or at `question.nextStageAt`).
 - `Game` (poll): `{ id, type, title, status: draft|live|ended, question, options: [{ id, text, votes, percent }], total, myChoice }`
 - `Game` (trivia): `{ id, type, title, status, questionCount, current, question: { index, text, options, seconds, endsAt,
   answers, answer (only once time is up) }, myAnswer: { option, correct?, points? }, myScore }`; the host also gets
   `questions` (with the answers).
+- `Game` (crop): like trivia, and `question` also has `{ stage: 0-2, stages: 3, points, image, nextStageAt,
+  photo + url, thumbnailUrl, miniUrl (once time is up) }`.
 - `Game` (bingo): `{ id, type, title, status, size, tiles: [{ index, prompt, claims, mine: { photo, url, thumbnailUrl, miniUrl } | null }],
   myTiles, myLines, fullCard, myScore, leaders: [{ rank, name, mine, tiles, lines, full, points }] (top 5) }`; the host also
   gets `claims: [{ tile, user, name, photo, … }]`.
@@ -271,6 +281,8 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/trash/purge |
 | GET | /api/hidden |
 | GET | /api/users/:id/avatar |
+| POST | /api/albums/:id/games/:round/guess |
+| GET | /api/albums/:id/games/:round/image |
 | POST | /api/albums/:id/games/:round/claims |
 | DELETE | /api/albums/:id/games/:round/claims/:tile |
 | POST | /api/albums/:id/games/:round/entries |

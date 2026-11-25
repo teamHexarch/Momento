@@ -8,6 +8,8 @@
 //           3rd get 100, 60 and 30 (PODIUM). Photos are ranked by an Elo rating from the head-to-head votes.
 //   bingo:  10 points per tile claimed with a photo, 30 more for each full line (row, column or diagonal), 100 more for
 //           the full card. Line and card points are worked out from the claims, so they always follow them.
+//   crop:   mystery crop: a photo starts as a close-up of one detail and zooms out in 3 stages over its time; a right
+//           guess scores 150 on the close-up, 100 on the middle zoom, 50 once the whole photo shows. One guess each.
 // The leaderboard adds up every response's points and the host's awards (podium places) in the album.
 import mongoose from 'mongoose';
 import { GameRound, GameResponse, GameAward, GameEntry, GameVote, GAME_TYPES } from '../models/Game.js';
@@ -21,6 +23,9 @@ export const STATE_MS = 2000;
 export const POLL_POINTS = 10, RIGHT_POINTS = 100, SPEED_POINTS = 50;
 export const VOTE_POINTS = 2, POINTED_VOTES = 10, PODIUM = [100, 60, 30];
 export const TILE_POINTS = 10, LINE_POINTS = 30, CARD_POINTS = 100;
+export const CROP_POINTS = [150, 100, 50];
+// How much of the photo each stage shows (a fraction of its width and height)
+export const CROP_STAGES = [0.2, 0.5, 1];
 // Prompts for a card the host doesn't write themselves
 export const DEFAULT_PROMPTS = ['Candid laugh', 'Group toast', 'Best dance move', 'The cake', 'A selfie with the host', 'Someone mid-speech',
   'Matching outfits', 'The venue from outside', 'A happy tear', 'Three generations', 'The best shoes', 'A photo-bomb', 'Something blue',
@@ -65,14 +70,61 @@ function readBingo(b) {
   const prompts = b.prompts.map((t, i) => cleanText(t, { max: LIMITS.description, what: `Prompt ${i + 1}`, required: true }));
   return { size, prompts };
 }
-const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle, bingo: readBingo };
+// Mystery crop: the host's photos (photo ids from the event) or { auto: n } random ones, 1-10. Each one asks
+// "Whose photo is this?" (the photographer and up to 3 other people with photos in the event, made automatically),
+// unless the host gives their own { question, options, answer }.
+const firstOf = (name) => (name || '').trim().split(/\s+/)[0] || 'Guest';
+const shuffle = (list) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+async function readCrop(b, album) {
+  const seconds = b.seconds === undefined ? 30 : Number(b.seconds);
+  if (!Number.isInteger(seconds) || seconds < 15 || seconds > 120) throw new HttpError(400, 'Give each photo 15 to 120 seconds.', 'GAME_INVALID');
+  let items;
+  if (b.auto !== undefined) {
+    const n = Number(b.auto);
+    if (!Number.isInteger(n) || n < 1 || n > 10) throw new HttpError(400, 'Choose 1 to 10 photos.', 'GAME_INVALID');
+    const pool = await Photo.find({ album: album._id, ...SHOWN }, '_id').lean();
+    if (!pool.length) throw new HttpError(409, 'This event has no photos yet.', 'GAME_NO_PHOTOS');
+    items = shuffle(pool).slice(0, n).map((p) => ({ photo: p._id }));
+  } else {
+    items = Array.isArray(b.photos) ? b.photos : [];
+    if (items.length < 1 || items.length > 10) throw new HttpError(400, 'Choose 1 to 10 photos.', 'GAME_INVALID');
+    items = items.map((x) => (typeof x === 'string' ? { photo: x } : x || {}));
+  }
+  const ids = items.map((x) => x.photo);
+  if (!ids.every((id) => mongoose.isValidObjectId(id))) throw new HttpError(400, 'Choose photos from this event.', 'GAME_INVALID');
+  const photos = new Map((await Photo.find({ _id: { $in: ids }, album: album._id, ...SHOWN }, 'uploader').lean()).map((p) => [String(p._id), p]));
+  if (photos.size !== new Set(ids.map(String)).size) throw new HttpError(404, 'Some of those photos aren\u2019t in this event.', 'GAME_PHOTO_NOT_FOUND');
+  // The people with photos in the event, for "Whose photo is this?"
+  const uploaders = await Photo.distinct('uploader', { album: album._id, ...SHOWN });
+  const people = new Map((await User.find({ _id: { $in: uploaders } }, 'name').lean()).map((u) => [String(u._id), firstOf(u.name)]));
+  const questions = items.map((x, n) => {
+    const focus = { x: 0.25 + Math.random() * 0.5, y: 0.25 + Math.random() * 0.5 };
+    const base = { photo: photos.get(String(x.photo))._id, focus, seconds };
+    if (x.question !== undefined) {
+      const text = cleanText(x.question, { max: LIMITS.description, what: `Photo ${n + 1}'s question`, required: true });
+      const opts = Array.isArray(x.options) ? x.options : [];
+      if (opts.length < 2 || opts.length > 4) throw new HttpError(400, `Photo ${n + 1} needs 2 to 4 answers.`, 'GAME_INVALID');
+      const options = opts.map((o, i) => cleanText(o, { max: LIMITS.title, what: `Photo ${n + 1}, answer ${i + 1}`, required: true }));
+      const answer = Number(x.answer);
+      if (!Number.isInteger(answer) || answer < 0 || answer >= options.length) throw new HttpError(400, `Choose the right answer for photo ${n + 1}.`, 'GAME_INVALID');
+      return { ...base, text, options, answer };
+    }
+    const right = people.get(String(photos.get(String(x.photo)).uploader)) || 'Guest';
+    const others = shuffle([...new Set([...people.values()].filter((name) => name !== right))]).slice(0, 3);
+    if (!others.length) throw new HttpError(409, '"Whose photo is this?" needs photos from at least 2 people. Add your own question instead.', 'GAME_NOT_ENOUGH_PEOPLE');
+    const options = shuffle([right, ...others]);
+    return { ...base, text: 'Whose photo is this?', options, answer: options.indexOf(right) };
+  });
+  return { questions, current: -1 };
+}
+const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle, bingo: readBingo, crop: readCrop };
 
 export async function createRound(album, user, body = {}) {
   const type = body.type;
   if (!GAME_TYPES.includes(type)) throw new HttpError(400, `Choose a game: ${GAME_TYPES.join(', ')}.`, 'GAME_INVALID');
   if (await GameRound.countDocuments({ album: album._id }) >= MAX_ROUNDS_PER_ALBUM) throw new HttpError(409, 'This album has a lot of games already. Delete some first.', 'GAME_LIMIT');
   const title = cleanText(body.title, { max: LIMITS.title, what: 'The name', required: true });
-  const round = await GameRound.create({ album: album._id, type, title, createdBy: user._id, settings: READERS[type](body) });
+  const round = await GameRound.create({ album: album._id, type, title, createdBy: user._id, settings: await READERS[type](body, album) });
   forget(album._id);
   if (body.start === true) return startRound(album, round._id);
   return round;
@@ -89,15 +141,15 @@ export async function startRound(album, roundId) {
   const round = await hostRound(album, roundId);
   if (round.status !== 'draft') throw new HttpError(409, 'This game has already started.', 'GAME_STATE');
   const set = { status: 'live', startedAt: new Date() };
-  if (round.type === 'trivia') Object.assign(set, { 'settings.current': 0, 'settings.currentAt': new Date() });
+  if (round.type === 'trivia' || round.type === 'crop') Object.assign(set, { 'settings.current': 0, 'settings.currentAt': new Date() });
   await GameRound.updateOne({ _id: round._id, status: 'draft' }, { $set: set });
   forget(album._id);
   return GameRound.findById(round._id);
 }
-// Trivia: on to the next question (the last one ends the round)
+// Trivia and mystery crop: on to the next question or photo (the last one ends the round)
 export async function nextQuestion(album, roundId) {
   const round = await hostRound(album, roundId);
-  if (round.type !== 'trivia' || round.status !== 'live') throw new HttpError(409, 'Only a live trivia round has a next question.', 'GAME_STATE');
+  if (!['trivia', 'crop'].includes(round.type) || round.status !== 'live') throw new HttpError(409, 'Only a live trivia or mystery crop round has a next one.', 'GAME_STATE');
   const next = round.settings.current + 1;
   if (next >= round.settings.questions.length) return endRound(album, roundId);
   await GameRound.updateOne({ _id: round._id, 'settings.current': round.settings.current }, { $set: { 'settings.current': next, 'settings.currentAt': new Date() } });
@@ -147,9 +199,14 @@ export async function vote(album, user, roundId, body = {}) {
     { $set: { choice }, $setOnInsert: { album: album._id, points: POLL_POINTS } }, { upsert: true });
   return { round: round._id, choice };
 }
-// Trivia: an answer to the question on screen, within its time; one per question
-export async function answer(album, user, roundId, body = {}) {
-  const round = await liveRound(album, roundId, 'trivia');
+// Which zoom stage a mystery crop photo is at: 0 (close-up), 1, 2 (the whole photo), by the time since it came up
+export function cropStage(question, currentAt, now = Date.now()) {
+  const part = (question.seconds * 1000) / CROP_STAGES.length;
+  return Math.min(CROP_STAGES.length - 1, Math.max(0, Math.floor((now - new Date(currentAt).getTime()) / part)));
+}
+// Trivia and mystery crop: an answer to the question (or photo) on screen, within its time; one per question
+export async function answer(album, user, roundId, body = {}, type = 'trivia') {
+  const round = await liveRound(album, roundId, type);
   const { questions, current, currentAt } = round.settings;
   const q = Number(body.question);
   if (q !== current) throw new HttpError(409, 'That question isn’t being asked now.', 'GAME_STATE');
@@ -159,7 +216,8 @@ export async function answer(album, user, roundId, body = {}) {
   const left = new Date(currentAt).getTime() + question.seconds * 1000 - Date.now();
   if (left <= 0) throw new HttpError(409, 'Time’s up for this question.', 'GAME_TIME_UP');
   const correct = choice === question.answer;
-  const points = correct ? RIGHT_POINTS + Math.round(SPEED_POINTS * Math.min(1, left / (question.seconds * 1000))) : 0;
+  const points = !correct ? 0 : type === 'crop' ? CROP_POINTS[cropStage(question, currentAt)]
+    : RIGHT_POINTS + Math.round(SPEED_POINTS * Math.min(1, left / (question.seconds * 1000)));
   try {
     await GameResponse.create({ round: round._id, album: album._id, user: user._id, q, choice, correct, points });
   } catch (error) {
@@ -167,6 +225,33 @@ export async function answer(album, user, roundId, body = {}) {
     throw error;
   }
   return { question: q, choice, correct, points };
+}
+
+// ---- Mystery crop: the picture for the photo on screen, at its current zoom only (never further) ----
+const crops = new Map();
+export async function cropImage(album, roundId) {
+  const round = await liveRound(album, roundId, 'crop');
+  const { questions, current, currentAt } = round.settings;
+  const q = questions[current];
+  const stage = cropStage(q, currentAt);
+  const key = `${round._id}:${current}:${stage}`;
+  if (crops.has(key)) return { image: crops.get(key), stage };
+  const photo = await Photo.findOne({ _id: q.photo, album: album._id, ...SHOWN }, 'previewKey storageKey').lean();
+  if (!photo) throw new HttpError(404, 'That photo is no longer in the event.', 'GAME_PHOTO_NOT_FOUND');
+  const { openPhoto } = await import('./storageService.js');
+  const { buffer } = await import('node:stream/consumers');
+  const sharp = (await import('sharp')).default;
+  const source = await buffer(await openPhoto(photo.previewKey || photo.storageKey));
+  const meta = await sharp(source).rotate().toBuffer({ resolveWithObject: true });
+  const { width, height } = meta.info, part = CROP_STAGES[stage];
+  const w = Math.max(1, Math.round(width * part)), h = Math.max(1, Math.round(height * part));
+  const left = Math.min(width - w, Math.max(0, Math.round(width * q.focus.x - w / 2)));
+  const top = Math.min(height - h, Math.max(0, Math.round(height * q.focus.y - h / 2)));
+  const image = await sharp(meta.data).extract({ left, top, width: w, height: h })
+    .resize({ width: 1024, height: 1024, fit: 'inside' }).jpeg({ quality: 80 }).toBuffer();
+  crops.set(key, image);
+  if (crops.size > 40) crops.delete(crops.keys().next().value);
+  return { image, stage };
 }
 
 // ---- Photo battle ----
@@ -410,7 +495,8 @@ function view(round, responses = [], userId, host, s = {}) {
     return { ...base, question: round.settings.question, total, myChoice: mine,
       options: round.settings.options.map((o, i) => ({ id: o.id, text: o.text, votes: counts[i], percent: total ? Math.round((counts[i] / total) * 100) : 0 })) };
   }
-  // trivia
+  // trivia and mystery crop
+  const crop = round.type === 'crop';
   const { questions, current, currentAt } = round.settings;
   const now = Date.now();
   const q = current >= 0 ? questions[current] : null;
@@ -421,10 +507,18 @@ function view(round, responses = [], userId, host, s = {}) {
   for (const r of responses) roundScores.set(String(r.user), (roundScores.get(String(r.user)) || 0) + (r.points || 0));
   return { ...base, questionCount: questions.length, current: round.status === 'live' ? current : null,
     question: round.status === 'live' && q ? { index: current, text: q.text, options: q.options, seconds: q.seconds, endsAt,
-      ...(revealed && { answer: q.answer }), answers: responses.filter((r) => r.q === current).length } : null,
+      ...(revealed && { answer: q.answer }), answers: responses.filter((r) => r.q === current).length,
+      // Mystery crop: the picture (at its current zoom) and when it next zooms out
+      ...(crop && (() => {
+        const stage = cropStage(q, currentAt, now), part = (q.seconds * 1000) / CROP_STAGES.length;
+        return { stage, stages: CROP_STAGES.length, points: CROP_POINTS[stage],
+          image: `${config.publicUrl}/api/albums/${round.album}/games/${round._id}/image?q=${current}&stage=${stage}`,
+          nextStageAt: stage < CROP_STAGES.length - 1 ? new Date(new Date(currentAt).getTime() + (stage + 1) * part) : null,
+          ...(revealed && { photo: String(q.photo), ...photoLinks(q.photo) }) };
+      })()) } : null,
     myAnswer: mineNow ? { option: mineNow.choice, correct: revealed ? mineNow.correct : undefined, points: revealed ? mineNow.points : undefined } : null,
     myScore: roundScores.get(me) || 0,
-    ...(host && { questions }) };
+    ...(host && { questions: crop ? questions.map((x) => ({ ...x, photo: String(x.photo) })) : questions }) };
 }
 
 export async function albumGames(albumId, userId, host) {

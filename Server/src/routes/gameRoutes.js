@@ -63,6 +63,16 @@ gameRoutes.post('/:round/answer', playLimit, async (req, res) => {
   const { album } = await member(req);
   res.json(await games.answer(album, req.user, req.params.round, req.body));
 });
+// Mystery crop: a guess for the photo on screen, and its picture at the current zoom (never further)
+gameRoutes.post('/:round/guess', playLimit, async (req, res) => {
+  const { album } = await member(req);
+  res.json(await games.answer(album, req.user, req.params.round, req.body, 'crop'));
+});
+gameRoutes.get('/:round/image', async (req, res) => {
+  const { album } = await member(req);
+  const { image, stage } = await games.cropImage(album, req.params.round);
+  noStore(res).set('X-Crop-Stage', String(stage)).type('image/jpeg').send(image);
+});
 // Scavenger bingo: claim a tile with your photo, take it back; the host can remove anyone's claim (?user=)
 gameRoutes.post('/:round/claims', playLimit, async (req, res) => {
   const { album } = await member(req);
