@@ -159,9 +159,15 @@ async function limited(fn) {
 
 // Rekognition takes images up to 5 MB; a bigger preview is made smaller first
 const MAX_BYTES = 5 * 1024 * 1024;
+// Rekognition reads only JPEG and PNG. Previews of screenshots, transparent PNGs, GIFs and WebP photos are WebP, which
+// it refused ("InvalidImageFormatException"), so those photos were never checked and never appeared. Anything that
+// isn't a JPEG or PNG is turned into a JPEG (transparency on white) first.
+const isJpeg = (b) => b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF;
+const isPng = (b) => b.length > 8 && b.readUInt32BE(0) === 0x89504E47;
 async function fit(buffer) {
-  if (buffer.length <= MAX_BYTES) return buffer;
-  return sharp(buffer, { limitInputPixels: 100_000_000 }).rotate().resize(2048, 2048, { fit: 'inside' }).jpeg({ quality: 85 }).toBuffer();
+  if (buffer.length <= MAX_BYTES && (isJpeg(buffer) || isPng(buffer))) return buffer;
+  return sharp(buffer, { limitInputPixels: 100_000_000 }).rotate().resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+    .flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer();
 }
 
 async function ask(buffer) {

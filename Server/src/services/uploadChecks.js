@@ -311,6 +311,9 @@ export async function processCheck(step, infer = classify, table = activeTable()
   } catch (error) {
     const attempts = job.attempts + 1;
     console.error('Photo check: %s', error.message);
+    // A photo that has failed 3 times tells the team (a system email, at most one an hour), so a broken check
+    // (AWS permissions, a format Rekognition refuses) is noticed in minutes rather than by people whose photos never appear
+    if (attempts === 3) tellTeamChecksFail(error);
     // Processing errors never publish a photo, and never hand an ordinary photo to people either: a busy or failing
     // check (Rekognition throttling, a storage hiccup) is simply tried again, a little later each time (15 s up to
     // 5 minutes), for about 3 hours (MAX_ATTEMPTS). Only then is it given up on.
@@ -326,6 +329,18 @@ export async function processCheck(step, infer = classify, table = activeTable()
 }
 
 const MAX_ATTEMPTS = Number(process.env.CHECK_MAX_ATTEMPTS) || 40;
+let lastFailMail = 0;
+function tellTeamChecksFail(error) {
+  if (Date.now() - lastFailMail < 3600000) return;
+  lastFailMail = Date.now();
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  import('./teamMail.js').then(({ sendTeamMail }) => sendTeamMail({
+    group: 'system', kind: 'check-failing', title: `Photo checks are failing: ${error.name || 'Error'}`,
+    html: `<p>Uploaded photos can't be checked, so they aren't appearing in albums. They're tried again for about 3 hours.</p>
+      <pre style="font-family:monospace;white-space:pre-wrap">${esc(error.name)}: ${esc(error.message)}</pre>
+      <p style="color:#5C596B;font-size:13px">See the server log: sudo docker compose logs --tail 200 api | grep "Photo check"</p>`,
+  })).catch((err) => console.error('Check failure email: %s', err.message));
+}
 
 // A small upload is checked straight away, inside the request, so its photos appear at once (one photo is well
 // under a second). Whatever isn't done within the time (a big batch, a retry) is left to the queue loops.
