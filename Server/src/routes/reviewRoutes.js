@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { Review, REVIEW_PARTS, REVIEW_ROLES, MAX_REVIEW_BODY } from '../models/Review.js';
 import { requireUser, requireStaff } from '../middleware/authMiddleware.js';
-import { sendEmail } from '../services/emailService.js';
+import { sendTeamMail } from '../services/teamMail.js';
 import { HttpError } from '../utils/httpError.js';
 
 // The Reviews page (/reviews): private feedback for the team, all out of 5 stars. Nobody sees anyone else's review.
@@ -13,7 +13,8 @@ import { HttpError } from '../utils/httpError.js';
 //   POST   /api/reviews  { rating, scores?: { join, upload, quality, find }, role?, body? }   signed in   { review }
 //   DELETE /api/reviews/:id      signed in, own review only   { ok }
 //   GET    /api/reviews/stats    staff only (404 for everyone else)   { summary }
-// Each review is emailed to SUPPORT_EMAIL so the team sees feedback as it arrives.
+// Each review is emailed to the team inbox (TEAM_EMAIL) as user input (services/teamMail.js), with its numbers on a
+// data line for the feedback sheet (Server/docs/feedback-sheet.gs).
 export const reviewRoutes = Router();
 
 const PART_NAMES = { join: 'Joining the album', upload: 'Adding photos', quality: 'Photo quality', find: 'Finding photos' };
@@ -103,10 +104,13 @@ reviewRoutes.post('/', requireUser, postLimit, async (req, res) => {
 
   const who = req.user.name ? `${esc(req.user.name)} (${esc(req.user.email)})` : esc(req.user.email);
   const rows = REVIEW_PARTS.map((p) => `${PART_NAMES[p]}: ${scores[p] ? stars(scores[p]) : 'not rated'}`).join('<br>');
-  sendEmail({
-    to: config.support.inbox,
+  // The weakest part rated, in the subject, so the inbox shows at a glance what someone found bad
+  const lowest = Object.entries(scores).sort((x, y) => x[1] - y[1])[0];
+  sendTeamMail({
+    kind: 'review',
     replyTo: req.user.email,
-    subject: `[Momento review] ${stars(rating)}${had ? ' (changed)' : ''}`,
+    title: `Review ${rating}/5${lowest && lowest[1] < rating ? ` · lowest: ${PART_NAMES[lowest[0]]} ${lowest[1]}/5` : ''}${had ? ' (changed)' : ''}`,
+    data: { rating, ...Object.fromEntries(REVIEW_PARTS.map((p) => [p, scores[p] ?? null])), role: role || null, changed: !!had, text: body || '' },
     html: `<p><b>${who}</b>${role ? `, the ${role},` : ''} gave Momento <b>${rating} out of 5</b> overall.</p>
       <p>${rows}</p>
       ${body ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #6C5FC7;background:#F6F4FA;white-space:pre-wrap">${esc(body)}</blockquote>` : '<p>No comment.</p>'}

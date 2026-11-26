@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/env.js';
 import { SupportMessage } from '../models/SupportMessage.js';
-import { sendEmail } from '../services/emailService.js';
+import { sendTeamMail } from '../services/teamMail.js';
 import { HttpError } from '../utils/httpError.js';
 
 // POST /api/support  { topic, name, email, message }: the support page's "Send us a message" form.
@@ -35,10 +35,11 @@ supportRoutes.post('/', limit, async (req, res) => {
   const saved = await SupportMessage.create({ topic, name, email, message, user: req.user?._id });
   const who = req.user ? `Logged in as ${esc(req.user.name)} (${esc(req.user.email)}), account ${req.user.id}` : 'Not logged in';
   try {
-    await sendEmail({
-      to: config.support.inbox,
+    await sendTeamMail({
+      kind: 'support',
       replyTo: email,
-      subject: `[Momento support] ${topic}: ${name}`,
+      title: `Support · ${topic}: ${oneLine(name)}`,
+      data: { topic, signedIn: !!req.user, text: message.slice(0, 1000) },
       html: `<p><b>${esc(name)}</b> &lt;${esc(email)}&gt; wrote about <b>${esc(topic)}</b>:</p>
         <blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #6C5FC7;background:#F6F4FA;white-space:pre-wrap">${esc(message)}</blockquote>
         <p style="color:#5C596B;font-size:13px">${who}. Sent ${new Date().toUTCString()}. Reply to this email to answer them.</p>`,

@@ -90,6 +90,19 @@ export async function report(req, res) {
   }
   const { audit } = await import('../services/auditService.js');
   await audit('photo.reported', { req, target: photo._id, meta: { reason, reports, hiddenForEveryone } });
+  // The team hears about every report (user input), with the reason on the data line for the feedback sheet
+  const REASONS = { nudity: 'Nudity or sexual content', abuse: 'Abuse, hate or violence', privacy: 'Privacy: a photo of me I didn’t agree to', copyright: 'Copyright', other: 'Something else' };
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const { sendTeamMail } = await import('../services/teamMail.js');
+  sendTeamMail({
+    kind: 'report',
+    title: `Photo report · ${REASONS[reason]}${hiddenForEveryone ? ' · now hidden from everyone' : ''}`,
+    html: `<p>A photo was reported: <b>${esc(REASONS[reason])}</b>.</p>
+      ${note ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #6C5FC7;background:#F6F4FA;white-space:pre-wrap">${esc(note)}</blockquote>` : '<p>No note.</p>'}
+      <p>Open reports on this photo: <b>${reports}</b> (hidden from everyone at ${REPORTS_TO_HIDE}).</p>
+      <p style="color:#5C596B;font-size:13px">Photo ${photo.id}, album ${photo.album}. Reporter's account ${req.user.id}. Decide on the staff review page.</p>`,
+    data: { reason, reports, hiddenForEveryone, text: note },
+  }).catch((err) => console.error(`Report on ${photo.id} saved but not emailed: ${err.message}`));
   // What really happens: it's gone from the reporter's view now, and from everyone's once REPORTS_TO_HIDE people report it
   // (no promise of a review here)
   res.status(201).json({ reported: true, hidden: true, message: 'Thanks for telling us. You won’t see this photo any more.' });
