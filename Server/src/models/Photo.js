@@ -36,6 +36,8 @@ const photoSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 photoSchema.index({ album: 1, createdAt: -1 });
+// The album's newest change, for live updates (GET /api/albums/:id/version)
+photoSchema.index({ album: 1, updatedAt: -1 });
 photoSchema.index({ album: 1, likeCount: -1, createdAt: -1 });
 photoSchema.index({ deletedAt: 1 }, { partialFilterExpression: { deletedAt: { $type: 'date' } } });
 photoSchema.index({ 'likeLog.user': 1 });

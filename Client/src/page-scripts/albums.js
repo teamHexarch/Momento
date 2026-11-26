@@ -539,6 +539,7 @@ export default function start() {
       showModal(albumModal);
       syncAddress();
       document.dispatchEvent(new CustomEvent('momento:album', { detail: a }));
+      startAlbumLive(a);
       albumModal.querySelector('.album-scroll').scrollTop = 0;
       paintMore();
       if (!still && !abMore.hidden) abMore.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: 600, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' });
@@ -1194,6 +1195,45 @@ export default function start() {
       render(false); sumUp(false); renderLive();
     }
     const afterPhotos = async (a, at) => { await loadAlbums(); await fetchAlbum(a); photosChanged(a, at); };
+
+    // ---- Live updates: while an album is open it asks the server every 5 seconds whether anything changed (photos
+    // added or deleted, reactions, comments: GET /api/albums/:id/version, a short stamp) and redraws in place when it
+    // has. Paused while you upload or select photos and while the page is in the background. The full-size photo you
+    // are looking at stays where it is; only its reactions and comments refresh.
+    const ALBUM_LIVE_MS = 5000;
+    let albumLiveTimer = 0, albumLiveFor = null, albumLiveVersion = null;
+    function startAlbumLive(a) { albumLiveFor = a; albumLiveVersion = null; clearTimeout(albumLiveTimer); albumLiveTimer = setTimeout(albumLiveTick, 1000); }
+    async function albumLiveTick() {
+      clearTimeout(albumLiveTimer);
+      const a = M.a;
+      if (!albumModal.open || !a || a !== albumLiveFor) return;
+      if (!document.hidden && !uploading && !albumSel.on && !M.closing) {
+        try {
+          const { version } = await momentoApi('/api/albums/' + encodeURIComponent(a.id) + '/version');
+          if (albumLiveVersion && version !== albumLiveVersion && M.a === a && albumModal.open) await albumLiveRefresh(a);
+          albumLiveVersion = version;
+        } catch {}
+      }
+      if (albumModal.open && M.a === a) albumLiveTimer = setTimeout(albumLiveTick, ALBUM_LIVE_MS);
+    }
+    async function albumLiveRefresh(a) {
+      const before = a.photoItems?.length || 0;
+      const onId = viewer.open ? current()?.id : null;
+      await fetchAlbum(a);
+      if (M.a !== a || !albumModal.open) return;
+      const added = (a.photoItems?.length || 0) - before;
+      if (onId) {
+        const at = a.photoItems.findIndex((p) => p.id === onId);
+        if (at < 0) photosChanged(a, M.i);   // the photo you were looking at was deleted: on to the next one
+        else {
+          M.i = at;
+          fillAlbum(a); refreshCard(a);
+          renderSocial(); paintTalk(current()); paintFilm();
+          if (!document.getElementById('vwComments')?.hidden) loadComments(current());
+        }
+      } else photosChanged(a, M.i);
+      if (added > 0) Momento.toast?.(added === 1 ? 'New photo' : `${added} new photos`, a.name);
+    }
 
     // ---- Select: pick photos, then download, hide or delete them together ----
     const abHead = document.getElementById('abHead'), abSelHead = document.getElementById('abSelHead');
@@ -3098,6 +3138,8 @@ export default function start() {
       checkTimer = setTimeout(poll, checks.some(c => c.state !== 'review') ? 4000 : 60000);
     }
     async function fetchAlbum(a) {
+      // (your own changes reload the album too: the live check takes its next stamp afresh, so they aren't announced)
+      if (a === albumLiveFor) albumLiveVersion = null;
       const result = await momentoApi('/api/albums/' + a.id);
       Object.assign(a, fromStore(result.album));
       a.photoItems = result.photos;

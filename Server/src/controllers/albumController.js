@@ -516,6 +516,19 @@ export async function checkStatus(req, res) {
   const member = await membershipOf(req, req.params.id);
   res.set('Cache-Control', 'private, no-store').json({ checks: await checksFor(member.album._id, req.user._id) });
 }
+// GET /api/albums/:id/version → { version }: a short stamp that changes whenever a photo is added, deleted or changed
+// (reactions, comments, bin, reports) or the album itself changes. An open album asks every few seconds and reloads
+// only when it changes (live updates without keeping a connection open). Two indexed reads, nothing else.
+export async function version(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  const [count, last] = await Promise.all([
+    Photo.countDocuments({ album: m.album._id }),
+    Photo.findOne({ album: m.album._id }, 'updatedAt').sort({ updatedAt: -1 }).lean(),
+  ]);
+  res.set('Cache-Control', 'private, no-store')
+    .json({ version: `${count}.${last?.updatedAt ? new Date(last.updatedAt).getTime() : 0}.${m.album.updatedAt ? new Date(m.album.updatedAt).getTime() : 0}` });
+}
+
 export async function show(req, res) {
   const m = await membershipOf(req, req.params.id);
   const hidden = m.hidden || [];

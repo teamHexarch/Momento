@@ -70,6 +70,7 @@ albumRoutes.post('/', createLimit, albums.create);
 albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
+albumRoutes.get('/:id/version', albums.version);
 albumRoutes.get('/:id/checks', albums.checkStatus);
 albumRoutes.delete('/:id/checks/:check', albums.removeCheck);
 albumRoutes.patch('/:id', albums.update);
