@@ -3,7 +3,10 @@ import { HttpError } from '../utils/httpError.js';
 import { stripLocation } from '../utils/gpsStrip.js';
 
 const TYPES = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
-const MAX_PIXELS = 100_000_000;
+// The biggest photo Momento reads, in megapixels: 100 by default. A server with more memory can take more
+// (MAX_PHOTO_MEGAPIXELS=210 on 4 GB covers 200 MP phone cameras such as the Samsung Galaxy Ultra)
+const megapixels = (name, fallback) => (Number(process.env[name]) > 0 ? Number(process.env[name]) : fallback) * 1_000_000;
+const MAX_PIXELS = megapixels('MAX_PHOTO_MEGAPIXELS', 100);
 
 // ---- Camera RAW files (Canon, Nikon, Sony, Fujifilm, Olympus/OM, Panasonic, Pentax, Leica, Hasselblad...) ----
 // What people see comes from the full-size JPEG every camera stores inside its RAW files. Since 2026-11-25 the RAW
@@ -106,9 +109,17 @@ export function heicPixels(b) {
 // The picture's size comes from the decoder (libheif reads the file's structure without decoding any pixels), checked
 // before decoding; scanning the bytes for 'ispe' boxes (heicPixels) got Samsung Galaxy HEICs wrong and refused them.
 // sharp then writes the JPEG from the decoded pixels (quicker and lighter than a JavaScript JPEG encoder).
-// Up to 60 megapixels (50 MP phone photos): decoding takes 4 bytes a pixel, and the server has 1 GB of memory.
-export const HEIC_MAX_PIXELS = 60_000_000;
-async function heicToJpeg(buffer) {
+// Up to MAX_HEIC_MEGAPIXELS (60 by default: 50 MP phone photos). Decoding takes about 4 bytes a pixel, all at once:
+// a 200 MP photo needs about 1 GB, so only raise it on a server with 4 GB (MAX_HEIC_MEGAPIXELS=210).
+export const HEIC_MAX_PIXELS = megapixels('MAX_HEIC_MEGAPIXELS', 60);
+// One HEIC is decoded at a time (uploads are checked side by side; two big ones together could run out of memory)
+let heicTurn = Promise.resolve();
+function heicToJpeg(buffer) {
+  const run = heicTurn.then(() => decodeHeic(buffer));
+  heicTurn = run.catch(() => {});
+  return run;
+}
+async function decodeHeic(buffer) {
   const decode = (await import('heic-decode')).default;
   const images = await decode.all({ buffer });
   try {
