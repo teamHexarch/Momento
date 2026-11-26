@@ -138,6 +138,14 @@ export default function start() {
     }), { rootMargin: '0px 0px -8% 0px' });
 
     // Where an album is in its life: closing soon is loud, kept is quiet
+    // Bottom left of the cover: whether it's an event (a time and a place) or a plain album
+    function kindTag(a) {
+      const event = (a.kind || (a.startsAt ? 'event' : 'album')) === 'event';
+      const icon = event
+        ? '<path d="M7 3v3M17 3v3M4 9h16"/><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M12 13.2a1.6 1.6 0 1 0 0 .01"/>'
+        : '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/>';
+      return `<span class="tag kind"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg>${event ? 'Event' : 'Album'}</span>`;
+    }
     function statusTag(a) {
       if (a.status === 'live') return '<span class="tag status live"><i></i>Live now</span>';
       if (a.status === 'new') {
@@ -165,7 +173,7 @@ export default function start() {
         <span class="frame glass">
           <span class="media">
             <span class="cover">${coverPic(a) ? `<img src="${esc(pic(coverPic(a), 1100, 620))}" alt="" loading="lazy">` : `<span class="cover-new" aria-hidden="true"><b>${esc((a.name.trim()[0] || '·').toUpperCase())}</b><small>No photos yet</small></span>`}
-              ${statusTag(a)}${bookmarkHtml(a)}</span>
+              ${statusTag(a)}${kindTag(a)}${bookmarkHtml(a)}</span>
           </span>
           <span class="info">
             <span class="name">${esc(a.name)}</span>
