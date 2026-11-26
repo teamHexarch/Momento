@@ -23,8 +23,10 @@ async function photoFor(req, { react = false } = {}) {
     const album = await Album.findById(photo.album, 'group');
     m = await hasGroupAccess(req.user._id, album) ? (m || { role: 'guest', via: 'group' }) : null;
   }
-  // A photo in the bin: only its album's host still sees it (to recover it), and nobody can react
-  if (!m || photo.auditHidden || (photo.deletedAt && (m.role !== 'host' || react))) {
+  // A photo in the bin: its album's host still sees it, and so does the person who added and deleted it (both can
+  // recover it from Recently deleted); nobody can react to it. A photo hidden by reports (flagged) stays hidden.
+  const binOwner = photo?.deletedAt && !photo.flaggedAt && photo.uploader?.equals(req.user._id) && photo.deletedBy?.equals(req.user._id);
+  if (!m || photo.auditHidden || (photo.deletedAt && ((m.role !== 'host' && !binOwner) || react))) {
     throw new HttpError(404, 'Photo not found.');
   }
   return { photo, m };

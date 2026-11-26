@@ -29,6 +29,9 @@ const decisionSchema = new mongoose.Schema({
   // When the uploader asked for a review, the day it's due (2 working days after the upload, utils/workingDays.js),
   // and the reminders staff have had about it (each sent once)
   requestedAt: Date,
+  // The automatic second look when a review was asked for (uploadChecks.secondLook): its level, labels and when.
+  // At 75 or below the photo was published without staff (status 'allowed', reviewer 'Automatic second look').
+  secondLook: { type: mongoose.Schema.Types.Mixed },
   dueDay: String,
   oneDayReminderSent: Boolean,
   dueTodayReminderSent: Boolean,

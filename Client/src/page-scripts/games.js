@@ -19,6 +19,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const isEvent = (a) => !!a && (a.kind ? a.kind === 'event' : !!a.startsAt);
 const toast = (title, msg) => (window.Momento?.toast ? window.Momento.toast(title, msg) : console.warn(title, msg));
 const medal = (n) => ['1st', '2nd', '3rd'][n - 1] || `${n}th`;
+// The site's own question window (Shell.tsx: translated, styled), or the browser's as a fallback
+const ask = (o) => (window.Momento?.confirm ? window.Momento.confirm({ danger: true, ...o }) : Promise.resolve(window.confirm([o.title, o.body].filter(Boolean).join('\n\n'))));
 
 export default function installGames() {
   const btn = document.getElementById('abGames');
@@ -124,7 +126,7 @@ export default function installGames() {
   function tick() {
     for (const el of body.querySelectorAll('[data-ends]')) {
       const left = Math.max(0, Math.ceil((new Date(el.dataset.ends).getTime() - Date.now()) / 1000));
-      el.textContent = left ? `${left}s` : 'Time’s up';
+      el.textContent = left ? `${left} s` : 'Time’s up';
       if (!left && !el.dataset.done) { el.dataset.done = '1'; setTimeout(() => { G.html = ''; refresh(); }, 600); }
     }
   }
@@ -146,7 +148,7 @@ export default function installGames() {
       : '<p class="gm-hint">Points from every game appear here.</p>';
     return `${d.host ? '<button class="gm-main" type="button" data-new>New game</button>' : ''}
       ${list}
-      <section class="gm-section"><h3>Leaderboard <small>Your points: ${d.myPoints}</small></h3>${board}</section>`;
+      <section class="gm-section"><h3>Leaderboard</h3><p class="gm-hint">Your points: ${d.myPoints}</p>${board}</section>`;
   }
 
   // ---- One game ----
@@ -179,13 +181,14 @@ export default function installGames() {
       <div class="gm-opts">${r.options.map((o) => `
         <button class="gm-opt gm-bar ${r.myChoice === o.id ? 'is-mine' : ''}" type="button" data-vote="${esc(o.id)}" ${live ? '' : 'disabled'} style="--p:${o.percent}%">
           <span>${esc(o.text)}</span><em>${r.myChoice != null || !live ? `${o.percent}%` : ''}</em></button>`).join('')}</div>
-      <p class="gm-hint">${r.total} ${r.total === 1 ? 'vote' : 'votes'}${live ? (r.myChoice != null ? ' · you can change your vote' : ' · tap to vote') : ''}</p>`;
+      <p class="gm-hint">Votes: ${r.total}</p>${live ? `<p class="gm-hint">${r.myChoice != null ? 'You can change your vote.' : 'Tap an answer to vote.'}</p>` : ''}`;
   }
 
   function quizView(r, host) {
     const crop = r.type === 'crop';
-    if (r.status === 'draft') return `<p class="gm-empty">${r.questionCount} ${crop ? (r.questionCount === 1 ? 'photo' : 'photos') : (r.questionCount === 1 ? 'question' : 'questions')}. Waiting for the host to start.</p>${host && r.questions ? hostQuestions(r) : ''}`;
-    if (r.status === 'ended' || !r.question) return `<p class="gm-empty">${r.status === 'ended' ? 'Finished.' : 'Waiting for the next question…'} Your score in this game: <b>${r.myScore}</b></p>`;
+    const many = r.questionCount === 1 ? (crop ? '1 photo' : '1 question') : `${r.questionCount} ${crop ? 'photos' : 'questions'}`;
+    if (r.status === 'draft') return `<p class="gm-empty">${many}. Waiting for the host to start.</p>${host && r.questions ? hostQuestions(r) : ''}`;
+    if (r.status === 'ended' || !r.question) return `<p class="gm-empty">${r.status === 'ended' ? 'Finished.' : 'Waiting for the next question…'}</p><p class="gm-hint">Your score in this game: ${r.myScore}</p>`;
     const q = r.question, mine = r.myAnswer, revealed = q.answer !== undefined;
     const pic = crop ? `<figure class="gm-crop"><img class="gm-crop-img" src="${esc(revealed && q.thumbnailUrl ? q.url : q.image)}" alt="${revealed ? 'The whole photo' : 'A close-up of an event photo'}">
       ${!revealed ? `<figcaption>Zoom ${q.stage + 1} of ${q.stages} · ${q.points} points now</figcaption>` : ''}</figure>` : '';
@@ -195,8 +198,8 @@ export default function installGames() {
         const cls = [mine?.option === i && 'is-mine', revealed && i === q.answer && 'is-right', revealed && mine?.option === i && i !== q.answer && 'is-wrong'].filter(Boolean).join(' ');
         return `<button class="gm-opt ${cls}" type="button" data-answer="${i}" data-q="${q.index}" ${mine || revealed ? 'disabled' : ''}>${esc(o)}</button>`;
       }).join('')}</div>
-      <p class="gm-hint">${mine ? (revealed ? (mine.correct ? `Right! +${mine.points} points` : 'Not this time.') : 'Answer locked in.') : (revealed ? 'You didn’t answer this one.' : 'Pick an answer.')}
-        · ${q.answers} answered · your score ${r.myScore}</p>`;
+      <p class="gm-hint">${mine ? (revealed ? (mine.correct ? `Right! +${mine.points} points` : 'Not this time.') : 'Answer locked in.') : (revealed ? 'You didn’t answer this one.' : 'Pick an answer.')}</p>
+      <p class="gm-hint">Answered: ${q.answers} · your score: ${r.myScore}</p>`;
   }
   function hostQuestions(r) {
     return `<details class="gm-details"><summary>Questions and answers (only you see these)</summary><ol>${r.questions.map((q) => `<li>${esc(q.text)} <b>${esc(q.options?.[q.answer] ?? '')}</b></li>`).join('')}</ol></details>`;
@@ -216,7 +219,7 @@ export default function installGames() {
         <span>${e.place ? medal(e.place) : e.rank}</span><img src="${esc(e.thumbnailUrl || e.url)}" alt=""><b>${esc(e.by)}</b><em>${e.wins}–${e.losses}</em>
         ${e.mine && live ? `<button class="gm-x" type="button" data-withdraw="${esc(e.photo)}" aria-label="Take this photo out">×</button>` : ''}</li>`).join('')}</ol>`
       : '<p class="gm-hint">No photos entered yet.</p>';
-    return `${vote}${enter}<section class="gm-section"><h3>Standings <small>${r.entries} ${r.entries === 1 ? 'photo' : 'photos'} · you voted ${r.myVotes} ${r.myVotes === 1 ? 'time' : 'times'}</small></h3>${standings}</section>`;
+    return `${vote}${enter}<section class="gm-section"><h3>Standings</h3><p class="gm-hint">Photos: ${r.entries} · your votes: ${r.myVotes}</p>${standings}</section>`;
   }
 
   function bingoView(r, host) {
@@ -225,7 +228,8 @@ export default function installGames() {
       <button class="gm-tile ${t.mine ? 'is-mine' : ''}" type="button" data-tile="${t.index}" ${live || host ? '' : 'disabled'}>
         ${t.mine ? `<img src="${esc(t.mine.thumbnailUrl || t.mine.url)}" alt="">` : ''}<span>${esc(t.prompt)}</span>${t.claims ? `<small>${t.claims}</small>` : ''}</button>`).join('')}</div>`;
     const leaders = r.leaders?.length ? `<ol class="gm-board">${r.leaders.map((x) => `<li class="${x.mine ? 'is-mine' : ''}"><span>${x.rank}</span><b>${esc(x.name)}</b><em>${x.points}</em></li>`).join('')}</ol>` : '';
-    return `<p class="gm-hint">${live ? 'Tap a square to fill it with one of your photos.' : ''} ${r.myTiles} ${r.myTiles === 1 ? 'square' : 'squares'} · ${r.myLines} ${r.myLines === 1 ? 'line' : 'lines'}${r.fullCard ? ' · full card!' : ''} · ${r.myScore} points</p>
+    return `${live ? '<p class="gm-hint">Tap a square to fill it with one of your photos.</p>' : ''}
+      <p class="gm-hint">Squares: ${r.myTiles} · lines: ${r.myLines} · points: ${r.myScore}</p>${r.fullCard ? '<p class="gm-q">Full card!</p>' : ''}
       ${grid}${leaders ? `<section class="gm-section"><h3>Top players</h3>${leaders}</section>` : ''}`;
   }
 
@@ -233,7 +237,7 @@ export default function installGames() {
     const img = (e) => `<img src="${esc(e.thumbnailUrl || e.url)}" alt="">`;
     let html = '';
     if (r.phase === 'entries' && r.status === 'live') {
-      html += `<p class="gm-hint">Upload a photo for “${esc(r.title)}”. ${r.entries} ${r.entries === 1 ? 'entry' : 'entries'} so far. You can enter ${r.maxEntries}.</p>`;
+      html += `<p class="gm-hint">Upload your photo for this competition. Entries so far: ${r.entries}. Each person can enter: ${r.maxEntries}.</p>`;
       if (r.canEnter) html += '<label class="gm-main gm-file">Upload an entry<input type="file" accept="image/*" data-submit hidden></label>';
       if (r.myEntries.length) html += `<h3>Your entries</h3><div class="gm-thumbs">${r.myEntries.map((e) => `<div class="gm-thumb">${img(e)}<button class="gm-x" type="button" data-unsubmit="${esc(e.id)}" aria-label="Take this entry back">×</button></div>`).join('')}</div>`;
       if (host && r.all?.length) html += `<h3>All entries (only you see these)</h3><div class="gm-thumbs">${r.all.map((e) => `<div class="gm-thumb">${img(e)}<small>${esc(e.by)}</small></div>`).join('')}</div>`;
@@ -241,9 +245,9 @@ export default function installGames() {
     if (r.status === 'draft') html += '<p class="gm-empty">Waiting for the host to open entries.</p>';
     if (r.podium?.length) html += `<h3>Winners</h3><ol class="gm-standings">${r.podium.map((p) => `<li class="${p.mine ? 'is-mine' : ''}"><span>${medal(p.place)}</span>${img(p)}<b>${esc(p.by)}</b></li>`).join('')}</ol>`;
     if (r.finalists?.length && r.status !== 'ended') {
-      html += `<h3>Finalists${r.ai === false ? '' : ' <small>picked with AI</small>'}</h3><ul class="gm-finalists">${r.finalists.map((f) => `<li class="${f.mine ? 'is-mine' : ''}">${img(f)}<div><b>${esc(f.by)}</b><span>${esc(f.reason || '')}</span></div></li>`).join('')}</ul>`;
+      html += `<h3>Finalists</h3>${r.ai === false ? '' : '<p class="gm-hint">Picked with AI.</p>'}<ul class="gm-finalists">${r.finalists.map((f) => `<li class="${f.mine ? 'is-mine' : ''}">${img(f)}<div><b>${esc(f.by)}</b><span>${esc(f.reason || '')}</span></div></li>`).join('')}</ul>`;
       if (host && r.status === 'live') {
-        const opt = (sel) => r.finalists.map((f, i) => `<option value="${esc(f.entry)}" ${r.podium?.[sel]?.entry === f.entry ? 'selected' : ''}>Finalist ${i + 1} (${esc(f.by)})</option>`).join('');
+        const opt = (sel) => r.finalists.map((f, i) => `<option value="${esc(f.entry)}" ${r.podium?.[sel]?.entry === f.entry ? 'selected' : ''}>${i + 1}. ${esc(f.by)}</option>`).join('');
         html += `<form class="gm-podium" data-podium>${[0, 1, 2].map((n) => `<label>${medal(n + 1)}<select name="p${n}"><option value="">Choose…</option>${opt(n)}</select></label>`).join('')}
           <button class="gm-main" type="submit">Save winners</button><p class="gm-hint">Winners must be different people. Then press End game.</p></form>`;
       }
@@ -256,7 +260,7 @@ export default function installGames() {
   function picker() {
     const mine = myPhotos();
     const used = new Set(G.pick?.used || []);
-    return `<p class="gm-hint">${esc(G.pick?.prompt || 'Choose one of your photos from this event.')}</p>
+    return `${G.pick?.title ? `<p class="gm-q">${esc(G.pick.title)}</p>` : ''}<p class="gm-hint">${esc(G.pick?.prompt || 'Choose one of your photos from this event.')}</p>
       ${mine.length ? `<div class="gm-thumbs">${mine.map((p) => `<button class="gm-thumb gm-choose" type="button" data-choose="${esc(p.id)}" ${used.has(p.id) ? 'disabled' : ''}><img src="${esc(p.thumbnailUrl || p.url)}" alt=""></button>`).join('')}</div>`
         : '<p class="gm-empty">You haven’t added any photos to this event yet. Close Games, add photos, then come back.</p>'}
       ${G.pick?.remove ? '<button class="gm-ghost gm-danger" type="button" data-unclaim>Empty this square</button>' : ''}`;
@@ -352,11 +356,17 @@ export default function installGames() {
     }
     if (d.host && r) {
       if (d.host === 'delete') {
-        if (!confirm(`Delete “${r.title}”? Its points come off the leaderboard.`)) return;
-        act(() => api(`/${r.id}`, { method: 'DELETE' }), () => { G.view = 'list'; G.round = null; });
+        ask({ from: t, title: `Delete “${r.title}”?`, body: 'Its points come off the leaderboard.', ok: 'Delete game' }).then((ok) => {
+          if (ok) act(() => api(`/${r.id}`, { method: 'DELETE' }), () => { G.view = 'list'; G.round = null; });
+        });
         return;
       }
-      if (d.host === 'end' && !confirm(r.type === 'contest' ? 'End the competition? Only the top 10 entries are kept; every other entry is deleted.' : 'End this game for everyone?')) return;
+      if (d.host === 'end') {
+        ask({ from: t, title: r.type === 'contest' ? 'End the competition?' : 'End this game for everyone?',
+          body: r.type === 'contest' ? 'Only the top 10 entries are kept; every other entry is deleted.' : 'Nobody can play it after this.', ok: 'End game' })
+          .then((ok) => { if (ok) act(() => api(`/${r.id}/end`, json('POST', {}))); });
+        return;
+      }
       act(() => api(`/${r.id}/${d.host}`, json('POST', {})));
       return;
     }
@@ -384,8 +394,9 @@ export default function installGames() {
     if (d.choose && G.pick) { const fn = G.pick.onPick; G.pick = null; fn(d.choose); return; }
     if (d.unclaim !== undefined && G.pick) { const fn = G.pick.remove; G.pick = null; fn(); return; }
     if (d.unsubmit && r) {
-      if (!confirm('Take this entry back? It will be deleted.')) return;
-      act(() => api(`/${r.id}/submissions/${encodeURIComponent(d.unsubmit)}`, { method: 'DELETE' }));
+      ask({ from: t, title: 'Take this entry back?', body: 'It will be deleted.', ok: 'Take it back' }).then((ok) => {
+        if (ok) act(() => api(`/${r.id}/submissions/${encodeURIComponent(d.unsubmit)}`, { method: 'DELETE' }));
+      });
     }
   });
   body.addEventListener('change', (e) => {
@@ -431,9 +442,9 @@ export default function installGames() {
       return;
     }
     const used = r.tiles.filter((t) => t.mine).map((t) => t.mine.photo);
-    pickPhoto(`“${tile.prompt}”: choose one of your photos that fits.`,
+    pickPhoto('Choose one of your photos that fits this square.',
       (photo) => act(() => api(`/${r.id}/claims`, json('POST', { tile: index, photo })), () => { G.view = 'round'; }),
-      { used, remove: tile.mine ? () => act(() => api(`/${r.id}/claims/${index}`, { method: 'DELETE' }), () => { G.view = 'round'; }) : null });
+      { title: tile.prompt, used, remove: tile.mine ? () => act(() => api(`/${r.id}/claims/${index}`, { method: 'DELETE' }), () => { G.view = 'round'; }) : null });
     if (host && r.claims?.some((c) => c.tile === index)) body.insertAdjacentHTML('beforeend', claimsHtml(r, index));
   }
   // The host: everyone's photo for a square, each with Remove

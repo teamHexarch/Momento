@@ -89,6 +89,15 @@ const EXPECTED_WITH_SWIMWEAR = new Set(['partially exposed female breast', 'part
 
 // The level from Rekognition's labels: the highest level among labels at or over their threshold.
 // drivers: the labels that set it (what staff decisions teach about). swimwear: the swimwear rule applied.
+// Sure enough that no person needs to look: at level 85 or 95, the label that set the level is at least
+// REVIEW_SURE_AT % sure (95 by default). Such a photo stays private with no review, like level 100.
+export const REVIEW_SURE_AT = Number(process.env.REVIEW_SURE_AT) || 95;
+export function isSure(scores) {
+  if (![85, 95].includes(Number(scores?.level))) return false;
+  const drivers = new Set(scores.drivers || []);
+  return (scores.labels || []).some((l) => drivers.has(key(l.name)) && Number(l.confidence) >= REVIEW_SURE_AT);
+}
+
 export function levelOf(labels) {
   const swimwear = (labels || []).some((l) => SWIMWEAR.has(key(l.name)) && Number(l.confidence) >= SWIMWEAR_SURE);
   let level = 0, drivers = [];

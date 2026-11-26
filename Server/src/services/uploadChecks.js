@@ -105,7 +105,9 @@ export function routeScore(scores, table = activeTable().table) {
     const action = rekognition.actionOf(level);
     if (action === 'publish') return { action: 'allow', level };
     if (action === 'staff') return { action: 'decline', staff: true, level };
-    return { action: 'decline', explicit: action === 'locked', level };
+    // explicit: no review possible (level 100, or 85/95 when the check is very sure: rekognition.isSure)
+    const sure = action === 'private' && rekognition.isSure(scores);
+    return { action: 'decline', explicit: action === 'locked' || sure, level, ...(sure && { sure: true }) };
   }
   const c = scores?.classes;
   const p = (name) => (Number.isFinite(c?.[name]) ? c[name] : NaN);
@@ -239,10 +241,18 @@ export async function processCheck(step, infer = classify, table = activeTable()
   }, { $set: { claim, due: new Date(Date.now() + 5 * 60000) } }, { sort: { due: 1 }, returnDocument: 'after' }).select('+files +rawKey');
   if (!job) return false;
   const owns = { _id: job._id, claim };
+  // How long each step took, logged once per photo (to see where an upload's time goes)
+  const started = Date.now(), times = {};
+  const lap = (name, since) => { times[name] = Date.now() - since; };
   try {
     if (!step) { await publish(job); return true; }
+    // The new preview, kept in memory, and its check started at once (in step with storing the files) rather than
+    // after the files are stored and the preview read back from storage
+    let preview = null, early = null;
     if (!job.files) {
+      let t = Date.now();
       const raw = await buffer(await openPhoto(job.rawKey));
+      lap('read', t); t = Date.now();
       let clean;
       try { clean = await sanitizePhoto(raw, { name: job.originalName, inPlace: true }); }
       catch (error) {
@@ -252,8 +262,12 @@ export async function processCheck(step, infer = classify, table = activeTable()
           $unset: { rawKey: 1, claim: 1 } });
         return true;
       }
+      lap('process', t); t = Date.now();
+      preview = clean.preview;
+      early = infer(preview).then((scores) => ({ scores }), (error) => ({ error }));
       // (a camera RAW is stored as its JPEG; the RAW goes with the quarantine copy below)
       job.files = { ...await storePhoto(String(job.album), clean), ...(clean.takenAt && { takenAt: clean.takenAt }) };
+      lap('store', t);
       const assigned = await UploadCheck.updateOne(owns, { $set: { files: job.files } });
       if (!assigned.matchedCount) { await deletePhoto(job.files.storageKey); return true; }
     }
@@ -269,9 +283,14 @@ export async function processCheck(step, infer = classify, table = activeTable()
     }
     // Scored on the preview (up to 2500 px, JPEG 82): the 600 px WebP thumbnail is compressed enough to make the model
     // read swimwear and stage outfits as Porn (a denim crop top: 30% on the preview, 64% on the thumbnail)
-    const image = await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey));
-    const scores = await infer(image);
-    const { action, explicit = false, staff = false, level, risk, learned: byLearning, confidence } = routeScore(scores, table);
+    let t = Date.now();
+    const image = preview || await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey));
+    const result = early ? await early : await infer(image).then((scores) => ({ scores }), (error) => ({ error }));
+    if (result.error) throw result.error;
+    const scores = result.scores;
+    lap('check', t);
+    console.log('Photo check %s: %s, %d ms in all', job.id, Object.entries(times).map(([k, v]) => `${k} ${v} ms`).join(', '), Date.now() - started);
+    const { action, explicit = false, staff = false, sure = false, level, risk, learned: byLearning, confidence } = routeScore(scores, table);
     // Training data for Momento's own decision layer (never affects this photo)
     await recordSample(job, image, scores, action, explicit);
     const entry = scores?.engine === 'rekognition'
@@ -282,7 +301,7 @@ export async function processCheck(step, infer = classify, table = activeTable()
       await UploadCheck.updateOne(owns, { $set: { state: 'publish', attempts: 0, due: new Date() }, $unset: { claim: 1 }, $push: { history: entry } });
     } else {
       const reason = scores?.engine === 'rekognition'
-        ? (explicit ? 'Level 100: nudity or explicit content' : staff ? 'Level 75: clearly suggestive, waiting for staff' : `Level ${level}: near-nude or nude, kept private`)
+        ? (explicit && sure ? `Level ${level}: kept private, the check is very sure (no review)` : explicit ? 'Level 100: nudity or explicit content' : staff ? 'Level 75: clearly suggestive, waiting for staff' : `Level ${level}: near-nude or nude, kept private`)
         : explicit ? 'The automatic check is sure this photo contains nudity' : 'The automatic check wasn’t sure about this photo';
       await decline(job, owns, { scores, entry, explicit, staff, reason });
     }
@@ -306,10 +325,36 @@ export async function processCheck(step, infer = classify, table = activeTable()
 // under a second). Whatever isn't done within the time (a big batch, a retry) is left to the queue loops.
 export async function checkNow(ids, budgetMs = 8000) {
   const until = Date.now() + budgetMs;
-  for (const id of ids) {
-    if (Date.now() > until) break;
-    if (await processCheck(1, classify, activeTable().table, id)) await processCheck(0, classify, activeTable().table, id);
+  // Two photos at a time (the server has two processors; HEIC photos still decode one at a time)
+  let next = 0;
+  await Promise.all([0, 1].map(async () => {
+    while (next < ids.length && Date.now() <= until) {
+      const id = ids[next++];
+      if (await processCheck(1, classify, activeTable().table, id)) await processCheck(0, classify, activeTable().table, id);
+    }
+  }));
+}
+
+// Publishes one approved photo now (instead of waiting for the queue loop)
+export const publishNow = (id) => processCheck(0, classify, activeTable().table, id);
+
+// The second look, when someone asks for a review of a declined photo (privacyController.requestReview): the photo
+// again, bigger (up to 4096 px, not the 2560 px preview) and against the thresholds staff decisions have taught since
+// the upload. Returns Rekognition's scores, or null when there's nothing to look at (or the check isn't Rekognition).
+export async function secondLook(checkId) {
+  if (!usesRekognition() || checkIsOff()) return null;
+  const job = await UploadCheck.findById(checkId).select('+files');
+  if (!job?.files?.storageKey || job.state !== 'rejected' || job.explicit) return null;
+  const { readableImage } = await import('./imageService.js');
+  const sharp = (await import('sharp')).default;
+  const picture = await readableImage(await buffer(await openPhoto(job.files.storageKey)));
+  let image;
+  // Rekognition takes up to 5 MB
+  for (const [edge, quality] of [[4096, 88], [3200, 85], [2560, 82]]) {
+    image = await sharp(picture, { limitInputPixels: false }).rotate().resize(edge, edge, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality }).toBuffer();
+    if (image.length <= 5 * 1024 * 1024) break;
   }
+  return rekognition.detect(image);
 }
 
 // The two queue loops (publish, check), run by the API itself

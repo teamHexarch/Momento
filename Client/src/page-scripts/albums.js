@@ -3042,7 +3042,7 @@ export default function start() {
             appeal.disabled = true; appeal.textContent = 'Sending…';
             try {
               const r = await momentoApi('/api/auth/moderation/' + check.id + '/review', momentoJson('POST', {}));
-              Momento.toast('Review requested', r.message || 'A staff member will look at it.');
+              Momento.toast(r.published ? 'Photo added' : 'Review requested', r.message || 'A staff member will look at it.');
               await fetchAlbum(a);
             } catch (error) { Momento.toast('Review request', error.message); appeal.disabled = false; appeal.textContent = 'Request review'; }
           });
