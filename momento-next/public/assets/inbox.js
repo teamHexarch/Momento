@@ -72,9 +72,11 @@
     :root[data-theme="dark"] .inbox-pop.inbox-pop { background: linear-gradient(180deg, #24212F, #181622) padding-box, var(--g-rim-menu) border-box; }
     .inbox-pop.is-open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity .25s ease, transform .5s var(--spring); }
     .inbox-head {
-      flex: none; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem 1rem .8rem 1.2rem;
+      flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem .75rem; padding: 1rem 1rem .8rem 1.2rem;
       box-shadow: inset 0 -1px 0 rgba(46,44,58,.07);
     }
+    /* The summary keeps at least 10rem; a long "Mark all read" in another language moves under it instead of squeezing it */
+    .inbox-head > div { flex: 1 1 10rem; min-width: 0; }
     .inbox-head h2 { margin: 0; font-size: 1.02rem; font-weight: 700; letter-spacing: -.015em; line-height: 1.3; }
     .inbox-sum { margin: .1rem 0 0; color: var(--slate); font-size: .8rem; line-height: 1.4; }
     .inbox-sum b { color: var(--pick, #8A5232); font-weight: 650; }

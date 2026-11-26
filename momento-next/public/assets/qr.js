@@ -72,6 +72,11 @@
       transition: transform .45s var(--spring, cubic-bezier(.34, 1.4, .64, 1)), box-shadow .3s ease; }
     .mq-tile:hover { transform: translateY(-2px) scale(1.02); }
     .mq-tile:active { transform: scale(.97); }
+    .mq-tile { position: relative; }
+    .mq-tile-qr { display: block; width: 100%; height: 100%; }
+    .mq-tile-zoom { position: absolute; right: -.45rem; bottom: -.45rem; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+      background: var(--dusk, #2e2c3a); color: #fff; box-shadow: 0 0 0 3px var(--paper, #fff), 0 6px 14px -6px rgba(20, 18, 30, .5); }
+    .mq-tile-zoom svg { width: 15px; height: 15px; }
     .mq-tile-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .7rem; border: none; border-radius: 100px; color: var(--slate, #5c596b); font-family: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
     .mq-tile-btn:hover { color: var(--dusk, #2e2c3a); }
 
@@ -232,10 +237,11 @@
   async function mount(el, album) {
     if (!el || !album?.code) return;
     el.classList.add('mq-mount');
-    el.innerHTML = `<button class="mq-tile" type="button" aria-label="Show the QR code"></button>
-      <button class="mq-tile-btn" type="button">${ICON.expand}Show QR code</button>`;
-    el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => show(album, b)));
-    try { el.querySelector('.mq-tile').innerHTML = await qrSvg(linkFor(album.code), `QR code to join ${album.name || 'the album'}`); }
+    // The tile itself is the button (tap to show it big for guests to scan); a small badge in its corner says so
+    el.innerHTML = `<button class="mq-tile" type="button" aria-label="Show QR code"><span class="mq-tile-qr"></span><i class="mq-tile-zoom" aria-hidden="true">${ICON.expand}</i></button>`;
+    const tile = el.querySelector('.mq-tile');
+    tile.addEventListener('click', () => show(album, tile));
+    try { el.querySelector('.mq-tile-qr').innerHTML = await qrSvg(linkFor(album.code), `QR code to join ${album.name || 'the album'}`); }
     catch (err) { el.hidden = true; }
   }
 

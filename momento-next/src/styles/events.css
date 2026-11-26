@@ -175,6 +175,12 @@
     .ev-scanbar-sep { flex: none; width: 1px; height: 1.75rem; margin: 0 .3rem; background: rgba(46, 44, 58, .14); }
     .ev-go { flex: none; height: 3rem; min-height: 3rem; padding: 0 1.6rem; white-space: nowrap; }
     .ev-go-wrap { position: relative; flex: none; display: inline-flex; }
+    /* A longer translation (Urdu: "قریبی اسکین کریں") can't fit search, range and scan on one line: scan then moves to
+       a second line, under the range, instead of pushing the page wider than the screen. 28px corners look like the
+       pill on one line (the bar is 60px tall) and still fit a two-line bar */
+    .ev-scanbar { --radius: 28px; flex-wrap: wrap; }
+    .ev-scanbar .ev-go-wrap { margin-inline-start: auto; }
+    .ev-scanbar .ev-search { flex-basis: 10rem; }   /* wrap only when search would go below its 10rem minimum */
     /* Until the first scan, a soft lavender ring breathes out from the scan button (transform + opacity only) */
     .ev-scanbar.is-fresh .ev-go-wrap::before { content: ""; position: absolute; inset: 0; border-radius: 100px; border: 2px solid rgba(184, 174, 245, .85); box-shadow: 0 0 22px 2px rgba(184, 174, 245, .45); opacity: 0; pointer-events: none; animation: ev-nudge 2.6s cubic-bezier(.2, .7, .3, 1) infinite; }
     @keyframes ev-nudge { 0% { transform: scale(1); opacity: .9; } 70%, 100% { transform: scale(var(--nx, 1.14), var(--ny, 1.5)); opacity: 0; } }
@@ -686,8 +692,8 @@
     .ev-side-head { display: grid; gap: var(--ev-gap); min-width: 0; }
     .ev-side-head .ev-status { min-height: 0; margin: 0; padding: 0 .4rem; font-size: .88rem; line-height: 1.45; }
     .ev-side-head .ev-status:empty { display: none; }
-    .ev-side-head .ev-notify { justify-content: space-between; margin: 0; padding: .35rem .5rem .35rem 1rem; box-sizing: border-box; background: rgba(46, 44, 58, .045); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .06); }
-    :root[data-theme="dark"] .ev-side-head .ev-notify { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+    :is(.ev-side-head, .ev-side-foot) .ev-notify { width: 100%; justify-content: space-between; margin: 0; padding: .35rem .5rem .35rem 1rem; box-sizing: border-box; background: rgba(46, 44, 58, .045); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .06); }
+    :root[data-theme="dark"] :is(.ev-side-head, .ev-side-foot) .ev-notify { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
     .ev-side { display: grid; align-content: start; gap: var(--ev-gap, .9rem); min-width: 0; }
     @media (max-width: 900px) { .ev-list:not(.is-all) > .evc:nth-of-type(n + 4) { display: none; } }   /* phones: the closest three until "Show all" (on desktop the list scrolls instead) */
     @media (min-width: 901px) {

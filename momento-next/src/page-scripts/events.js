@@ -541,11 +541,11 @@ export default function start() {
       function listMsg(title, text, { scanning = false, retry = false, cta = false } = {}) {
         moreBtn.hidden = true;
         const pin = '<span class="ev-radar-pin"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span>';
-        listEl.innerHTML = `<div class="ev-empty ev-scan panel${cta ? ' ev-scan--cta' : ''}${scanning ? '' : ' is-idle'}">${scanning || cta ? `<span class="ev-radar" aria-hidden="true"><i></i><i></i><i></i>${cta ? pin : ''}</span>` : ''}<h2></h2><p></p>${retry || cta ? `<button class="btn btn-dark${cta ? ' ev-scan-go' : ''}" type="button" data-rescan></button>` : ''}</div>`;
+        listEl.innerHTML = `<div class="ev-empty ev-scan panel${cta ? ' ev-scan--cta' : ''}${scanning ? '' : ' is-idle'}">${scanning || cta ? `<span class="ev-radar" aria-hidden="true"><i></i><i></i><i></i>${cta ? pin : ''}</span>` : ''}<h2></h2><p></p>${retry ? '<button class="btn btn-dark" type="button" data-rescan></button>' : ''}</div>`;
         listEl.querySelector('h2').textContent = title;
         listEl.querySelector('p').textContent = text;
         const again = listEl.querySelector('[data-rescan]');
-        if (again) again.textContent = cta ? 'Scan nearby' : typeof retry === 'string' ? retry : 'Scan again';
+        if (again) again.textContent = typeof retry === 'string' ? retry : 'Scan again';
         if (again) { again.addEventListener('click', () => useMyLocation()); rollButton?.(again); }
       }
       // How far a scan looks: you pick one of these (the chips in the scan bar), and it's remembered.
@@ -1020,7 +1020,7 @@ export default function start() {
       const showIdle = () => {
         listMsg('Scan to see the events near you', `Pick how far to look, then scan to see public events within ${fmtRange(rangeM)}. Momento asks for your location first, and only uses it when you scan.`, { cta: true });
         listEl.querySelector('.ev-scan')?.setAttribute('data-idle', '');
-        mapScan.hidden = false; note.hidden = true;   // the globe's own scan button, until a scan happens
+        note.hidden = true;   // (one Scan button only: the scan bar's, next to how far to look)
       };
       function paintRange() {
         rangeEl.style.setProperty('--i', Math.max(0, RANGES.indexOf(rangeM)));

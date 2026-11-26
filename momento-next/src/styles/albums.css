@@ -225,8 +225,10 @@
     .faces i:first-child { margin-left: 0; }
     .faces span { margin-left: .6rem; font-size: .85rem; }
     .live-over .faces { margin-top: .9rem; --ring: rgba(40,34,52,.9); }
-    .live-actions { display: flex; gap: .5rem; padding: 10px 2px 2px; }
-    .live-actions .btn { flex: 1; }
+    .live-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: 10px 2px 2px; }
+    /* Equal halves while both labels fit; a longer translation ("Tambahkan foto Anda") is never cut off:
+       its button keeps its full label and drops to a row of its own instead */
+    .live-actions .btn { flex: 1 1 0; min-width: fit-content; }
 
     /* ---------- Shared section label: a small pane of liquid glass (the `glass` class gives it
        the same fill and rim as the nav bar, in both themes) ---------- */

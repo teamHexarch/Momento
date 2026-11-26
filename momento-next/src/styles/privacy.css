@@ -20,6 +20,8 @@
     .brand img { width: 2rem; height: 2rem; border-radius: 9px; }
     .back { font-size: .92rem; font-weight: 600; }
     main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 16px 4rem; }
+    /* A long word in another language ("конфиденциальности") breaks rather than running off a small phone */
+    h1, h2 { overflow-wrap: break-word; hyphens: auto; }
     h1 { margin: 0; font-size: clamp(2rem, 6vw, 2.8rem); line-height: 1.1; letter-spacing: -.035em; }
     .updated { margin: .6rem 0 2rem; color: var(--slate); font-size: .92rem; }
     .lede { margin: 0 0 2rem; padding: 1.1rem 1.25rem; border-radius: 16px; background: var(--tint); font-size: 1.02rem; }
@@ -32,6 +34,8 @@
     th { color: var(--slate); font-weight: 600; font-size: .85rem; }
     td:first-child { font-weight: 600; white-space: nowrap; padding-right: 1rem; }
     footer { max-width: 46rem; margin: 0 auto; padding: 1.5rem 16px 3rem; border-top: 1px solid var(--line); color: var(--slate); font-size: .9rem; }
+    /* Each link keeps its place: names in Arabic or Urdu would otherwise be reordered among themselves */
+    footer a { unicode-bidi: isolate; }
     @media (pointer: coarse) { footer a { display: inline-block; padding-block: 12px; } }   /* 44px rows for a thumb */
     @media (max-width: 560px) {
       table, tbody, tr, td { display: block; }

@@ -96,8 +96,6 @@
     .as-status { min-height: 1.2rem; margin: .9rem 0 0; color: var(--slate, #5c596b); font-size: .85rem; font-weight: 500; }
     .as-status.is-error { color: #9A3D3D; }
     :root[data-theme="dark"] .as-status.is-error { color: #F0A3A3; }
-    /* The button added to the "Album created" screen */
-    .m-done .as-open { width: 100%; margin: 0 0 .6rem; }
     @media (max-width: 460px) { .as-pair { grid-template-columns: 1fr; } .as-pop .as-card { padding: 1.3rem 1.2rem 1.1rem; } }
     /* Phones: a waiting guest's name gets the row, Approve and Decline share the line under it */
     @media (max-width: 460px) {
@@ -339,14 +337,10 @@
     if (type !== 'add' || !album?.id || album.role === 'guest' || !dlg?.open) return;
     const doneView = dlg.querySelector('.m-done');
     if (!doneView) return;
-    let wrap = doneView.querySelector('.as-open');
-    if (!wrap) {
-      wrap = document.createElement('div');
-      wrap.className = 'acct-actions as-open';
-      wrap.innerHTML = `<button class="acct-ghost" type="button" data-album-settings>Album settings</button>`;
-      (doneView.querySelector('.m-showqr') || doneView.querySelector('.acct-actions'))?.before(wrap);
-    }
-    const btn = wrap.querySelector('button');
+    // The screen has a quiet "Album settings" link at its foot (CreateDialog); it's shown once the album exists
+    const btn = doneView.querySelector('[data-album-settings]');
+    if (!btn) return;
+    btn.hidden = false;
     btn.onclick = () => open(album.id, btn);
   });
 })();

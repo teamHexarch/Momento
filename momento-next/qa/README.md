@@ -37,6 +37,7 @@ done: dev mode adds an overlay element and is slower.
 | `node behave-diff.mjs behave.mjs <A> <B>` (or `behave-albums.mjs`, `behave-pages.mjs`) | Behaviours as data: intro, nav, FAQ, auth dialog, deep links, redirects, translations, themes, metadata. Prints only what differs. |
 | `node behave-static.mjs <A> <B> out/static` | Terms, Privacy and 404: every character of visible text, every element and attribute, the head, in 6 languages and both themes. |
 | `node behave-404.mjs <A> <B> out/404` | The 404 page's hover, press and keyboard-focus states. |
+| `NEXT_URL=http://localhost:3002 node lang-layout.mjs [/page ...]` | Every page in all 12 languages at 8 screen sizes (340 px phone to 1440 px desktop), with each dialog and each menu (`aria-expanded` button) opened in turn: reports buttons/links that overlap, text cut off or spilling out of its box, and pages wider than the screen. Only prints what English doesn't also have (`ALL=1` for everything). Narrow it with `LANGS=yue,ar` and `VIEWS=phone,tablet`. Takes about 25 min in full. Known false alarms: notification rows scrolling under "Clear all", the footer menu (`open sf-head`) and Support answers caught mid-animation, and a few px of glow on hero titles. |
 | `node hyd.mjs` | Loads every page in 4 modes (sample data on or off, Spanish, Arabic) and fails on any React hydration error. Reads `NEXT_URL` (default `http://localhost:3001`). |
 
 Screenshots and diff images are written to the folder you name (`out/...`, git-ignored). In a diff image, red is a differing pixel.
