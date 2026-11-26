@@ -365,6 +365,17 @@ export default function start() {
           });
         } catch (err) { map = {}; return fail(); }
         mapOk = true;
+        // The wheel zooms only with the pointer on the globe itself. In the space around it the page scrolls as
+        // usual: the wheel is caught on its way down (capture) and never reaches MapLibre's zoom
+        const onGlobe = (e) => {
+          const r = map.getCanvas().getBoundingClientRect();
+          const radius = 256 * 2 ** map.getZoom() / Math.PI;   // half the globe's width on screen (sizeToZoom)
+          // Close in (the surface fills the view) or tilted: all of it is the map
+          if (radius * 2 > Math.min(r.width, r.height) * 1.15 || map.getPitch() > 5) return true;
+          const c = map.project(map.getCenter());   // the globe's middle, on the canvas
+          return Math.hypot(e.clientX - r.left - c.x, e.clientY - r.top - c.y) <= radius * 1.02;
+        };
+        map.getContainer().addEventListener('wheel', (e) => { if (!onGlobe(e)) e.stopPropagation(); }, { capture: true, passive: true });
         controls();
         map.on('load', () => {
           paintAreas();
