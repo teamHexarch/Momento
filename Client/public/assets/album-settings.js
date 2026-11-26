@@ -174,6 +174,12 @@
           <label class="as-row is-wrap"><span><b>Join deadline</b><small>Leave empty to close joining when the event ends</small></span><input type="datetime-local" id="asDeadline" value="${local}"></label>
         </section>
 
+        ${a.kind === 'event' ? `
+        <section class="as-sec" aria-labelledby="asGames">
+          <h3 id="asGames">Games</h3>
+          ${sw('games', a.games !== false, 'Games for guests', 'Polls, quizzes, photo battles and more. Turning them off hides them; nothing is deleted')}
+        </section>` : ''}
+
         <section class="as-sec" aria-labelledby="asReqs">
           <h3 id="asReqs">Waiting for you ${waiting.length ? `<b class="as-badge">${waiting.length}</b>` : ''}</h3>
           ${waiting.length ? `<ul class="as-reqs">${waiting.map((r) => `
@@ -253,7 +259,18 @@
       });
 
       // Switches save straight away and flip back if the server says no
-      card.querySelectorAll('.acct-sw[data-key]:not([data-key="keepHostCover"])').forEach((btn) => btn.addEventListener('click', async () => {
+      // Games on or off: saved on the album itself (like Keep my cover); the album page shows or hides them at once
+      card.querySelector('.acct-sw[data-key="games"]')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget, on = btn.getAttribute('aria-checked') !== 'true';
+        btn.disabled = true;
+        try {
+          await momentoApi('/api/albums/' + encodeURIComponent(id), momentoJson('PATCH', { games: on }));
+          await reload(); say(on ? 'Games are on.' : 'Games are off.'); announce();
+          document.dispatchEvent(new CustomEvent('momento:games-setting', { detail: { album: id, on } }));
+          card.querySelector('[data-key="games"]')?.focus();
+        } catch (err) { btn.disabled = false; say(err.message, true); }
+      });
+      card.querySelectorAll('.acct-sw[data-key]:not([data-key="keepHostCover"]):not([data-key="games"])').forEach((btn) => btn.addEventListener('click', async () => {
         const on = btn.getAttribute('aria-checked') !== 'true';
         btn.setAttribute('aria-checked', String(on)); btn.style.pointerEvents = 'none';
         try {

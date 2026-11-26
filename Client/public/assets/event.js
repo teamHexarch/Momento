@@ -153,6 +153,25 @@
     /* No empty line saved for a message that isn't there */
     #mCreate .acct-status:empty { min-height: 0; margin: 0; }
     .ev-sec[hidden] { display: none; }
+    /* Games for guests: a switch with three dice that light up in the game colours when it's on */
+    .ev-games { position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; padding: .8rem .9rem; border-radius: 18px; cursor: pointer;
+      background: color-mix(in srgb, var(--dusk, #2e2c3a) 5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dusk, #2e2c3a) 10%, transparent); transition: background-color .25s ease, box-shadow .25s ease; }
+    .ev-games:has(input:checked) { background: linear-gradient(120deg, color-mix(in srgb, #3BA4F5 14%, transparent), color-mix(in srgb, #FF4FA3 12%, transparent) 55%, color-mix(in srgb, #FFB020 14%, transparent));
+      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, #9B6BFF 45%, transparent); }
+    .ev-games input { position: absolute; opacity: 0; pointer-events: none; }
+    .ev-games-dice { display: grid; grid-template-columns: repeat(3, .62rem); gap: .2rem; }
+    .ev-games-dice i { width: .62rem; height: .62rem; border-radius: .18rem; background: color-mix(in srgb, var(--dusk, #2e2c3a) 22%, transparent); transition: background-color .3s ease, transform .45s cubic-bezier(.34, 1.56, .64, 1); }
+    .ev-games:has(input:checked) .ev-games-dice i:nth-child(1) { background: #FF5A5F; transform: translateY(-3px) rotate(-12deg); }
+    .ev-games:has(input:checked) .ev-games-dice i:nth-child(2) { background: #FFB020; transform: translateY(2px) rotate(8deg); }
+    .ev-games:has(input:checked) .ev-games-dice i:nth-child(3) { background: #2FCB8E; transform: translateY(-1px) rotate(-6deg); }
+    .ev-games-text b { display: block; font-size: .95rem; font-weight: 700; color: var(--dusk, #2e2c3a); }
+    .ev-games-text small { display: block; margin-top: .15rem; font-size: .8rem; line-height: 1.4; color: var(--slate, #5c596b); }
+    .ev-games-sw { position: relative; width: 2.6rem; height: 1.55rem; border-radius: 99px; background: color-mix(in srgb, var(--dusk, #2e2c3a) 22%, transparent); transition: background-color .25s ease; }
+    .ev-games-sw::after { content: ""; position: absolute; top: .2rem; left: .2rem; width: 1.15rem; height: 1.15rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .35s cubic-bezier(.34, 1.56, .64, 1); }
+    .ev-games input:checked ~ .ev-games-sw { background: #7B5CF0; }
+    .ev-games input:checked ~ .ev-games-sw::after { transform: translateX(1.05rem); }
+    .ev-games:has(input:focus-visible) { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { .ev-games-dice i, .ev-games-sw::after { transition: none; } }
     details.ev-more > summary, details.ev-more > summary small { white-space: nowrap; }
     @media (max-width: 480px) { details.ev-more > summary small { display: none; } }
     @media (prefers-reduced-motion: reduce) { details.ev-more > summary svg, .ev-range::-webkit-slider-thumb { transition: none; } .ev-range:is(:hover, :active)::-webkit-slider-thumb { transform: none; } }
@@ -554,6 +573,13 @@
           </label>
           <small class="ev-vis-hint" id="evVisHint"></small>
         </div>
+        <!-- Event games (src/page-scripts/games.js): on unless the host turns them off here (or later in Album settings) -->
+        <label class="ev-games">
+          <input type="checkbox" name="evGames" checked>
+          <span class="ev-games-dice" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="ev-games-text"><b>Games for guests</b><small>Polls, quizzes, photo battles and more, with a leaderboard. You can turn them off later.</small></span>
+          <i class="ev-games-sw" aria-hidden="true"></i>
+        </label>
         <!-- Everything optional, folded away: the cover (mountCover puts it first), public or not, and when and
              how far away guests can add photos -->
         <details class="ev-more">
@@ -762,7 +788,7 @@
     // An album for a friend group is shared with the group, not held at a place and time: no start and
     // end, no venue, no "Who can join?" and no upload window
     // (More options stays: the cover is there)
-    const eventOnly = ['.ev-public', '.ev-when', '.ev-venue', '.ev-lead-sec', '.ev-radius-sec'].map((s) => box.querySelector(s));
+    const eventOnly = ['.ev-public', '.ev-games', '.ev-when', '.ev-venue', '.ev-lead-sec', '.ev-radius-sec'].map((s) => box.querySelector(s));
     const syncWho = () => {
       const grouped = !!form.group?.value;
       box.dataset.grouped = grouped ? 'true' : '';
@@ -876,6 +902,7 @@
       form.evLead.value = '30';
       form.evRadius.value = '1';
       if (form.evVis) { form.evVis.value = 'invite'; syncVis(); }
+      if (form.evGames) form.evGames.checked = true;
       box._syncRadius();
       setVenue(null);
       const input = search.querySelector('input'); if (input) input.value = '';
@@ -1016,6 +1043,8 @@
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
         visibility: !form.group?.value && form.evVis?.value === 'public' ? 'public' : 'invite',
+        // Games for guests (the switch on step 2)
+        games: form.evGames ? form.evGames.checked : true,
       },
     };
   }

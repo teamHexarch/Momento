@@ -30,6 +30,7 @@ const TEXT = {
   invite: (n) => `${n.by} invited you to ${n.groupName}`,
   'review-approved': (n) => `Your photo was approved and is now in ${n.albumName || 'the album'}`,
   'review-declined': (n) => `Our team reviewed your photo for ${n.albumName || 'the album'} and declined it`,
+  'game-won': (n) => `You won ${n.gameTitle || 'a game'} at ${n.albumName}! 🏆`,
   closing: (n) => (n.endsAt && new Date(n.endsAt) > Date.now()
     ? `${n.albumName} stops taking photos in ${until(n.endsAt)}`
     : `${n.albumName} has stopped taking photos`),
@@ -38,6 +39,7 @@ const BODY = {
   request: () => 'Approve or decline them here, or in the album’s settings.',
   'review-approved': () => 'Thanks for asking. Everyone in the album can see it now.',
   'review-declined': () => 'It stays private and is deleted after 30 days.',
+  'game-won': () => 'Open the event to see the final standings.',
   closing: (n) => (n.endsAt && new Date(n.endsAt) > Date.now() ? 'Add any last photos before it’s kept for good.' : undefined),
 };
 export const textOf = (n) => (TEXT[n.type] || (() => 'Something new on Momento'))(n);
@@ -73,17 +75,17 @@ async function inAlbum(users, album) {
 }
 
 // notify({ user, type, actor, album, photo, emoji })   user: who it's for. Never for your own actions.
-export async function notify({ user, type, actor, album, photo, emoji, group }) {
+export async function notify({ user, type, actor, album, photo, emoji, group, game, gameTitle }) {
   try {
     if (!user || (actor && String(actor) === String(user))) return;
     if (MEMBERS_ONLY.has(type) && !(await inAlbum([user], album)).length) return;
     if (ACTIVITY.has(type) && !(await wantActivity([user], album)).length) return;
     // One reaction per person per photo (a change updates it and makes it unread again); one join, request,
     // group invite and "closing soon" per album or group
-    const key = { user, type, ...(actor && { actor }), ...(album && { album }), ...(photo && { photo }), ...(group && { group }) };
+    const key = { user, type, ...(actor && { actor }), ...(album && { album }), ...(photo && { photo }), ...(group && { group }), ...(game && { game }) };
     const n = ['like', 'reaction', 'joined', 'request', 'invite', 'closing'].includes(type)
       ? await Notification.findOneAndUpdate(key, { $set: { emoji, read: false, at: new Date() } }, { upsert: true, returnDocument: 'after' })
-      : await Notification.create({ ...key, emoji });
+      : await Notification.create({ ...key, emoji, ...(gameTitle && { gameTitle }) });
     if (pushReady) sendPush(n).catch((err) => console.error(`Push failed: ${err.message}`));
   } catch (err) {
     console.error(`Notification failed: ${err.message}`);
@@ -132,6 +134,8 @@ export async function unnotify({ user, type, actor, photo, group }) {
 // Where tapping it goes (push notifications; the inbox works this out itself from the fields below)
 export function linkOf(item) {
   if (item.type === 'invite') return `${config.frontendUrl}/events#needs`;
+  // A game win: the event, with its Games window open at that game
+  if (item.type === 'game-won' && item.albumId) return `${config.frontendUrl}/albums#album=${item.albumId}${item.gameId ? `&game=${item.gameId}` : ''}`;
   if (item.type === 'request' && item.albumId) return `${config.frontendUrl}/albums#requests=${item.albumId}${item.actor?.id ? `&guest=${item.actor.id}` : ''}`;
   return `${config.frontendUrl}/albums${item.albumId ? `?album=${item.albumId}` : ''}`;
 }
@@ -153,6 +157,7 @@ export async function describe(list) {
       albumId: n.album?.id, albumName: n.album?.name || 'an album', endsAt: n.album?.endsAt, groupName: n.group?.name || 'a group',
       photoIds: photoIds?.length ? photoIds : undefined,
       photoId: n.photo ? String(n.photo) : undefined,
+      gameId: n.game ? String(n.game) : undefined, gameTitle: n.gameTitle || undefined,
       thumbUrl: n.photo ? `${config.publicUrl}/api/photos/${n.photo}?size=thumb` : undefined,
     };
     out.title = out.text = textOf(out);

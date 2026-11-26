@@ -21,9 +21,12 @@ const playLimit = rateLimit({
 });
 // An event: kind 'event', or an older album with event times
 export const isEvent = (album) => (album.kind || (album.startsAt ? 'event' : 'album')) === 'event';
+// Games are on for an event unless the host turned them off (album.games false)
+export const gamesOn = (album) => isEvent(album) && album.games !== false;
 const member = async (req, { listing = false } = {}) => {
   const m = await membershipOf(req, req.params.id);
   if (!listing && !isEvent(m.album)) throw new HttpError(403, 'Games are only for events.', 'GAMES_EVENTS_ONLY');
+  if (!listing && !gamesOn(m.album)) throw new HttpError(403, 'The host has turned games off for this event.', 'GAMES_OFF');
   return { album: m.album, host: m.role === 'host' };
 };
 const hostOnly = async (req) => {
@@ -35,8 +38,9 @@ const noStore = (res) => res.set('Cache-Control', 'private, no-store');
 
 gameRoutes.get('/', async (req, res) => {
   const { album, host } = await member(req, { listing: true });
-  // A plain album: no games (enabled: false tells the page not to show the games section)
-  if (!isEvent(album)) return noStore(res).json({ enabled: false, rounds: [], leaderboard: [], myPoints: 0, host, pollEveryMs: 3000 });
+  // A plain album, or an event with games off: no games (enabled: false tells the page not to show the games section;
+  // off: true tells the host they can turn them back on in the album's settings)
+  if (!gamesOn(album)) return noStore(res).json({ enabled: false, off: isEvent(album), rounds: [], leaderboard: [], winsBoard: [], myPoints: 0, myWins: 0, host, pollEveryMs: 3000 });
   noStore(res).json({ enabled: true, ...(await games.albumGames(album._id, req.user._id, host)), host, pollEveryMs: 3000 });
 });
 gameRoutes.get('/:round', async (req, res) => {

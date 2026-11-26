@@ -21,6 +21,7 @@
     joined: svg('<circle cx="10" cy="8.5" r="3.2"/><path d="M4 19.5c.6-3.2 2.9-5 6-5s5.4 1.8 6 5M18 8v6M15 11h6"/>', 16),
     invite: svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/>', 16),
     closing: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', 16),
+    'game-won': svg('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/>', 16),
     other: svg(BELL, 16),
   };
   // The same pictures, small, for the badge on each notification's avatar
@@ -30,6 +31,7 @@
     joined: svg('<circle cx="10" cy="8.5" r="3.2"/><path d="M4 19.5c.6-3.2 2.9-5 6-5s5.4 1.8 6 5"/>', 11),
     invite: svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/>', 11),
     closing: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', 11),
+    'game-won': svg('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/>', 11),
     other: svg(BELL, 11),
   };
   // Kinds that ask something of you. While unread they sit at the top under "Needs you", with a button
@@ -235,6 +237,8 @@
       // (with who asked, so their row is the one ready to answer)
       if (n.type === 'request') return safeUrl('albums#' + new URLSearchParams({ requests: n.albumId, ...(n.actor?.id && { guest: n.actor.id }) }));
       const q = new URLSearchParams({ album: n.albumId });
+      // A game win opens the event at that game
+      if (n.type === 'game-won' && n.gameId) q.set('game', n.gameId);
       if (Array.isArray(n.photoIds) && n.photoIds.length) {
         q.set('photos', n.photoIds.join(','));
         if (n.actor?.name) q.set('by', n.actor.name);

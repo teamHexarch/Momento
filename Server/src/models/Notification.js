@@ -2,15 +2,18 @@ import mongoose from 'mongoose';
 
 // Something that happened to you: someone reacted to your photo, added photos to your album, joined or
 // asked to join an album you host, the host let you in, someone invited you to a group, or an album
-// you're in is about to stop taking photos. One reaction per person per photo (changing it updates it).
+// you're in is about to stop taking photos, or you won a game at an event. One reaction per person per photo (changing it updates it).
 // Read ones stay in the inbox until cleared; everything goes after 90 days.
 // ('like' is from before likes became private bookmarks: no new ones are made and old ones aren't shown.)
 const notificationSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['like', 'reaction', 'joined', 'request', 'approved', 'photos', 'invite', 'closing', 'review-approved', 'review-declined'], required: true },
+  type: { type: String, enum: ['like', 'reaction', 'joined', 'request', 'approved', 'photos', 'invite', 'closing', 'review-approved', 'review-declined', 'game-won'], required: true },
   actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album' },
   photo: { type: mongoose.Schema.Types.ObjectId, ref: 'Photo' },
+  // For 'game-won': the event game they won, and its name then (the game may be deleted later)
+  game: { type: mongoose.Schema.Types.ObjectId, ref: 'GameRound' },
+  gameTitle: String,
   // For 'invite': the group they were invited to
   group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group' },
   // For 'photos': the photos added since they last read it (the newest 60), so tapping it shows just those

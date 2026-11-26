@@ -14,6 +14,12 @@ const roundSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   startedAt: Date,
   endedAt: Date,
+  // A time limit (polls, photo battles, bingo): the game ends by itself at endsAt (set when it starts, from
+  // settings.minutes, or the event's end for settings.untilEventEnds). Ended by gameService.endDueRounds.
+  endsAt: Date,
+  // Set when it ends: the top 3 places (ties share a place), each with that person's points in this game.
+  // Everyone in 1st place is a winner: they get a "You won" notification and a game win on the event's board.
+  podium: { type: [{ _id: false, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, name: String, points: Number, place: Number }], default: undefined },
   // poll: { question, options: [{ id, text }] }
   // trivia: { questions: [{ text, options: [String], answer: Number, seconds }], current: Number, currentAt: Date }
   // battle: { maxEntries: Number (photos per person) }
@@ -23,6 +29,8 @@ const roundSchema = new mongoose.Schema({
   settings: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { collection: 'game_rounds', timestamps: true, versionKey: false });
 roundSchema.index({ album: 1, createdAt: -1 });
+// Timed games whose time is up (gameService.endDueRounds, every few seconds)
+roundSchema.index({ status: 1, endsAt: 1 }, { partialFilterExpression: { endsAt: { $exists: true } } });
 
 const responseSchema = new mongoose.Schema({
   round: { type: mongoose.Schema.Types.ObjectId, ref: 'GameRound', required: true },

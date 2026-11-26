@@ -192,6 +192,8 @@ function summary(album, role, stats = {}) {
     hasHostCover: !!album.cover?.key,
     keepHostCover: !!album.keepHostCover,
     allowComments: album.allowComments !== false,
+    // Event games on or off (plain albums: always off)
+    games: (album.kind || (album.startsAt ? 'event' : 'album')) === 'event' && album.games !== false,
     uploadLimits: { perGuest: album.uploadLimits?.perGuest ?? 150, total: album.uploadLimits?.total ?? 1500 },
     ...shown,
   };
@@ -347,6 +349,8 @@ export async function create(req, res) {
   const isEvent = b.kind === 'event' || b.startsAt != null || b.endsAt != null;
   const fields = { ...readAlbumFields(b), ...(isEvent ? readEventFields(b) : { zone: undefined }), kind: isEvent ? 'event' : 'album' };
   fields.visibility = isEvent && b.visibility === 'public' ? 'public' : 'invite';
+  // Games: an event has them unless the host said no (games: false)
+  if (isEvent) fields.games = b.games !== false;
   const group = b.groupId ? await groupFor(req.user._id, b.groupId) : null;
   // Group albums are for the group (and anyone given the code), never listed publicly on Events
   if (group) Object.assign(fields, { group: group._id, visibility: 'invite', eventUploadWindow: isEvent && b.eventUploadWindow === true });
@@ -578,6 +582,11 @@ export async function update(req, res) {
   if (typeof req.body?.keepHostCover === 'boolean') m.album.keepHostCover = req.body.keepHostCover;
   // Photo comments on or off for the whole album
   if (typeof req.body?.allowComments === 'boolean') m.album.allowComments = req.body.allowComments;
+  // Event games on or off (only events have them; turning them off hides them, nothing is deleted)
+  if (typeof req.body?.games === 'boolean') {
+    if ((m.album.kind || (m.album.startsAt ? 'event' : 'album')) !== 'event') throw new HttpError(400, 'Games are only for events.', 'GAMES_EVENTS_ONLY');
+    m.album.games = req.body.games;
+  }
   // Upload caps: photos per guest (1-1000) and for the album (1-10000)
   if (req.body?.uploadLimits !== undefined) {
     const { perGuest, total } = req.body.uploadLimits || {};

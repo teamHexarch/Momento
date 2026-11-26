@@ -2938,6 +2938,8 @@ export default function start() {
       if (!id) return;
       const photos = (q.get('photos') || '').split(',').filter(Boolean);
       pendingFocus = photos.length ? { album: id, photos, by: q.get('by') || '' } : null;
+      // From a "You won" notification: #album=<id>&game=<game id> also opens that game (games.js picks it up)
+      if (q.get('game')) window.momentoPendingGame = { album: id, game: q.get('game') };
       document.dispatchEvent(new CustomEvent('momento:open-album', { detail: id }));
     };
     addEventListener('hashchange', albumFromHash);

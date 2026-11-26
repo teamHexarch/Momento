@@ -121,12 +121,37 @@ async function readCrop(b, album) {
 }
 const READERS = { poll: readPoll, trivia: readTrivia, battle: readBattle, bingo: readBingo, crop: readCrop, contest: contest.readContest };
 
+// ---- Time limits: polls, battles and bingo can end by themselves ----
+// (quizzes and mystery crop run on their own clocks, question by question; a competition ends once the host picks winners)
+export const TIMED_TYPES = new Set(['poll', 'battle', 'bingo']);
+export const MAX_MINUTES = 24 * 60;
+// body.minutes: 1 to 1440; body.untilEventEnds: true (ends with the event). Neither: no limit (the host ends it).
+function readTimeLimit(type, body, album) {
+  if (!TIMED_TYPES.has(type)) return {};
+  if (body.untilEventEnds === true) {
+    if (!album.endsAt) throw new HttpError(400, 'This event has no end time. Choose a number of minutes instead.', 'GAME_INVALID');
+    return { untilEventEnds: true };
+  }
+  if (body.minutes === undefined || body.minutes === null || body.minutes === '' || body.minutes === 0) return {};
+  const minutes = Number(body.minutes);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES) throw new HttpError(400, 'Give the game 1 minute to 24 hours, or no time limit.', 'GAME_INVALID');
+  return { minutes };
+}
+// When a game that's starting now runs out of time (null: no limit)
+function endsAtFor(round, album, now = new Date()) {
+  const s = round.settings || {};
+  if (s.untilEventEnds && album.endsAt) return new Date(Math.max(now.getTime() + 60000, new Date(album.endsAt).getTime()));
+  if (s.minutes) return new Date(now.getTime() + s.minutes * 60000);
+  return null;
+}
+
 export async function createRound(album, user, body = {}) {
   const type = body.type;
   if (!GAME_TYPES.includes(type)) throw new HttpError(400, `Choose a game: ${GAME_TYPES.join(', ')}.`, 'GAME_INVALID');
   if (await GameRound.countDocuments({ album: album._id }) >= MAX_ROUNDS_PER_ALBUM) throw new HttpError(409, 'This album has a lot of games already. Delete some first.', 'GAME_LIMIT');
   const title = cleanText(body.title, { max: LIMITS.title, what: 'The name', required: true });
-  const round = await GameRound.create({ album: album._id, type, title, createdBy: user._id, settings: await READERS[type](body, album) });
+  const settings = { ...(await READERS[type](body, album)), ...readTimeLimit(type, body, album) };
+  const round = await GameRound.create({ album: album._id, type, title, createdBy: user._id, settings });
   forget(album._id);
   if (body.start === true) return startRound(album, round._id);
   return round;
@@ -143,6 +168,8 @@ export async function startRound(album, roundId) {
   const round = await hostRound(album, roundId);
   if (round.status !== 'draft') throw new HttpError(409, 'This game has already started.', 'GAME_STATE');
   const set = { status: 'live', startedAt: new Date() };
+  const endsAt = endsAtFor(round, album, set.startedAt);
+  if (endsAt) set.endsAt = endsAt;
   if (round.type === 'trivia' || round.type === 'crop') Object.assign(set, { 'settings.current': 0, 'settings.currentAt': new Date() });
   await GameRound.updateOne({ _id: round._id, status: 'draft' }, { $set: set });
   forget(album._id);
@@ -177,8 +204,72 @@ export async function endRound(album, roundId) {
   }
   // A competition: keep the top 10, delete the rest (services/contestService.js)
   if (ended.modifiedCount && round.type === 'contest') await contest.finishContest(round);
+  // The winners: saved on the game (for the celebration and the event's wins board) and told they won
+  if (ended.modifiedCount) await crownWinners(album, round).catch((err) => console.error(`Game winners failed: ${err.message}`));
   forget(album._id);
   return GameRound.findById(round._id);
+}
+
+// ---- Winners ----
+// Each person's points in one game: their answers, votes and claims (bingo with its line and card bonuses) and the
+// host's awards (podium places in battles and competitions)
+export async function roundPoints(round) {
+  const [responses, awards] = await Promise.all([
+    GameResponse.find({ round: round._id }, 'user q points photo').lean(),
+    GameAward.find({ round: round._id }, 'user points').lean(),
+  ]);
+  const photoIds = responses.filter((r) => r.photo).map((r) => r.photo);
+  const shown = photoIds.length ? new Set((await Photo.find({ _id: { $in: photoIds }, ...SHOWN }, '_id').lean()).map((p) => String(p._id))) : new Set();
+  const totals = new Map(), tiles = new Map();
+  const add = (u, n) => totals.set(String(u), (totals.get(String(u)) || 0) + (n || 0));
+  for (const r of responses) {
+    if (r.photo && !shown.has(String(r.photo))) continue;
+    if (round.type === 'bingo') { if (!tiles.has(String(r.user))) tiles.set(String(r.user), []); tiles.get(String(r.user)).push(r.q); }
+    else add(r.user, r.points);
+  }
+  for (const [u, t] of tiles) add(u, bingoScore(round.settings.size, t).points);
+  for (const a of awards) add(a.user, a.points);
+  return totals;
+}
+// Places from points: ties share a place (two on 120 are both 1st; the next is 3rd). Only people who scored.
+export function rankPlaces(totals, top = 3) {
+  const rows = [...totals.entries()].filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1]);
+  return rows.map(([user, points]) => ({ user, points, place: 1 + rows.filter(([, p]) => p > points).length }))
+    .filter((r) => r.place <= top).slice(0, 12);
+}
+// A poll is a vote, not a contest: nobody wins it
+async function crownWinners(album, round) {
+  if (round.type === 'poll') return;
+  const fresh = await GameRound.findById(round._id).lean();
+  const places = rankPlaces(await roundPoints(fresh));
+  const names = new Map((await User.find({ _id: { $in: places.map((p) => p.user) } }, 'name').lean()).map((u) => [String(u._id), firstOf(u.name)]));
+  const podium = places.map((p) => ({ user: new mongoose.Types.ObjectId(p.user), name: names.get(p.user) || 'Guest', points: p.points, place: p.place }));
+  await GameRound.updateOne({ _id: round._id }, { $set: { podium } });
+  const { notify } = await import('./notifyService.js');
+  for (const w of podium.filter((p) => p.place === 1)) {
+    await notify({ user: w.user, type: 'game-won', album: album._id, game: round._id, gameTitle: fresh.title });
+  }
+}
+
+// ---- Time's up: live games past their endsAt are ended (server.js runs this every few seconds; the state pages ask
+// for also ends an album's own as soon as anyone looks, so a game never stays live long past its time) ----
+let sweeping = null;
+export async function endDueRounds({ album, now = new Date() } = {}) {
+  const filter = { status: 'live', endsAt: { $lte: now }, ...(album && { album }) };
+  const due = await GameRound.find(filter, 'album').limit(50).lean();
+  let ended = 0;
+  const { Album } = await import('../models/Album.js');
+  for (const r of due) {
+    const a = await Album.findById(r.album);
+    if (!a) continue;
+    try { await endRound(a, r._id); ended++; } catch (err) { console.error(`Ending a timed game failed: ${err.message}`); }
+  }
+  return { ended };
+}
+// One sweep at a time across the server (a slow database doesn't pile them up)
+export function sweepTimedGames() {
+  if (!sweeping) sweeping = endDueRounds().catch((err) => console.error(`Timed games sweep failed: ${err.message}`)).finally(() => { sweeping = null; });
+  return sweeping;
 }
 export async function removeRound(album, roundId) {
   const round = await hostRound(album, roundId);
@@ -414,6 +505,8 @@ async function stateOf(albumId) {
   return promise;
 }
 async function build(albumId) {
+  // A timed game whose time is up ends now, before anyone sees it still live
+  if (await GameRound.exists({ album: albumId, status: 'live', endsAt: { $lte: new Date() } })) await endDueRounds({ album: albumId });
   const [rounds, responses, awards, entries, votes] = await Promise.all([
     GameRound.find({ album: albumId }).sort({ createdAt: -1 }).lean(),
     GameResponse.find({ album: albumId }, 'round user q choice points correct photo').lean(),
@@ -461,13 +554,34 @@ async function build(albumId) {
   const wanted = new Set([...top.map(([u]) => u), ...[...battles.values()].flatMap((b) => b.standings.map((e) => e.user)), ...bingoPlayers,
     ...contestEntries.map((e) => String(e.user))]);
   const names = new Map((await User.find({ _id: { $in: [...wanted] } }, 'name').lean()).map((u) => [String(u._id), (u.name || '').trim().split(/\s+/)[0] || 'Guest']));
-  return { rounds, byRound, totals, battles, placesOf, names, contestEntries, board: top.map(([u, points], i) => ({ rank: i + 1, user: u, name: names.get(u) || 'Guest', points })) };
+  // Game wins: how many finished games each person came 1st in (ties count for everyone tied)
+  const wins = new Map(), winNames = new Map();
+  for (const r of rounds) {
+    if (r.status !== 'ended') continue;
+    for (const p of (r.podium || []).filter((x) => x.place === 1)) {
+      const u = String(p.user);
+      wins.set(u, (wins.get(u) || 0) + 1);
+      winNames.set(u, names.get(u) || p.name || 'Guest');
+    }
+  }
+  const winsBoard = [...wins.entries()].sort((a, b) => (b[1] - a[1]) || ((totals.get(b[0]) || 0) - (totals.get(a[0]) || 0))).slice(0, 10)
+    .map(([u, n]) => ({ user: u, name: winNames.get(u), wins: n, points: totals.get(u) || 0 }));
+  winsBoard.forEach((row, i) => { row.rank = 1 + winsBoard.filter((x) => x.wins > row.wins).length; });
+  return { rounds, byRound, totals, wins, winsBoard, battles, placesOf, names, contestEntries, board: top.map(([u, points], i) => ({ rank: i + 1, user: u, name: names.get(u) || 'Guest', points })) };
 }
 
 // One round as a player (or the host) sees it
 function view(round, responses = [], userId, host, s = {}) {
   const me = String(userId);
-  const base = { id: String(round._id), type: round.type, title: round.title, status: round.status, startedAt: round.startedAt || null, endedAt: round.endedAt || null };
+  const st = round.settings || {};
+  const base = { id: String(round._id), type: round.type, title: round.title, status: round.status, startedAt: round.startedAt || null, endedAt: round.endedAt || null,
+    // A time limit: when it ends by itself (live), or how long it will run once started (draft)
+    endsAt: round.endsAt || null, minutes: st.minutes || null, untilEventEnds: !!st.untilEventEnds,
+    // Once finished: the top 3 places (ties share), and whether you won
+    ...(round.status === 'ended' && round.podium && {
+      results: round.podium.map((p) => ({ name: String(p.user) === me ? 'You' : (s.names?.get(String(p.user)) || p.name || 'Guest'), points: p.points, place: p.place, mine: String(p.user) === me })),
+      iWon: round.podium.some((p) => p.place === 1 && String(p.user) === me),
+    }) };
   if (round.type === 'contest') {
     return { ...base, ...contest.contestView(round, (s.contestEntries || []).filter((e) => String(e.round) === String(round._id)), userId, host, s.names) };
   }
@@ -538,6 +652,9 @@ export async function albumGames(albumId, userId, host) {
     rounds: s.rounds.map((r) => view(r, s.byRound.get(String(r._id)), userId, host, s)),
     leaderboard: s.board.map(({ user, ...row }) => ({ ...row, mine: user === String(userId) })),
     myPoints: s.totals.get(String(userId)) || 0,
+    // Who has won the most games at this event
+    winsBoard: s.winsBoard.map(({ user, ...row }) => ({ ...row, mine: user === String(userId) })),
+    myWins: s.wins.get(String(userId)) || 0,
   };
 }
 export async function oneGame(albumId, roundId, userId, host) {

@@ -50,6 +50,9 @@ const albumSchema = new mongoose.Schema({
   keepHostCover: { type: Boolean, default: false },
   // The host can turn photo comments off for this album (on by default)
   allowComments: { type: Boolean, default: true },
+  // Event games (routes/gameRoutes.js): the host chooses when making the event, and can change it in the album's
+  // settings. Unset (events made before the choice existed) counts as on. Plain albums never have games.
+  games: Boolean,
   // Upload caps the host can change: photos per guest (the host has no per-person cap) and for the whole album
   uploadLimits: {
     perGuest: { type: Number, min: 1, max: 1000, default: 150 },

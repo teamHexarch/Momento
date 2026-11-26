@@ -115,6 +115,19 @@ only (404 otherwise); creating and running games is for the host (`403 GAME_HOST
 
 - `GET /api/albums/:id/games` → `{ enabled: true, rounds: [Game], leaderboard: [{ rank, name, points, mine }] (top 10), myPoints, host, pollEveryMs }`
 - `GET /api/albums/:id/games/:round` → `{ game: Game }`
+- **Games on or off:** an event has games unless its host turns them off. `POST /api/albums` with `games: false` (events
+  only; default on) and `PATCH /api/albums/:id { games: true | false }` (host; `400 GAMES_EVENTS_ONLY` for a plain
+  album). Album summaries carry `games` (always `false` for plain albums). With games off, `GET …/games` answers
+  `{ enabled: false, off: true, … }` and everything else `403 GAMES_OFF` (nothing is deleted; turning them back on
+  brings the games back).
+- **Time limits** (polls, photo battles, bingo): add `minutes: 1-1440` or `untilEventEnds: true` when creating the game.
+  It ends by itself at `Game.endsAt` (set when it starts; the server checks every 15 s, and on every state read).
+  Every `Game` carries `endsAt` (null without a limit), `minutes`, `untilEventEnds`.
+- **Winners:** when any game except a poll ends (time up, or the host ends or finishes it), the top 3 places are
+  saved (ties share a place): a finished `Game` carries `results: [{ name, points, place, mine }]` and `iWon`.
+  Everyone in 1st place gets a `game-won` notification ("You won <game> at <event>! 🏆", with `gameId`, `gameTitle`;
+  it opens `albums#album=<id>&game=<gameId>`). The games response also has `winsBoard: [{ rank, name, wins, points,
+  mine }]` (top 10 by games won) and `myWins`.
 - **Host:** `POST /api/albums/:id/games` with
   `{ type: "poll", title, question, options: [2-6 texts], start?: true }` or
   `{ type: "trivia", title, questions: [{ text, options: [2-4], answer: index, seconds?: 5-120 (20) }] (1-20), start?: true }`

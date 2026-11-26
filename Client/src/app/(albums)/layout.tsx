@@ -12,6 +12,9 @@ import '@/styles/nav-extra.css';   // the header menu's Reviews link
 import '@/styles/join-here.css';
 // The album window's sort and filter row, and the viewer's zoom controls (new: after the original sheets)
 import '@/styles/album-tools.css';
+// Event games: the Games button, the arcade strip, the Games window and the winners' celebration (after glass.css,
+// so the Games button's rainbow wins over the plain glass)
+import '@/styles/games.css';
 
 export const viewport: Viewport = pageViewport;
 

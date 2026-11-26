@@ -47,6 +47,9 @@ export default function AlbumModal() {
                 <button className="icon" type="button" id="albumQr" aria-label="Show QR code" title="Show QR code"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2v2M20 14v6h-6" /></svg></button>
               </span>
             </div>
+            {/* Event games at the top of the album (src/page-scripts/games.js fills it): what's live, the latest winner,
+                and the event's leaderboard. Hidden in plain albums and in events with games off */}
+            <section className="ab-arcade" id="abArcade" aria-label="Games" hidden></section>
             {/* Sort and filter the photos (on this device): a menu for the order, chips for which photos show */}
             <div className="ab-tools" id="abTools" hidden>
               <div className="ab-sort-wrap">

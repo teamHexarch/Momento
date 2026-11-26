@@ -31,6 +31,7 @@
     "test:uploads": "node scripts/testUploads.js",
     "test:venue": "node scripts/testVenue.js",
     "test:games": "node scripts/testGames.js",
+    "test:winners": "node scripts/testGameWinners.js",
     "test:learning": "node scripts/testLearningEndToEnd.js",
     "preview:review": "node scripts/reviewPreview.js",
     "admin-team": "node --env-file-if-exists=.env scripts/adminTeam.js",

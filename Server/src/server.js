@@ -5,6 +5,7 @@ import { initStorage, storageName } from './services/storageService.js';
 import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
+import { sweepTimedGames } from './services/gameService.js';
 import { warmUp, usesRekognition } from './services/nsfwService.js';
 import { startUploadChecks, calibratedBins, calibrationError, activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from './services/uploadChecks.js';
 import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
@@ -30,6 +31,8 @@ setInterval(emptyBin, 6 * 3600000).unref();
 // Every hour: "closes soon" emails, weekly recaps, tidying, and the daily backup (see services/jobs.js)
 setTimeout(runJobs, 2 * 60000).unref();
 setInterval(runJobs, 3600000).unref();
+// Every 15 seconds: timed event games whose time is up end, and their winners hear about it (services/gameService.js)
+setInterval(sweepTimedGames, 15000).unref();
 // The nudity check's model loads in the background, so the first upload isn't slow
 setTimeout(warmUp, 5000).unref();
 // The nudity check for album photos runs its queue here, with the same in-process model (services/uploadChecks.js)
