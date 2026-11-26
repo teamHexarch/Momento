@@ -774,7 +774,6 @@ export default function start() {
       // An event says so (Delete event, Event settings, Share event); a plain photo album says album
       const word = isEventAlbum(a) ? 'event' : 'album';
       albumRemove.textContent = a.role === 'host' ? `Delete ${word}` : `Leave ${word}`;
-      paintPending(a);
       setLabel('abSettings', word === 'event' ? 'Event settings' : 'Album settings');
       setLabel('abShare', word === 'event' ? 'Share event' : 'Share album');
       paintPhotoTools(a);   // sort and filter (below)
@@ -1060,13 +1059,8 @@ export default function start() {
       if (ok?.cancelled) return M.a === a && !uploading ? { back: true, files: [...ok.files, ...left] } : undefined;
       if (!ok || M.a !== a || uploading) return;
       if (ok.files) files = ok.files;   // (any left out in the confirmation stay out)
-      // Previews for the "Adding…" tiles while the server checks them (not camera RAW or HEIC: browsers can't show them)
-      for (const f of files) if (!isRawFile(f) && !/\.(heic|heif)$/i.test(f.name) && !localPreviews.has(f.name)) localPreviews.set(f.name, URL.createObjectURL(f));
       if (!files.length) return;
       uploading = true;
-      // "Adding…" tiles at once, from your own files, until the server says where each one is
-      a.sending = files.map((f) => f.name);
-      paintPending(a);
       const add = document.getElementById('albumAdd'); add.disabled = true; document.getElementById('albumCamera').disabled = true;
       note.textContent = left.length ? bigLine(left.map((f) => f.name)) : '';
       const count = plural(files.length, 'photo', 'photos');
@@ -1157,11 +1151,7 @@ export default function start() {
         uploadPct.textContent = '';
         note.textContent = err.message + ' Refresh the album before retrying; some photos may have uploaded.';
         try { await fetchAlbum(a); photosChanged(a, 0); } catch {}
-      } finally {
-        uploading = false; add.disabled = false; document.getElementById("albumCamera").disabled = false;
-        a.sending = null;   // the server's own list of photos being checked takes over (showChecks)
-        paintPending(a);
-      }
+      } finally { uploading = false; add.disabled = false; document.getElementById("albumCamera").disabled = false; }
     }
     // A link to share: hosts get a join link (it carries the album code); guests get a link back to the album
     const albumLinkFor = (a) => {
@@ -1206,31 +1196,11 @@ export default function start() {
     }
     const afterPhotos = async (a, at) => { await loadAlbums(); await fetchAlbum(a); photosChanged(a, at); };
 
-    // ---- Your photos still on their way (uploaded, the check not finished yet): one tile each at the top of the grid
-    // saying "Adding…", with the picture from your own device when this page uploaded it, so an upload never seems to
-    // vanish. Each turns into the real photo as soon as its check is done (the checks poll and live updates redraw).
-    const localPreviews = new Map();   // file name → a preview URL, from this page's uploads
-    function paintPending(a) {
-      thumbsEl.querySelectorAll('.ab-pending').forEach((el) => el.remove());
-      if (!albumModal.open || M.a !== a) return;
-      // While uploading: every file sent; afterwards: those the server is still checking. Never one already in the album.
-      const inAlbum = new Set((a.photoItems || []).filter((p) => p.mine && p.name).map((p) => p.name));
-      const list = (a.sending ? [...new Set([...a.sending, ...(a.pendingChecks || []).map((c) => c.name)])] : (a.pendingChecks || []).map((c) => c.name))
-        .filter((name) => !a.sending || !inAlbum.has(name)).map((name) => ({ name }));
-      if (!list.length) return;
-      thumbsEl.insertAdjacentHTML('afterbegin', list.map((c) => {
-        const url = localPreviews.get(c.name);
-        return `<div class="ab-pending" role="img" aria-label="${esc(c.name || 'Your photo')}: being added">${url ? `<img src="${esc(url)}" alt="">` : ''}<span>Adding…</span></div>`;
-      }).join(''));
-      albumCard.classList.remove('is-empty');
-      document.getElementById('albumEmpty').hidden = true;
-    }
-
-    // ---- Live updates: while an album is open it asks the server every 5 seconds whether anything changed (photos
+    // ---- Live updates: while an album is open it asks the server every 3 seconds whether anything changed (photos
     // added or deleted, reactions, comments: GET /api/albums/:id/version, a short stamp) and redraws in place when it
     // has. Paused while you upload or select photos and while the page is in the background. The full-size photo you
-    // are looking at stays where it is; only its reactions and comments refresh.
-    const ALBUM_LIVE_MS = 5000;
+    // are looking at stays where it is; only its reactions and comments refresh. Quietly: no note, nothing to press.
+    const ALBUM_LIVE_MS = 3000;
     let albumLiveTimer = 0, albumLiveFor = null, albumLiveVersion = null;
     function startAlbumLive(a) { albumLiveFor = a; albumLiveVersion = null; clearTimeout(albumLiveTimer); albumLiveTimer = setTimeout(albumLiveTick, 1000); }
     async function albumLiveTick() {
@@ -1247,11 +1217,9 @@ export default function start() {
       if (albumModal.open && M.a === a) albumLiveTimer = setTimeout(albumLiveTick, ALBUM_LIVE_MS);
     }
     async function albumLiveRefresh(a) {
-      const before = a.photoItems?.length || 0;
       const onId = viewer.open ? current()?.id : null;
       await fetchAlbum(a);
       if (M.a !== a || !albumModal.open) return;
-      const added = (a.photoItems?.length || 0) - before;
       if (onId) {
         const at = a.photoItems.findIndex((p) => p.id === onId);
         if (at < 0) photosChanged(a, M.i);   // the photo you were looking at was deleted: on to the next one
@@ -1262,7 +1230,6 @@ export default function start() {
           if (!document.getElementById('vwComments')?.hidden) loadComments(current());
         }
       } else photosChanged(a, M.i);
-      if (added > 0) Momento.toast?.(added === 1 ? 'New photo' : `${added} new photos`, a.name);
     }
 
     // ---- Select: pick photos, then download, hide or delete them together ----
@@ -3106,8 +3073,6 @@ export default function start() {
       // Photos simply still being processed aren't listed: they appear in the album when they're ready (an ordinary
       // photo never needs anything from you). Only those that need something are: kept private, unreadable, waiting
       const shown = checks.filter((c) => c.state !== 'checking' && c.state !== 'publish');
-      a.pendingChecks = checks.filter((c) => c.state === 'checking' || c.state === 'publish');
-      if (M.a === a) paintPending(a);
       box.replaceChildren(...shown.map(check => {
         const line = document.createElement('li');
         line.className = 'check is-' + check.state;
