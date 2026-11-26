@@ -599,7 +599,7 @@
       photos.sort((x, y) => String(y.likedAt).localeCompare(String(x.likedAt)));
       return { body: { photos } };
     }
-    // Comments on a photo (like the server's: up to 200 characters, 50 per photo; yours or, as host, any can be deleted)
+    // Comments on a photo (like the server's: up to 50 characters, 50 per photo; yours or, as host, any can be deleted)
     const cm = /^\/api\/photos\/(.+)-p(\d+)\/comments(?:\/([^/]+))?$/.exec(path);
     if (cm) {
       const a = state.albums.find((x) => x.id === cm[1]), pid = `${cm[1]}-p${cm[2]}`;
@@ -612,7 +612,7 @@
         if (a.allowComments === false) return fail(403, 'The host has turned comments off for this album.', 'COMMENTS_OFF');
         const text = String(body.text ?? '').replace(/[ \t]+/g, ' ').trim();
         if (!text) return fail(400, 'Your comment can\u2019t be empty.', 'TEXT_EMPTY');
-        if ([...text].length > 200) return fail(400, 'Your comment can be up to 200 characters.', 'TEXT_TOO_LONG');
+        if ([...text].length > 50) return fail(400, 'Your comment can be up to 50 characters.', 'TEXT_TOO_LONG');
         if (list.length >= 50) return fail(409, 'This photo already has 50 comments.', 'COMMENT_LIMIT');
         const c = { id: 'c' + (++state.seq), text, by: state.user.name, mine: true, at: new Date().toISOString() };
         list.push(c); save();

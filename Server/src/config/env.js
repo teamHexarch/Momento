@@ -81,8 +81,9 @@ export const config = {
     // Where replies go, so "reply to this email" reaches a person
     replyTo: env.EMAIL_REPLY_TO || '',
   },
-  // Where the support page's "Send us a message" form is emailed (e.g. the team's Gmail)
-  support: { inbox: env.SUPPORT_EMAIL || 'support@hexarch.org' },
+  // The team inbox for everything people send us (reviews, support messages, photo reports): TEAM_EMAIL, e.g. the
+  // team's Gmail (the older SUPPORT_EMAIL works too). services/teamMail.js tags each one so a filter can label it.
+  support: { inbox: env.TEAM_EMAIL || env.SUPPORT_EMAIL || 'team@hexarch.org' },
   // Who is emailed when someone asks for a declined picture to be reviewed (the review page is review.html)
   staffReview: { inbox: env.STAFF_REVIEW_EMAIL || 'team@hexarch.org' },
   // Push notifications to phones and computers (Web Push). Make the pair once with

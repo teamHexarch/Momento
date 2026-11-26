@@ -192,6 +192,11 @@
 .gm-pick:hover { border-color: var(--gc); transform: rotate(-1deg) scale(1.02); }
 .gm-pick:active { transform: scale(.96); }
 .gm-pick img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+/* One vote per pair: both lock once one is picked (the picked one keeps its colour ring) */
+.gm-pick:disabled { cursor: default; opacity: .55; }
+.gm-pick.is-picked { border-color: var(--gc); opacity: 1; }
+.gm-pick:disabled:hover { transform: none; }
+.gm-pick:disabled:hover:not(.is-picked) { border-color: transparent; }
 .gm-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: .45rem; }
 .gm-thumb { position: relative; display: grid; gap: .2rem; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--dusk); font: inherit; }
 .gm-thumb img { width: 100%; aspect-ratio: 1; border-radius: 12px; object-fit: cover; }

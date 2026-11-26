@@ -146,8 +146,9 @@ let client = null, detector = null;
 export function useDetector(fn) { detector = fn; }
 export const hasDetector = () => Boolean(detector);
 
-// At most 10 photos with Rekognition at once (its default limit is far higher; this keeps memory steady)
-const MAX_AT_ONCE = 10;
+// At most 4 photos with Rekognition at once: a new AWS account's per-second limit is low, and bursts from a big
+// upload were refused (throttled) and retried until the check gave up
+const MAX_AT_ONCE = Number(process.env.REKOGNITION_AT_ONCE) || 4;
 let running = 0; const waiting = [];
 async function limited(fn) {
   if (running >= MAX_AT_ONCE) await new Promise((resolve) => waiting.push(resolve));
@@ -176,8 +177,9 @@ async function ask(buffer) {
 
 const RETRYABLE = new Set(['ThrottlingException', 'ProvisionedThroughputExceededException', 'InternalServerError', 'ServiceUnavailableException', 'TimeoutError']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// Up to 4 tries, waiting 0.5 s, 1 s, 2 s between them (throttling and AWS-side errors only)
-export async function detect(buffer, tries = 4) {
+// Up to 6 tries, waiting about 0.5, 1, 2, 4, 8 s between them (throttling and AWS-side errors only; a little
+// randomness so photos refused together don't all try again at the same moment)
+export async function detect(buffer, tries = 6) {
   return limited(async () => {
     for (let i = 0; ; i++) {
       try {
@@ -186,7 +188,7 @@ export async function detect(buffer, tries = 4) {
       } catch (error) {
         const retry = RETRYABLE.has(error.name) || error.$retryable || error.code === 'ECONNRESET';
         if (!retry || i >= tries - 1) throw error;
-        await sleep(500 * 2 ** i);
+        await sleep(500 * 2 ** i * (0.75 + Math.random() / 2));
       }
     }
   });

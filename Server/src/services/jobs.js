@@ -108,9 +108,12 @@ export async function reviewReminders(now = new Date()) {
     const uploaded = new Date(job?.createdAt || d.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: process.env.REVIEW_TIMEZONE || 'Australia/Sydney' });
     const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const headline = flag === 'oneDayReminderSent' ? 'Reminder: You haven’t reviewed this photo yet — 1 working day left' : 'Action Required: Photo review is due today';
-    await sendEmail({
+    const { sendTeamMail } = await import('./teamMail.js');
+    await sendTeamMail({
+      group: 'system',
+      kind: 'review-reminder',
       to: config.staffReview.inbox,
-      subject: `[Momento review] ${headline}`,
+      title: `Review reminder · ${headline}`,
       html: `<p><b>${esc(headline)}</b></p>
         <table cellpadding="6" style="border-collapse:collapse;font-size:14px">
           <tr><td style="color:#5C596B">File</td><td><b>${esc(job?.originalName ? fixFileName(job.originalName) : 'Photo')}</b></td></tr>

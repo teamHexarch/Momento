@@ -46,9 +46,9 @@ export async function alert(subject, lines = []) {
   const { alertEmail, alertWebhook } = config.security;
   try {
     if (alertEmail) {
-      const { sendEmail } = await import('./emailService.js');
+      const { sendTeamMail } = await import('./teamMail.js');
       const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-      await sendEmail({ to: alertEmail, subject: `[Momento security] ${subject}`, html: `<pre style="font-family:monospace">${esc(text)}</pre>` });
+      await sendTeamMail({ group: 'system', kind: 'security', to: alertEmail, title: `Security · ${subject}`, html: `<pre style="font-family:monospace">${esc(text)}</pre>` });
     }
     if (alertWebhook) {
       // A fixed address from the settings (never from a request); no redirects, 5 second limit

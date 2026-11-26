@@ -48,15 +48,15 @@ export default function Viewer() {
           <div className="rx-scroll" id="vwEmoji"></div>
           <p className="rx-none" id="rxNone" role="status" hidden></p>
         </div>
-        {/* Comments on this photo: a popover on a computer, a sheet from the bottom on a phone. Up to 200 characters each */}
+        {/* Comments on this photo: a popover on a computer, a sheet from the bottom on a phone. Up to 50 characters each */}
         <div className="rx-who vw-comments" id="vwComments" role="dialog" aria-label="Comments" tabIndex={-1} hidden>
           <div className="rx-grab" aria-hidden="true"><i></i></div>
           <div className="cm-head"><b>Comments</b><span id="cmCount"></span></div>
           <ul className="cm-list" id="cmList" aria-live="polite"></ul>
           <p className="cm-empty" id="cmEmpty" hidden>No comments yet. Say something nice.</p>
           <form className="cm-form" id="cmForm" autoComplete="off">
-            <textarea id="cmText" rows={1} maxLength={200} placeholder="Add a comment…" aria-label="Your comment, up to 200 characters" enterKeyHint="send"></textarea>
-            <div className="cm-row"><span className="cm-left" id="cmLeft" aria-live="polite">0/200</span><button className="cm-send" type="submit" id="cmSend" disabled>Post</button></div>
+            <textarea id="cmText" rows={1} maxLength={50} placeholder="Add a comment…" aria-label="Your comment, up to 50 characters" enterKeyHint="send"></textarea>
+            <div className="cm-row"><span className="cm-left" id="cmLeft" aria-live="polite">0/50</span><button className="cm-send" type="submit" id="cmSend" disabled>Post</button></div>
             <p className="cm-err" id="cmErr" role="alert" hidden></p>
           </form>
           <p className="cm-off" id="cmOff" hidden>The host has turned comments off for this album.</p>

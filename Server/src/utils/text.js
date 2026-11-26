@@ -4,7 +4,7 @@ import { HttpError } from './httpError.js';
 // database space. Text is trimmed and runs of spaces collapsed first; anything still over the limit is refused with
 // 400 TEXT_TOO_LONG.
 export const LIMITS = {
-  comment: 200,          // photo comments
+  comment: 50,           // photo comments
   reviewBody: 300,       // the review page's comment
   featureOther: 100,     // a review's "Other" feature request
   displayName: 40,       // a person's name or guest nickname

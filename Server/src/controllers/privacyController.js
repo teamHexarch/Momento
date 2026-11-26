@@ -133,24 +133,15 @@ export async function requestReview(req, res) {
   }
   // A second, closer look first: if it now comes out at level 75 or below, the photo is published and no person
   // needs to look (uploadChecks.secondLook). Otherwise (or if the look fails) it goes to staff as before.
+  // (usually already done when the photo was declined; done again here in case the thresholds have learned since)
   if (await UploadCheck.exists({ _id: req.params.id, user: req.user._id, state: 'rejected' })) {
-    const { secondLook, publishNow } = await import('../services/uploadChecks.js');
-    const { actionOf } = await import('../services/rekognitionService.js');
-    const look = await secondLook(req.params.id).catch((err) => { console.error('Second look failed: %s', err.message); return null; });
-    const record = look && { level: look.level, labels: look.labels, at: new Date() };
-    if (look && actionOf(look.level) === 'publish') {
-      const allowed = await ModerationDecision.findOneAndUpdate({ _id: req.params.id, user: req.user._id, status: 'final' },
-        { $set: { status: 'allowed', reviewer: 'Automatic second look', reviewedAt: new Date(), secondLook: record } });
-      if (allowed) {
-        await UploadCheck.updateOne({ _id: req.params.id, state: 'rejected' }, { $set: { state: 'publish', attempts: 0, due: new Date() },
-          $push: { history: { stage: 2, action: 'allow', rule: 'second-look', level: look.level, at: new Date() } } });
-        await publishNow(req.params.id).catch((err) => console.error('Second look publish: %s', err.message));
-        await audit('moderation.second-look-allowed', { req, target: req.params.id, meta: { level: look.level } });
-        return res.json({ id: req.params.id, status: 'allowed', published: true,
-          message: 'A second, closer check found this photo is fine, so it’s now in the album.' });
-      }
+    const { secondLookDecides } = await import('../services/uploadChecks.js');
+    const published = await secondLookDecides(req.params.id, { userId: req.user._id }).catch((err) => { console.error('Second look failed: %s', err.message); return false; });
+    if (published) {
+      await audit('moderation.second-look-allowed', { req, target: req.params.id });
+      return res.json({ id: req.params.id, status: 'allowed', published: true,
+        message: 'A second, closer check found this photo is fine, so it’s now in the album.' });
     }
-    if (record) await ModerationDecision.updateOne({ _id: req.params.id, user: req.user._id }, { $set: { secondLook: record } });
   }
   const before = await ModerationDecision.findOneAndUpdate(
     { _id: req.params.id, user: req.user._id, status: { $in: ['final', 'review-requested'] } },

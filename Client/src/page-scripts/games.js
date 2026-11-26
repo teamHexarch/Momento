@@ -408,7 +408,7 @@ export default function installGames() {
     let vote = '';
     if (live && r.canVote) {
       if (G.pair && G.pairFor === r.id) vote = `<h3 class="gm-vs-head">Which is better?</h3><div class="gm-pair">${G.pair.map((p, i) => `
-        <button class="gm-pick" type="button" data-pick="${esc(p.photo)}" data-lose="${esc(G.pair[1 - i].photo)}"><img src="${esc(p.thumbnailUrl || p.url)}" alt="Photo ${i + 1}"></button>`).join('<span class="gm-vs" aria-hidden="true">VS</span>')}</div>`;
+        <button class="gm-pick${G.picked === p.photo ? ' is-picked' : ''}" type="button" data-pick="${esc(p.photo)}" data-lose="${esc(G.pair[1 - i].photo)}" ${G.picked ? 'disabled' : ''}><img src="${esc(p.thumbnailUrl || p.url)}" alt="Photo ${i + 1}"></button>`).join('<span class="gm-vs" aria-hidden="true">VS</span>')}</div>`;
       else vote = `<p class="gm-hint">${esc(G.pairFor === r.id && G.pairNote || '')}</p><button class="gm-main" type="button" data-pair>Vote on photos</button>`;
     } else if (live) vote = '<p class="gm-hint">Voting opens when at least two photos from other people are in.</p>';
     const enter = live && r.canEnter ? `<button class="gm-ghost" type="button" data-enter>Enter one of your photos (${mine.length}/${r.maxEntries})</button>` : '';
@@ -595,8 +595,12 @@ export default function installGames() {
     }
     if (d.pair !== undefined && r) { loadPair(r); return; }
     if (d.pick && r) {
-      G.pair = null;
-      act(() => api(`/${r.id}/pick`, json('POST', { winner: d.pick, loser: d.lose })), () => loadPair(r, true));
+      // One vote per pair: both photos lock at once (the chosen one marked) until the next pair arrives
+      if (G.picked) return;
+      G.picked = d.pick;
+      body.querySelectorAll('[data-pick]').forEach((b) => { b.disabled = true; b.classList.toggle('is-picked', b === t); });
+      act(() => api(`/${r.id}/pick`, json('POST', { winner: d.pick, loser: d.lose })), () => loadPair(r, true))
+        .finally(() => { G.picked = null; G.html = ''; paint(); });
       return;
     }
     if (d.enter !== undefined && r) {

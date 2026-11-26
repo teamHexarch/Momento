@@ -1,5 +1,5 @@
 import { config } from '../config/env.js';
-import { sendEmail } from './emailService.js';
+import { sendTeamMail } from './teamMail.js';
 import { Album } from '../models/Album.js';
 import { fixFileName } from '../controllers/albumController.js';
 
@@ -19,9 +19,11 @@ export async function tellStaffAboutReview({ decision, fileName, user }) {
     ['Why it was declined', decision.reason || 'The automatic nudity check'],
     ['When', new Date().toUTCString()],
   ];
-  await sendEmail({
+  await sendTeamMail({
+    kind: 'review-request',
     to: config.staffReview.inbox,
-    subject: `[Momento review] ${KIND[decision.kind] || 'A picture'} is waiting for review`,
+    title: `Review request · ${KIND[decision.kind] || 'A picture'} is waiting for review`,
+    data: { picture: decision.kind || 'photo', level: decision.autoLevel ?? null, secondLook: decision.secondLook?.level ?? null },
     html: `<p>Someone asked for a declined picture to be reviewed by a person.</p>
       <table cellpadding="6" style="border-collapse:collapse;font-size:14px">${rows.map(([k, v]) => `<tr><td style="color:#5C596B;vertical-align:top">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join('')}</table>
       <p><a href="${esc(link)}" style="display:inline-block;padding:12px 22px;border-radius:100px;background:#2E2C3A;color:#F8F7FA;text-decoration:none;font-weight:600">Open the review page</a></p>
