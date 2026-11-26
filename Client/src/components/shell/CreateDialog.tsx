@@ -24,6 +24,12 @@ const CreateMarkup = memo(function CreateMarkup() {
             <label><input type="radio" name="kind" value="album" defaultChecked /><b>Album</b><small>Photos together, any time. Join with the code or link</small></label>
             <label><input type="radio" name="kind" value="event" /><b>Event</b><small>A time and a place, with a sharing zone</small></label>
           </div>
+          {/* Events only: games for the guests or not (assets/event.js sends the answer; changeable in Album settings) */}
+          <div className="m-kind m-games" role="radiogroup" aria-labelledby="mGamesTitle" hidden>
+            <span className="m-kind-title" id="mGamesTitle">Would you like games at your event?</span>
+            <label><input type="radio" name="games" value="yes" defaultChecked /><b>Yes, add games</b><small>Polls, quizzes, photo battles and more, with a leaderboard and winners</small></label>
+            <label><input type="radio" name="games" value="no" /><b>No games</b><small>Just photos. You can turn games on later in Album settings</small></label>
+          </div>
           <input name="place" type="hidden" />
           <label className="acct-field m-group m-share" hidden><span>Share with</span><select name="group"></select></label>
         </div>
@@ -102,6 +108,9 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
       step = event ? next : 'details';
       steps.forEach((panel) => { panel.hidden = panel.dataset.createStep !== step; });
       if (kindField) kindField.hidden = grouped;
+      // "Would you like games at your event?" only for an event (not an album, not a friend group's album)
+      const gamesField = form.querySelector<HTMLElement>('.m-games');
+      if (gamesField) gamesField.hidden = !event;
       // An event's date and time are on step two (Starts and Ends), so step one has no date
       form.querySelector<HTMLElement>('.m-date')!.hidden = event;
       form.querySelector<HTMLElement>('[data-name-label]')!.textContent = event ? 'Event name' : 'Album name';
