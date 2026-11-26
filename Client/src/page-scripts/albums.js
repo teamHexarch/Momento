@@ -742,11 +742,12 @@ export default function start() {
       albumCard.classList.toggle('is-empty', empty);
       document.getElementById('albumEmpty').hidden = !empty;
       document.getElementById('albumEmptyText').textContent = a.role === 'host'
-        ? (a.code ? `Share the code ${a.code} with guests so they can join, or add the first photos yourself.` : 'Add the first photos yourself, or share the album’s code with guests.')
+        ? (a.code ? `Share the code ${a.code} with guests so they can join, or add the first photos yourself.` : `Add the first photos yourself, or share the ${isEventAlbum(a) ? 'event' : 'album'}’s code with guests.`)
         : 'Be the first to add photos from the night.';
       document.getElementById('albumDownload').hidden = !a.photos;
       paintPulse(a);
-      document.getElementById('abBinHere').hidden = a.role !== 'host';
+      // Everyone has a bin: the host sees every deleted photo, a guest the ones they deleted themselves
+      document.getElementById('abBinHere').hidden = false;
       document.getElementById('abBinCount').textContent = a.trashCount ? String(a.trashCount) : '';
       albumRemove.hidden = false;
       // Albums with event times take photos in their window; the host can add at any time
@@ -761,7 +762,11 @@ export default function start() {
       const unhide = document.getElementById('albumUnhide');
       unhide.hidden = !a.hiddenCount;
       unhide.querySelector('span').textContent = a.hiddenCount ? `Hidden by you (${a.hiddenCount})` : 'Hidden by you';
-      albumRemove.textContent = a.role === 'host' ? 'Delete album' : 'Leave album';
+      // An event says so (Delete event, Event settings, Share event); a plain photo album says album
+      const word = isEventAlbum(a) ? 'event' : 'album';
+      albumRemove.textContent = a.role === 'host' ? `Delete ${word}` : `Leave ${word}`;
+      setLabel('abSettings', word === 'event' ? 'Event settings' : 'Album settings');
+      setLabel('abShare', word === 'event' ? 'Share event' : 'Share album');
       paintPhotoTools(a);   // sort and filter (below)
     }
 
@@ -796,6 +801,13 @@ export default function start() {
       reactions: (x, y) => (photoReactions(y.p) - photoReactions(x.p)) || (x.p._o - y.p._o),
     };
     // Puts the album's photos (and their thumbnails, which go with them) in the chosen order
+    const isEventAlbum = (a) => (a?.kind || (a?.startsAt ? 'event' : 'album')) === 'event';
+    // A menu item's words, after its icon
+    const setLabel = (id, text) => {
+      const el = document.getElementById(id);
+      const node = el && [...el.childNodes].reverse().find((n) => n.nodeType === 3 && n.textContent.trim());
+      if (node) node.textContent = text;
+    };
     function sortPhotos(a) {
       const items = a.photoItems || [];
       if (!items.length) return;
@@ -2764,14 +2776,16 @@ export default function start() {
       const where = BIN.album ? byId(BIN.album)?.name : '';
       document.getElementById('binTitle').textContent = where ? where : canRecover() ? 'Recently deleted' : 'Hidden by you';
       document.getElementById('binSub').textContent = deleted
-        ? 'Photos you delete stay here for 30 days, then they’re deleted for good.'
+        ? (BIN.album ? byId(BIN.album)?.role === 'host' : ALBUMS.some((a) => a.role === 'host'))
+          ? 'Photos deleted from your albums stay here for 30 days, then they’re deleted for good. A name shows who deleted it.'
+          : 'Photos you delete stay here for 30 days, then they’re deleted for good.'
         : 'Only you stop seeing these. Everyone else in the album still does.';
       // The photos, a heading per album
       const groups = new Map();
       for (const p of list) (groups.get(p.albumId) || groups.set(p.albumId, { name: p.albumName, items: [] }).get(p.albumId)).items.push(p);
       const heads = !BIN.album && groups.size > 0;
       binBody.innerHTML = [...groups.values()].map((g) => `${heads ? `<h3 class="bin-album">${esc(g.name)}</h3>` : ''}
-        <div class="ab-grid">${g.items.map((p) => `<button class="ab-tile" type="button" data-id="${esc(p.id)}" aria-label="Photo from ${esc(g.name)}${deleted ? `, deleted ${binDays(p) === 1 ? 'today' : 'with ' + plural(binDays(p), 'day', 'days') + ' left'}` : ''}"><img ${smallImg(p)} alt="" loading="lazy" decoding="async">${deleted ? `<span class="bin-days${binDays(p) <= 3 ? ' is-soon' : ''}">${plural(binDays(p), 'day', 'days')}</span>` : ''}<span class="ab-check" aria-hidden="true"></span></button>`).join('')}</div>`).join('');
+        <div class="ab-grid">${g.items.map((p) => `<button class="ab-tile" type="button" data-id="${esc(p.id)}" aria-label="Photo from ${esc(g.name)}${deleted && p.deletedBy ? `, deleted by ${p.deletedBy === 'You' ? 'you' : esc(p.deletedBy)}` : ''}${deleted ? `, deleted ${binDays(p) === 1 ? 'today' : 'with ' + plural(binDays(p), 'day', 'days') + ' left'}` : ''}"><img ${smallImg(p)} alt="" loading="lazy" decoding="async">${deleted ? `<span class="bin-days${binDays(p) <= 3 ? ' is-soon' : ''}">${plural(binDays(p), 'day', 'days')}</span>${p.deletedBy && p.deletedBy !== 'You' ? `<span class="bin-by">${esc(p.deletedBy)}</span>` : ''}` : ''}<span class="ab-check" aria-hidden="true"></span></button>`).join('')}</div>`).join('');
       binEmpty.hidden = list.length > 0;
       binEmpty.querySelector('b').textContent = deleted ? 'Nothing here' : 'Nothing hidden';
       binEmpty.querySelector('span').textContent = deleted ? 'Photos you delete stay here for 30 days.' : 'Photos you hide from an album show up here.';
@@ -2795,7 +2809,8 @@ export default function start() {
       if (on && !wasOn && binModal.open) document.getElementById('binCancel').focus({ preventScroll: true });
     }
     // Only the host of an album can delete (and so recover) its photos
-    const canRecover = () => (BIN.album ? byId(BIN.album)?.role === 'host' : ALBUMS.some((a) => a.role === 'host'));
+    // Anyone in an album can recover (the host: every deleted photo; a guest: the ones they deleted themselves)
+    const canRecover = () => (BIN.album ? !!byId(BIN.album) : ALBUMS.length > 0);
     async function openBin({ album = null, tab = 'deleted' } = {}) {
       BIN.album = album; BIN.opener = document.activeElement;
       BIN.tab = canRecover() ? tab : 'hidden';

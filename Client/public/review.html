@@ -33,13 +33,13 @@
     /* The site's palette and type (as albums.html and index.html) */
     :root {
       --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #6F6B7D; --line: #D6D2DE; --surface: #FFFFFF;
-      --tide: #6F9896; --safe: #2F7D4F; --hold: #A86A12; --stop: #B4503F;
+      --tide: #6F9896; --safe: #2F7D4F; --pass: #6B8F2E; --hold: #A86A12; --stop: #B4503F;
       --font-main: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
       --spring: cubic-bezier(0.34, 1.4, 0.64, 1); --out: cubic-bezier(0.16, 1, 0.3, 1);
       --focus-ring: #2E2C3A;
     }
     :root[data-theme="dark"] { --paper: #121119; --dusk: #F2EFF8; --slate: #B4AFC8; --stone: #9A95AE; --line: #2C2A38; --surface: #1C1B25;
-      --safe: #7CC79A; --hold: #E2B062; --stop: #F0A3A3; --focus-ring: #F2EFF8; }
+      --safe: #7CC79A; --pass: #C2DB8A; --hold: #E2B062; --stop: #F0A3A3; --focus-ring: #F2EFF8; }
     html { background: radial-gradient(120% 80% at 20% 10%, #FFF8EC, transparent 55%), linear-gradient(160deg, #EDECF2, #C9D0E4) fixed; }
     * { box-sizing: border-box; }
     /* One screen, nothing scrolls: the photo takes whatever room is left */
@@ -108,6 +108,9 @@
     .lv b { font-size: 1.2rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; }
     .lv small { font-size: .72rem; font-weight: 600; color: var(--slate); }
     .lv[data-group="safe"] b { color: var(--safe); }
+    /* 75 is published (since 2026-11-25), so it's a softer green than 0-50, not the amber of the held levels */
+    .lv[data-group="pass"] b { color: var(--pass); }
+    .lv[data-group="pass"]:hover:not(:disabled), .lv.is-on[data-group="pass"] { color: var(--pass); }
     .lv[data-group="hold"] b { color: var(--hold); }
     .lv[data-group="stop"] b { color: var(--stop); }
     .lv:hover:not(:disabled) { transform: translateY(-2px); box-shadow: inset 0 0 0 1.5px currentColor, 0 8px 20px -12px rgba(30, 25, 50, .45); }
@@ -141,7 +144,7 @@
     .why-pop h2 { margin: 0; font-size: 1.3rem; letter-spacing: -.03em; }
     .why-pop .why-sub { margin: .3rem 0 1rem; font-size: .88rem; }
     .why-sub .lvl { font-weight: 750; }
-    .why-sub .lvl[data-group="safe"] { color: var(--safe); } .why-sub .lvl[data-group="hold"] { color: var(--hold); } .why-sub .lvl[data-group="stop"] { color: var(--stop); }
+    .why-sub .lvl[data-group="safe"] { color: var(--safe); } .why-sub .lvl[data-group="pass"] { color: var(--pass); } .why-sub .lvl[data-group="hold"] { color: var(--hold); } .why-sub .lvl[data-group="stop"] { color: var(--stop); }
     .why-sub .dot, .tick.is-common::after { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; background: var(--hold); }
     .why-sub .dot { margin: 0 .15rem 0 .1rem; vertical-align: .08em; }
     .why { display: grid; gap: .7rem; }
@@ -285,7 +288,7 @@
       background: rgba(255, 255, 255, .5); box-shadow: inset 0 0 0 1px rgba(46, 44, 58, .07); }
     :root[data-theme="dark"] .std-row { background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
     .std-row .n { font-size: 1.2rem; font-weight: 750; letter-spacing: -.02em; text-align: center; }
-    .std-row[data-group="safe"] .n { color: var(--safe); } .std-row[data-group="hold"] .n { color: var(--hold); } .std-row[data-group="stop"] .n { color: var(--stop); }
+    .std-row[data-group="safe"] .n { color: var(--safe); } .std-row[data-group="pass"] .n { color: var(--pass); } .std-row[data-group="hold"] .n { color: var(--hold); } .std-row[data-group="stop"] .n { color: var(--stop); }
     .std-row .t { font-size: .84rem; color: var(--slate); line-height: 1.4; }
     .std-row .t b { display: block; color: var(--dusk); font-size: .9rem; }
     .std-row .d { font-size: .74rem; font-weight: 700; white-space: nowrap; color: var(--stone); }
@@ -430,13 +433,13 @@
       [0, 'General', 'No nudity, nothing sexual: everyday clothes, people, places, food, events; a hug or a quick kiss', 'safe'],
       [25, 'Contextual', 'Swimwear, sportswear, stage outfits or crop tops where they fit; a bare male chest; revealing clothes with no sexual posing', 'safe'],
       [50, 'Mildly sexy', 'Underwear or sexy clothing, fashion or glamour shots, a passionate kiss; private parts fully covered, no clear sexual intent', 'safe'],
-      [75, 'Suggestive', 'Covered, but clear sexual intent: provocative poses, framing on chest, crotch or buttocks, upskirt, sexual gestures or text', 'hold'],
+      [75, 'Suggestive', 'Covered, but clear sexual intent: provocative poses, framing on chest, crotch or buttocks, upskirt, sexual gestures or text', 'pass'],
       [85, 'Near-nude', 'Nipple pasties; chest or crotch covered only by hands, hair or objects; see-through clothing; thongs leaving most of the buttocks bare', 'hold'],
       [95, 'Nude, hidden', 'Fully or topless nude, but nipples and genitals hidden by pose, objects or angle; fully bare buttocks', 'hold'],
       [100, 'Explicit', 'Visible nipples or genitals (censored included), or any sexual activity, clothed or not: touching, sex acts, sex toys, fetish', 'stop'],
     ];
     // The standard's pop-up: each level with its full meaning and its default decision
-    const DEFAULTS = { 0: 'Publish', 15: 'Publish', 25: 'Publish', 50: 'Publish unless not OK', 75: 'Staff decide', 100: 'Always private' };
+    const DEFAULTS = { 0: 'Publish', 15: 'Publish', 25: 'Publish', 50: 'Publish unless not OK', 75: 'Publish', 100: 'Always private' };
     for (const [value, word, meaning, group] of LEVELS) {
       const row = document.createElement('div');
       row.className = 'std-row'; row.dataset.group = group;

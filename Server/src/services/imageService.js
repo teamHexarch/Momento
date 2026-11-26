@@ -1,3 +1,4 @@
+import { Worker } from 'node:worker_threads';
 import sharp from 'sharp';
 import { HttpError } from '../utils/httpError.js';
 import { stripLocation } from '../utils/gpsStrip.js';
@@ -106,30 +107,58 @@ export function heicPixels(b) {
   }
   return most;
 }
-// The picture's size comes from the decoder (libheif reads the file's structure without decoding any pixels), checked
-// before decoding; scanning the bytes for 'ispe' boxes (heicPixels) got Samsung Galaxy HEICs wrong and refused them.
-// sharp then writes the JPEG from the decoded pixels (quicker and lighter than a JavaScript JPEG encoder).
+// HEIC (iPhone, Samsung): decoded by libheif in a worker thread (services/heicWorker.js), so the slow decode never
+// holds up other requests. The size comes from the file's structure and is checked before any pixels are decoded
+// (scanning the bytes for 'ispe' boxes, heicPixels, got Samsung Galaxy HEICs wrong).
 // Up to MAX_HEIC_MEGAPIXELS (60 by default: 50 MP phone photos). Decoding takes about 4 bytes a pixel, all at once:
 // a 200 MP photo needs about 1 GB, so only raise it on a server with 4 GB (MAX_HEIC_MEGAPIXELS=210).
 export const HEIC_MAX_PIXELS = megapixels('MAX_HEIC_MEGAPIXELS', 60);
-// One HEIC is decoded at a time (uploads are checked side by side; two big ones together could run out of memory)
+let heicWorker = null, heicIdle = null, heicNext = 0;
+const heicWaiting = new Map();
+function heicThread() {
+  if (heicWorker) return heicWorker;
+  heicWorker = new Worker(new URL('./heicWorker.js', import.meta.url));
+  heicWorker.unref();
+  heicWorker.on('message', ({ id, error, ...pixels }) => {
+    const job = heicWaiting.get(id);
+    heicWaiting.delete(id);
+    if (job) error ? job.reject(new Error(error)) : job.resolve(pixels);
+  });
+  const fail = (error) => {
+    for (const job of heicWaiting.values()) job.reject(error instanceof Error ? error : new Error('HEIC decoder stopped'));
+    heicWaiting.clear();
+    heicWorker = null;
+  };
+  heicWorker.on('error', fail);
+  heicWorker.on('exit', fail);
+  return heicWorker;
+}
+// One HEIC at a time (uploads are checked side by side; two big ones together could run out of memory). The worker
+// stops after 30 idle seconds, which also hands back the memory a big decode took (WebAssembly memory never shrinks).
 let heicTurn = Promise.resolve();
-function heicToJpeg(buffer) {
-  const run = heicTurn.then(() => decodeHeic(buffer));
+function heicPixelsOf(buffer) {
+  const run = heicTurn.then(() => new Promise((resolve, reject) => {
+    clearTimeout(heicIdle);
+    const id = ++heicNext;
+    heicWaiting.set(id, { resolve, reject });
+    const copy = new Uint8Array(buffer);   // a copy, sent across (the upload's own buffer stays here)
+    heicThread().postMessage({ id, buffer: copy.buffer, maxPixels: HEIC_MAX_PIXELS }, [copy.buffer]);
+  })).finally(() => {
+    clearTimeout(heicIdle);
+    heicIdle = setTimeout(() => { const w = heicWorker; heicWorker = null; w?.terminate(); }, 30000);
+    heicIdle.unref();
+  });
   heicTurn = run.catch(() => {});
   return run;
 }
-async function decodeHeic(buffer) {
-  const decode = (await import('heic-decode')).default;
-  const images = await decode.all({ buffer });
-  try {
-    const first = images[0];
-    if (!first?.width || !first?.height) throw new Error('HEIC has no picture');
-    if (first.width * first.height > HEIC_MAX_PIXELS) throw new Error(`HEIC too large: ${first.width} x ${first.height}`);
-    const { width, height, data } = await first.decode();   // upright already (libheif applies the rotation)
-    return await sharp(Buffer.from(data.buffer, data.byteOffset, data.byteLength), { raw: { width, height, channels: 4 } })
-      .jpeg({ quality: 92 }).toBuffer();
-  } finally { images.dispose?.(); }
+// The decoded picture, as sharp's input: the pixels themselves, no JPEG in between
+async function heicImage(buffer) {
+  const { width, height, data } = await heicPixelsOf(buffer);
+  return { input: Buffer.from(data.buffer || data, data.byteOffset || 0, data.byteLength), raw: { width, height, channels: 4 } };
+}
+async function heicToJpeg(buffer) {
+  const { input, raw } = await heicImage(buffer);
+  return sharp(input, { raw }).jpeg({ quality: 92 }).toBuffer();
 }
 
 // A picture sharp can read, for the cover and profile photos: an iPhone HEIC (HEVC inside, which sharp can't decode)
@@ -153,11 +182,11 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
   const { buffer } = stripLocation(input, { inPlace });
   const raw = isRawName(name) && looksRaw(buffer);
   try {
-    let source = buffer, rotate = 0;
-    // An iPhone HEIC sharp can't read: decoded to JPEG first (it keeps the photo's orientation in its pixels)
+    let source = buffer, rotate = 0, rawPixels = null;
+    // An iPhone HEIC sharp can't read: decoded to pixels first, in the worker (upright already)
     if (!raw && isHeicBytes(buffer)) {
       try { await sharp(buffer).metadata().then((m) => { if (m.format !== 'heif') throw new Error('not heif'); return sharp(buffer).resize(8).toBuffer(); }); }
-      catch { source = await heicToJpeg(buffer); }
+      catch { ({ input: source, raw: rawPixels } = await heicImage(buffer)); }
     }
     if (raw) {
       const found = await embeddedJpeg(buffer);
@@ -169,14 +198,18 @@ export async function sanitizePhoto(input, { name = '', inPlace = false } = {}) 
     }
     // failOn 'error', not 'warning': many phone cameras (Samsung Galaxy especially) write JPEGs that make libjpeg warn
     // ("Invalid SOS parameters for sequential JPEG") yet decode perfectly; 'warning' refused every one of them
-    const image = sharp(source, { animated: !raw, limitInputPixels: MAX_PIXELS, failOn: raw ? 'none' : 'error' });
+    // (a decoded HEIC arrives as RGBA pixels: the always-opaque alpha is dropped so it becomes a JPEG like the others)
+    const image = rawPixels ? sharp(source, { raw: rawPixels, limitInputPixels: MAX_PIXELS }).removeAlpha()
+      : sharp(source, { animated: !raw, limitInputPixels: MAX_PIXELS, failOn: raw ? 'none' : 'error' });
     const metadata = await image.metadata();
     if (!raw && !TYPES[metadata.format] && metadata.format !== 'heif' && source === buffer) throw new Error('Unsupported format');
     const animated = !raw && metadata.pages > 1;
-    const format = !raw && (metadata.hasAlpha || animated || metadata.format === 'webp') ? 'webp' : 'jpeg';
+    const format = !raw && !rawPixels && (metadata.hasAlpha || animated || metadata.format === 'webp') ? 'webp' : 'jpeg';
     const output = (rotate ? image.rotate(rotate) : image.autoOrient())
       .resize({ width: PREVIEW_EDGE, height: PREVIEW_EDGE, fit: 'inside', withoutEnlargement: true });
-    if (format === 'jpeg') output.jpeg({ quality: 82, mozjpeg: true });
+    // Standard JPEG with optimised coding, not mozjpeg: about 5 times quicker (0.9 s down to 0.2 s for a 12 MP photo
+    // on a fast PC, several seconds on the server) for a slightly bigger file
+    if (format === 'jpeg') output.jpeg({ quality: 82, optimiseCoding: true });
     else output.webp({ quality: 82 });
     const preview = await output.toBuffer();
     // The thumbnail comes from the preview (already small and upright): much quicker than the original

@@ -8,8 +8,9 @@ import { hasGroupAccess } from '../services/groupAccess.js';
 import { deletePhotos } from '../services/storageService.js';
 
 // "Recently deleted" (My albums): deleting moves a photo to the bin (deletedAt is set) where it
-// waits 30 days before it's removed for good. Only the host of an album can delete, recover or
-// purge its photos. Guests hide other people's photos from their own view instead ("Hidden by you").
+// waits 30 days before it's removed for good. The host sees, recovers and purges every deleted photo in their
+// albums; anyone else sees, recovers and purges the photos they added and deleted themselves.
+// Guests hide other people's photos from their own view instead ("Hidden by you").
 // Spec: Client/SERVER-TRASH-API.md
 
 export const KEEP_DAYS = 30;
@@ -55,12 +56,26 @@ export async function moveToTrash(req, res) {
   res.json({ moved: r.modifiedCount, skipped });
 }
 
-// GET /api/trash[?album=]  → photos in the bin, newest deleted first
+// The albums this person is in but doesn't host (all of them, or the one asked for), with their names
+async function joined(userId, only) {
+  if (only && !mongoose.isValidObjectId(only)) return new Map();
+  const rows = await Membership.find({ user: userId, ...(only && { album: only }) }, 'album').populate('album', 'name host');
+  return new Map(rows.filter((m) => m.album && !m.album.host?.equals(userId)).map((m) => [String(m.album._id), m.album.name]));
+}
+
+// GET /api/trash[?album=]  → photos in the bin, newest deleted first: every one in the albums you host, and in
+// other albums the ones you added and deleted yourself. Each says who deleted it (deletedBy: "You" or a first name).
 export async function listTrash(req, res) {
-  const names = await hosted(req.user._id, req.query.album);
-  const photos = await Photo.find({ album: { $in: [...names.keys()] }, deletedAt: { $ne: null } }).sort({ deletedAt: -1 }).limit(1000);
+  const me = req.user._id;
+  const [names, others] = await Promise.all([hosted(me, req.query.album), joined(me, req.query.album)]);
+  const photos = await Photo.find({ deletedAt: { $ne: null }, $or: [
+    { album: { $in: [...names.keys()] } },
+    { album: { $in: [...others.keys()] }, deletedBy: me, uploader: me },
+  ] }).sort({ deletedAt: -1 }).limit(1000).populate({ path: 'deletedBy', select: 'name', model: 'User' });
   res.json({ photos: photos.map((p) => ({
-    ...rowOf(p, names.get(String(p.album))),
+    ...rowOf(p, names.get(String(p.album)) ?? others.get(String(p.album))),
+    host: names.has(String(p.album)),
+    deletedBy: !p.deletedBy ? null : p.deletedBy._id.equals(me) ? 'You' : firstName(p.deletedBy.name),
     deletedAt: p.deletedAt, purgeAt: new Date(p.deletedAt.getTime() + KEEP_DAYS * DAY),
   })) });
 }
@@ -75,7 +90,7 @@ export async function restore(req, res) {
 
 // POST /api/trash/purge  { photoIds } | { all: true[, album] }  → { purged }  (for good, files too)
 export async function purge(req, res) {
-  const photos = await picked(req);
+  const photos = await picked(req, true);
   await deletePhotos(photos.map((p) => p.storageKey));
   const r = await Photo.deleteMany({ _id: { $in: photos.map((p) => p._id) } });
   res.json({ purged: r.deletedCount });

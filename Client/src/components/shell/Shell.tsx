@@ -11,7 +11,7 @@ import { flourish, useCardLight, useFlourish, usePageLeave, useTrail } from './e
 import { intro } from './intro';
 
 type Name = 'settings' | 'help' | 'confirm' | 'ask' | 'choose' | 'create';
-type Album = { id: string; code: string; name: string; role?: string; photos?: number; mine?: number };
+type Album = { id: string; code: string; name: string; role?: string; photos?: number; mine?: number; kind?: string; startsAt?: string | null };
 
 /**
  * The shared shell of the app pages (Home, My albums, Social, Settings, Support): the dialogs, the page effects and
@@ -81,20 +81,22 @@ export default function Shell({ trailFromMainLoop = false, choose = false }: {
     M.removeAlbum = async (a: Album, from: HTMLElement | null) => {
       const host = a.role !== 'guest';
       const n = a.photos || 0;
+      // An event is called an event (Delete event), a plain photo album an album
+      const word = (a.kind || (a.startsAt ? 'event' : 'album')) === 'event' ? 'event' : 'album';
       const ok = await M.confirm({
         from,
         title: host ? `Delete “${a.name}”?` : `Leave “${a.name}”?`,
         body: host
-          ? (n ? `All ${n.toLocaleString('en-GB')} photos and the guest code go with it, for everyone who joined.` : 'It has no photos yet, so only the album and its guest code are removed.')
-          : `It’s taken off your albums. ${a.mine ? `Your ${a.mine} photos stay` : 'Photos stay'} in the album for the host and other guests.`,
-        ok: host ? 'Delete album' : 'Leave album',
+          ? (n ? `All ${n.toLocaleString('en-GB')} photos and the guest code go with it, for everyone who joined.` : `It has no photos yet, so only the ${word} and its guest code are removed.`)
+          : `It’s taken off your albums. ${a.mine ? `Your ${a.mine} photos stay` : 'Photos stay'} in the ${word} for the host and other guests.`,
+        ok: host ? `Delete ${word}` : `Leave ${word}`,
       });
       if (!ok) return false;
       try {
         await (host ? api.albums.remove(a.id) : api.albums.leave(a.id));
-      } catch (err) { M.toast('Could not remove album', (err as Error).message); return false; }
+      } catch (err) { M.toast(`Could not remove ${word}`, (err as Error).message); return false; }
       document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'remove', id: a.id } }));
-      M.toast(host ? 'Album deleted' : 'You left the album', a.name);
+      M.toast(host ? (word === 'event' ? 'Event deleted' : 'Album deleted') : `You left the ${word}`, a.name);
       return true;
     };
     M.intro = intro;

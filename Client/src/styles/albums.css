@@ -1111,6 +1111,8 @@
     .bin-album:first-child { margin-top: .3rem; }
     .bin-days { position: absolute; left: .35rem; bottom: .35rem; padding: .16rem .5rem; border-radius: 100px; background: rgba(30,26,40,.72); color: #fff; font-size: .72rem; font-weight: 650; pointer-events: none; }
     .bin-days.is-soon { background: #9A3D3D; }
+    /* Who deleted it (shown to the host when it was a guest) */
+    .bin-by { position: absolute; right: .35rem; top: .35rem; max-width: calc(100% - .7rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: .16rem .5rem; border-radius: 100px; background: rgba(30,26,40,.72); color: #fff; font-size: .72rem; font-weight: 650; pointer-events: none; }
     .bin-card { height: auto; min-height: min(34rem, calc(100dvh - 32px)); }
     .bin-card .album-empty { margin: 1.4rem 0 0; }
     .bin-peek { position: absolute; inset: 0; z-index: 8; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: .8rem; padding: 1rem; background: #0A090E; border-radius: inherit; }

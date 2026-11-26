@@ -304,7 +304,9 @@ export async function list(req, res) {
     statsFor(ids, req.user._id, hidden),
     Photo.find({ album: { $in: ids }, _id: { $nin: hidden }, deletedAt: null }).sort({ createdAt: -1 }).limit(80).populate('uploader', 'name'),
     waitingGuests(hostedIds),
-    Photo.aggregate([{ $match: { album: { $in: hostedIds }, deletedAt: { $ne: null } } }, { $group: { _id: '$album', n: { $sum: 1 } } }]),
+    // The bin: every deleted photo in albums you host, and the ones you deleted yourself elsewhere
+    Photo.aggregate([{ $match: { deletedAt: { $ne: null }, $or: [{ album: { $in: hostedIds } },
+      { album: { $in: ids }, deletedBy: req.user._id, uploader: req.user._id }] } }, { $group: { _id: '$album', n: { $sum: 1 } } }]),
     hidden.length ? Photo.countDocuments({ _id: { $in: hidden }, deletedAt: null }) : 0,
   ]);
   const trash = new Map(binned.map((b) => [String(b._id), b.n]));
@@ -313,14 +315,15 @@ export async function list(req, res) {
     .map((m) => ({
       ...summary(m.album, m.role, stats.get(String(m.album._id))),
       saved: saved.has(String(m.album._id)),
-      ...(m.role === 'host' && { waiting: waiting.get(String(m.album._id)) || 0, trashCount: trash.get(String(m.album._id)) || 0 }),
+      trashCount: trash.get(String(m.album._id)) || 0,
+      ...(m.role === 'host' && { waiting: waiting.get(String(m.album._id)) || 0 }),
     }))
     .sort(((s) => (a, b) => s.dir * (s.by === 'name'
       ? collator.compare(a.name || '', b.name || '') || a.date.localeCompare(b.date)
       : a.date.localeCompare(b.date) || byTime(a.startsAt, b.startsAt)))(sortOrder(req, ['name', 'date'], 'date')));
   res.json({
     albums,
-    // The bin (photos in albums you host) and the photos you've hidden, across all albums
+    // The bin (photos in albums you host, and your own deleted ones elsewhere) and the photos you've hidden, across all albums
     trashCount: [...trash.values()].reduce((t, n) => t + n, 0),
     hiddenCount,
     // Single photos, newest first (the "just added" line of prints)
@@ -517,7 +520,8 @@ export async function show(req, res) {
     statsFor([m.album._id], req.user._id, hidden),
     Photo.find({ album: m.album._id, deletedAt: null, ...(!withHidden && { _id: { $nin: hidden } }) }).sort({ createdAt: -1 }).populate('uploader', 'name'),
     hidden.length ? Photo.countDocuments({ album: m.album._id, _id: { $in: hidden }, deletedAt: null }) : 0,
-    m.role === 'host' ? Photo.countDocuments({ album: m.album._id, deletedAt: { $ne: null } }) : 0,
+    // The bin's count: every deleted photo for the host; for anyone else, the ones they deleted themselves
+    Photo.countDocuments({ album: m.album._id, deletedAt: { $ne: null }, ...(m.role !== 'host' && { deletedBy: req.user._id, uploader: req.user._id }) }),
   ]);
   const hiddenSet = new Set(hidden.map(String));
   const s = sortOrder(req, ['name', 'uploader', 'taken', 'uploaded'], 'uploaded');

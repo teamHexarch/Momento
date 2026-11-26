@@ -112,6 +112,12 @@ export default {
   "Could not remove album": ["无法移除相册", "एल्बम हटाया नहीं जा सका", "No se pudo quitar el álbum", "تعذّرت إزالة الألبوم", "Impossible de retirer l'album", "অ্যালবাম সরানো যায়নি", "Não foi possível remover o álbum", "Не удалось убрать альбом", "البم ہٹایا نہیں جا سکا", "移除唔到相簿", "Tidak dapat menghapus album"],
   "Album deleted": ["相册已删除", "एल्बम हटा दिया गया", "Álbum eliminado", "تم حذف الألبوم", "Album supprimé", "অ্যালবাম মুছে ফেলা হয়েছে", "Álbum excluído", "Альбом удалён", "البم حذف ہو گیا", "相簿已刪除", "Album dihapus"],
   "You left the album": ["你已退出相册", "आपने एल्बम छोड़ दिया", "Saliste del álbum", "غادرت الألبوم", "Vous avez quitté l'album", "আপনি অ্যালবাম ছেড়ে দিয়েছেন", "Você saiu do álbum", "Вы покинули альбом", "آپ نے البم چھوڑ دیا", "你已退出相簿", "Anda keluar dari album"],
+  "Leave event": ["退出活动", "इवेंट छोड़ें", "Salir del evento", "مغادرة الحدث", "Quitter l'événement", "ইভেন্ট ছাড়ুন", "Sair do evento", "Покинуть мероприятие", "ایونٹ چھوڑیں", "退出活動", "Keluar dari acara"],
+  "Delete event": ["删除活动", "इवेंट हटाएँ", "Eliminar evento", "حذف الحدث", "Supprimer l'événement", "ইভেন্ট মুছুন", "Excluir evento", "Удалить мероприятие", "ایونٹ حذف کریں", "刪除活動", "Hapus acara"],
+  "Event deleted": ["活动已删除", "इवेंट हटा दिया गया", "Evento eliminado", "تم حذف الحدث", "Événement supprimé", "ইভেন্ট মুছে ফেলা হয়েছে", "Evento excluído", "Мероприятие удалено", "ایونٹ حذف ہو گیا", "活動已刪除", "Acara dihapus"],
+  "You left the event": ["你已退出活动", "आपने इवेंट छोड़ दिया", "Saliste del evento", "غادرت الحدث", "Vous avez quitté l'événement", "আপনি ইভেন্ট ছেড়ে দিয়েছেন", "Você saiu do evento", "Вы покинули мероприятие", "آپ نے ایونٹ چھوڑ دیا", "你已退出活動", "Anda keluar dari acara"],
+  "Event settings": ["活动设置", "इवेंट सेटिंग्स", "Ajustes del evento", "إعدادات الحدث", "Paramètres de l'événement", "ইভেন্ট সেটিংস", "Configurações do evento", "Настройки мероприятия", "ایونٹ کی ترتیبات", "活動設定", "Pengaturan acara"],
+  "Share event": ["分享活动", "इवेंट शेयर करें", "Compartir evento", "مشاركة الحدث", "Partager l'événement", "ইভেন্ট শেয়ার করুন", "Compartilhar evento", "Поделиться мероприятием", "ایونٹ شیئر کریں", "分享活動", "Bagikan acara"],
 
   // ---- Create an album (first step) ----
   "Step %1 of %2": ["第 %1 步，共 %2 步", "चरण %1 / %2", "Paso %1 de %2", "الخطوة %1 من %2", "Étape %1 sur %2", "ধাপ %1 / %2", "Etapa %1 de %2", "Шаг %1 из %2", "مرحلہ %1 از %2", "第 %1 步，共 %2 步", "Langkah %1 dari %2"],

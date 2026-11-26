@@ -89,6 +89,15 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - The host chooses public or invite-only (`PATCH /api/albums/:id { visibility }`) and turns the location check on or
   off with `PATCH /api/events/:id/policy { locationRequired: true | false }`.
 
+## Recently deleted (the bin)
+
+- `GET /api/trash[?album=]` → `{ photos: [{ id, albumId, albumName, url, thumbnailUrl, miniUrl?, downloadUrl, host, deletedBy, deletedAt, purgeAt }] }`:
+  every deleted photo in albums you host (`host: true`), and in other albums the ones you added **and** deleted yourself.
+  `deletedBy` is `"You"` or the first name of whoever deleted it (the host sees guests' deletions).
+- `POST /api/trash/restore` and `POST /api/trash/purge` (`{ photoIds }` or `{ all: true[, album] }`) act on the same set:
+  a guest can recover or delete for good only their own deleted photos.
+- `trashCount` on `GET /api/albums` (each album and the total) and `GET /api/albums/:id` counts the same set.
+
 ## Event mini-games (polls, trivia, photo battle, scavenger bingo, mystery crop, photo competitions)
 
 **Events only** (albums with a time and a place): in a plain photo album `GET …/games` answers `{ enabled: false,
