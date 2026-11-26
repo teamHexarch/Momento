@@ -411,7 +411,7 @@ export default function installGames() {
         <button class="gm-pick${G.picked === p.photo ? ' is-picked' : ''}" type="button" data-pick="${esc(p.photo)}" data-lose="${esc(G.pair[1 - i].photo)}" ${G.picked ? 'disabled' : ''}><img src="${esc(p.thumbnailUrl || p.url)}" alt="Photo ${i + 1}"></button>`).join('<span class="gm-vs" aria-hidden="true">VS</span>')}</div>`;
       else vote = `<p class="gm-hint">${esc(G.pairFor === r.id && G.pairNote || '')}</p><button class="gm-main" type="button" data-pair>Vote on photos</button>`;
     } else if (live) vote = '<p class="gm-hint">Voting opens when at least two photos from other people are in.</p>';
-    const enter = live && r.canEnter ? `<button class="gm-ghost" type="button" data-enter>Enter one of your photos (${mine.length}/${r.maxEntries})</button>` : '';
+    const enter = live && r.canEnter ? `<button class="gm-main gm-add" type="button" data-enter><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>Enter one of your photos (${mine.length}/${r.maxEntries})</button>` : '';
     const standings = r.standings.length ? `<ol class="gm-standings">${r.standings.map((e) => `<li class="${e.mine ? 'is-mine' : ''}">
         <span>${e.place ? MEDAL_ICON[e.place] || medal(e.place) : e.rank}</span><img src="${esc(e.thumbnailUrl || e.url)}" alt=""><b>${esc(e.by)}</b><em>${e.wins}–${e.losses}</em>
         ${e.mine && live ? `<button class="gm-x" type="button" data-withdraw="${esc(e.photo)}" aria-label="Take this photo out">×</button>` : ''}</li>`).join('')}</ol>`

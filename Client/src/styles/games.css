@@ -3,13 +3,14 @@
    mystery crop #9B6BFF, competition #FF4FA3); text on a colour is always --gm-ink. Buttons are chunky: a darker edge
    underneath that the button sinks into when pressed. Medals: gold, silver, bronze. Imported by the albums layout. */
 :root { --gm-ink: #1A1430; --gm-gold: #FFC83D; --gm-silver: #C9D1E0; --gm-bronze: #E0915A;
-  --gm-rainbow: linear-gradient(105deg, #FF5A5F, #FFB020 30%, #2FCB8E 55%, #3BA4F5 78%, #9B6BFF); }
+  /* The games accent: one smooth sweep from violet through pink to coral (neighbouring hues, so it reads as one colour) */
+  --gm-accent: linear-gradient(120deg, #7B5CFF 0%, #C44FE0 52%, #FF6E8A 100%); }
 
-/* The Games button: the only rainbow in the album's header (the glass button paints from these, see glass.css) */
+/* The Games button: the only colour in the album's header (the glass button paints from these, see glass.css) */
 .ab-btn.ab-games { position: relative; display: inline-flex; align-items: center; gap: .4rem; font-weight: 750;
-  --gb-sheen: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,0) 55%); --gb-fill: var(--gm-rainbow);
-  --gb-rim: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.3)); --gb-ink: var(--gm-ink); --gb-lift: rgba(255,255,255,.14);
-  --gb-shadow: 0 0 0 .5px rgba(26,20,48,.15), 0 8px 22px -10px rgba(155,107,255,.8); }
+  --gb-sheen: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,0) 55%); --gb-fill: var(--gm-accent);
+  --gb-rim: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.12)); --gb-ink: #fff; --gb-lift: rgba(255,255,255,.12);
+  --gb-shadow: 0 0 0 .5px rgba(26,20,48,.2), 0 8px 22px -10px rgba(196,79,224,.75); }
 .ab-btn.ab-games[hidden] { display: none; }
 .ab-games-dot { display: none; position: absolute; top: -.2rem; right: -.2rem; width: .7rem; height: .7rem; border-radius: 50%; background: #FF3B47; box-shadow: 0 0 0 2px #fff; }
 .ab-games.is-live .ab-games-dot { display: block; }
@@ -58,8 +59,8 @@
 /* ---- The Games window ---- */
 .gm-card { --gc: #9B6BFF; display: flex; flex-direction: column; width: min(580px, calc(100vw - 32px)); max-height: min(840px, calc(100dvh - 32px)); padding: 0; overflow: hidden; }
 .gm-head { position: relative; display: grid; grid-template-columns: 2.5rem 1fr 2.5rem; align-items: center; gap: .5rem; padding: 1rem 1rem .8rem; }
-/* The confetti-coloured band along the top, and a glow in the open game's colour */
-.gm-head::before { content: ""; position: absolute; inset: 0 0 auto; height: .35rem; background: var(--gm-rainbow); }
+/* The accent band along the top, and a glow in the open game's colour */
+.gm-head::before { content: ""; position: absolute; inset: 0 0 auto; height: .35rem; background: var(--gm-accent); }
 .gm-head::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 140% at 50% -40%, color-mix(in srgb, var(--gc) 28%, transparent), transparent 60%); pointer-events: none; }
 .gm-head > * { position: relative; z-index: 1; }
 .gm-head h2 { grid-column: 2; font-size: 1.4rem; font-weight: 800; letter-spacing: -.025em; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -90,6 +91,9 @@
 .gm-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 :is(.gm-main, .gm-ghost, .gm-link, .gm-game, .gm-opt, .gm-tile, .gm-pick, .gm-choose, .gm-x, .gm-tabs button):focus-visible { outline: 2px solid var(--gc, var(--copper)); outline-offset: 3px; }
 .gm-file { cursor: pointer; }
+/* A main action that adds something (enter a photo): the plus sits in a small dark disc */
+.gm-add { width: 100%; }
+.gm-add svg { flex: none; padding: .2rem; border-radius: 50%; background: rgba(26,20,48,.18); }
 
 /* You: points and games won, and the host's New game */
 .gm-me { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; }
@@ -266,7 +270,7 @@
   animation: gm-pop .7s cubic-bezier(.34, 1.56, .64, 1) both; }
 :root[data-theme="dark"] .gm-party-card { color: #ECEAF4; background: #221C36; }
 .gm-party-card.is-me { box-shadow: 0 30px 80px -20px rgba(0,0,0,.6), 0 0 0 8px color-mix(in srgb, var(--gm-gold) 55%, transparent), 0 0 70px 10px rgba(255,200,61,.35); }
-.gm-party-card::before { content: ""; position: absolute; inset: 0 0 auto; height: .45rem; border-radius: 30px 30px 0 0; background: var(--gm-rainbow); }
+.gm-party-card::before { content: ""; position: absolute; inset: 0 0 auto; height: .45rem; border-radius: 30px 30px 0 0; background: var(--gm-accent); }
 .gm-trophy { margin-top: -3.6rem; font-size: 4.2rem; line-height: 1; filter: drop-shadow(0 8px 14px rgba(0,0,0,.3)); animation: gm-bounce 1.2s cubic-bezier(.34, 1.56, .64, 1) .25s both; }
 .gm-party-game { margin: .3rem 0 0; color: var(--slate); font-size: .85rem; font-weight: 700; }
 .gm-party-card h2 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.4rem); font-weight: 900; letter-spacing: -.035em; line-height: 1.05; }

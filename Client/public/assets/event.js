@@ -156,8 +156,8 @@
     /* Games for guests: a switch with three dice that light up in the game colours when it's on */
     .ev-games { position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; padding: .8rem .9rem; border-radius: 18px; cursor: pointer;
       background: color-mix(in srgb, var(--dusk, #2e2c3a) 5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dusk, #2e2c3a) 10%, transparent); transition: background-color .25s ease, box-shadow .25s ease; }
-    .ev-games:has(input:checked) { background: linear-gradient(120deg, color-mix(in srgb, #3BA4F5 14%, transparent), color-mix(in srgb, #FF4FA3 12%, transparent) 55%, color-mix(in srgb, #FFB020 14%, transparent));
-      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, #9B6BFF 45%, transparent); }
+    .ev-games:has(input:checked) { background: linear-gradient(120deg, color-mix(in srgb, #7B5CFF 14%, transparent), color-mix(in srgb, #C44FE0 11%, transparent) 55%, color-mix(in srgb, #FF6E8A 12%, transparent));
+      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, #C44FE0 40%, transparent); }
     .ev-games input { position: absolute; opacity: 0; pointer-events: none; }
     .ev-games-dice { display: grid; grid-template-columns: repeat(3, .62rem); gap: .2rem; }
     .ev-games-dice i { width: .62rem; height: .62rem; border-radius: .18rem; background: color-mix(in srgb, var(--dusk, #2e2c3a) 22%, transparent); transition: background-color .3s ease, transform .45s cubic-bezier(.34, 1.56, .64, 1); }
