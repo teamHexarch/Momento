@@ -257,6 +257,7 @@ export default function installGames() {
     title.textContent = G.view === 'new' ? 'New game' : r ? r.title || typeOf(r).name : 'Games';
     modal.querySelector('.gm-card')?.style.setProperty('--gc', r ? typeOf(r).color : G.view === 'new' ? typeOf({ type: G.newType }).color : '#9B6BFF');
     const html = G.view === 'new' ? newForm() : G.view === 'pick' ? picker() : r ? roundView(r) : listView();
+    if (G.view === 'round') smallCheers(r);
     if (html === G.html) return;
     const oldImg = body.querySelector('img.gm-crop-img');
     G.html = html;
@@ -444,8 +445,10 @@ export default function installGames() {
     if (r.finalists?.length && r.status !== 'ended') {
       html += `<h3>Finalists</h3>${r.ai === false ? '' : '<p class="gm-hint">Picked with AI.</p>'}<ul class="gm-finalists">${r.finalists.map((f) => `<li class="${f.mine ? 'is-mine' : ''}">${img(f)}<div><b>${esc(f.by)}</b><span>${esc(f.reason || '')}</span></div></li>`).join('')}</ul>`;
       if (host && r.status === 'live') {
-        const opt = (sel) => r.finalists.map((f, i) => `<option value="${esc(f.entry)}" ${r.podium?.[sel]?.entry === f.entry ? 'selected' : ''}>${i + 1}. ${esc(f.by)}</option>`).join('');
-        html += `<form class="gm-podium" data-podium>${[0, 1, 2].map((n) => `<label>${MEDAL_ICON[n + 1]}<select name="p${n}" aria-label="${medal(n + 1)} place"><option value="">Choose…</option>${opt(n)}</select></label>`).join('')}
+        // Each place: the finalists as photo chips to tap (2nd and 3rd can be left empty)
+        const chips = (n) => `${n ? `<label class="gm-pickchip is-none"><input type="radio" name="p${n}" value="" ${!r.podium?.[n] ? 'checked' : ''}><span>Nobody</span></label>` : ''}${r.finalists.map((f) => `
+          <label class="gm-pickchip"><input type="radio" name="p${n}" value="${esc(f.entry)}" ${r.podium?.[n]?.entry === f.entry ? 'checked' : ''}>${img(f)}<span>${esc(f.by)}</span></label>`).join('')}`;
+        html += `<form class="gm-podium" data-podium>${[0, 1, 2].map((n) => `<fieldset class="gm-place is-p${n + 1}"><legend><span aria-hidden="true">${MEDAL_ICON[n + 1]}</span>${medal(n + 1)} place</legend><div class="gm-place-opts">${chips(n)}</div></fieldset>`).join('')}
           <button class="gm-main" type="submit">Save winners</button><p class="gm-hint">Winners must be different people. Then press End game to announce them.</p></form>`;
       }
     } else if (r.phase === 'judging' && r.status === 'live') html += '<p class="gm-empty">Entries are closed. The host is picking the winners.</p>';
@@ -682,6 +685,34 @@ export default function installGames() {
     act(() => api(`/${r.id}/claims/${t.dataset.tileIndex}?user=${encodeURIComponent(t.dataset.removeClaim)}`, { method: 'DELETE' }), () => { G.view = 'round'; });
   });
 
+  // ---- Small cheers while playing: a right answer (quiz, mystery crop), a new bingo line or a full card ----
+  const answered = new Set(), lines = new Map();
+  function smallCheers(r) {
+    if (!r || !modal.open) return;
+    if ((r.type === 'trivia' || r.type === 'crop') && r.question?.answer !== undefined && r.myAnswer?.correct) {
+      const key = `${r.id}:${r.question.index}`;
+      if (!answered.has(key)) { answered.add(key); pop(`+${r.myAnswer.points}`, 'Right answer!'); }
+    }
+    if (r.type === 'bingo') {
+      const before = lines.get(r.id);
+      lines.set(r.id, { lines: r.myLines, full: r.fullCard });
+      if (before && r.fullCard && !before.full) pop('BINGO!', 'Full card');
+      else if (before && r.myLines > before.lines) pop(`+${30 * (r.myLines - before.lines)}`, r.myLines - before.lines > 1 ? 'New lines!' : 'Line complete!');
+    }
+  }
+  // Confetti over the Games window and the points popping up in the middle (popovers: above the window, without
+  // taking focus or blocking taps)
+  function pop(big, small) {
+    const layer = (el) => { el.setAttribute('popover', 'manual'); document.body.append(el); try { el.showPopover(); } catch {} return el; };
+    const tag = layer(Object.assign(document.createElement('div'), { className: 'gm-pop' }));
+    tag.innerHTML = `<b>${esc(big)}</b><small>${esc(small)}</small>`;
+    tag.setAttribute('role', 'status');
+    const fx = reducedMotion() ? null : layer(Object.assign(document.createElement('canvas'), { className: 'gm-pop-fx' }));
+    const stop = fx ? confetti(fx, false, true) : () => {};
+    try { if (!reducedMotion()) navigator.vibrate?.(40); } catch {}
+    setTimeout(() => { stop(); fx?.remove(); tag.remove(); }, 2600);
+  }
+
   // ---- The celebration: confetti and the winners, when a game finishes ----
   function findCheers(d) {
     for (const r of d.rounds) {
@@ -747,7 +778,7 @@ export default function installGames() {
     try { if (r.iWon && !reducedMotion()) navigator.vibrate?.([60, 40, 120]); } catch {}
   }
   // Paper confetti from the middle, then from both bottom corners (more for your own win). Returns a stop function.
-  function confetti(canvas, big) {
+  function confetti(canvas, big, small = false) {
     const ctx = canvas.getContext('2d');
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const size = () => { canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr; };
@@ -760,8 +791,8 @@ export default function installGames() {
         c: CONFETTI[Math.floor(Math.random() * CONFETTI.length)], round: Math.random() < .25, wob: Math.random() * 6.28,
       });
     };
-    burst(innerWidth / 2, innerHeight * .42, big ? 200 : 130, { spread: 26, up: 14, min: 3 });
-    const corners = setTimeout(() => {
+    burst(innerWidth / 2, innerHeight * .42, small ? 90 : big ? 200 : 130, small ? { spread: 20, up: 12, min: 4 } : { spread: 26, up: 14, min: 3 });
+    const corners = small ? 0 : setTimeout(() => {
       burst(innerWidth * .04, innerHeight, big ? 110 : 60, { spread: 12, up: 16, min: 12 });
       burst(innerWidth * .96, innerHeight, big ? 110 : 60, { spread: 12, up: 16, min: 12 });
       for (const p of parts.slice(-(big ? 220 : 120))) p.vx = Math.abs(p.vx) * (p.x < canvas.width / 2 ? 1 : -1) + (p.x < canvas.width / 2 ? 3 : -3) * dpr;
