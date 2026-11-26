@@ -304,22 +304,28 @@ export async function processCheck(step, infer = classify, table = activeTable()
         ? (explicit && sure ? `Level ${level}: kept private, the check is very sure (no review)` : explicit ? 'Level 100: nudity or explicit content' : staff ? 'Level 75: clearly suggestive, waiting for staff' : `Level ${level}: near-nude or nude, kept private`)
         : explicit ? 'The automatic check is sure this photo contains nudity' : 'The automatic check wasn’t sure about this photo';
       await decline(job, owns, { scores, entry, explicit, staff, reason });
+      // Rekognition decides on its own: a level 85 or 95 it isn't very sure about gets the second, closer look at
+      // once (no one has to ask), and is published if that comes out at 75 or below
+      if (!explicit && [85, 95].includes(level)) await secondLookDecides(job.id).catch((err) => console.error('Second look: %s', err.message));
     }
   } catch (error) {
     const attempts = job.attempts + 1;
     console.error('Photo check: %s', error.message);
-    // Processing errors never publish a photo
-    if (attempts >= 3 && step && !job.files) {
+    // Processing errors never publish a photo, and never hand an ordinary photo to people either: a busy or failing
+    // check (Rekognition throttling, a storage hiccup) is simply tried again, a little later each time (15 s up to
+    // 5 minutes), for about 3 hours (MAX_ATTEMPTS). Only then is it given up on.
+    if (attempts >= MAX_ATTEMPTS && step && !job.files) {
       if (job.rawKey) await removeFile(job.rawKey);
       await UploadCheck.updateOne(owns, { $set: { state: 'failed', attempts, expires: new Date(Date.now() + 86400000) },
         $unset: { claim: 1, rawKey: 1 } });
-    } else if (attempts >= 3 && step) {
-      // Stored but the model kept failing: declined like an uncertain photo, so the uploader can ask for a review
+    } else if (attempts >= MAX_ATTEMPTS && step) {
       await decline(job, owns, { reason: 'The automatic check couldn’t run' });
-    } else await UploadCheck.updateOne(owns, { $set: { attempts, due: new Date(Date.now() + Math.min(attempts, 10) * 15000) }, $unset: { claim: 1 } });
+    } else await UploadCheck.updateOne(owns, { $set: { attempts, due: new Date(Date.now() + Math.min(attempts, 20) * 15000) }, $unset: { claim: 1 } });
   }
   return true;
 }
+
+const MAX_ATTEMPTS = Number(process.env.CHECK_MAX_ATTEMPTS) || 40;
 
 // A small upload is checked straight away, inside the request, so its photos appear at once (one photo is well
 // under a second). Whatever isn't done within the time (a big batch, a retry) is left to the queue loops.
@@ -357,10 +363,32 @@ export async function secondLook(checkId) {
   return rekognition.detect(image);
 }
 
+// The second look, deciding: at level 75 or below the photo is published (decision 'allowed' by 'Automatic second
+// look', which never teaches the thresholds); otherwise what it found is kept for staff. True when it published.
+export async function secondLookDecides(checkId, { userId } = {}) {
+  const look = await secondLook(checkId);
+  if (!look) return false;
+  const record = { level: look.level, labels: look.labels, at: new Date() };
+  const mine = userId ? { user: userId } : {};
+  if (rekognition.actionOf(look.level) === 'publish') {
+    const allowed = await ModerationDecision.findOneAndUpdate({ _id: checkId, ...mine, status: { $in: ['final', 'review-requested'] } },
+      { $set: { status: 'allowed', reviewer: 'Automatic second look', reviewedAt: new Date(), secondLook: record } });
+    if (allowed) {
+      await UploadCheck.updateOne({ _id: checkId, state: { $in: ['rejected', 'review'] } }, { $set: { state: 'publish', attempts: 0, due: new Date() },
+        $push: { history: { stage: 2, action: 'allow', rule: 'second-look', level: look.level, at: new Date() } } });
+      await publishNow(checkId).catch((err) => console.error('Second look publish: %s', err.message));
+      return true;
+    }
+  }
+  await ModerationDecision.updateOne({ _id: checkId, ...mine }, { $set: { secondLook: record } });
+  return false;
+}
+
 // The two queue loops (publish, check), run by the API itself
 export function startUploadChecks() {
   let stopped = false;
-  for (const step of [0, 1]) {
+  // Publishing (0) and checking (1), with two check workers so a big upload isn't checked one photo at a time
+  for (const step of [0, 1, 1]) {
     const tick = async () => {
       if (stopped) return;
       let worked = false;

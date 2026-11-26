@@ -1463,6 +1463,9 @@
     .gm-pick { padding: 0; border: 2px solid transparent; border-radius: 16px; background: none; overflow: hidden; cursor: pointer; transition: transform .35s var(--spring, ease), border-color .2s ease; }
     .gm-pick:hover { border-color: var(--copper); }
     .gm-pick img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+    .gm-pick:disabled { cursor: default; opacity: .55; }
+    .gm-pick.is-picked { border-color: var(--copper); opacity: 1; }
+    .gm-pick:disabled:hover:not(.is-picked) { border-color: transparent; }
     .gm-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: .45rem; }
     .gm-thumb { position: relative; display: grid; gap: .2rem; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--dusk); font: inherit; }
     .gm-thumb img { width: 100%; aspect-ratio: 1; border-radius: 12px; object-fit: cover; }

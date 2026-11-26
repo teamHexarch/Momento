@@ -1121,14 +1121,14 @@ export default function start() {
         if (left.length || r.tooBig.length) lines.push(bigLine([...left.map((f) => f.name), ...r.tooBig]));
         if (r.failed.length) lines.push(`${listNames(r.failed)} couldn’t be read. Try exporting ${r.failed.length === 1 ? 'it' : 'them'} as JPEG.`);
         if (r.dupes) lines.push(`${plural(r.dupes, 'photo was', 'photos were')} already in the album.`);
-        if (r.unsure) lines.push(`${plural(r.unsure, 'photo needs', 'photos need')} a quick check by our team before ${r.unsure === 1 ? 'it appears' : 'they appear'}. Only you can see ${r.unsure === 1 ? 'it' : 'them'} for now: press Request review below.`);
+        if (r.unsure) lines.push(`${plural(r.unsure, 'photo was', 'photos were')} kept private: the automatic check thinks ${r.unsure === 1 ? 'it may show' : 'they may show'} nudity. If that’s wrong, press Request review below.`);
         if (r.explicit) lines.push(`${plural(r.explicit, 'photo was', 'photos were')} declined: ${r.explicit === 1 ? 'it looks' : 'they look'} like ${r.explicit === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
         if (r.blocked && !r.unsure && !r.explicit) lines.push(`${plural(r.blocked, 'photo was', 'photos were')} declined by the automatic check.`);
         if (r.removed) lines.push(`${plural(r.removed, 'photo was', 'photos were')} removed from Momento before and can’t be added again.`);
         if (r.errors.length) lines.push(r.errors[0]);
-        if (r.queued) setUpload('done', 1, 'Upload received. You can keep using Momento.');
+        if (r.queued) setUpload('done', 1, r.added ? `${plural(r.added, 'photo', 'photos')} uploaded; the rest appear in a moment` : 'Uploaded: your photos appear in a moment');
         else if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
-        else if (r.unsure) { setUpload('done', 1, r.unsure === 1 ? 'Uploaded: waiting for a review' : 'Uploaded: waiting for review'); uploadPct.textContent = ''; }
+        else if (r.unsure) { setUpload('done', 1, 'Uploaded: kept private'); uploadPct.textContent = ''; }
         else { setUpload('failed', 1, r.explicit ? 'Not added' : 'Nothing was uploaded'); uploadPct.textContent = ''; }
         await loadAlbums();
         await fetchAlbum(a);
@@ -2563,15 +2563,15 @@ export default function start() {
       panelIn(pbWho);
       (whoTabs.querySelector('[aria-pressed="true"]') || whoTabs.firstChild)?.focus({ preventScroll: true });
     }
-    // ---- Comments on a photo (up to 200 characters each; the server's /api/photos/:id/comments) ----
+    // ---- Comments on a photo (up to 50 characters each; the server's /api/photos/:id/comments) ----
     // The Comments button opens a panel: everyone's comments, oldest first, and a box to add yours with a live
-    // counter (0/200). Yours (or any, as the host) can be deleted. Posting shows the comment at once and takes it
+    // counter (0/50). Yours (or any, as the host) can be deleted. Posting shows the comment at once and takes it
     // back if the server says no.
     const talkBtn = document.getElementById('vwTalk'), cmPanel = document.getElementById('vwComments'), cmList = document.getElementById('cmList');
     const cmForm = document.getElementById('cmForm'), cmText = document.getElementById('cmText'), cmLeft = document.getElementById('cmLeft');
     const cmSend = document.getElementById('cmSend'), cmErr = document.getElementById('cmErr'), cmEmpty = document.getElementById('cmEmpty');
     const cmOff = document.getElementById('cmOff'), cmCount = document.getElementById('cmCount');
-    const CM_MAX = 200;
+    const CM_MAX = 50;
     const cmChars = (s) => [...s].length;
     function paintTalk(p) {
       const n = +p.commentCount || 0;
@@ -3006,7 +3006,7 @@ export default function start() {
       const parts = [
         [n((c) => c.state === 'checking' || c.state === 'publish'), 'being checked', 'is-checking'],
         [n((c) => c.state === 'review'), 'waiting for our team', 'is-review'],
-        [n(unsure), n(unsure) === 1 ? 'needs a review' : 'need a review', 'is-unsure'],
+        [n(unsure), 'kept private', 'is-unsure'],
         [n((c) => c.state === 'rejected' && !unsure(c)), 'declined', 'is-rejected'],
         [n((c) => c.state === 'failed'), 'couldn’t be read', 'is-failed'],
       ].filter(([k]) => k);
@@ -3023,14 +3023,17 @@ export default function start() {
         checking: 'Checking…', publish: 'Passed: adding it to the album…', review: 'Waiting for our team (within 1–2 working days)',
         rejected: 'Declined', failed: 'Couldn’t be read: try another copy of this photo',
       };
-      box.replaceChildren(...checks.map(check => {
+      // Photos simply still being processed aren't listed: they appear in the album when they're ready (an ordinary
+      // photo never needs anything from you). Only those that need something are: kept private, unreadable, waiting
+      const shown = checks.filter((c) => c.state !== 'checking' && c.state !== 'publish');
+      box.replaceChildren(...shown.map(check => {
         const line = document.createElement('li');
         line.className = 'check is-' + check.state;
         line.innerHTML = '<span class="check-dot" aria-hidden="true"></span><span class="check-text"><span class="check-name"></span><span class="check-state"></span></span>';
         line.querySelector('.check-name').textContent = check.name;
         line.querySelector('.check-name').title = check.name;
         line.querySelector('.check-state').textContent = check.state === 'rejected'
-          ? (check.reviewed ? 'Declined by our team' : check.explicit ? 'Declined: it looks like nudity' : 'Needs a review: our check wasn’t sure')
+          ? (check.reviewed ? 'Declined by our team' : check.explicit ? 'Declined: it looks like nudity' : 'Kept private: it may show nudity')
           : labels[check.state] || check.state;
         if (check.state === 'rejected' && !check.reviewed && !check.explicit) line.classList.add('is-unsure');
         // Only a photo the check was unsure about can be sent to our team
@@ -3064,8 +3067,8 @@ export default function start() {
         }
         return line;
       }));
-      checksBox.hidden = !checks.length;
-      const sum = checksSummary(checks);
+      checksBox.hidden = !shown.length;
+      const sum = checksSummary(shown);
       checksSum.querySelector('.checks-sum-text').textContent = sum.text;
       checksSum.className = 'checks-sum ' + sum.worst;
       paintChecksOpen();

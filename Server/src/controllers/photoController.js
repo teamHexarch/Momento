@@ -176,7 +176,7 @@ export async function liked(req, res) {
 }
 
 // ---- Comments: GET/POST /api/photos/:id/comments · DELETE /api/photos/:id/comments/:commentId ----
-// Anyone in the album can read and write them (not on photos in the bin). Up to 200 characters, at most 50 per photo
+// Anyone in the album can read and write them (not on photos in the bin). Up to 50 characters, at most 50 per photo
 // (the photo's commentCount is reserved first, so two people can't both take the 50th). The author, the album's host,
 // or the admin team (DELETE /api/admin/comments/:id) can delete one. The host can turn comments off (allowComments).
 

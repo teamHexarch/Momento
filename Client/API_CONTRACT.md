@@ -40,7 +40,7 @@
 ## Photo comments
 
 - **`GET /api/photos/:id/comments`** (album members): `{ comments: [Comment] (oldest first), count, max: 50, allowComments, maxLength: 200 }`
-- **`POST /api/photos/:id/comments`** `{ text }` (1-200 characters, trimmed, spaces collapsed): `201 { comment, commentCount }`.
+- **`POST /api/photos/:id/comments`** `{ text }` (1-50 characters, trimmed, spaces collapsed): `201 { comment, commentCount }`.
   `403 COMMENTS_OFF` (the host turned them off), `409 COMMENT_LIMIT` (50 already), `429 COMMENT_RATE_LIMIT` (10 a minute),
   `400 TEXT_TOO_LONG` / `TEXT_EMPTY`. 404 for anyone outside the album or a photo in the bin.
 - **`DELETE /api/photos/:id/comments/:commentId`**: the author or the album's host: `{ ok, commentCount }`
