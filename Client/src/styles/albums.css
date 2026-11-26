@@ -1097,6 +1097,13 @@
 
     :root[data-theme="dark"] .ab-tool.is-danger { color: #F0A3A3; }
     .album-card.is-empty .ab-grid { display: none; }
+    /* Your photos still being added (checked on the server): a tile with your own picture, dimmed, and "Adding…" */
+    .ab-pending { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 4px; overflow: hidden; background: var(--line); }
+    .ab-pending img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .45; }
+    .ab-pending span { position: relative; padding: .22rem .6rem; border-radius: 100px; background: rgba(30, 26, 40, .72); color: #fff; font-size: .75rem; font-weight: 650;
+      animation: ab-pending-pulse 1.4s ease-in-out infinite; }
+    @keyframes ab-pending-pulse { 50% { opacity: .55; } }
+    @media (prefers-reduced-motion: reduce) { .ab-pending span { animation: none; } }
 
     /* Recently deleted */
     .bin-seg { flex: none; display: flex; gap: .35rem; padding: 0 1.1rem .7rem 1.5rem; }
