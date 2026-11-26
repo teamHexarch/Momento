@@ -94,7 +94,7 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - `POST /api/auth/moderation/:id/review` first takes an automatic second, closer look (the photo up to 4096 px, against
   the thresholds learned from staff). If it now comes out at level 75 or below the photo is published at once:
   `{ id, status: "allowed", published: true, message }`. Otherwise it goes to staff as before: `{ id, status: "review-requested", message }`.
-- At level 85 or 95 with Rekognition at least 95% sure (`REVIEW_SURE_AT`), the upload is `explicit` like level 100:
+- At level 85 or 95 with Rekognition at least 85% sure (`REVIEW_SURE_AT`), the upload is `explicit` like level 100:
   no review possible (`400 explicit`).
 
 ## Recently deleted (the bin)
