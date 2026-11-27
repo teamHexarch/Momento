@@ -65,6 +65,7 @@ for (const type of ['pageswap', 'pagereveal']) {
       error.code = data.code;
       if (data.code === 'session_limit' || data.code === 'SESSION_LIMIT_REACHED') { error.challenge = data.challenge; error.devices = data.devices; error.pendingLoginToken = data.pendingLoginToken; }
       error.retryAt = data.retryAt;
+      error.data = data;   // anything else the server sent with it (e.g. the current termsVersion)
       throw error;
     }
     return data;

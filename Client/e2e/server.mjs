@@ -28,6 +28,8 @@ Object.assign(process.env, {
   NODE_ENV: 'test', NSFW_CHECK: 'off', JWT_SECRET: 'momento-e2e-only-secret-not-used-anywhere-else-000',
   MONGODB_URI: mongo.getUri(), PORT: '4000', PUBLIC_URL: 'http://localhost:4000', FRONTEND_URL: 'http://localhost:3000',
   UPLOAD_DIR: uploads,
+  // Uploads need the upload agreement on record (the website records it when the box is ticked)
+  UPLOAD_CONSENT: 'on',
   // Google's scripts load for real, so the Content-Security-Policy check (e2e/csp.spec.mjs) sees them: reCAPTCHA's
   // public test keys (they work on localhost and always pass), and placeholder sign-in and Maps keys (their scripts
   // load, then report the key isn't valid; nothing else needs them here)
@@ -56,7 +58,7 @@ const hash = await bcrypt.hash(password, 4);
 const person = (name, email) => User.create({ name, email, passwordHash: hash, emailVerified: true });
 const host = await person('Hana Host', 'host@example.invalid');
 // One guest per test and browser (desktop, phone), each with photos of their own
-const GUESTS = ['desktop', 'phone', 'desktop-retry', 'phone-retry', 'desktop-offline', 'phone-offline', 'desktop-csp', 'phone-csp', 'desktop-join', 'phone-join', 'desktop-i18n', 'phone-i18n'];
+const GUESTS = ['desktop', 'phone', 'desktop-retry', 'phone-retry', 'desktop-offline', 'phone-offline', 'desktop-csp', 'phone-csp', 'desktop-join', 'phone-join', 'desktop-i18n', 'phone-i18n', 'desktop-paging', 'phone-paging'];
 for (const g of GUESTS) await person(`Gus ${g}`, `guest-${g}@example.invalid`);
 const now = Date.now();
 const album = await Album.create({

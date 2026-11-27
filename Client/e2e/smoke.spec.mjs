@@ -44,6 +44,9 @@ test('a guest joins with the link, uploads a photo, sees it and reacts', async (
   // It appears in the album (the photo check runs on the server first)
   const tile = album.locator('#thumbs .ab-tile').first();
   await expect(tile).toBeVisible({ timeout: 45000 });
+  // The agreement is on record on the server (the test server refuses uploads without it), against its Terms version
+  const { album: details } = await (await page.request.get(`${s.api}/api/albums/${s.albumId}`)).json();
+  expect(details.uploadConsent?.termsVersion, 'agreement recorded').toBe(details.termsVersion);
 
   // Open it and react
   await tile.click();

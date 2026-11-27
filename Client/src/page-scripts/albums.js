@@ -1124,8 +1124,9 @@ export default function start() {
       const setSent = (b, n) => { for (const f of b) sent.set(f, n === 'all' ? f.size : f.size * n); paint(); };
       // Worth trying again: the connection dropped or stalled, the server was briefly busy or erred
       const passing = (err) => !err.status || err.status >= 500 || (err.status === 429 && (err.code === 'upload-busy' || err.code === 'busy'));
+      let consentResent = null;   // the agreement sent again, once for this upload (see consent-required below)
       async function sendBatch(b) {
-        let retried = false;
+        let retried = false, consentRetried = false;
         for (let attempt = 0; !stop; attempt++) {
           await online();
           if (stop) break;
@@ -1157,6 +1158,14 @@ export default function start() {
               r.notSent.push(...b);
               r.reason ||= err.message;
               return;
+            }
+            // Agreed here, but the record didn't reach the server (the connection dropped as the box was ticked):
+            // send the agreement again and this batch with it, rather than asking again
+            // (batches going up side by side share the one attempt)
+            if (err.code === 'consent-required' && !consentRetried && (consentResent || Momento.event?.hasConsent?.(a))) {
+              consentRetried = true;
+              consentResent ||= Momento.event.recordConsent(a);
+              if ((await consentResent) === true) { attempt--; continue; }
             }
             setSent(b, 'all');
             if (err.code === 'too-big') r.tooBig.push(...(err.data?.tooBig || b.map((f) => f.name)));
@@ -1286,9 +1295,22 @@ export default function start() {
     // added or deleted, reactions, comments: GET /api/albums/:id/version, a short stamp) and redraws in place when it
     // has. Paused while you upload or select photos and while the page is in the background. The full-size photo you
     // are looking at stays where it is; only its reactions and comments refresh. Quietly: no note, nothing to press.
+    // Load on the server (audit F4): every 3 seconds while you're using the page, every 15 after a minute without a
+    // touch, key or scroll, every 30 after five; and after a failed check (offline, or asked too often) it waits
+    // longer each time, up to a minute. The stamp answer carries an ETag, so an unchanged album is a bodyless 304.
     const ALBUM_LIVE_MS = 3000;
-    let albumLiveTimer = 0, albumLiveFor = null, albumLiveVersion = null;
-    function startAlbumLive(a) { albumLiveFor = a; albumLiveVersion = null; clearTimeout(albumLiveTimer); albumLiveTimer = setTimeout(albumLiveTick, 1000); }
+    let albumLiveTimer = 0, albumLiveFor = null, albumLiveVersion = null, albumLiveFails = 0, lastActive = Date.now();
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => addEventListener(t, () => {
+      const wasIdle = Date.now() - lastActive > 60000;
+      lastActive = Date.now();
+      if (wasIdle && albumLiveFor && albumModal.open) { clearTimeout(albumLiveTimer); albumLiveTimer = setTimeout(albumLiveTick, 300); }   // back: check now
+    }, { passive: true, capture: true }));
+    const liveDelay = () => {
+      if (albumLiveFails) return Math.min(60000, ALBUM_LIVE_MS * 2 ** albumLiveFails);
+      const idle = Date.now() - lastActive;
+      return idle > 300000 ? 30000 : idle > 60000 ? 15000 : ALBUM_LIVE_MS;
+    };
+    function startAlbumLive(a) { albumLiveFor = a; albumLiveVersion = null; albumLiveFails = 0; clearTimeout(albumLiveTimer); albumLiveTimer = setTimeout(albumLiveTick, 1000); }
     async function albumLiveTick() {
       clearTimeout(albumLiveTimer);
       const a = M.a;
@@ -1296,16 +1318,28 @@ export default function start() {
       if (!document.hidden && !uploading && !albumSel.on && !M.closing) {
         try {
           const { version } = await momentoApi('/api/albums/' + encodeURIComponent(a.id) + '/version');
-          if (albumLiveVersion && version !== albumLiveVersion && M.a === a && albumModal.open) await albumLiveRefresh(a);
+          // The first stamp after a load: anything added between the load and now would count as "already seen",
+          // so ask for changes since the load (cheap, and only when the server does ?since=)
+          const catchUp = !albumLiveVersion && a._since != null && a._complete;
+          if (M.a === a && albumModal.open && ((albumLiveVersion && version !== albumLiveVersion) || catchUp)) await albumLiveRefresh(a);
           albumLiveVersion = version;
-        } catch {}
+          albumLiveFails = 0;
+        } catch { albumLiveFails = Math.min(albumLiveFails + 1, 5); }
       }
-      if (albumModal.open && M.a === a) albumLiveTimer = setTimeout(albumLiveTick, ALBUM_LIVE_MS);
+      if (albumModal.open && M.a === a) albumLiveTimer = setTimeout(albumLiveTick, liveDelay());
     }
+    // Back on the page after it was in the background: check straight away rather than at the next tick
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && albumLiveFor && albumModal.open && M.a === albumLiveFor) { clearTimeout(albumLiveTimer); albumLiveTimer = setTimeout(albumLiveTick, 300); }
+    });
     async function albumLiveRefresh(a) {
       const onId = viewer.open ? current()?.id : null;
-      await fetchAlbum(a);
+      if ((await fetchChanges(a)) === false) return;   // nothing new: no redraw
       if (M.a !== a || !albumModal.open) return;
+      redrawKeepingPlace(a, onId);
+    }
+    // Redraws the open album after its photos changed under you: the full-size photo you're on stays on screen
+    function redrawKeepingPlace(a, onId) {
       if (onId) {
         const at = a.photoItems.findIndex((p) => p.id === onId);
         if (at < 0) photosChanged(a, M.i);   // the photo you were looking at was deleted: on to the next one
@@ -3220,15 +3254,74 @@ export default function start() {
       };
       checkTimer = setTimeout(poll, checks.some(c => c.state !== 'review') ? 4000 : 60000);
     }
+    // ---- The album's photos, a page at a time (GET /api/albums/:id?limit=&before=) ----
+    // The first page (the newest 200) is shown straight away; the rest follow in the background, a page at a time,
+    // so sorting, filters and "Added by" still cover the whole album once it's in. A server without paging sends
+    // every photo in the first answer (no nextBefore), which works the same.
+    const PAGE = 200;
+    const thumbOf = (p) => p.thumbnailUrl || p.url + '?size=thumb';
+    const albumUrl = (a, q) => '/api/albums/' + encodeURIComponent(a.id) + (q ? '?' + new URLSearchParams(q) : '');
+    function setPhotos(a, photos) {
+      a.photoItems = photos;
+      a.photoItems.forEach((p, i) => { p._o = i; });   // the server's order (newest first), kept for ties
+      a.pics = photos.map(thumbOf);
+      sortPhotos(a);   // in the order chosen on this device
+    }
     async function fetchAlbum(a) {
       // (your own changes reload the album too: the live check takes its next stamp afresh, so they aren't announced)
       if (a === albumLiveFor) albumLiveVersion = null;
-      const result = await momentoApi('/api/albums/' + a.id);
+      const load = (a._load = (a._load || 0) + 1);   // a newer load replaces any pages still on their way
+      const result = await momentoApi(albumUrl(a, { limit: PAGE }));
       Object.assign(a, fromStore(result.album));
-      a.photoItems = result.photos;
+      a._head = JSON.stringify(result.album);
       showChecks(a, result.checks || []);
-      a.pics = result.photos.map((p) => p.thumbnailUrl || p.url + '?size=thumb');
-      sortPhotos(a);   // in the order chosen on this device (the server's order is kept on each photo)
+      a._since = result.nextSince ?? null;
+      a._complete = !result.nextBefore;
+      setPhotos(a, result.photos);
+      if (result.nextBefore) loadRest(a, load, result.nextBefore);
+    }
+    async function loadRest(a, load, before) {
+      const got = new Map(a.photoItems.map((p) => [p.id, p]));
+      const server = [...a.photoItems].sort((x, y) => x._o - y._o);
+      try {
+        while (before) {
+          const page = await momentoApi(albumUrl(a, { limit: PAGE, before }));
+          if (a._load !== load) return;
+          for (const p of page.photos || []) if (!got.has(p.id)) { got.set(p.id, p); server.push(p); }
+          before = page.nextBefore;
+        }
+      } catch { /* the photos so far stay; the next full load tries again */ return; }
+      if (a._load !== load) return;
+      a._complete = true;
+      const onId = viewer.open ? current()?.id : null;
+      setPhotos(a, server);
+      if (M.a === a && albumModal.open) redrawKeepingPlace(a, onId);
+    }
+    // Live updates: only the photos changed since the last answer (?since=), and the album's details and totals
+    // (?limit=1). Falls back to loading the whole album when the server says there's too much, or doesn't do ?since=.
+    async function fetchChanges(a) {
+      if (a._since == null || !a._complete) return fetchAlbum(a);
+      const [changes, head] = await Promise.all([momentoApi(albumUrl(a, { since: a._since })), momentoApi(albumUrl(a, { limit: 1 }))]);
+      if (!Array.isArray(changes.removed) || changes.tooMany || changes.nextSince == null) return fetchAlbum(a);
+      Object.assign(a, fromStore(head.album));
+      showChecks(a, changes.checks || head.checks || []);
+      const headNow = JSON.stringify(head.album), headSame = headNow === a._head;
+      a._head = headNow;
+      // (the last photo changed is always sent again, so "nothing new" is: the same album details, no removals, and
+      // every photo the same)
+      const same = headSame && !changes.removed.length && changes.photos.every((p) => { const had = a.photoItems.find((x) => x.id === p.id); return had && JSON.stringify({ ...had, _o: undefined }) === JSON.stringify({ ...p, _o: undefined }); });
+      a._since = changes.nextSince;
+      if (same) return false;
+      const gone = new Set(changes.removed);
+      const byIdNow = new Map(changes.photos.map((p) => [p.id, p]));
+      const server = [...a.photoItems].sort((x, y) => x._o - y._o).filter((p) => !gone.has(p.id)).map((p) => byIdNow.get(p.id) || p);
+      const known = new Set(server.map((p) => p.id));
+      const added = changes.photos.filter((p) => !known.has(p.id)).sort((x, y) => timeOf(y) - timeOf(x));
+      // A photo deleted for good leaves nothing behind to list in "removed": when the server's count and ours
+      // disagree, load the whole album instead
+      if (Number.isFinite(changes.total) && changes.total !== added.length + server.length) { await fetchAlbum(a); return true; }
+      setPhotos(a, [...added, ...server]);
+      return true;
     }
     async function loadAlbums() {
       // Until the email is confirmed the server refuses the list (403), and the confirm-your-email popup

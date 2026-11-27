@@ -1565,15 +1565,37 @@
   const consentId = (album) => `${Momento.account?.get?.()?.id || 'signed-out'}:${album?.id}`;
   const consents = () => { try { return JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') || {}; } catch (e) { return {}; } };
   const saveConsents = (all) => { try { localStorage.setItem(CONSENT_KEY, JSON.stringify(Object.fromEntries(Object.entries(all).slice(-300)))); } catch (e) {} };
-  const hasConsent = (album) => !!album?.id && consents()[consentId(album)] === window.MOMENTO_TERMS_VERSION;
-  function rememberConsent(album) { if (!album?.id) return; const all = consents(); delete all[consentId(album)]; all[consentId(album)] = window.MOMENTO_TERMS_VERSION; saveConsents(all); }
-  function forgetConsent(album) { const all = consents(); delete all[consentId(album)]; saveConsents(all); }
+  // The Terms version to agree to: the server's, when the album's details carry it (GET /api/albums/:id)
+  const termsOf = (album) => album?.termsVersion || window.MOMENTO_TERMS_VERSION;
+  // The server keeps the record (album.uploadConsent, on any device); this device's copy covers a server without it
+  const serverKeeps = (album) => !!album && 'uploadConsent' in album;
+  const hasConsent = (album) => !!album?.id && (album.uploadConsent?.termsVersion === termsOf(album) || consents()[consentId(album)] === termsOf(album));
+  function rememberConsent(album) { if (!album?.id) return; const all = consents(); delete all[consentId(album)]; all[consentId(album)] = termsOf(album); saveConsents(all); }
+  function forgetConsent(album) { const all = consents(); delete all[consentId(album)]; saveConsents(all); if (album) album.uploadConsent = null; }
+  // Records the agreement on the server (POST /api/albums/:id/consent). 'outdated' when the Terms changed since the
+  // page loaded (the box is shown again, against the new version); false when it couldn't be recorded: the upload
+  // still goes ahead, and a server that needs the record says so (consent-required), which asks again.
+  async function recordConsent(album) {
+    if (!album?.id) return false;
+    try {
+      const r = await momentoApi(`/api/albums/${encodeURIComponent(album.id)}/consent`, momentoJson('POST', { termsVersion: termsOf(album) }));
+      album.uploadConsent = { termsVersion: r.termsVersion, at: r.at };
+      return true;
+    } catch (e) {
+      if (e.status === 409 && e.data?.termsVersion) { album.termsVersion = e.data.termsVersion; forgetConsent(album); return 'outdated'; }
+      return false;
+    }
+  }
 
   // ---- Asking before an upload (and the guest's location, when the album has a zone) ----
   // Resolves to { location, files } (files: the ones still in the list; each has a cross to leave it out), or null.
   // The first upload to an album asks for the agreement (a box to tick); after that, uploads to it go straight up.
-  function confirmUpload(album, files, { fromCamera = false } = {}) {
-    if (hasConsent(album)) return Promise.resolve({ location: '', files: [...files] });
+  async function confirmUpload(album, files, { fromCamera = false } = {}) {
+    if (hasConsent(album)) {
+      // Agreed on this device before the server kept a record: record it now (it's the same agreement, same Terms)
+      if (serverKeeps(album) && !album.uploadConsent && (await recordConsent(album)) === 'outdated') return confirmUpload(album, files, { fromCamera });
+      return { location: '', files: [...files] };
+    }
     return new Promise((resolve) => {
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
@@ -1640,8 +1662,20 @@
       const no = () => done(fromCamera ? { cancelled: true, files: items.map((it) => it.f) } : null);
       d.querySelector('[data-no]').addEventListener('click', no);
       d.addEventListener('cancel', (e) => { e.preventDefault(); no(); });
-      yes.addEventListener('click', () => {
-        if (!items.length || !agree.checked) return;
+      const said = d.querySelector('.ev-consent-note');
+      yes.addEventListener('click', async () => {
+        if (!items.length || !agree.checked || yes.getAttribute('aria-busy')) return;
+        yes.setAttribute('aria-busy', 'true');
+        const recorded = await recordConsent(album);
+        yes.removeAttribute('aria-busy');
+        if (recorded === 'outdated') {
+          // The Terms changed while the page was open: tick again, against the new version
+          agree.checked = false; paint();
+          said.textContent = Momento.i18n?.t ? Momento.i18n.t('The Terms have been updated. Read them, then tick the box again.') : 'The Terms have been updated. Read them, then tick the box again.';
+          said.setAttribute('role', 'alert');
+          agree.focus();
+          return;
+        }
         rememberConsent(album);
         done({ location: '', files: items.map((it) => it.f) });
       });
@@ -1661,7 +1695,7 @@
     return `Event ${when}. This album has closed to new photos.`;
   }
 
-  Momento.event = { mount, activate, read, camera, confirmUpload, forgetConsent, locate, windowText, distanceM, prepareCover, isPlaceholder };
+  Momento.event = { mount, activate, read, camera, confirmUpload, forgetConsent, hasConsent, recordConsent, locate, windowText, distanceM, prepareCover, isPlaceholder };
 
   // ---- Your friend groups, for the Create form's "Share with" ----
   // The form used to ask the server each time it opened and only then show the field, so it popped in a
