@@ -27,6 +27,7 @@ const notificationSchema = new mongoose.Schema({
 
 notificationSchema.index({ user: 1, at: -1 });
 notificationSchema.index({ user: 1, read: 1 });
+notificationSchema.index({ album: 1 });   // deleted with their album
 notificationSchema.index({ at: 1 }, { expireAfterSeconds: 90 * 86400 });
 
 export const Notification = mongoose.model('Notification', notificationSchema);

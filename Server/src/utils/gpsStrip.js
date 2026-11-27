@@ -30,10 +30,53 @@ function emptyGps(buf, t, end, { loose = false, gpsAtRoot = false } = {}) {
   let removed = false;
   for (let i = 0; i < n; i++) {
     const e = ifd0 + 2 + i * 12;
-    if (u16(e) !== 0x8825) continue;   // GPSInfo
+    const tag = u16(e);
+    if (PRIVATE_IFD0.has(tag)) blankEntry(buf, t, e, end, u16, u32);
+    if (tag === 0x8769) blankPrivateIn(buf, t, t + u32(e + 8), end, u16, u32);   // the Exif directory
+    if (tag !== 0x8825) continue;   // GPSInfo
     removed = clearGpsDir(buf, t, t + u32(e + 8), end, u16, u32) || removed;
   }
   return removed;
+}
+
+// Who took or owns the photo, and what identifies the camera: blanked like the location (since 2026-11-27, audit H2).
+// Make, model, exposure, orientation and the date stay. IFD0: description, artist, copyright, Windows author/title/
+// comment/keywords/subject. Exif directory: user comment, maker note (holds serial numbers), unique id, owner name,
+// body and lens serial numbers.
+const PRIVATE_IFD0 = new Set([0x010e, 0x013b, 0x8298, 0x9c9b, 0x9c9c, 0x9c9d, 0x9c9e, 0x9c9f]);
+const PRIVATE_EXIF = new Set([0x9286, 0x927c, 0xa420, 0xa430, 0xa431, 0xa435]);
+// Zeroes one entry's value (inside the entry when it's 4 bytes or less, else where it points), keeping every length
+function blankEntry(buf, t, e, end, u16, u32) {
+  const size = (TYPE_SIZE[u16(e + 2)] || 1) * u32(e + 4);
+  if (size <= 4) { buf.fill(0, e + 8, e + 12); return; }
+  const off = t + u32(e + 8);
+  if (off >= t && off + size <= end) buf.fill(0, off, off + size);
+}
+function blankPrivateIn(buf, t, d, end, u16, u32) {
+  if (d + 2 > end) return;
+  const n = u16(d);
+  if (n > 1000 || d + 2 + n * 12 > end) return;
+  for (let i = 0; i < n; i++) {
+    const e = d + 2 + i * 12;
+    if (PRIVATE_EXIF.has(u16(e))) blankEntry(buf, t, e, end, u16, u32);
+  }
+}
+
+// IPTC (JPEG APP13, Photoshop "8BIM" resource 0x0404): every dataset's value becomes spaces (by-line, copyright,
+// contact, city, caption...), keeping the lengths
+function blankIptc(buf, start, end) {
+  for (let r = buf.indexOf('8BIM', start, 'latin1'); r !== -1 && r + 12 <= end; r = buf.indexOf('8BIM', r + 4, 'latin1')) {
+    if (buf.readUInt16BE(r + 4) !== 0x0404) continue;
+    const nameLen = buf[r + 6], nameEnd = r + 7 + nameLen + ((nameLen + 1) & 1);
+    if (nameEnd + 4 > end) break;
+    const size = buf.readUInt32BE(nameEnd), data = nameEnd + 4, stop = Math.min(end, data + size);
+    for (let d = data; d + 5 <= stop && buf[d] === 0x1c;) {
+      const len = buf.readUInt16BE(d + 3);
+      if (len & 0x8000) break;   // extended datasets are not used by cameras or phones
+      buf.fill(0x20, d + 5, Math.min(stop, d + 5 + len));
+      d += 5 + len;
+    }
+  }
 }
 // Empties the GPS directory at g (offsets inside it count from the TIFF start t)
 function clearGpsDir(buf, t, g, end, u16, u32) {
@@ -54,17 +97,22 @@ function clearGpsDir(buf, t, g, end, u16, u32) {
 }
 
 // Blanks XMP location tags (exif:GPS…) between start and end, keeping the length
+// Also blanks who made it and what identifies the camera (serial numbers, owner, creator, rights, contact details,
+// person and face regions, location names); returns true only when there was GPS
+const XMP_PRIVATE = '(?:exif(?:EX)?:GPS\\w*|aux:SerialNumber|aux:LensSerialNumber|aux:OwnerName|exifEX:BodySerialNumber|exifEX:LensSerialNumber|exifEX:CameraOwnerName|dc:creator|dc:rights|xmpRights:\\w+|photoshop:(?:AuthorsPosition|City|State|Country|Credit|Source|CaptionWriter)|Iptc4xmpCore:\\w+|Iptc4xmpExt:\\w+|mwg-rs:Regions|MP:RegionInfo|plus:\\w+)';
+const XMP_ATTR_D = new RegExp(`(${XMP_PRIVATE}\\s*=\\s*")([^"]*)(")`, 'g');
+const XMP_ATTR_S = new RegExp(`(${XMP_PRIVATE}\\s*=\\s*')([^']*)(')`, 'g');
+const XMP_ELEMENT = new RegExp(`(<(${XMP_PRIVATE})\\b[^>]*>)([\\s\\S]*?)(<\\/\\2>)`, 'g');
 function blankXmpGps(buf, start, end) {
   const text = buf.toString('latin1', start, end);
-  if (!/GPS/.test(text)) return false;
   const blank = (s) => ' '.repeat(s.length);
   const out = text
-    .replace(/(exif(?:EX)?:GPS\w*\s*=\s*")([^"]*)(")/g, (m, a, v, b) => a + blank(v) + b)
-    .replace(/(exif(?:EX)?:GPS\w*\s*=\s*')([^']*)(')/g, (m, a, v, b) => a + blank(v) + b)
-    .replace(/(<(exif(?:EX)?:GPS\w*)\b[^>]*>)([\s\S]*?)(<\/\2>)/g, (m, open, tag, v, close) => open + blank(v) + close);
+    .replace(XMP_ATTR_D, (m, a, v, b) => a + blank(v) + b)
+    .replace(XMP_ATTR_S, (m, a, v, b) => a + blank(v) + b)
+    .replace(XMP_ELEMENT, (m, open, tag, v, close) => open + blank(v) + close);
   if (out === text) return false;
   buf.write(out, start, 'latin1');
-  return true;
+  return /exif(?:EX)?:GPS/.test(text);
 }
 
 const EXIF_HEADER = Buffer.from('Exif\0\0', 'latin1');
@@ -83,6 +131,8 @@ function jpeg(buf) {
       if (buf.compare(EXIF_HEADER, 0, 6, body, body + 6) === 0) removed = emptyGps(buf, body + 6, end) || removed;
       else removed = blankXmpGps(buf, body, end) || removed;
     }
+    if (marker === 0xed) blankIptc(buf, body, end);   // APP13: IPTC
+    if (marker === 0xfe) buf.fill(0x20, body, end);   // COM: a free-text comment (some editors write the author here)
     s += 2 + len;
   }
   return removed;
@@ -93,15 +143,12 @@ function png(buf) {
   for (let c = 8; c + 12 <= buf.length;) {
     const len = buf.readUInt32BE(c), type = buf.toString('latin1', c + 4, c + 8), data = c + 8, end = data + len;
     if (end + 4 > buf.length) break;
-    let changed = false;
-    if (type === 'eXIf') changed = emptyGps(buf, isTiffAt(buf, data) ? data : data + 6, end);
+    const isXmp = type === 'iTXt' && buf.toString('latin1', data, data + 17) === 'XML:com.adobe.xmp';
+    if (type === 'eXIf') removed = emptyGps(buf, isTiffAt(buf, data) ? data : data + 6, end) || removed;
     // XMP in an uncompressed iTXt chunk
-    if (type === 'iTXt' && buf.toString('latin1', data, data + 17) === 'XML:com.adobe.xmp') changed = blankXmpGps(buf, data, end);
-    if (changed) {
-      // PNG chunks carry a checksum of their type and data
-      buf.writeUInt32BE(zlib.crc32(buf.subarray(c + 4, end)) >>> 0, end);
-      removed = true;
-    }
+    if (isXmp) removed = blankXmpGps(buf, data, end) || removed;
+    // PNG chunks carry a checksum of their type and data (private details may have changed even without GPS)
+    if (type === 'eXIf' || isXmp) buf.writeUInt32BE(zlib.crc32(buf.subarray(c + 4, end)) >>> 0, end);
     if (type === 'IEND') break;
     c = end + 4;
   }

@@ -17,5 +17,7 @@ const reportSchema = new mongoose.Schema({
 
 reportSchema.index({ photo: 1, reporter: 1 }, { unique: true });
 reportSchema.index({ status: 1, createdAt: -1 });
+reportSchema.index({ reporter: 1, createdAt: -1 });   // the daily report cap
+reportSchema.index({ album: 1 });                      // deleted with their album
 
 export const Report = mongoose.model('Report', reportSchema);

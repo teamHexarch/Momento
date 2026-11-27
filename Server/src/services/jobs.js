@@ -156,7 +156,41 @@ export async function tidy(now = new Date()) {
   // Resolved reports older than a year go
   const { Report } = await import('../models/Report.js');
   const reports = await Report.deleteMany({ status: { $ne: 'open' }, updatedAt: { $lt: new Date(now - 365 * DAY) } });
-  return { accounts, requests: r.modifiedCount, zips, sessions: sessions.modifiedCount, resumed, reports: reports.deletedCount };
+  // Photo files whose background delete stopped halfway (services/storageService.js, deletePhotosLater)
+  const { drainDeletes } = await import('./storageService.js');
+  const { files } = await drainDeletes();
+  return { accounts, requests: r.modifiedCount, zips, sessions: sessions.modifiedCount, resumed, reports: reports.deletedCount, files };
+}
+
+// ---- Once a day: rows that point at a photo or album that no longer exists (audit B3) ----
+// Comments and reports of deleted photos, notifications and reports of deleted albums. Deleting an album already
+// removes its own; this catches the rest (single photos deleted for good, older data). Up to 5,000 of each a night.
+async function claimDaily(id, now) {
+  const day = now.toISOString().slice(0, 10);
+  if ((await JobState.updateOne({ _id: id, at: { $lt: new Date(day) } }, { at: now })).modifiedCount === 1) return true;
+  if (await JobState.exists({ _id: id })) return false;
+  try { await JobState.create({ _id: id, at: now }); return true; } catch { return false; }
+}
+export async function orphans(now = new Date(), { force = false } = {}) {
+  if (!force && !await claimDaily('orphans', now)) return null;
+  const [{ PhotoComment }, { Report }, { Notification }, { UploadConsent }, { User }] = await Promise.all([
+    import('../models/PhotoComment.js'), import('../models/Report.js'), import('../models/Notification.js'),
+    import('../models/UploadConsent.js'), import('../models/User.js')]);
+  const missing = async (model, field, target, extra = {}) => {
+    const rows = await model.aggregate([
+      { $match: { [field]: { $type: 'objectId' }, ...extra } },
+      { $lookup: { from: target.collection.name, localField: field, foreignField: '_id', as: 'x', pipeline: [{ $project: { _id: 1 } }] } },
+      { $match: { x: { $size: 0 } } }, { $limit: 5000 }, { $project: { _id: 1 } }]);
+    if (!rows.length) return 0;
+    return (await model.deleteMany({ _id: { $in: rows.map((r) => r._id) } })).deletedCount;
+  };
+  return {
+    comments: await missing(PhotoComment, 'photo', Photo),
+    reports: await missing(Report, 'photo', Photo),
+    albumReports: await missing(Report, 'album', Album),
+    notifications: await missing(Notification, 'album', Album),
+    uploadConsents: await missing(UploadConsent, 'album', Album) + await missing(UploadConsent, 'user', User),
+  };
 }
 
 // ---- Daily backup: every collection, as compressed JSON lines, into the photo storage ----
@@ -164,6 +198,19 @@ export async function tidy(now = new Date()) {
 // of every month, for 12 months. Restore with scripts/restoreBackup.js.
 export const BACKUP_DAYS = 14;
 const JobState = mongoose.models.JobState || mongoose.model('JobState', new mongoose.Schema({ _id: String, at: Date }, { versionKey: false }));
+// The separate backup bucket (BACKUP_BUCKET), or null to keep backups in the photo bucket
+let vaultStore;
+async function backupStore() {
+  if (!config.aws.backupBucket) return null;
+  if (vaultStore) return vaultStore;
+  const [{ S3Client }, { objectStorage }] = await Promise.all([import('@aws-sdk/client-s3'), import('./storage/objectStorage.js')]);
+  const credentials = config.aws.backupKeyId && config.aws.backupSecret
+    ? { accessKeyId: config.aws.backupKeyId, secretAccessKey: config.aws.backupSecret } : undefined;
+  vaultStore = objectStorage({ name: 's3-backup', label: 'Backup bucket', bucket: config.aws.backupBucket,
+    keyHint: 'give the backup key s3:PutObject on this bucket',
+    client: new S3Client({ region: config.aws.region, maxAttempts: 3, ...(credentials && { credentials }) }) });
+  return vaultStore;
+}
 export async function backup(now = new Date()) {
   const day = now.toISOString().slice(0, 10);
   // Once a day, whichever hourly run gets there first
@@ -177,14 +224,19 @@ export async function backup(now = new Date()) {
   const db = mongoose.connection.db;
   const names = (await db.listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name).filter((n) => !n.startsWith('system.'));
   let docs = 0;
+  const vault = await backupStore();
+  const put = vault ? (key, body, type) => vault.save(key, body, type) : saveFile;
   for (const name of names) {
     const lines = [];
     for await (const d of db.collection(name).find({})) { lines.push(EJSON.stringify(d, { relaxed: false })); docs++; }
     const file = await gzip(Buffer.from(lines.join('\n')));
-    await saveFile(`backups/day-${day}/${name}.jsonl.gz`, file, 'application/gzip');
-    await saveFile(`backups/month-${month}/${name}.jsonl.gz`, file, 'application/gzip');
+    await put(`backups/day-${day}/${name}.jsonl.gz`, file, 'application/gzip');
+    await put(`backups/month-${month}/${name}.jsonl.gz`, file, 'application/gzip');
   }
-  await saveFile(`backups/day-${day}/_info.json`, Buffer.from(JSON.stringify({ at: now, collections: names, documents: docs }, null, 2)), 'application/json');
+  await put(`backups/day-${day}/_info.json`, Buffer.from(JSON.stringify({ at: now, collections: names, documents: docs }, null, 2)), 'application/json');
+  // In the separate backup bucket, old backups are expired by the bucket's own lifecycle rule (the server's key there
+  // can only add files), so nothing more to do here
+  if (vault) return { collections: names.length, documents: docs, bucket: config.aws.backupBucket };
   // Monthly backups are kept 12 months, so a deleted account is gone from every backup within a year
   const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1)).toISOString().slice(0, 7);
   // Daily backups go after BACKUP_DAYS days. The older weekday folders (day-Mon … day-Sun, before 2026-11-25) go once
@@ -217,5 +269,6 @@ export async function runJobs() {
   await step('competitions', async () => (await import('./contestService.js')).sweepContests());
   await step('weekly recaps', () => weeklyRecap());
   await step('tidy', () => tidy());
+  await step('orphans', () => orphans());
   await step('backup', () => backup());
 }

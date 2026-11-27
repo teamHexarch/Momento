@@ -7,7 +7,7 @@ import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
 import { gameRoutes } from './gameRoutes.js';
 import { whenOpen } from '../services/switches.js';
-import { uploadBudget } from '../middleware/uploadBudget.js';
+import { uploadBudget, dailyQuota } from '../middleware/uploadBudget.js';
 
 // Making albums: 30 an hour per account. Whole-album zips (heavy to build): 20 an hour per account
 const perAccount = (minutes, limit, error) => rateLimit({
@@ -15,6 +15,8 @@ const perAccount = (minutes, limit, error) => rateLimit({
   standardHeaders: 'draft-8', legacyHeaders: false, message: { error },
 });
 const createLimit = perAccount(60, 30, 'That’s a lot of new albums. Wait a while, then make more.');
+// And at most ALBUMS_PER_DAY (10) a day, so one account can't spread a huge upload across hundreds of albums (audit M3)
+const createDayLimit = perAccount(24 * 60, Number(process.env.ALBUMS_PER_DAY) || 10, 'That’s a lot of new albums for one day. Try again tomorrow.');
 const downloadLimit = perAccount(60, 20, 'That’s a lot of downloads. Wait a while, then try again.');
 
 // Uploads: 600 an hour per account (the page sends big selections as several small uploads side by side)
@@ -66,11 +68,12 @@ albumRoutes.get('/:id/cover/:token', albums.coverFile);
 albumRoutes.use(requireVerified);
 
 albumRoutes.get('/', albums.list);
-albumRoutes.post('/', createLimit, albums.create);
+albumRoutes.post('/', createLimit, createDayLimit, albums.create);
 albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
-albumRoutes.get('/:id/version', albums.version);
+// An open album asks every 3 seconds (20 a minute); 60 a minute per account leaves room for a few tabs (audit M4)
+albumRoutes.get('/:id/version', perAccount(1, 60, 'The album is checking for new photos too often. Wait a moment.'), albums.version);
 albumRoutes.get('/:id/checks', albums.checkStatus);
 albumRoutes.delete('/:id/checks/:check', albums.removeCheck);
 albumRoutes.patch('/:id', albums.update);
@@ -79,7 +82,9 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 // Which files the album already has (by SHA-256), so the page skips them before uploading
 albumRoutes.post('/:id/photos/known', albums.knownHashes);
-albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
+// The upload agreement ("I took these photos or have permission to share them..."), once per album and Terms version
+albumRoutes.post('/:id/consent', perAccount(60, 120, 'That’s a lot of agreeing. Wait a while, then try again.'), albums.giveUploadConsent);
+albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), dailyQuota, uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', downloadLimit, albums.download);
 // The emailed link to a big album's zip (made in the background)
 albumRoutes.get('/:id/zip/:token', albums.zipFile);

@@ -64,6 +64,9 @@ export async function remove(req, res) {
   if (m.role !== 'host' && !photo.uploader?.equals(req.user._id)) throw new HttpError(403, 'You can delete the photos you added; the host can delete any photo in their album.');
   await deletePhoto(photo.storageKey);
   await photo.deleteOne();
+  // Its comments and reports go with it (audit B3)
+  const [{ PhotoComment }, { Report }] = await Promise.all([import('../models/PhotoComment.js'), import('../models/Report.js')]);
+  await Promise.all([PhotoComment.deleteMany({ photo: photo._id }), Report.deleteMany({ photo: photo._id })]);
   res.json({ ok: true });
 }
 
@@ -73,23 +76,43 @@ const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
 // The reporter stops seeing the photo at once. When REPORTS_TO_HIDE (3) different people report it, it's
 // hidden from everyone (into the host's bin, where the host can't restore it) until staff decide.
 const REPORTS_TO_HIDE = Number(process.env.REPORTS_TO_HIDE) || 3;
+const REPORTS_PER_DAY = Number(process.env.REPORTS_PER_DAY) || 10;
+// Reports that count towards hiding a photo from everyone: from the host, from someone who joined the album more than
+// 24 hours ago, or from someone who has added photos to it. Three accounts made a minute ago can't hide anyone's photo
+// (they still stop seeing it themselves, and staff still get every report).
+async function countedReporters(photo, rows) {
+  const ids = rows.map((r) => r.reporter).filter(Boolean);
+  if (!ids.length) return 0;
+  const dayAgo = new Date(Date.now() - 86400000);
+  const [settled, uploaders] = await Promise.all([
+    Membership.find({ album: photo.album, user: { $in: ids }, $or: [{ role: 'host' }, { createdAt: { $lte: dayAgo } }] }, 'user').lean(),
+    Photo.distinct('uploader', { album: photo.album, uploader: { $in: ids } }),
+  ]);
+  return new Set([...settled.map((m) => String(m.user)), ...uploaders.map(String)]).size;
+}
 export async function report(req, res) {
   const { photo } = await photoFor(req, { react: true });
   const reason = ['nudity', 'abuse', 'privacy', 'copyright', 'other'].includes(req.body?.reason) ? req.body.reason : null;
   if (!reason) throw new HttpError(400, 'Choose why you’re reporting this photo.');
   const note = String(req.body?.note ?? '').trim().slice(0, 1000);
   const { Report } = await import('../models/Report.js');
+  // At most REPORTS_PER_DAY new reports per account a day (audit M2: report brigading)
+  const isNew = !await Report.exists({ photo: photo._id, reporter: req.user._id });
+  if (isNew && await Report.countDocuments({ reporter: req.user._id, createdAt: { $gt: new Date(Date.now() - 86400000) } }) >= REPORTS_PER_DAY) {
+    throw new HttpError(429, 'You’ve reported a lot of photos today. You can still hide photos from your own view; try reporting again tomorrow.', 'report-limit');
+  }
   await Report.updateOne({ photo: photo._id, reporter: req.user._id }, { $set: { reason, note, status: 'open', album: photo.album } }, { upsert: true });
   // Out of the reporter's own view straight away
   await Membership.updateOne({ album: photo.album, user: req.user._id }, { $addToSet: { hidden: photo._id }, $setOnInsert: { role: 'guest', via: 'group' } }, { upsert: true });
   const reports = await Report.countDocuments({ photo: photo._id, status: 'open' });
+  const counted = await countedReporters(photo, await Report.find({ photo: photo._id, status: 'open' }, 'reporter').lean());
   let hiddenForEveryone = false;
-  if (reports >= REPORTS_TO_HIDE) {
+  if (counted >= REPORTS_TO_HIDE) {
     const r = await Photo.updateOne({ _id: photo._id, flaggedAt: null }, { $set: { flaggedAt: new Date(), deletedAt: new Date() } });
     hiddenForEveryone = r.modifiedCount === 1;
   }
   const { audit } = await import('../services/auditService.js');
-  await audit('photo.reported', { req, target: photo._id, meta: { reason, reports, hiddenForEveryone } });
+  await audit('photo.reported', { req, target: photo._id, meta: { reason, reports, counted, hiddenForEveryone } });
   // The team hears about every report (user input), with the reason on the data line for the feedback sheet
   const REASONS = { nudity: 'Nudity or sexual content', abuse: 'Abuse, hate or violence', privacy: 'Privacy: a photo of me I didn’t agree to', copyright: 'Copyright', other: 'Something else' };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -99,7 +122,7 @@ export async function report(req, res) {
     title: `Photo report · ${REASONS[reason]}${hiddenForEveryone ? ' · now hidden from everyone' : ''}`,
     html: `<p>A photo was reported: <b>${esc(REASONS[reason])}</b>.</p>
       ${note ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #6C5FC7;background:#F6F4FA;white-space:pre-wrap">${esc(note)}</blockquote>` : '<p>No note.</p>'}
-      <p>Open reports on this photo: <b>${reports}</b> (hidden from everyone at ${REPORTS_TO_HIDE}).</p>
+      <p>Open reports on this photo: <b>${reports}</b>, of which <b>${counted}</b> from established members (hidden from everyone at ${REPORTS_TO_HIDE}).</p>
       <p style="color:#5C596B;font-size:13px">Photo ${photo.id}, album ${photo.album}. Reporter's account ${req.user.id}. Decide on the staff review page.</p>`,
     data: { reason, reports, hiddenForEveryone, text: note },
   }).catch((err) => console.error(`Report on ${photo.id} saved but not emailed: ${err.message}`));

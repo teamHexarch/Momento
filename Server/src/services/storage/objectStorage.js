@@ -64,6 +64,13 @@ export function objectStorage({ name, label, client, bucket, keyHint, cdn }) {
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     },
+    // Deletes many files at once: up to 1,000 per request (S3 DeleteObjects) instead of one request per file
+    async removeMany(keys) {
+      for (let i = 0; i < keys.length; i += 1000) {
+        const out = await client.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true } }));
+        if (out.Errors?.length) throw new Error(`${out.Errors.length} files could not be deleted (first: ${out.Errors[0].Code})`);
+      }
+    },
     // The folder names right under a prefix (e.g. "backups/" → ["backups/day-Mon/", ...])
     async folders(prefix) {
       const out = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, Delimiter: '/' }));

@@ -62,6 +62,13 @@ export const config = {
   aws: {
     region: env.AWS_REGION || 'ap-southeast-2',
     s3Bucket: env.S3_BUCKET || '',
+    // Optional, recommended (audit C2): the daily database backup goes to its own bucket (BACKUP_BUCKET, with
+    // Versioning and Object Lock on) using its own key that may only add files (BACKUP_ACCESS_KEY_ID /
+    // BACKUP_SECRET_ACCESS_KEY, s3:PutObject on that bucket only). Then a leaked server key can't delete the backups.
+    // Old backups are removed by the bucket's lifecycle rule, not by the server. Unset: backups stay in S3_BUCKET.
+    backupBucket: env.BACKUP_BUCKET || '',
+    backupKeyId: env.BACKUP_ACCESS_KEY_ID || '',
+    backupSecret: env.BACKUP_SECRET_ACCESS_KEY || '',
     hasKeys: Boolean(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY),
     // Optional: photos served through Amazon CloudFront (faster, cheaper) instead of straight from the
     // bucket. All three are needed; see "Faster photos with CloudFront" in README.md.
@@ -100,6 +107,9 @@ export const config = {
     tos: env.TOS_VERSION || '2026-11-20',
     privacy: env.PRIVACY_VERSION || '2026-11-19',
     enforce: env.REQUIRE_CONSENT === 'on',
+    // UPLOAD_CONSENT=on: uploading to an album needs the upload agreement for the current Terms version
+    // (POST /api/albums/:id/consent). Off until the website sends it; the agreement is recorded either way.
+    uploadConsent: env.UPLOAD_CONSENT === 'on',
   },
   // The age check at sign-up: under 13s are refused. REQUIRE_AGE=on makes the birth date required
   // (otherwise it's checked when the sign-up form sends one).

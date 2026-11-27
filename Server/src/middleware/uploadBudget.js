@@ -42,3 +42,33 @@ export function uploadBudget(req, res, next) {
 
 // For tests
 export const uploadsInFlight = () => ({ bytes: inFlight, users: perUser.size });
+
+// ---- Daily storage quota (audit M3) ----
+// What one account may add in 24 hours, in bytes: UPLOAD_DAY_GB (5 GB unless set). Stops one account filling the
+// photo bucket (and the bill) through albums it made itself. The total is read from the database (photos by uploader,
+// an indexed query) at most once a minute per account, plus what has been sent since.
+const DAY_QUOTA = (Number(process.env.UPLOAD_DAY_GB) || 5) * 1024 ** 3;
+const dayUse = new Map();   // account → { bytes, at }
+export async function dailyQuota(req, res, next) {
+  try {
+    const size = Number(req.get('content-length')) || 0;
+    const who = String(req.user?._id || '');
+    if (!who) return next();
+    let use = dayUse.get(who);
+    if (!use || use.at < Date.now() - 60000) {
+      const { Photo } = await import('../models/Photo.js');
+      const [row] = await Photo.aggregate([
+        { $match: { uploader: req.user._id, createdAt: { $gt: new Date(Date.now() - 86400000) } } },
+        { $group: { _id: null, bytes: { $sum: '$size' } } },
+      ]);
+      use = { bytes: row?.bytes || 0, at: Date.now() };
+      dayUse.set(who, use);
+      if (dayUse.size > 20000) dayUse.clear();
+    }
+    if (use.bytes + size > DAY_QUOTA) {
+      return next(new HttpError(429, `You’ve added a lot today (the limit is ${DAY_QUOTA / 1024 ** 3} GB a day). Try the rest tomorrow.`, 'daily-quota'));
+    }
+    use.bytes += size;
+    next();
+  } catch (err) { next(err); }
+}
