@@ -213,6 +213,8 @@ export const api = {
     nearby: (lat: number, lng: number, radius: number) => request<{ events: NearbyEvent[] }>(`/api/events/nearby?lat=${lat.toFixed(5)}&lng=${lng.toFixed(5)}&radius=${radius}`),
     requests: () => request<unknown>('/api/events/requests'),
     answerRequest: (albumId: string, userId: string, approve: boolean) => send<unknown>('POST', `/api/events/${enc(albumId)}/requests/${enc(userId)}`, { approve }),
+    /** Who gets in: joining open, whether guests' location is checked, a join deadline (host only) */
+    policy: (albumId: string, b: { joiningOpen?: boolean; locationRequired?: boolean; joinDeadline?: string | null }) => send<{ ok: true }>('PATCH', `/api/events/${enc(albumId)}/policy`, b),
   },
 
   /** The Reviews page: your own review only (one per person, sending again replaces it). See BACKEND-NOTES-NEXT.md */

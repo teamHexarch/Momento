@@ -26,3 +26,16 @@ album go straight up. A new account, new Terms, or the server saying it has no r
 When the server answers `consent-required`, the website already forgets its saved answer, stops the upload, keeps
 the photos, and "Retry the rest" shows the agreement again. Once the endpoint exists, the website will call it
 when the box is ticked (a one-line change in `assets/event.js`, `rememberConsent`).
+
+## 2. Guests on borrowed or shared phones (the 3-device limit)
+
+**Website (done):** new events don't check guests' location unless the host ticks "Check guests are at the venue"
+(the website saves `locationRequired: false` with `PATCH /api/events/:id/policy` right after creating the event,
+which the server already supports). A guest with the link or QR code goes straight into the album; nobody is asked
+for their location.
+
+**Server (needed):** guests hit the login device limit (3) on a borrowed phone or when moving between devices.
+
+- Raise the device limit to 10 (`services/deviceLogin.js`).
+- For accounts that only join albums (not hosts), don't send the takeover email; just sign the oldest device out.
+- Optional: default `locationRequired` to `false` in `Album.js` too, so events made any other way match the website.

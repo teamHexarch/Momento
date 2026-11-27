@@ -189,6 +189,11 @@ const CreateDialog = forwardRef<CreateHandle, { viewAlbum: (id: string) => void 
       submit.disabled = back.disabled = true;
       try {
         ({ album: made } = await api.albums.create({ name, date, place, ...ev.fields, ...(groupId && { groupId }) }));
+        // An event checks guests' location only when the host ticked it (the server's default is to check): saved now,
+        // so the first guest isn't asked. If it doesn't save, the host can still change it in Album settings.
+        if (made && event && ev.fields.locationRequired === false) {
+          await api.events.policy(made.id, { locationRequired: false }).catch(() => api.events.policy(made!.id, { locationRequired: false })).catch((err) => console.warn('Couldn’t turn the location check off:', err));
+        }
         document.dispatchEvent(new CustomEvent('momento:albums', { detail: { type: 'add', album: made } }));
       } catch (err) { say((err as Error).message); return; }
       finally { delete form.dataset.busy; submit.disabled = back.disabled = false; }

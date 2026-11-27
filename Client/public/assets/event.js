@@ -153,6 +153,13 @@
     /* No empty line saved for a message that isn't there */
     #mCreate .acct-status:empty { min-height: 0; margin: 0; }
     .ev-sec[hidden] { display: none; }
+    .ev-loccheck { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: .6rem; cursor: pointer; }
+    .ev-loccheck[hidden] { display: none; }
+    .ev-loccheck input { width: 1.1rem; height: 1.1rem; margin: .15rem 0 0; accent-color: var(--dusk, #2e2c3a); cursor: pointer; }
+    .ev-loccheck input:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    .ev-loccheck b { display: block; font-size: .9rem; font-weight: 650; color: var(--dusk, #2e2c3a); }
+    .ev-loccheck small { display: block; margin-top: .1rem; font-size: .8rem; line-height: 1.45; color: var(--slate, #5c596b); }
+    :root[data-theme="dark"] .ev-loccheck input { accent-color: #F2EFF8; }
     details.ev-more > summary, details.ev-more > summary small { white-space: nowrap; }
     @media (max-width: 480px) { details.ev-more > summary small { display: none; } }
     @media (prefers-reduced-motion: reduce) { details.ev-more > summary svg, .ev-range::-webkit-slider-thumb { transition: none; } .ev-range:is(:hover, :active)::-webkit-slider-thumb { transform: none; } }
@@ -575,7 +582,10 @@
                 <select name="evLead" id="evLead">${LEADS.map((m) => `<option value="${m}">${m === 0 ? 'At the start' : m < 60 ? `${m} minutes before` : `${m / 60} hour${m === 60 ? '' : 's'} before`}</option>`).join('')}</select>
               </div>
             </div>
-            <div class="ev-sec ev-radius-sec">
+            <!-- Off unless the host turns it on: guests with the code or link get straight in, and nobody is asked for
+                 their location (the host can change it later in Album settings, "Check location on entry") -->
+            <label class="ev-loccheck"><input type="checkbox" name="evLocCheck"><span><b>Check guests are at the venue</b><small>Guests further away wait for you to let them in. When off, anyone with the code or link gets straight in.</small></span></label>
+            <div class="ev-sec ev-radius-sec" hidden>
               <div class="ev-range-head"><label class="ev-label" for="evRadius">Guests must be within</label><output class="ev-range-val" for="evRadius" data-radius-out>1 km</output></div>
               <input class="ev-range" id="evRadius" name="evRadius" type="range" min="1" max="10" step="0.5" value="1" aria-valuetext="1 kilometre">
             </div>
@@ -772,7 +782,11 @@
     // An album for a friend group is shared with the group, not held at a place and time: no start and
     // end, no venue, no "Who can join?" and no upload window
     // (More options stays: the cover is there)
-    const eventOnly = ['.ev-public', '.ev-when', '.ev-venue', '.ev-lead-sec', '.ev-radius-sec'].map((s) => box.querySelector(s));
+    const eventOnly = ['.ev-public', '.ev-when', '.ev-venue', '.ev-lead-sec', '.ev-loccheck'].map((s) => box.querySelector(s));
+    // The distance only matters when the location check is on
+    const radiusSec = box.querySelector('.ev-radius-sec');
+    const syncLocCheck = () => { radiusSec.hidden = !!box.dataset.grouped || !form.evLocCheck.checked; };
+    form.evLocCheck.addEventListener('change', syncLocCheck);
     const syncWho = () => {
       const grouped = !!form.group?.value;
       box.dataset.grouped = grouped ? 'true' : '';
@@ -780,6 +794,7 @@
       const panel = form.querySelector(`[data-create-step="${grouped ? 'details' : 'event'}"]`);
       if (panel && box.parentElement !== panel) panel.append(box);
       eventOnly.forEach((el) => { if (el) el.hidden = grouped; });
+      syncLocCheck();
       if (grouped && form.evVis) { form.evVis.value = 'invite'; syncVis(); }
       if (form.place) form.place.value = grouped ? '' : ((isPlaceholder(state.venue?.name) ? '' : state.venue?.name) || state.venue?.address || '').slice(0, 60);
     };
@@ -885,6 +900,7 @@
       lastStart = '';
       form.evLead.value = '30';
       form.evRadius.value = '1';
+      form.evLocCheck.checked = false;
       if (form.evVis) { form.evVis.value = 'invite'; syncVis(); }
       box._syncRadius();
       setVenue(null);
@@ -1024,6 +1040,8 @@
         uploadLeadMin: t.leadMin,
         eventUploadWindow: true,
         zone: { lat: st.venue.lat, lng: st.venue.lng, radiusM: st.radiusM },
+        // Checking guests' location when they join: off unless ticked (saved on the event once it's made, CreateDialog)
+        locationRequired: !!form.evLocCheck?.checked,
         venue: { address: st.venue.address || '', placeId: st.venue.placeId || '' },
         visibility: !form.group?.value && form.evVis?.value === 'public' ? 'public' : 'invite',
         // "Would you like games at your event?" (step 1, CreateDialog.tsx): yes unless they chose No games
