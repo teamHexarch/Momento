@@ -189,7 +189,8 @@
       frame.allow = 'camera; geolocation; clipboard-write; web-share';
       frame.src = 'albums?album=' + encodeURIComponent(id) + '&embed=1' + (upload ? '&upload=1' : '')
         + (focus.photos ? '&photos=' + encodeURIComponent(focus.photos) + (focus.by ? '&by=' + encodeURIComponent(focus.by) : '') : '')
-        + (/[?&]dev\b/.test(location.search) ? '&dev' : '');
+        // (the local sample-data preview: carried into the frame when it's on; ?dev=off must not turn it back on)
+        + (/[?&]dev(?!=off)\b/.test(location.search) ? '&dev' : '');
       viewer.classList.remove('is-ready');
       viewer.append(frame);
       if (!viewer.open) viewer.showModal();
