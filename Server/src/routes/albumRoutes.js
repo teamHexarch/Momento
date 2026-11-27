@@ -72,7 +72,8 @@ albumRoutes.post('/', createLimit, createDayLimit, albums.create);
 albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
-albumRoutes.get('/:id/version', albums.version);
+// An open album asks every 3 seconds (20 a minute); 60 a minute per account leaves room for a few tabs (audit M4)
+albumRoutes.get('/:id/version', perAccount(1, 60, 'The album is checking for new photos too often. Wait a moment.'), albums.version);
 albumRoutes.get('/:id/checks', albums.checkStatus);
 albumRoutes.delete('/:id/checks/:check', albums.removeCheck);
 albumRoutes.patch('/:id', albums.update);

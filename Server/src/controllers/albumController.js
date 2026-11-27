@@ -518,51 +518,170 @@ export async function checkStatus(req, res) {
 }
 // GET /api/albums/:id/version → { version }: a short stamp that changes whenever a photo is added, deleted or changed
 // (reactions, comments, bin, reports) or the album itself changes. An open album asks every few seconds and reloads
-// only when it changes (live updates without keeping a connection open). Two indexed reads, nothing else.
+// only when it changes (live updates without keeping a connection open).
+// Polling load (audit M4): the photo part of the stamp is kept in memory per album and worked out at most once a
+// second, however many people have the album open; the answer carries an ETag, so an unchanged album is a bodyless 304.
+const STAMP_MS = 1000;
+const photoStamps = new Map(); // album id → { at, value: Promise<string> }
+function photoStampOf(albumId) {
+  const key = String(albumId);
+  const now = Date.now();
+  const hit = photoStamps.get(key);
+  if (hit && now - hit.at < STAMP_MS) return hit.value;
+  const value = Promise.all([
+    Photo.countDocuments({ album: albumId }),
+    Photo.findOne({ album: albumId }, 'updatedAt').sort({ updatedAt: -1 }).lean(),
+  ]).then(([count, last]) => `${count}.${last?.updatedAt ? new Date(last.updatedAt).getTime() : 0}`);
+  photoStamps.set(key, { at: now, value });
+  value.catch(() => photoStamps.delete(key));
+  // Albums nobody is looking at any more drop out (the map never grows past what's open right now)
+  if (photoStamps.size > 2000) for (const [k, v] of photoStamps) if (now - v.at > 60000) photoStamps.delete(k);
+  return value;
+}
 export async function version(req, res) {
   const m = await membershipOf(req, req.params.id);
-  const [count, last] = await Promise.all([
-    Photo.countDocuments({ album: m.album._id }),
-    Photo.findOne({ album: m.album._id }, 'updatedAt').sort({ updatedAt: -1 }).lean(),
-  ]);
-  res.set('Cache-Control', 'private, no-store')
-    .json({ version: `${count}.${last?.updatedAt ? new Date(last.updatedAt).getTime() : 0}.${m.album.updatedAt ? new Date(m.album.updatedAt).getTime() : 0}` });
+  const stamp = `${await photoStampOf(m.album._id)}.${m.album.updatedAt ? new Date(m.album.updatedAt).getTime() : 0}`;
+  const etag = `"v${stamp}"`;
+  // Private (it's behind the login), and the browser must ask again every time, but may reuse its copy on a 304
+  res.removeHeader('Pragma');
+  res.set({ 'Cache-Control': 'private, no-cache', ETag: etag });
+  const asked = String(req.get('If-None-Match') || '').split(',').map((t) => t.trim().replace(/^W\//, ''));
+  if (asked.includes(etag)) return res.status(304).end();
+  res.json({ version: stamp });
+}
+
+// ---- GET /api/albums/:id: the album and its photos ----
+// Without ?limit (or ?since) every photo comes at once, as before. Paging (audit B1):
+//   ?limit=N (default 200, at most 500) with ?sort_by=&order= as before. The answer adds { total, nextBefore };
+//     ask again with ?before=<nextBefore> for the next page (null: that was the last). nextBefore is opaque:
+//     a time and id for "uploaded" order (an ISO date is accepted too), a position for the other orders.
+//   ?since=<nextSince> (live updates): only photos changed since then, as { photos, removed, total, nextSince };
+//     removed lists ids now deleted or hidden from you. tooMany: true means reload the whole album instead.
+export const PAGE_DEFAULT = 200;
+export const PAGE_MAX = 500;
+function photoJsonFor(req, withHidden, hiddenSet) {
+  return (p) => {
+    const mine = p.uploader?._id.equals(req.user._id);
+    return {
+      id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
+      // Bookmarked: private, just yours (liked is its old name)
+      bookmarked: (p.likes || []).some((id) => id.equals(req.user._id)), liked: (p.likes || []).some((id) => id.equals(req.user._id)),
+      reactions: reactionCounts(p), reaction: myReaction(p, req.user._id),
+      // For sorting and the comment badge: the original file name and size, when it was taken, how many comments
+      name: fixFileName(p.originalName || '') || undefined, size: p.size, takenAt: p.takenAt || null, commentCount: p.commentCount || 0,
+      ...(withHidden && hiddenSet.has(p.id) && { hidden: true }),
+    };
+  };
+}
+function photoOrder(s) {
+  const nameOf = (p) => fixFileName(p.originalName || '');
+  return (a, b) => s.dir * (
+    s.by === 'name' ? collator.compare(nameOf(a), nameOf(b))
+      : s.by === 'uploader' ? collator.compare(a.uploader?.name || '', b.uploader?.name || '')
+        : s.by === 'taken' ? byTime(a.takenAt || a.createdAt, b.takenAt || b.createdAt)
+          : 0) || s.dir * byTime(a.createdAt, b.createdAt) || s.dir * String(a._id).localeCompare(String(b._id));
+}
+const badPage = () => new HttpError(400, 'That page of the album can’t be found. Reload the album.', 'BAD_PAGE');
+function pageLimit(raw) {
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new HttpError(400, 'limit must be a whole number from 1 to 500.', 'BAD_LIMIT');
+  return Math.min(n, PAGE_MAX);
+}
+// "uploaded" order cursor: "<ms>_<photo id>" (what nextBefore gives), or a plain date (as the handoff spec allows)
+function uploadedCursor(raw) {
+  const s = String(raw);
+  const m = /^(\d{1,15})_([0-9a-f]{24})$/i.exec(s);
+  if (m) return { at: new Date(Number(m[1])), id: new mongoose.Types.ObjectId(m[2]) };
+  const at = new Date(s);
+  if (Number.isNaN(at.getTime())) throw badPage();
+  return { at, id: null };
+}
+function sinceTime(raw) {
+  const at = /^\d{1,15}$/.test(String(raw)) ? new Date(Number(raw)) : new Date(String(raw));
+  if (Number.isNaN(at.getTime())) throw new HttpError(400, 'since must be a time from an earlier answer.', 'BAD_SINCE');
+  return at;
 }
 
 export async function show(req, res) {
   const m = await membershipOf(req, req.params.id);
   const hidden = m.hidden || [];
+  const hiddenSet = new Set(hidden.map(String));
   const withHidden = req.query.hidden === '1';
-  const [stats, photos, hiddenCount, trashCount] = await Promise.all([
+  const limit = pageLimit(req.query.limit);
+  const since = req.query.since !== undefined ? sinceTime(req.query.since) : null;
+  const shown = { album: m.album._id, deletedAt: null, ...(!withHidden && { _id: { $nin: hidden } }) };
+  const s = sortOrder(req, ['name', 'uploader', 'taken', 'uploaded'], 'uploaded');
+  const toJson = photoJsonFor(req, withHidden, hiddenSet);
+  // Taken before anything is read, so a photo changed while this answer is built is in the next ?since= too
+  const startedAt = Date.now();
+
+  // Live updates: only what changed. Uses the { album, updatedAt } index
+  if (since) {
+    const cap = limit || PAGE_MAX;
+    const [changed, total] = await Promise.all([
+      Photo.find({ album: m.album._id, updatedAt: { $gte: since } }).sort({ updatedAt: 1 }).limit(cap + 1).populate('uploader', 'name'),
+      Photo.countDocuments(shown),
+    ]);
+    const tooMany = changed.length > cap;
+    const rows = tooMany ? changed.slice(0, cap) : changed;
+    const visible = (p) => !p.deletedAt && (withHidden || !hiddenSet.has(p.id));
+    // $gte: a photo changed in the same millisecond as the last one is sent again rather than missed
+    const nextSince = rows.length ? new Date(rows.at(-1).updatedAt).getTime() : since.getTime();
+    return res.json({
+      photos: rows.filter(visible).map(toJson), removed: rows.filter((p) => !visible(p)).map((p) => p.id),
+      total, nextSince, ...(tooMany && { tooMany: true }),
+      checks: await checksFor(m.album._id, req.user._id),
+    });
+  }
+
+  const [stats, hiddenCount, trashCount] = await Promise.all([
     statsFor([m.album._id], req.user._id, hidden),
-    Photo.find({ album: m.album._id, deletedAt: null, ...(!withHidden && { _id: { $nin: hidden } }) }).sort({ createdAt: -1 }).populate('uploader', 'name'),
     hidden.length ? Photo.countDocuments({ album: m.album._id, _id: { $in: hidden }, deletedAt: null }) : 0,
     // The bin's count: every deleted photo for the host; for anyone else, the ones they deleted themselves
     Photo.countDocuments({ album: m.album._id, deletedAt: { $ne: null }, ...(m.role !== 'host' && { deletedBy: req.user._id, uploader: req.user._id }) }),
   ]);
-  const hiddenSet = new Set(hidden.map(String));
-  const s = sortOrder(req, ['name', 'uploader', 'taken', 'uploaded'], 'uploaded');
-  const nameOf = (p) => fixFileName(p.originalName || '');
-  photos.sort((a, b) => s.dir * (
-    s.by === 'name' ? collator.compare(nameOf(a), nameOf(b))
-      : s.by === 'uploader' ? collator.compare(a.uploader?.name || '', b.uploader?.name || '')
-        : s.by === 'taken' ? byTime(a.takenAt || a.createdAt, b.takenAt || b.createdAt)
-          : 0) || s.dir * byTime(a.createdAt, b.createdAt));
+  const albumJson = { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)) };
+
+  let photos, page = {};
+  if (!limit) {
+    // Everything at once (today's page, until it pages through albums)
+    photos = await Photo.find(shown).sort({ createdAt: -1 }).populate('uploader', 'name');
+    photos.sort(photoOrder(s));
+  } else if (s.by === 'uploaded') {
+    // Straight from the { album, createdAt } index, one page at a time
+    const op = s.dir === 1 ? '$gt' : '$lt';
+    let after = {};
+    if (req.query.before !== undefined) {
+      const c = uploadedCursor(req.query.before);
+      after = c.id ? { $or: [{ createdAt: { [op]: c.at } }, { createdAt: c.at, _id: { [op]: c.id } }] } : { createdAt: { [op]: c.at } };
+    }
+    const [rows, total] = await Promise.all([
+      Photo.find({ $and: [shown, after] }).sort({ createdAt: s.dir, _id: s.dir }).limit(limit + 1).populate('uploader', 'name'),
+      Photo.countDocuments(shown),
+    ]);
+    photos = rows.slice(0, limit);
+    const last = photos.at(-1);
+    page = { total, nextBefore: rows.length > limit ? `${new Date(last.createdAt).getTime()}_${last.id}` : null };
+  } else {
+    // Name, uploader or date taken: sorted here across the whole album from just the sort fields, then only this
+    // page's photos are read in full
+    const offset = req.query.before === undefined ? 0 : Number(/^o(\d{1,7})$/.exec(String(req.query.before))?.[1] ?? NaN);
+    if (!Number.isInteger(offset)) throw badPage();
+    const keys = await Photo.find(shown, 'originalName takenAt createdAt uploader').populate('uploader', 'name').lean();
+    keys.sort(photoOrder(s));
+    const ids = keys.slice(offset, offset + limit).map((p) => p._id);
+    const full = new Map((await Photo.find({ _id: { $in: ids } }).populate('uploader', 'name')).map((p) => [p.id, p]));
+    photos = ids.map((id) => full.get(String(id))).filter(Boolean);
+    page = { total: keys.length, nextBefore: offset + limit < keys.length ? `o${offset + limit}` : null };
+  }
   res.json({
     checks: await checksFor(m.album._id, req.user._id),
-    album: { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)) },
-    photos: photos.map((p) => {
-      const mine = p.uploader?._id.equals(req.user._id);
-      return {
-        id: p.id, url: photoUrl(p.id), thumbnailUrl: thumbnailUrl(p.id), ...miniOf(p), downloadUrl: `${photoUrl(p.id)}/download`, by: mine ? 'You' : firstName(p.uploader?.name), mine, at: p.createdAt,
-        // Bookmarked: private, just yours (liked is its old name)
-        bookmarked: (p.likes || []).some((id) => id.equals(req.user._id)), liked: (p.likes || []).some((id) => id.equals(req.user._id)),
-        reactions: reactionCounts(p), reaction: myReaction(p, req.user._id),
-        // For sorting and the comment badge: the original file name and size, when it was taken, how many comments
-        name: nameOf(p) || undefined, size: p.size, takenAt: p.takenAt || null, commentCount: p.commentCount || 0,
-        ...(withHidden && hiddenSet.has(p.id) && { hidden: true }),
-      };
-    }),
+    album: albumJson,
+    photos: photos.map(toJson),
+    ...page,
+    // Where live updates (?since=) start from for this answer
+    ...(limit && { nextSince: startedAt }),
   });
 }
 
