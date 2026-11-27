@@ -95,7 +95,8 @@ export function setUpAuth(): () => void {
   const field = (n: string) => form.querySelector(`[name="${n}"]`) as HTMLInputElement;
   // Sent with sign-up and Google so the server keeps a consent record: what was agreed to, and which version. Pressing
   // Create account or Continue with Google is the agreement (the line next to each button says so).
-  const TERMS_VERSION = '2026-11-07'; // the Privacy Policy's "Last updated" date (privacy)
+  // (one version for the whole site, set in public/assets/api.js; the date here is only a fallback)
+  const TERMS_VERSION: string = (window as unknown as { MOMENTO_TERMS_VERSION?: string }).MOMENTO_TERMS_VERSION || '2026-11-07';
   const consent = () => ({ acceptTerms: true, termsVersion: TERMS_VERSION });
   // An error the person can see: the dialog scrolls to it (on a phone it can sit below the fold)
   const showError = (msg: string) => { error.textContent = msg; if (msg) reveal(error); };

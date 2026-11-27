@@ -882,6 +882,9 @@
     .album-card { display: flex; flex-direction: column; width: min(980px, calc(100vw - 32px)); height: min(920px, calc(100dvh - 32px)); padding: 0; overflow: hidden; border-radius: var(--r-card); }
     .album-scroll { position: relative; flex: 1 1 auto; min-height: 0; padding: 0 .75rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(127,120,150,.4) transparent; }
     .album-card .note:empty { display: none; }
+    /* Under the photos: the upload bar, its note (and Retry the rest) and the photo checks never shrink, so a full album
+       can't squeeze them under the bottom bar; the photos above scroll instead */
+    .album-card > :is(.upload, .note, .checks) { flex-shrink: 0; }
     /* Upload progress: bytes sent fill the bar; then a soft sweep while the server finishes the photos */
     .upload { margin-top: 1rem; padding: 0 .7rem; }
     .upload[hidden] { display: none; }

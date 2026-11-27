@@ -1158,7 +1158,13 @@ export default function start() {
             else if (err.code === 'unreadable') { r.failed.push(...(err.data?.failed || b.map((f) => f.name))); r.tooBig.push(...(err.data?.tooBig || [])); }
             else if (err.code === 'nsfw') r.blocked += err.data?.decisionIds?.length || b.length;
             else if (err.code === 'removed-content') r.removed += b.length;
-            else {
+            else if (err.code === 'consent-required') {
+              // The server has no record of the agreement for this album: ask for it again (Retry the rest shows it)
+              Momento.event?.forgetConsent?.(a);
+              r.notSent.push(...b);
+              r.errors.push(err.message || 'Tick the box to agree, then upload again.');
+              stop = true; r.stopped = 'consent';
+            } else {
               // The album closed, this account may not add photos, or it's sent a lot this hour: the rest stay here
               // unsent (tried again later with "Retry the rest", when that can help)
               r.notSent.push(...b);
@@ -1186,7 +1192,7 @@ export default function start() {
         if (unsent.length) {
           const why = r.errors[0] || r.reason || 'The connection kept dropping.';
           lines.push(`${listNames(unsent.map((f) => f.name))} didn’t upload. ${why}`);
-          if (r.stopped !== 'never') lastFailed = { album: a, files: unsent, asked: { location: ok.location || '' } };
+          if (r.stopped !== 'never') lastFailed = { album: a, files: unsent, asked: r.stopped === 'consent' ? null : { location: ok.location || '' } };
         } else if (r.errors.length) lines.push(r.errors[0]);
         const sentOk = r.added || r.queued;
         if (unsent.length) setUpload('failed', 1, sentOk ? `${plural(r.added + r.queued, 'photo', 'photos')} uploaded, ${unsent.length} didn’t` : 'Nothing was uploaded');

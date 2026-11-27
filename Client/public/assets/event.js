@@ -396,6 +396,16 @@
     .ev-ask h2 { margin: 0; font-size: 1.4rem; letter-spacing: -.03em; line-height: 1.2; }
     .ev-ask p { margin: .5rem 0 0; color: var(--slate, #5c596b); line-height: 1.55; font-size: .93rem; }
     .ev-ask p.ev-limit { font-size: .8rem; margin-top: .35rem; opacity: .85; }
+    /* The agreement, asked the first time someone uploads to an album */
+    .ev-ask .ev-consent { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: .6rem; margin-top: .9rem; padding: .75rem .85rem; border-radius: 16px; cursor: pointer;
+      background: rgba(127, 120, 150, .1); box-shadow: inset 0 0 0 1px rgba(127, 120, 150, .22); color: var(--dusk, #2e2c3a); font-size: .86rem; line-height: 1.5; }
+    .ev-ask .ev-consent:has(input:checked) { box-shadow: inset 0 0 0 1.5px var(--dusk, #2e2c3a); }
+    .ev-ask .ev-consent[hidden], .ev-ask .ev-consent-note[hidden] { display: none; }
+    .ev-ask .ev-consent input { width: 1.15rem; height: 1.15rem; margin: .12rem 0 0; accent-color: var(--dusk, #2e2c3a); cursor: pointer; }
+    .ev-ask .ev-consent input:focus-visible { outline: 2px solid var(--dusk, #2e2c3a); outline-offset: 2px; }
+    .ev-ask .ev-consent a { color: inherit; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+    .ev-ask p.ev-consent-note { margin-top: .4rem; font-size: .78rem; }
+    :root[data-theme="dark"] .ev-ask .ev-consent input { accent-color: #F2EFF8; }
     /* Every photo about to go up, each with a cross to leave it out */
     .ev-ask .ev-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.4rem, 1fr)); gap: .45rem; max-height: min(15.5rem, 34dvh); margin: 1rem 0 .2rem; padding: 0; overflow-y: auto; list-style: none; overscroll-behavior: contain; }
     .ev-thumb { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: rgba(127, 120, 150, .14); }
@@ -1528,9 +1538,21 @@
     });
   }
 
+  // ---- Agreeing to upload to an album: asked once per album, then remembered on this device for this account and this
+  // version of the Terms (a new account, new Terms, or the server saying it has no record asks again) ----
+  const CONSENT_KEY = 'momento-upload-consent';
+  const consentId = (album) => `${Momento.account?.get?.()?.id || 'signed-out'}:${album?.id}`;
+  const consents = () => { try { return JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  const saveConsents = (all) => { try { localStorage.setItem(CONSENT_KEY, JSON.stringify(Object.fromEntries(Object.entries(all).slice(-300)))); } catch (e) {} };
+  const hasConsent = (album) => !!album?.id && consents()[consentId(album)] === window.MOMENTO_TERMS_VERSION;
+  function rememberConsent(album) { if (!album?.id) return; const all = consents(); delete all[consentId(album)]; all[consentId(album)] = window.MOMENTO_TERMS_VERSION; saveConsents(all); }
+  function forgetConsent(album) { const all = consents(); delete all[consentId(album)]; saveConsents(all); }
+
   // ---- Asking before an upload (and the guest's location, when the album has a zone) ----
-  // Resolves to { location, files } (files: the ones still in the list; each has a cross to leave it out), or null
+  // Resolves to { location, files } (files: the ones still in the list; each has a cross to leave it out), or null.
+  // The first upload to an album asks for the agreement (a box to tick); after that, uploads to it go straight up.
   function confirmUpload(album, files, { fromCamera = false } = {}) {
+    if (hasConsent(album)) return Promise.resolve({ location: '', files: [...files] });
     return new Promise((resolve) => {
       const d = document.createElement('dialog');
       d.className = 'ev-ask';
@@ -1544,12 +1566,14 @@
         <p data-what></p>
         <p class="ev-limit">Up to ${Number(limits.maxPhotoMB) || 50} MB a photo. Camera RAW files (CR3, NEF, ARW, RAF, DNG and more) can be bigger.</p>
         <p class="ev-limit">Works with JPEG, PNG, HEIC and HEIF (iPhone), WebP, AVIF, GIF, TIFF, JPEG XL and camera RAW, including iPhone ProRAW (DNG).</p>
-        <p class="ev-limit" data-terms></p>
+        <label class="ev-consent" data-terms><input type="checkbox" data-consent autofocus><span>I took these photos or have permission to share them, and the people in them are happy for them to be shared with this album. I let Momento store, check and show them to the album’s members, as set out in the <a href="terms" target="_blank" rel="noopener">Terms</a>.</span></label>
+        <p class="ev-consent-note">You’ll only be asked once for this album.</p>
         <ul class="ev-thumbs" aria-label="Photos to upload"></ul>
         <p class="ev-none" data-none hidden>${fromCamera ? 'All the photos were taken out. Go back to the camera to take more.' : 'All the photos were taken out. Cancel and choose again.'}</p>
-        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>${fromCamera ? 'Back to camera' : 'Cancel'}</button><button class="mq-btn" type="button" data-yes autofocus>Upload</button></div>`;
+        <div class="mq-row"><button class="mq-btn is-light" type="button" data-no>${fromCamera ? 'Back to camera' : 'Cancel'}</button><button class="mq-btn" type="button" data-yes>Upload</button></div>`;
       document.body.append(d);
-      const list = d.querySelector('.ev-thumbs'), yes = d.querySelector('[data-yes]');
+      const list = d.querySelector('.ev-thumbs'), yes = d.querySelector('[data-yes]'), agree = d.querySelector('[data-consent]');
+      agree.addEventListener('change', () => paint());
       for (const it of items) {
         const li = document.createElement('li');
         li.className = 'ev-thumb';
@@ -1582,10 +1606,10 @@
         d.querySelector('#evAskTitle').textContent = n ? `Upload ${n === 1 ? '1 photo' : `${n} photos`}?` : 'No photos to upload';
         const p = d.querySelector('[data-what]');
         p.innerHTML = `Momento would like to add ${what} to <b>${esc(album?.name || 'the album')}</b>. Everyone in the album will be able to see and download ${n === 1 ? 'it' : 'them'}.`;
-        d.querySelector('[data-terms]').innerHTML = `By uploading, you confirm you took ${n === 1 ? 'this photo' : 'these photos'} or have permission to share ${n === 1 ? 'it' : 'them'} (<a href="terms" target="_blank" rel="noopener">Terms</a>).`;
-        for (const el of [p, d.querySelector('[data-terms]'), list]) el.hidden = !n;
+        for (const el of [p, d.querySelector('[data-terms]'), d.querySelector('.ev-consent-note'), list]) el.hidden = !n;
         d.querySelector('[data-none]').hidden = !!n;
-        yes.disabled = !n;
+        // Upload only once the box is ticked
+        yes.disabled = !n || !agree.checked;
         yes.textContent = n > 1 ? `Upload ${n}` : 'Upload';
       }
       paint();
@@ -1595,7 +1619,11 @@
       const no = () => done(fromCamera ? { cancelled: true, files: items.map((it) => it.f) } : null);
       d.querySelector('[data-no]').addEventListener('click', no);
       d.addEventListener('cancel', (e) => { e.preventDefault(); no(); });
-      yes.addEventListener('click', () => { if (items.length) done({ location: '', files: items.map((it) => it.f) }); });
+      yes.addEventListener('click', () => {
+        if (!items.length || !agree.checked) return;
+        rememberConsent(album);
+        done({ location: '', files: items.map((it) => it.f) });
+      });
       d.showModal();
     });
   }
@@ -1611,7 +1639,7 @@
     return `Event ${when}. This album has closed to new photos.`;
   }
 
-  Momento.event = { mount, activate, read, camera, confirmUpload, locate, windowText, distanceM, prepareCover, isPlaceholder };
+  Momento.event = { mount, activate, read, camera, confirmUpload, forgetConsent, locate, windowText, distanceM, prepareCover, isPlaceholder };
 
   // ---- Your friend groups, for the Create form's "Share with" ----
   // The form used to ask the server each time it opened and only then show the field, so it popped in a

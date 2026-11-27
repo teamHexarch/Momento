@@ -36,6 +36,9 @@ for (const type of ['pageswap', 'pagereveal']) {
   // albums.html shows the sample albums
   const local = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   window.MOMENTO_API = !local ? 'https://api.hexarch.org' : location.port === '4000' ? '' : 'http://localhost:4000';
+  // The Terms and Privacy Policy version people agree to (the Privacy Policy's "Last updated" date): sign-up and Google
+  // send it (components/home/authLogic.ts), and agreeing to upload to an album is remembered against it (assets/event.js)
+  window.MOMENTO_TERMS_VERSION = '2026-11-07';
   // fetch, aimed at the API and carrying the login cookie (needed when the API is another address)
   window.momentoFetch = (path, opts = {}) => fetch(window.MOMENTO_API + path, { credentials: 'include', ...opts });
   window.momentoApi = async (path, opts = {}) => {

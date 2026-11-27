@@ -25,16 +25,22 @@ async function joinAsGuest(page, s, guest) {
 }
 // This guest's photos in the album, according to the server
 const myPhotos = async (page, s) => ((await (await page.request.get(`${s.api}/api/albums/${s.albumId}`)).json()).photos || []).filter((p) => p.mine);
-async function chooseAndConfirm(album, files) {
+// Choose photos; the first time in an album, agree in the upload window (Upload stays off until the box is ticked)
+async function chooseAndConfirm(album, files, { firstTime = true, shot } = {}) {
   await album.locator('#albumFiles').setInputFiles(files);
-  await album.locator('.ev-ask [data-yes]').click();
+  if (!firstTime) return;
+  const ask = album.locator('dialog.ev-ask[open]');
+  await expect(ask.locator('[data-yes]')).toBeDisabled();
+  if (shot && process.env.SHOTS) await shot.page.screenshot({ path: path.join(process.env.SHOTS, `consent-${shot.name}-${process.env.SHOTS_THEME || 'light'}.png`) });
+  await ask.locator('[data-consent]').check();
+  await ask.locator('[data-yes]').click();
 }
 
 test('a guest joins with the link, uploads a photo, sees it and reacts', async ({ page }, info) => {
   const s = seed(), who = info.project.name;
   const { album, errors } = await joinAsGuest(page, s, who);
 
-  await chooseAndConfirm(album, s.photos[who][0]);
+  await chooseAndConfirm(album, s.photos[who][0], { shot: { page, name: who } });
   // It appears in the album (the photo check runs on the server first)
   const tile = album.locator('#thumbs .ab-tile').first();
   await expect(tile).toBeVisible({ timeout: 45000 });
@@ -48,6 +54,12 @@ test('a guest joins with the link, uploads a photo, sees it and reacts', async (
   await emoji.click();
   // Saved on the server, not just shown on the page
   await expect.poll(async () => (await myPhotos(page, s)).some((p) => p.reaction === chosen), { message: 'reaction saved', timeout: 15000 }).toBe(true);
+  await page.keyboard.press('Escape');
+
+  // A second upload to the same album goes straight up: the agreement was given once, for this album
+  await chooseAndConfirm(album, s.photos[who][1], { firstTime: false });
+  await expect.poll(async () => (await myPhotos(page, s)).length, { message: 'second photo arrived', timeout: 30000 }).toBe(2);
+  await expect(album.locator('dialog.ev-ask')).toHaveCount(0);
 
   expect(errors, 'no script errors on the page').toEqual([]);
 });
