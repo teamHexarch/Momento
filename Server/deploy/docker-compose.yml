@@ -9,6 +9,11 @@ services:
     # progress (uploads) to finish before stopping the old container (src/server.js stops cleanly in 25 s)
     init: true
     stop_grace_period: 30s
+    # Memory ceiling (audit B6): if a burst of huge photos ever needs more, only this container is restarted
+    # (restart: unless-stopped), instead of the whole 4 GB server freezing with Caddy and SSH. 3 GB leaves room for
+    # Caddy and the system; on a different size of server, export API_MEM_LIMIT (e.g. 700m on 1 GB) before updating.
+    mem_limit: ${API_MEM_LIMIT:-3g}
+    memswap_limit: ${API_MEMSWAP_LIMIT:-4g}
     env_file: /opt/momento-config/server.env
     environment:
       NODE_ENV: production
@@ -28,6 +33,7 @@ services:
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
+    mem_limit: 256m
     depends_on: [api]
     ports:
       - '80:80'

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import mongoose from 'mongoose';
 import sharp from 'sharp';
 import { config } from '../config/env.js';
 import * as disk from './storage/diskStorage.js';
@@ -90,17 +91,37 @@ export function ensureThumbnail(photo) {
   return job;
 }
 
-export const deletePhoto = async (key) => {
-  await driver.remove(`${key}.thumb.webp`);
-  await driver.remove(`${key}.mini.webp`);
-  await driver.remove(`${key}.preview.jpg`);
-  await driver.remove(`${key}.preview.webp`);
-  await driver.remove(key);
-};
+// Every file one photo has in storage: the original, its thumbnail, mini and preview
+export const filesOf = (key) => [`${key}.thumb.webp`, `${key}.mini.webp`, `${key}.preview.jpg`, `${key}.preview.webp`, key];
+export const deletePhoto = (key) => driver.removeMany(filesOf(key));
 
-// Deletes many photos, a few at a time, so a big album doesn't open hundreds of requests at once
+// Deletes many photos' files with as few requests as possible (S3: 1,000 files per request)
 export async function deletePhotos(keys) {
-  for (let i = 0; i < keys.length; i += 10) {
-    await Promise.all(keys.slice(i, i + 10).map(deletePhoto));
-  }
+  await driver.removeMany(keys.flatMap(filesOf));
+}
+
+// ---- Deleting files in the background (audit B4) ----
+// A big album has thousands of files. Instead of deleting them while the person waits (which could outlast the
+// proxy's 5-minute timeout), their keys are written down (PendingDelete, 1,000 per row) and deleted right after the
+// answer is sent. If the server restarts halfway, the hourly tidy job finishes the rest (drainDeletes).
+const PendingDelete = mongoose.models.PendingDelete || mongoose.model('PendingDelete',
+  new mongoose.Schema({ keys: [String], at: { type: Date, default: Date.now }, tries: { type: Number, default: 0 } }, { versionKey: false }));
+export async function deletePhotosLater(storageKeys) {
+  const keys = storageKeys.filter(Boolean).flatMap(filesOf);
+  for (let i = 0; i < keys.length; i += 1000) await PendingDelete.create({ keys: keys.slice(i, i + 1000) });
+  if (keys.length) setImmediate(() => { if (mongoose.connection.readyState === 1) drainDeletes().catch((err) => { if (mongoose.connection.readyState === 1) console.error(`Background delete: ${err.message}`); }); });
+}
+let draining = null;
+export function drainDeletes() {
+  draining ||= (async () => {
+    let files = 0;
+    for (;;) {
+      const row = await PendingDelete.findOne({ tries: { $lt: 20 } }).sort({ at: 1 });
+      if (!row) break;
+      try { await driver.removeMany(row.keys); files += row.keys.length; await row.deleteOne(); }
+      catch (err) { await PendingDelete.updateOne({ _id: row._id }, { $inc: { tries: 1 } }); console.error(`Background delete failed (will retry): ${err.message}`); break; }
+    }
+    return { files };
+  })().finally(() => { draining = null; });
+  return draining;
 }

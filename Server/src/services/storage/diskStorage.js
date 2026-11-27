@@ -62,3 +62,7 @@ export async function remove(key) {
   // Tidy the album's folder away once its last photo is gone (rmdir refuses if anything is left)
   await fsp.rmdir(path.dirname(file)).catch(() => {});
 }
+
+export async function removeMany(keys) {
+  for (const key of keys) await remove(key);
+}

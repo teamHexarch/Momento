@@ -62,6 +62,13 @@ export const config = {
   aws: {
     region: env.AWS_REGION || 'ap-southeast-2',
     s3Bucket: env.S3_BUCKET || '',
+    // Optional, recommended (audit C2): the daily database backup goes to its own bucket (BACKUP_BUCKET, with
+    // Versioning and Object Lock on) using its own key that may only add files (BACKUP_ACCESS_KEY_ID /
+    // BACKUP_SECRET_ACCESS_KEY, s3:PutObject on that bucket only). Then a leaked server key can't delete the backups.
+    // Old backups are removed by the bucket's lifecycle rule, not by the server. Unset: backups stay in S3_BUCKET.
+    backupBucket: env.BACKUP_BUCKET || '',
+    backupKeyId: env.BACKUP_ACCESS_KEY_ID || '',
+    backupSecret: env.BACKUP_SECRET_ACCESS_KEY || '',
     hasKeys: Boolean(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY),
     // Optional: photos served through Amazon CloudFront (faster, cheaper) instead of straight from the
     // bucket. All three are needed; see "Faster photos with CloudFront" in README.md.

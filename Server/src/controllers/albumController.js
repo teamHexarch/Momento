@@ -16,7 +16,7 @@ import { sendEmail } from '../services/emailService.js';
 import { reminderHtml } from '../services/emailTemplates.js';
 import { HttpError } from '../utils/httpError.js';
 import { newAlbumCode, normaliseCode } from '../utils/albumCodes.js';
-import { deletePhotos, openPhoto } from '../services/storageService.js';
+import { deletePhotosLater, openPhoto } from '../services/storageService.js';
 import { isRawName } from '../services/imageService.js';
 import { reactionCounts, myReaction } from './photoController.js';
 import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services/coverService.js';
@@ -630,15 +630,22 @@ export async function remove(req, res) {
   if (m.role !== 'host') throw new HttpError(403, 'Only the host can delete the album.');
   await discardChecks({ album: m.album._id });
   const photos = await Photo.find({ album: m.album._id }, 'storageKey');
-  await deletePhotos(photos.map((p) => p.storageKey));
   await removeCoverFiles([m.album.cover?.key, m.album.cover?.thumbKey]);
   const { removeGamesFor } = await import('../services/gameService.js');
   await removeGamesFor({ albums: [m.album._id] });
+  const [{ PhotoComment }, { Report }, { Notification }] = await Promise.all([
+    import('../models/PhotoComment.js'), import('../models/Report.js'), import('../models/Notification.js')]);
+  // The album and everything that points at it go now (comments, reports and notifications too: audit B3)
   await Promise.all([
     Photo.deleteMany({ album: m.album._id }),
     Membership.deleteMany({ album: m.album._id }),
+    PhotoComment.deleteMany({ album: m.album._id }),
+    Report.deleteMany({ album: m.album._id }),
+    Notification.deleteMany({ album: m.album._id }),
     m.album.deleteOne(),
   ]);
+  // The photo files are deleted in the background, after this answer (audit B4)
+  await deletePhotosLater(photos.map((p) => p.storageKey));
   res.json({ ok: true });
 }
 

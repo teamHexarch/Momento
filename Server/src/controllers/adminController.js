@@ -234,9 +234,21 @@ export async function decisionStatus(req, res) {
   });
 }
 
+// Every time staff look at a private review image is written to the audit log (audit M1): who, which photo, when.
+// The review page loads an image more than once, so one row per staff member and image every 10 minutes.
+const previewSeen = new Map();
+async function logPreview(req, kind, target, meta) {
+  const key = `${req.user?._id}:${kind}:${target}`, now = Date.now();
+  if (previewSeen.get(key) > now - 600000) return;
+  previewSeen.set(key, now);
+  if (previewSeen.size > 5000) for (const [k, at] of previewSeen) if (at <= now - 600000) previewSeen.delete(k);
+  await audit('staff.preview', { req, target, meta: { kind, ...meta } }).catch(() => {});
+}
+
 export async function moderationPreview(req, res) {
   const job = await UploadCheck.findOne({ _id: id(req.params.id), state: { $in: ['review', 'rejected'] } }).select('+files');
   if (!job?.files) throw new HttpError(404, 'Review image unavailable.');
+  await logPreview(req, 'upload-check', job._id, { album: String(job.album) });
   const big = !!job.files.previewKey;
   const stream = await openPhoto(big ? job.files.previewKey : job.files.thumbnailKey);
   res.set('Cache-Control', 'private, no-store').type(big ? (job.files.previewMimeType || 'image/jpeg') : 'webp');
@@ -247,6 +259,7 @@ export async function reportPreview(req, res) {
   const report = await Report.findById(id(req.params.id));
   const photo = report && await Photo.findById(report.photo);
   if (!photo?.thumbnailKey) throw new HttpError(404, 'Review image unavailable.');
+  await logPreview(req, 'report', photo._id, { reportId: String(report._id) });
   const stream = await openPhoto(photo.thumbnailKey);
   res.set('Cache-Control', 'private, no-store').type('webp');
   stream.on('error', () => res.destroy()).pipe(res);

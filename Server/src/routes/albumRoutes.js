@@ -7,7 +7,7 @@ import { requireVerified } from '../middleware/authMiddleware.js';
 import * as albums from '../controllers/albumController.js';
 import { gameRoutes } from './gameRoutes.js';
 import { whenOpen } from '../services/switches.js';
-import { uploadBudget } from '../middleware/uploadBudget.js';
+import { uploadBudget, dailyQuota } from '../middleware/uploadBudget.js';
 
 // Making albums: 30 an hour per account. Whole-album zips (heavy to build): 20 an hour per account
 const perAccount = (minutes, limit, error) => rateLimit({
@@ -15,6 +15,8 @@ const perAccount = (minutes, limit, error) => rateLimit({
   standardHeaders: 'draft-8', legacyHeaders: false, message: { error },
 });
 const createLimit = perAccount(60, 30, 'That’s a lot of new albums. Wait a while, then make more.');
+// And at most ALBUMS_PER_DAY (10) a day, so one account can't spread a huge upload across hundreds of albums (audit M3)
+const createDayLimit = perAccount(24 * 60, Number(process.env.ALBUMS_PER_DAY) || 10, 'That’s a lot of new albums for one day. Try again tomorrow.');
 const downloadLimit = perAccount(60, 20, 'That’s a lot of downloads. Wait a while, then try again.');
 
 // Uploads: 600 an hour per account (the page sends big selections as several small uploads side by side)
@@ -66,7 +68,7 @@ albumRoutes.get('/:id/cover/:token', albums.coverFile);
 albumRoutes.use(requireVerified);
 
 albumRoutes.get('/', albums.list);
-albumRoutes.post('/', createLimit, albums.create);
+albumRoutes.post('/', createLimit, createDayLimit, albums.create);
 albumRoutes.post('/join', joinLimit, whenOpen('joins'), albums.join);
 
 albumRoutes.get('/:id', albums.show);
@@ -79,7 +81,7 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 // Which files the album already has (by SHA-256), so the page skips them before uploading
 albumRoutes.post('/:id/photos/known', albums.knownHashes);
-albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
+albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), dailyQuota, uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', downloadLimit, albums.download);
 // The emailed link to a big album's zip (made in the background)
 albumRoutes.get('/:id/zip/:token', albums.zipFile);
