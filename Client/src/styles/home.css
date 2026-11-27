@@ -340,6 +340,8 @@
     }
     @keyframes beam { to { translate: 0 100%; } }
     .is-scanning .qr-beam { animation-duration: .4s; }
+    /* Reduced motion: the scanning line stays still, halfway down */
+    @media (prefers-reduced-motion: reduce) { .qr-beam, .is-scanning .qr-beam { animation: none; translate: 0 50%; } }
     .qr-found {
       position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .5rem;
       border-radius: 18px; background: rgba(255,255,255,.92); color: var(--dusk); font-weight: 650;
