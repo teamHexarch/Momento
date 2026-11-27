@@ -2,6 +2,7 @@
 # Client/ is the Next.js site: it's built here (npm run build makes the static site in Client/out) and only
 # that output is published. assets/devpreview.js (local sample data) is removed from the published files.
 # If the build fails, nothing is published and the site already live stays as it is.
+# The smoke test (website-tests.yml) runs first: if it fails, nothing is published either.
 #
 # The HTML version of the site (before Next.js) is kept on the html-site branch.
 # Needs Settings > Pages > Build and deployment > Source set to "GitHub Actions".
@@ -25,7 +26,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    uses: ./.github/workflows/website-tests.yml
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: github-pages

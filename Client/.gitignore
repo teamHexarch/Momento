@@ -19,3 +19,5 @@ qa/out/
 .DS_Store
 Thumbs.db
 *.log
+# The smoke test's run files (seed, results, report)
+e2e/.run/

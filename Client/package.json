@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build && node scripts/finish-export.mjs",
-    "preview": "node scripts/serve-out.mjs"
+    "preview": "node scripts/serve-out.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.4.6",
@@ -13,6 +14,7 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
