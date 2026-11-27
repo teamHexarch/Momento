@@ -56,7 +56,7 @@ const hash = await bcrypt.hash(password, 4);
 const person = (name, email) => User.create({ name, email, passwordHash: hash, emailVerified: true });
 const host = await person('Hana Host', 'host@example.invalid');
 // One guest per test and browser (desktop, phone), each with photos of their own
-const GUESTS = ['desktop', 'phone', 'desktop-retry', 'phone-retry', 'desktop-offline', 'phone-offline', 'desktop-csp', 'phone-csp', 'desktop-join', 'phone-join'];
+const GUESTS = ['desktop', 'phone', 'desktop-retry', 'phone-retry', 'desktop-offline', 'phone-offline', 'desktop-csp', 'phone-csp', 'desktop-join', 'phone-join', 'desktop-i18n', 'phone-i18n'];
 for (const g of GUESTS) await person(`Gus ${g}`, `guest-${g}@example.invalid`);
 const now = Date.now();
 const album = await Album.create({

@@ -26,8 +26,11 @@
     camera: svgIcon('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/>', 22),
   };
   const pad = (n) => String(n).padStart(2, '0');
-  const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const fmtWhen = (d) => d.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  // In the site's language (Western digits, so the translation table's number patterns still match); English keeps
+  // the browser's own 12- or 24-hour choice
+  const timeLocale = () => { const l = document.documentElement.lang; return l && !/^en\b/.test(l) ? l + '-u-nu-latn' : []; };
+  const fmtTime = (d) => d.toLocaleTimeString(timeLocale(), { hour: 'numeric', minute: '2-digit' });
+  const fmtWhen = (d) => d.toLocaleString(timeLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   const km = (m) => `${+(m / 1000).toFixed(1)} km`;
   function distanceM(a, b) {
     const R = 6371000, rad = Math.PI / 180;
@@ -1651,7 +1654,8 @@
     if (a?.anytimeUploads) return '';
     if (!a?.startsAt || !a?.endsAt) return '';
     const s = new Date(a.startsAt), e = new Date(a.endsAt), opens = new Date(a.opensAt || s);
-    const when = `${fmtWhen(s)} to ${fmtTime(e)}`;
+    // (a dash between the times in other languages, which reads the same in all of them)
+    const when = `${fmtWhen(s)}${Array.isArray(timeLocale()) ? ' to ' : ' – '}${fmtTime(e)}`;
     if (a.status === 'upcoming') return `Event ${when}. Photos can be added from ${fmtWhen(opens)}.`;
     if (a.status === 'live') return `Event ${when}. Photos can be added until ${fmtTime(e)}.`;
     return `Event ${when}. This album has closed to new photos.`;

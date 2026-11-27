@@ -47,6 +47,10 @@ export default function start() {
     const coverPic = (a) => { if (a.cover?.thumbUrl) return a.cover.thumbUrl; const i = (a.photoItems || []).findIndex((p) => p._o === 0); return a.pics?.[i >= 0 ? i : 0] || null; };
     const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
     const num = (n) => n.toLocaleString('en-GB');
+    // Clock times in the site's language (7:33 PM in English is 19:33 or 下午7:33 elsewhere), with Western digits so
+    // the translation table's number patterns still match; English keeps the browser's own choice of 12 or 24 hours
+    const timeLocale = () => { const l = document.documentElement.lang; return l && !/^en\b/.test(l) ? l + '-u-nu-latn' : []; };
+    const tr = (s) => (window.Momento?.i18n?.t ? window.Momento.i18n.t(s) : s);
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const byId = (id) => ALBUMS.find((a) => a.id === id);
     const ARCHIVE = ALBUMS;
@@ -719,7 +723,7 @@ export default function start() {
     function openLabel(a) {
       if (a.anytimeUploads) return '';
       if (!a.startsAt || !a.endsAt) return '';
-      const t = (d) => new Date(d).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const t = (d) => new Date(d).toLocaleTimeString(timeLocale(), { hour: 'numeric', minute: '2-digit' });
       const dd = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
       const zone = a.zone?.radiusM ? ` · ${a.zone.radiusM >= 1000 ? +(a.zone.radiusM / 1000).toFixed(1) + ' km' : a.zone.radiusM + ' m'}` : '';
       if (a.status === 'live') return `Open until ${t(a.endsAt)}${zone}`;
@@ -741,7 +745,7 @@ export default function start() {
       document.getElementById('abSettings').hidden = a.role !== 'host';
       document.getElementById('albumLink').hidden = !isHost;
       document.getElementById('albumQr').hidden = !isHost;
-      document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : '', a.group ? `Shared with ${a.group.name}` : ''].filter(Boolean).join(' · ');
+      document.getElementById('albumSub').textContent = [`${fmtDate(a.date)} ${a.date.slice(0, 4)}`, a.place, a.role === 'host' ? 'Hosted by you' : a.hostName ? `Hosted by ${a.hostName}` : '', a.group ? `Shared with ${a.group.name}` : ''].filter(Boolean).map(tr).join(' · ');
       // A speech-bubble badge with the number of comments, on photos that have any
       const talk = (p) => (+p.commentCount > 0 ? `<span class="ab-talk" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z"/></svg>${+p.commentCount}</span>` : '');
       thumbsEl.innerHTML = (a.photoItems || []).map((p, n) => `<button class="ab-tile" type="button" data-n="${n}" data-id="${esc(p.id)}" aria-label="Photo ${n + 1}${p.by ? ', added by ' + esc(p.by) : ''}${+p.commentCount > 0 ? ', ' + plural(+p.commentCount, 'comment', 'comments') : ''}"><img ${smallImg(p, pic(p.url, 400, 400))} alt="" loading="lazy" decoding="async">${talk(p)}<span class="ab-check" aria-hidden="true"></span></button>`).join('');
@@ -964,7 +968,8 @@ export default function start() {
           clearTimeout(watch);
           const data = xhr.response || {};
           if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
-          const err = new Error(data.error || 'The upload failed. Please try again.');
+          const said = data.error || 'The upload failed. Please try again.';
+          const err = new Error(Momento.i18n?.t ? Momento.i18n.t(said) : said);   // (in the page's language, like momentoApi's)
           err.status = xhr.status; err.code = data.code; err.data = data;
           reject(err);
         });
@@ -1206,7 +1211,8 @@ export default function start() {
         photosChanged(a, 0);
         await gpsCheck;
         if (hadGps && r.added) lines.push(r.added === 1 ? 'Location data was removed from this photo.' : 'Location data was removed from these photos.');
-        note.textContent = lines.join(' ');
+        // Each sentence in the page's language (joined into one line they'd never match a phrase)
+        note.textContent = lines.map((l) => (Momento.i18n?.t ? Momento.i18n.t(l) : l)).join(' ');
         if (lastFailed) addRetry(note);
         else if (r.added || r.queued || r.unsure) fadeUploadSoon(note);
       } catch (err) {

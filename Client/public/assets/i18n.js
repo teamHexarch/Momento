@@ -282,6 +282,9 @@
       if (/\$\d/.test(k)) PAT.push([new RegExp('^' + esc(k).replace(/\\?\$(\d)/g, '(?<v$1>.+?)') + '$'), v]);
       else X[k] = v;
     }
+    // Most specific first: "Open photo $1 from $2 in $3" before "Open $1", whatever order the files load in
+    const fixed = (re) => re.source.replace(/\(\?<v\d>\.\+\?\)/g, '').length;
+    PAT.sort((a, b) => fixed(b[0]) - fixed(a[0]));
   };
   const base = (document.currentScript?.src || 'assets/i18n.js').replace(/i18n\.js(\?.*)?$/, '');
   document.write(`<script src="${base}i18n/${lang}.js"><\/script>`);
@@ -380,7 +383,8 @@
     if (v !== node.nodeValue) node.nodeValue = v;
   }
   function doAttrs(el) {
-    if (SKIP.has(el.nodeName) || el.closest('[data-no-i18n]')) return;
+    // A text box's typed contents are left alone (SKIP), but its placeholder and label are interface text
+    if ((SKIP.has(el.nodeName) && el.nodeName !== 'TEXTAREA') || el.closest('[data-no-i18n]')) return;
     for (const a of ATTRS) {
       const v = el.getAttribute(a);
       if (!v) continue;

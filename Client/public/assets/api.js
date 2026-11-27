@@ -56,7 +56,11 @@ for (const type of ['pageswap', 'pagereveal']) {
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = new Error(data.error || 'The request failed. Please try again.');
+      // The server writes its messages in English: shown in the page's language (assets/i18n.js; the English stays
+      // in error.serverMessage, with error.code for code that needs to tell errors apart)
+      const said = data.error || 'The request failed. Please try again.';
+      const error = new Error(window.Momento?.i18n?.t ? window.Momento.i18n.t(said) : said);
+      error.serverMessage = said;
       error.status = response.status;
       error.code = data.code;
       if (data.code === 'session_limit' || data.code === 'SESSION_LIMIT_REACHED') { error.challenge = data.challenge; error.devices = data.devices; error.pendingLoginToken = data.pendingLoginToken; }
