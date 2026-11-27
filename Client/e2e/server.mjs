@@ -49,8 +49,8 @@ const password = 'E2e-correct-horse-9';
 const hash = await bcrypt.hash(password, 4);
 const person = (name, email) => User.create({ name, email, passwordHash: hash, emailVerified: true });
 const host = await person('Hana Host', 'host@example.invalid');
-// One guest per browser the test runs in (desktop, phone), each with a photo of their own
-const GUESTS = ['desktop', 'phone'];
+// One guest per test and browser (desktop, phone), each with photos of their own
+const GUESTS = ['desktop', 'phone', 'desktop-retry', 'phone-retry', 'desktop-offline', 'phone-offline'];
 for (const g of GUESTS) await person(`Gus ${g}`, `guest-${g}@example.invalid`);
 const now = Date.now();
 const album = await Album.create({
@@ -64,8 +64,12 @@ await Membership.create({ album: album._id, user: host._id, role: 'host' });
 // taken for a copy of the other
 const photos = {};
 for (const [i, g] of GUESTS.entries()) {
-  photos[g] = path.join(uploads, `smoke-${g}.jpg`);
-  await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 120 + i * 60, g: 160, b: 210 - i * 60 } } }).jpeg().toFile(photos[g]);
+  photos[g] = [];
+  for (let n = 0; n < 4; n++) {
+    const file = path.join(uploads, `smoke-${g}-${n + 1}.jpg`);
+    await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: (40 * i + 13 * n) % 256, g: (90 + 50 * n) % 256, b: (200 - 30 * i) % 256 } } }).jpeg().toFile(file);
+    photos[g].push(file);
+  }
 }
 
 fs.mkdirSync(path.join(here, '.run'), { recursive: true });

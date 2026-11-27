@@ -517,6 +517,13 @@
 
 
     .note { min-height: 1.2rem; margin: .9rem 0 0; color: var(--slate); font-size: .85rem; }
+    /* "Retry the rest" after an upload where some photos didn't go up (albums.js addRetry) */
+    .note-retry { display: inline-flex; align-items: center; min-height: 2rem; margin: .35rem 0 0 .2rem; padding: 0 .9rem; border: 0; border-radius: 100px;
+      background: var(--dusk); color: var(--paper, #fff); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; transition: transform .2s var(--spring, ease), opacity .2s ease; }
+    .note-retry:hover { opacity: .88; }
+    .note-retry:active { transform: scale(.96); }
+    .note-retry:focus-visible { outline: 2px solid var(--focus-ring, var(--dusk)); outline-offset: 3px; }
+    @media (prefers-reduced-motion: reduce) { .note-retry { transition: none; } }
     .error { color: #9A3D3D; }
 
     /* Join code: one box per character, like a verification code (K7Q-48DM) */

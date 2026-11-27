@@ -945,24 +945,35 @@ export default function start() {
       }
     });
     // fetch can't report upload progress, so photos go up with XMLHttpRequest (same cookie, same errors)
+    // A stalled connection (venue Wi-Fi that stops answering) never errors by itself: when nothing has moved for
+    // STALL_MS while sending, or the server hasn't answered UPLOAD_ANSWER_MS after the last byte, the upload is
+    // dropped and counts as a connection problem (so it's tried again)
+    const STALL_MS = 60000, UPLOAD_ANSWER_MS = 180000;
     function sendWithProgress(path, body, onProgress, headers = {}) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        let watch = 0, stalled = false;
+        const arm = (ms) => { clearTimeout(watch); watch = setTimeout(() => { stalled = true; xhr.abort(); }, ms); };
         xhr.open('POST', window.MOMENTO_API + path);
         for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
         xhr.withCredentials = true;
         xhr.responseType = 'json';
-        xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); });
-        xhr.upload.addEventListener('load', () => onProgress(1));
+        xhr.upload.addEventListener('progress', (e) => { arm(STALL_MS); if (e.lengthComputable) onProgress(e.loaded / e.total); });
+        xhr.upload.addEventListener('load', () => { arm(UPLOAD_ANSWER_MS); onProgress(1); });
         xhr.addEventListener('load', () => {
+          clearTimeout(watch);
           const data = xhr.response || {};
           if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
           const err = new Error(data.error || 'The upload failed. Please try again.');
           err.status = xhr.status; err.code = data.code; err.data = data;
           reject(err);
         });
-        xhr.addEventListener('error', () => reject(new Error('The connection dropped during the upload.')));
-        xhr.addEventListener('abort', () => reject(new Error('The upload was cancelled.')));
+        xhr.addEventListener('error', () => { clearTimeout(watch); reject(new Error('The connection dropped during the upload.')); });
+        xhr.addEventListener('abort', () => {
+          clearTimeout(watch);
+          reject(stalled ? new Error('The connection stopped responding during the upload.') : Object.assign(new Error('The upload was cancelled.'), { cancelled: true }));
+        });
+        arm(STALL_MS);
         xhr.send(body);
       });
     }
@@ -1039,10 +1050,16 @@ export default function start() {
 
     let uploading = false;
     albumFiles.addEventListener('change', () => { const files = [...albumFiles.files]; albumFiles.value = ''; uploadFiles(files); });
-    // Any number of photos: sent as small uploads (up to 6 photos or ~48 MB each), three at a time side by
-    // side, so a big selection goes up quickly and one problem photo (too big, unreadable) never stops the rest
+    // Any number of photos: sent as small uploads (up to 3 photos or ~24 MB each), three at a time side by side, so a
+    // big selection goes up quickly and stays inside the server's 600 uploads an hour (1,000 photos is about 340).
+    // Nothing is lost to one bad moment: an upload that keeps failing is split and each photo tried on its own; with
+    // no connection it waits for one (and that waiting doesn't use up its tries); and whatever still couldn't be sent
+    // is kept here, listed, with "Retry the rest" (no need to choose the photos again or refresh anything).
     // Resolves to { back: true, files } when "Back to camera" was pressed in the confirmation ({ fromCamera })
-    async function uploadFiles(files, { fromCamera = false } = {}) {
+    // ({ again } is "Retry the rest": the same album, already confirmed, so it goes straight to sending)
+    const BATCH_PHOTOS = 3, BATCH_MB = 24, SIDE_BY_SIDE = 3, TRIES = 4;
+    let lastFailed = null;   // { album, files, asked: { location } }: what "Retry the rest" sends, and the answer already given
+    async function uploadFiles(files, { fromCamera = false, again = null } = {}) {
       const a = M.a;
       if (!a || !files.length || uploading) return;
       const note = document.getElementById('albumNote');
@@ -1054,13 +1071,14 @@ export default function start() {
       const listNames = (names) => names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
       const bigLine = (names) => `${listNames(names)} ${names.length === 1 ? 'is' : 'are'} over ${LIMITS.maxPhotoMB} MB, so ${names.length === 1 ? 'it was' : 'they were'} left out (the limit is ${LIMITS.maxPhotoMB} MB a photo; camera RAW files can be bigger).`;
       if (!files.length) { note.textContent = bigLine(left.map((f) => f.name)); return; }
-      // Ask first (and get the guest's location when the album has a zone): assets/event.js
-      const ok = Momento.event ? await Momento.event.confirmUpload(a, files, { fromCamera }) : { location: '' };
+      // Ask first (and get the guest's location when the album has a zone): assets/event.js. "Retry the rest" was
+      // asked already.
+      const ok = again || (Momento.event ? await Momento.event.confirmUpload(a, files, { fromCamera }) : { location: '' });
       if (ok?.cancelled) return M.a === a && !uploading ? { back: true, files: [...ok.files, ...left] } : undefined;
       if (!ok || M.a !== a || uploading) return;
       if (ok.files) files = ok.files;   // (any left out in the confirmation stay out)
       if (!files.length) return;
-      uploading = true;
+      uploading = true; lastFailed = null;
       const add = document.getElementById('albumAdd'); add.disabled = true; document.getElementById('albumCamera').disabled = true;
       note.textContent = left.length ? bigLine(left.map((f) => f.name)) : '';
       const count = plural(files.length, 'photo', 'photos');
@@ -1075,57 +1093,86 @@ export default function start() {
       const batches = [];
       for (let cur = [], bytes = 0, i = 0; i < files.length; i++) {
         const f = files[i];
-        if (cur.length && (cur.length >= 6 || bytes + f.size > 48 * MB)) { batches.push(cur); cur = []; bytes = 0; }
+        if (cur.length && (cur.length >= BATCH_PHOTOS || bytes + f.size > BATCH_MB * MB)) { batches.push(cur); cur = []; bytes = 0; }
         cur.push(f); bytes += f.size;
         if (i === files.length - 1) batches.push(cur);
       }
-      const sizeOf = (b) => b.reduce((t, f) => t + f.size, 0);
-      const sent = batches.map(() => 0);
-      const r = { added: 0, queued: 0, dupes: 0, blocked: 0, unsure: 0, explicit: 0, removed: 0, tooBig: [], failed: [], errors: [] };
-      let stop = false, lastRefresh = 0;
+      const sent = new Map(files.map((f) => [f, 0]));   // bytes of each photo sent so far
+      const r = { added: 0, queued: 0, dupes: 0, blocked: 0, unsure: 0, explicit: 0, removed: 0, tooBig: [], failed: [], errors: [], notSent: [], stopped: '' };
+      let stop = false, lastRefresh = 0, offline = false;
       const paint = () => {
-        const done = sent.reduce((t, n) => t + n, 0), p = Math.min(1, done / total);
-        if (p >= 1) setUpload('processing', 1, hadGps ? `Finishing ${count}, removing location data…` : `Finishing ${count}…`);
+        const done = [...sent.values()].reduce((t, n) => t + n, 0), p = Math.min(1, done / total);
+        if (offline) setUpload('sending', p, `Waiting for a connection… ${mb(total * p)} of ${mb(total)} sent`);
+        else if (p >= 1) setUpload('processing', 1, hadGps ? `Finishing ${count}, removing location data…` : `Finishing ${count}…`);
         else setUpload('sending', p, `Uploading ${count}, ${mb(total * p)} of ${mb(total)}`);
       };
       const headers = ok.location ? { 'X-Momento-Location': ok.location } : {};
       const wait = (ms) => new Promise((res) => setTimeout(res, ms));
-      async function sendBatch(b, k) {
+      // No connection: wait for one (the browser says when it's back; checked again every 15 s in case it doesn't)
+      const online = async () => {
+        while (!stop && navigator.onLine === false) {
+          offline = true; paint();
+          await Promise.race([new Promise((res) => addEventListener('online', res, { once: true })), wait(15000)]);
+        }
+        if (offline) { offline = false; paint(); }
+      };
+      const setSent = (b, n) => { for (const f of b) sent.set(f, n === 'all' ? f.size : f.size * n); paint(); };
+      // Worth trying again: the connection dropped or stalled, the server was briefly busy or erred
+      const passing = (err) => !err.status || err.status >= 500 || (err.status === 429 && (err.code === 'upload-busy' || err.code === 'busy'));
+      async function sendBatch(b) {
+        let retried = false;
         for (let attempt = 0; !stop; attempt++) {
+          await online();
+          if (stop) break;
           const form = new FormData();
           b.forEach((file) => form.append('photos', file));
           try {
-            const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => { sent[k] = sizeOf(b) * Math.min(1, p); paint(); }, headers);
-            r.added += d.photos?.length || 0; r.dupes += d.skipped || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
+            const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => setSent(b, Math.min(1, p)), headers);
+            r.added += d.photos?.length || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
+            // A photo sent again after a dropped connection may have arrived the first time: the server then skips it
+            // as a copy, but for this guest it simply went up
+            if (retried) r.added += d.skipped || 0; else r.dupes += d.skipped || 0;
             r.queued += (d.checks || []).filter((c) => ['checking', 'publish'].includes(c.state)).length;
             for (const c of d.checks || []) if (c.state === 'rejected') { if (c.explicit) r.explicit++; else r.unsure++; }
             r.tooBig.push(...(d.tooBig || [])); r.failed.push(...(d.failed || []));
-            sent[k] = sizeOf(b); paint();
+            setSent(b, 'all');
             // The photos show up in the album while the rest are still going (not while one is open full size)
             if (!viewer.open && Date.now() - lastRefresh > 2000) { lastRefresh = Date.now(); fetchAlbum(a).then(() => { if (!viewer.open) photosChanged(a, 0); }, () => {}); }
             return;
           } catch (err) {
-            sent[k] = 0; paint();
-            // Busy for a moment, or the connection dropped: tried again, a little later each time
-            const again = attempt < 3 && (!err.status || err.status >= 500 || (err.status === 429 && err.code === 'upload-busy'));
-            if (again) { await wait(700 * 2 ** attempt); continue; }
-            sent[k] = sizeOf(b); paint();
+            setSent(b, 0);
+            if (err.cancelled || stop) break;
+            if (passing(err)) {
+              retried = retried || !err.status;
+              // Offline: not a real try, just wait for the connection
+              if (navigator.onLine === false) { attempt--; continue; }
+              if (attempt + 1 < TRIES) { await wait(800 * 2 ** attempt + Math.random() * 400); continue; }
+              // Still failing: each photo on its own, so one stubborn photo or a flaky connection can't sink the rest
+              if (b.length > 1) { for (const f of b) await sendBatch([f]); return; }
+              r.notSent.push(...b);
+              r.reason ||= err.message;
+              return;
+            }
+            setSent(b, 'all');
             if (err.code === 'too-big') r.tooBig.push(...(err.data?.tooBig || b.map((f) => f.name)));
             else if (err.code === 'unreadable') { r.failed.push(...(err.data?.failed || b.map((f) => f.name))); r.tooBig.push(...(err.data?.tooBig || [])); }
             else if (err.code === 'nsfw') r.blocked += err.data?.decisionIds?.length || b.length;
             else if (err.code === 'removed-content') r.removed += b.length;
             else {
+              // The album closed, this account may not add photos, or it's sent a lot this hour: the rest stay here
+              // unsent (tried again later with "Retry the rest", when that can help)
+              r.notSent.push(...b);
               r.errors.push(err.message);
-              // The album closed, or this account may not add photos: no point sending the rest
-              if (err.status === 403 || err.status === 401 || err.status === 404 || err.status === 429) stop = true;
+              if ([401, 403, 404, 429].includes(err.status)) { stop = true; r.stopped = err.status === 429 ? 'later' : 'never'; }
             }
             return;
           }
         }
+        if (stop) r.notSent.push(...b.filter((f) => !r.notSent.includes(f)));
       }
       try {
         let next = 0;
-        await Promise.all([0, 1, 2].map(async () => { while (!stop && next < batches.length) { const k = next++; await sendBatch(batches[k], k); } }));
+        await Promise.all(Array.from({ length: SIDE_BY_SIDE }, async () => { while (next < batches.length) { const b = batches[next++]; if (stop) r.notSent.push(...b); else await sendBatch(b); } }));
         const lines = [];
         if (left.length || r.tooBig.length) lines.push(bigLine([...left.map((f) => f.name), ...r.tooBig]));
         if (r.failed.length) lines.push(`${listNames(r.failed)} couldn’t be read. Try exporting ${r.failed.length === 1 ? 'it' : 'them'} as JPEG.`);
@@ -1134,25 +1181,52 @@ export default function start() {
         if (r.explicit) lines.push(`${plural(r.explicit, 'photo was', 'photos were')} declined: ${r.explicit === 1 ? 'it looks' : 'they look'} like ${r.explicit === 1 ? 'it contains' : 'they contain'} nudity, which isn’t allowed on Momento.`);
         if (r.blocked && !r.unsure && !r.explicit) lines.push(`${plural(r.blocked, 'photo was', 'photos were')} declined by the automatic check.`);
         if (r.removed) lines.push(`${plural(r.removed, 'photo was', 'photos were')} removed from Momento before and can’t be added again.`);
-        if (r.errors.length) lines.push(r.errors[0]);
-        if (r.queued) setUpload('done', 1, r.added ? `${plural(r.added, 'photo', 'photos')} uploaded; the rest appear in a moment` : 'Uploaded: your photos appear in a moment');
+        // What didn't go up, by name, and why; kept so it can be sent again with one tap
+        const unsent = [...new Set(r.notSent)];
+        if (unsent.length) {
+          const why = r.errors[0] || r.reason || 'The connection kept dropping.';
+          lines.push(`${listNames(unsent.map((f) => f.name))} didn’t upload. ${why}`);
+          if (r.stopped !== 'never') lastFailed = { album: a, files: unsent, asked: { location: ok.location || '' } };
+        } else if (r.errors.length) lines.push(r.errors[0]);
+        const sentOk = r.added || r.queued;
+        if (unsent.length) setUpload('failed', 1, sentOk ? `${plural(r.added + r.queued, 'photo', 'photos')} uploaded, ${unsent.length} didn’t` : 'Nothing was uploaded');
+        else if (r.queued) setUpload('done', 1, r.added ? `${plural(r.added, 'photo', 'photos')} uploaded; the rest appear in a moment` : 'Uploaded: your photos appear in a moment');
         else if (r.added) setUpload('done', 1, `${plural(r.added, 'photo', 'photos')} uploaded`);
         else if (r.unsure) { setUpload('done', 1, 'Uploaded: kept private'); uploadPct.textContent = ''; }
         else { setUpload('failed', 1, r.explicit ? 'Not added' : 'Nothing was uploaded'); uploadPct.textContent = ''; }
-        await loadAlbums();
-        await fetchAlbum(a);
+        if (unsent.length) uploadPct.textContent = '';
+        await loadAlbums().catch(() => {});
+        await fetchAlbum(a).catch(() => {});
         photosChanged(a, 0);
         await gpsCheck;
         if (hadGps && r.added) lines.push(r.added === 1 ? 'Location data was removed from this photo.' : 'Location data was removed from these photos.');
         note.textContent = lines.join(' ');
-        if (r.added || r.queued || r.unsure) fadeUploadSoon(note);
+        if (lastFailed) addRetry(note);
+        else if (r.added || r.queued || r.unsure) fadeUploadSoon(note);
       } catch (err) {
+        // Something unexpected on this page: nothing that wasn't confirmed as sent is forgotten
         setUpload('failed', 1, 'Upload didn’t finish');
         uploadPct.textContent = '';
-        note.textContent = err.message + ' Refresh the album before retrying; some photos may have uploaded.';
+        const unsent = files.filter((f) => sent.get(f) < f.size || r.notSent.includes(f));
+        note.textContent = unsent.length ? `${listNames(unsent.map((f) => f.name))} didn’t upload. ${err.message}` : err.message;
+        if (unsent.length) { lastFailed = { album: a, files: unsent, asked: { location: ok.location || '' } }; addRetry(note); }
         try { await fetchAlbum(a); photosChanged(a, 0); } catch {}
       } finally { uploading = false; add.disabled = false; document.getElementById("albumCamera").disabled = false; }
     }
+    // "Retry the rest": sends only the photos that didn't go up, to the same album, without asking again
+    function addRetry(note) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'note-retry';
+      b.textContent = lastFailed.files.length === 1 ? 'Retry this photo' : `Retry the rest (${lastFailed.files.length})`;
+      b.addEventListener('click', () => {
+        const f = lastFailed;
+        if (!f || M.a !== f.album || uploading) return;
+        uploadFiles(f.files, { again: f.asked });
+      });
+      note.append(' ', b);
+    }
+    // Leaving the album (or opening another) forgets what wasn't sent; the files only live in this page
+    document.addEventListener('momento:album', () => { if (lastFailed && M.a !== lastFailed.album) lastFailed = null; });
     // A link to share: hosts get a join link (it carries the album code); guests get a link back to the album
     const albumLinkFor = (a) => {
       const url = new URL('albums', location.href);
