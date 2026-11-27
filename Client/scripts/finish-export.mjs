@@ -8,6 +8,7 @@
 // GitHub Pages finds /albums/index.html (the old /albums.html addresses would then need redirect pages).
 import fs from 'node:fs';
 import path from 'node:path';
+import { withPolicy } from './csp.mjs';
 
 const out = path.resolve(import.meta.dirname, '..', 'out');
 const fail = (msg) => { console.error('finish-export: ' + msg); process.exit(1); };
@@ -36,4 +37,12 @@ for (const name of fs.readdirSync(out)) {
 for (const f of ['.nojekyll', 'CNAME', '404.html', 'index.html', 'groups.html']) {
   if (!fs.existsSync(path.join(out, f))) fail(`out/${f} is missing`);
 }
-console.log(`finish-export: ${pages} pages tidied; out/ is ready for GitHub Pages`);
+// Every page gets its Content-Security-Policy, with the hashes of its own inline scripts (scripts/csp.mjs). Done last,
+// so the hashes match the files exactly as they're published.
+let secured = 0;
+for (const name of fs.readdirSync(out)) {
+  if (!name.endsWith('.html')) continue;
+  const file = path.join(out, name);
+  try { fs.writeFileSync(file, withPolicy(fs.readFileSync(file, 'utf8'))); secured++; } catch (err) { fail(`${name}: ${err.message}`); }
+}
+console.log(`finish-export: ${pages} pages tidied, ${secured} with a Content-Security-Policy; out/ is ready for GitHub Pages`);
