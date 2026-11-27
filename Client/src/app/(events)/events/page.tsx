@@ -32,12 +32,8 @@ const SCRIPTS: LegacyScript[] = [
   '/assets/qr.js',
   '/assets/album-settings.js',
   '/assets/event.js',
-  // The globe: MapLibre GL, pinned and checked against its published hash (its stylesheet is bundled in the layout)
-  {
-    src: 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js',
-    integrity: 'sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp',
-    crossOrigin: 'anonymous',
-  },
+  // (The globe's library, MapLibre GL, loads when the globe is nearly on screen: mapLib() in page-scripts/events.js.
+  // Its stylesheet is bundled in the layout.)
   '/assets/event-albums.js',
 ];
 

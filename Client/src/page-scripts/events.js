@@ -309,10 +309,36 @@ export default function start() {
         box.append(zoom, credit);
       }
 
+      // The globe's library (MapLibre GL, about 800 KB, pinned and checked against its published hash) loads when the
+      // globe is nearly on screen or a scan starts, not with the page: on a phone it was over a second of script
+      // start-up before anything could be tapped. mapLib() resolves true once it's there, false if it can't load.
+      let libState = window.maplibregl ? 'ready' : 'idle';
+      const libWaiters = [];
+      function mapLib() {
+        if (window.maplibregl) libState = 'ready';
+        if (libState === 'ready' || libState === 'failed') return Promise.resolve(libState === 'ready');
+        const p = new Promise((res) => libWaiters.push(res));
+        if (libState === 'idle') {
+          libState = 'loading';
+          const s = document.createElement('script');
+          s.src = 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js';
+          s.integrity = 'sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp';
+          s.crossOrigin = 'anonymous';
+          const settle = (ok) => { libState = ok ? 'ready' : 'failed'; libWaiters.splice(0).forEach((r) => r(ok)); };
+          s.onload = () => settle(!!window.maplibregl);
+          s.onerror = () => settle(false);
+          document.head.append(s);
+        }
+        return p;
+      }
       function ensureMap() {
         if (map) return mapOk ? map : null;
         const fail = () => { mapOk = false; note.textContent = 'The globe couldn’t load. The list still works.'; note.hidden = false; mapScan.hidden = true; return null; };
-        if (!window.maplibregl) return fail();
+        if (!window.maplibregl) {
+          // Still on its way: not a failure. It's asked for now, and the globe appears when it arrives
+          if (libState !== 'failed') { mapLib().then((ok) => (ok ? ensureMap() : fail())); return null; }
+          return fail();
+        }
         nightTiles();
         loadNight().catch(() => {});
         const roomy = Math.min(box.clientWidth || 600, box.clientHeight || 560);
@@ -641,6 +667,9 @@ export default function start() {
           say(`Scanning ${scanLabel()} around ${label}…`);
           listMsg(`Scanning ${scanLabel()} around ${label}…`, 'Looking for public events happening nearby.', { scanning: true });
         }
+        // The scan plays on the globe: wait for its library if it's still on its way (at most 5 s; after that the
+        // results show in the list, and on the globe once it arrives)
+        if (!window.maplibregl && libState !== 'failed') { await Promise.race([mapLib(), new Promise((ok) => setTimeout(ok, 5000))]); if (req !== lookReq) return; }
         const fx = quiet ? null : scanFx(at, radius);
         if (!quiet) scanBusy(true);
         let unbusy = !quiet;
@@ -1127,7 +1156,9 @@ export default function start() {
         // Visitors (not logged in) can scan and look at events too; joining one asks them to log in
         // Events is one part of a longer page, so it never asks for your location unprompted: if you've
         // already allowed it, it scans when you reach the Events section; otherwise it waits for a tap on "Scan nearby"
-        ensureMap();
+        // The globe is made once it's nearly on screen (its library loads then: see mapLib)
+        const nearGlobe = new IntersectionObserver(([en]) => { if (en.isIntersecting) { nearGlobe.disconnect(); ensureMap(); } }, { rootMargin: '600px 0px' });
+        nearGlobe.observe(box);
         let allowed = false;
         try { allowed = (await navigator.permissions?.query({ name: 'geolocation' }))?.state === 'granted'; } catch (err) {}
         // Already allowed: it scans once the Events section is on screen (straight away if it already is)

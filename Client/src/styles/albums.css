@@ -252,6 +252,9 @@
     .years-ghost { display: none; }
     #years.is-loading:empty { min-height: 0; }
     #years.is-loading:empty + .years-ghost { display: block; min-height: 100svh; margin-bottom: var(--s5); }
+    /* The footer waits out of sight while the stand-ins hold the room: a visitor who turns out to be signed out
+       loses them at once, and the footer would jump a screen up into view (a layout shift); now it simply appears */
+    :root:not(.is-guest) body:has(#years.is-loading:empty) .site-foot { visibility: hidden; }
     .ghost-head { display: block; width: 6.5rem; height: 2.3rem; margin-bottom: var(--s2); border-radius: 12px; background: rgba(127, 120, 150, .12); }
     .ghost-card { display: block; padding: 8px 8px 1rem; }
     .ghost-card i { display: block; aspect-ratio: 4 / 3; border-radius: 21px; background: rgba(127, 120, 150, .12); }
