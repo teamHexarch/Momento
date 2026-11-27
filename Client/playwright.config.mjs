@@ -2,7 +2,10 @@
 // Runs the built site (npm run build first) against the real API on a throwaway database (e2e/server.mjs).
 //   npm run build && npm run test:e2e        (needs `npm ci` in ../Server and `npx playwright install chromium`)
 // PW_CHANNEL=chrome uses the Chrome already on this computer instead of Playwright's own browser.
+// PW_DEV=1 runs against `next dev` instead (React's strict mode on; no Content-Security-Policy, so skip csp.spec):
+//   PW_DEV=1 npx playwright test smoke paging i18n guest-join
 import { defineConfig, devices } from '@playwright/test';
+const dev = !!process.env.PW_DEV;
 
 export default defineConfig({
   testDir: './e2e',
@@ -25,6 +28,8 @@ export default defineConfig({
   ],
   webServer: [
     { command: 'node e2e/server.mjs', url: 'http://localhost:4000/api/health', timeout: 180000, reuseExistingServer: false, stdout: 'pipe' },
-    { command: 'node scripts/serve-out.mjs', url: 'http://localhost:3000/', env: { PORT: '3000' }, timeout: 30000, reuseExistingServer: false },
+    dev
+      ? { command: 'npx next dev -p 3000', url: 'http://localhost:3000/', timeout: 180000, reuseExistingServer: false }
+      : { command: 'node scripts/serve-out.mjs', url: 'http://localhost:3000/', env: { PORT: '3000' }, timeout: 30000, reuseExistingServer: false },
   ],
 });

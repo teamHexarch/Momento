@@ -15,9 +15,9 @@ export default function nextConfig(phase) {
   /** @type {import('next').NextConfig} */
   const config = {
     devIndicators: false, // keeps the dev-mode badge off the page, so it can be compared with the original
-    // The page scripts (public/legacy, public/assets) must run exactly once per page load
-    // (see src/legacy/LegacyScripts.tsx), so React's development double-render is off.
-    reactStrictMode: false,
+    // React's strict mode (development only: it renders and runs effects twice to surface unsafe code). The page
+    // scripts still run exactly once per page load: src/legacy/LegacyScripts.tsx guards that itself.
+    reactStrictMode: true,
     // One 404 page for the whole app (src/app/global-not-found.tsx). Needed because every page has its own root layout.
     experimental: { globalNotFound: true },
   };
