@@ -107,6 +107,9 @@ export const config = {
     tos: env.TOS_VERSION || '2026-11-20',
     privacy: env.PRIVACY_VERSION || '2026-11-19',
     enforce: env.REQUIRE_CONSENT === 'on',
+    // UPLOAD_CONSENT=on: uploading to an album needs the upload agreement for the current Terms version
+    // (POST /api/albums/:id/consent). Off until the website sends it; the agreement is recorded either way.
+    uploadConsent: env.UPLOAD_CONSENT === 'on',
   },
   // The age check at sign-up: under 13s are refused. REQUIRE_AGE=on makes the birth date required
   // (otherwise it's checked when the sign-up form sends one).

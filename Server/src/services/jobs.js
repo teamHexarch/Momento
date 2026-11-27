@@ -173,8 +173,9 @@ async function claimDaily(id, now) {
 }
 export async function orphans(now = new Date(), { force = false } = {}) {
   if (!force && !await claimDaily('orphans', now)) return null;
-  const [{ PhotoComment }, { Report }, { Notification }] = await Promise.all([
-    import('../models/PhotoComment.js'), import('../models/Report.js'), import('../models/Notification.js')]);
+  const [{ PhotoComment }, { Report }, { Notification }, { UploadConsent }, { User }] = await Promise.all([
+    import('../models/PhotoComment.js'), import('../models/Report.js'), import('../models/Notification.js'),
+    import('../models/UploadConsent.js'), import('../models/User.js')]);
   const missing = async (model, field, target, extra = {}) => {
     const rows = await model.aggregate([
       { $match: { [field]: { $type: 'objectId' }, ...extra } },
@@ -188,6 +189,7 @@ export async function orphans(now = new Date(), { force = false } = {}) {
     reports: await missing(Report, 'photo', Photo),
     albumReports: await missing(Report, 'album', Album),
     notifications: await missing(Notification, 'album', Album),
+    uploadConsents: await missing(UploadConsent, 'album', Album) + await missing(UploadConsent, 'user', User),
   };
 }
 

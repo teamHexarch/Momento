@@ -82,6 +82,8 @@ albumRoutes.delete('/:id/membership', albums.leave);
 
 // Which files the album already has (by SHA-256), so the page skips them before uploading
 albumRoutes.post('/:id/photos/known', albums.knownHashes);
+// The upload agreement ("I took these photos or have permission to share them..."), once per album and Terms version
+albumRoutes.post('/:id/consent', perAccount(60, 120, 'That’s a lot of agreeing. Wait a while, then try again.'), albums.giveUploadConsent);
 albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), dailyQuota, uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
 albumRoutes.get('/:id/download', downloadLimit, albums.download);
 // The emailed link to a big album's zip (made in the background)

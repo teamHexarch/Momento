@@ -23,6 +23,7 @@ import { saveCover, removeCover, removeCoverFiles, hostCover } from '../services
 import { isBig, requestZip, ZipFile } from '../services/zipService.js';
 import { discardChecks, queueUpload, checkNow } from '../services/uploadChecks.js';
 import { UploadCheck } from '../models/UploadCheck.js';
+import { UploadConsent } from '../models/UploadConsent.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { isBanned, BANNED_MESSAGE } from '../services/contentSafety.js';
 import { sendPhoto, removeFile } from '../services/storageService.js';
@@ -635,13 +636,16 @@ export async function show(req, res) {
     });
   }
 
-  const [stats, hiddenCount, trashCount] = await Promise.all([
+  const [stats, hiddenCount, trashCount, consent] = await Promise.all([
     statsFor([m.album._id], req.user._id, hidden),
     hidden.length ? Photo.countDocuments({ album: m.album._id, _id: { $in: hidden }, deletedAt: null }) : 0,
     // The bin's count: every deleted photo for the host; for anyone else, the ones they deleted themselves
     Photo.countDocuments({ album: m.album._id, deletedAt: { $ne: null }, ...(m.role !== 'host' && { deletedBy: req.user._id, uploader: req.user._id }) }),
+    uploadConsentOf(m.album._id, req.user._id),
   ]);
-  const albumJson = { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)) };
+  const albumJson = { ...summary(m.album, m.role, stats.get(String(m.album._id))), hiddenCount, trashCount, saved: (req.user.savedAlbums || []).some((id) => id.equals(m.album._id)),
+    // The upload agreement this person gave for this album under the current Terms (null: ask before uploading)
+    uploadConsent: consent, termsVersion: config.policies.tos };
 
   let photos, page = {};
   if (!limit) {
@@ -761,6 +765,7 @@ export async function remove(req, res) {
     PhotoComment.deleteMany({ album: m.album._id }),
     Report.deleteMany({ album: m.album._id }),
     Notification.deleteMany({ album: m.album._id }),
+    UploadConsent.deleteMany({ album: m.album._id }),
     m.album.deleteOne(),
   ]);
   // The photo files are deleted in the background, after this answer (audit B4)
@@ -791,7 +796,34 @@ export async function checkMember(req, res, next) {
     if (status === 'upcoming' && opensAt) throw new HttpError(403, `Photos can be added from ${new Date(opensAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })} UTC.`, 'not-open-yet');
     throw new HttpError(403, `This album closed to new photos on ${closesLabel(closes)}. You can still look at it and download everything.`, 'closed');
   }
+  // The upload agreement (UPLOAD_CONSENT=on), checked before any file is received
+  if (config.policies.uploadConsent && !await uploadConsentOf(album._id, req.user._id)) {
+    throw new HttpError(409, 'Tick the box to agree, then upload again.', 'consent-required', { termsVersion: config.policies.tos });
+  }
   next();
+}
+
+// ---- The upload agreement (per person, per album, per Terms version) ----
+// { termsVersion, at } when this person agreed to upload to this album under the current Terms, otherwise null
+async function uploadConsentOf(albumId, userId) {
+  const row = await UploadConsent.findOne({ album: albumId, user: userId, termsVersion: config.policies.tos }, 'termsVersion at').lean();
+  return row ? { termsVersion: row.termsVersion, at: row.at } : null;
+}
+// POST /api/albums/:id/consent { termsVersion } (members only) → { ok, termsVersion, at }
+// The version must be the current one (it's in /api/config and in the album's details): agreeing to older Terms is a
+// 409 terms-outdated with the current version, so the page can show the box again.
+export async function giveUploadConsent(req, res) {
+  const m = await membershipOf(req, req.params.id);
+  const termsVersion = req.body?.termsVersion;
+  if (typeof termsVersion !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(termsVersion)) {
+    throw new HttpError(400, 'Send the Terms version you agreed to, like 2026-11-20.', 'BAD_TERMS_VERSION');
+  }
+  if (termsVersion !== config.policies.tos) {
+    throw new HttpError(409, 'The Terms have been updated. Read them, then tick the box again.', 'terms-outdated', { termsVersion: config.policies.tos });
+  }
+  const at = new Date();
+  await UploadConsent.updateOne({ album: m.album._id, user: req.user._id }, { $set: { termsVersion, at } }, { upsert: true });
+  res.json({ ok: true, termsVersion, at });
 }
 
 export async function addPhotos(req, res) {

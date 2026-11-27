@@ -59,6 +59,8 @@ app.get('/api/config', (req, res) => {
     captcha: config.captcha.siteKey && config.captcha.secretKey ? { provider: 'recaptcha', siteKey: config.captcha.siteKey } : null,
     googleClientId: config.google.clientId && config.google.clientSecret ? config.google.clientId : null,
     mapsApiKey: config.mapsApiKey || null,
+    // The Terms version people agree to (sign-up, and the upload agreement: POST /api/albums/:id/consent)
+    termsVersion: config.policies.tos,
     // Upload limits, so the page can say them and skip a too-big file before sending it
     uploads: { maxPhotoMB: Math.round(config.maxUploadBytes / 1048576), maxRawMB: Math.round(config.maxRawUploadBytes / 1048576), rawTypes: Object.keys(RAW_TYPES) },
   });
