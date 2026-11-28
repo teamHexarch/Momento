@@ -1,128 +1,48 @@
-import sharp from 'sharp';
 import { HttpError } from '../utils/httpError.js';
 import { sha256 } from './contentSafety.js';
 import * as rekognition from './rekognitionService.js';
 
-// The nudity check, for everything people upload. NSFW_ENGINE picks it:
-//   rekognition (the default): AWS Rekognition on AWS's computers (services/rekognitionService.js, the 7 levels);
-//     nothing heavy runs here, and the server never freezes while a photo is checked
-//   nsfwjs: the older free model below, on this server's CPU (about 0.6-3 s per photo, blocking other requests)
-// Tests use nsfwjs unless they set NSFW_ENGINE, as their stand-in models answer with NSFW.js's classes.
-// With Rekognition, a cover or profile picture is refused at level 85 or more (near-nude, nude or explicit).
-//
-// The older model's notes: Album photos go through the private check queue
-// (services/uploadChecks.js, using scan); cover pictures and profile pictures are checked here (assertAllowed).
-// A free, open-source model (NSFW.js, MobileNetV2) runs right here on the server, in plain JavaScript:
-// about 120 MB of memory once it's loaded, and roughly half a second per photo. Photos are checked one
-// at a time, so a big upload can't use up the server's memory.
-//
-// A photo is refused when its "Porn" + "Hentai" scores reach NSFW_THRESHOLD (0.6 unless set). Swimwear
-// and other "Sexy" (suggestive, not explicit) photos are allowed: beach and pool events are normal.
-// NSFW_CHECK=off turns the check off. If the model ever fails to load, uploads still work (logged).
+// The nudity check, for everything people upload: AWS Rekognition on AWS's computers (services/rekognitionService.js,
+// the 7 levels). Nothing heavy runs on this server. Album photos go through the private check queue
+// (services/uploadChecks.js, using scan); cover pictures and profile pictures are checked here (assertAllowed) and
+// refused at level 85 or more (near-nude, nude or explicit).
+// NSFW_CHECK=off turns the check off. Tests pass a stand-in for Rekognition (rekognition.useDetector).
 
-const THRESHOLD = Number(process.env.NSFW_THRESHOLD) || 0.6;
 const enabled = process.env.NSFW_CHECK !== 'off';
-// Tests never load the real model (slow); they pass a stand-in with useClassifier
 const testing = process.env.NODE_ENV === 'test';
-export const ENGINE = (process.env.NSFW_ENGINE || (testing ? 'nsfwjs' : 'rekognition')).toLowerCase() === 'nsfwjs' ? 'nsfwjs' : 'rekognition';
-export const usesRekognition = () => ENGINE === 'rekognition';
-// Covers and profile pictures: refused at this Rekognition level or more
+// Covers and profile pictures: refused at this level or more
 export const REFUSE_LEVEL = 85;
+export const MODEL_NAME = rekognition.MODEL_NAME;
+export const threshold = () => REFUSE_LEVEL;
 
-let classifier = null, featurer = null, loading = null;
-// The layer just before MobileNetV2 decides: 1280 numbers describing what is in the picture (no picture can be
-// rebuilt from them). Kept with staff ratings to train Momento's own decision layer later (models/TrainingSample.js).
-export const FEATURE_LAYER = 'flatten_1', FEATURE_SIZE = 1280;
-async function load() {
-  if (classifier) return classifier;
-  loading ||= (async () => {
-    const tf = await import('@tensorflow/tfjs');
-    const nsfw = await import('nsfwjs');
-    await tf.setBackend('cpu');
-    tf.enableProdMode();
-    const model = await nsfw.load('MobileNetV2');
-    const pixels = async (buffer) => {
-      const { data, info } = await sharp(buffer, { limitInputPixels: 100_000_000 }).rotate()
-        .resize(224, 224, { fit: 'fill' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-      return tf.tensor3d(new Uint8Array(data), [info.height, info.width, 3], 'int32');
-    };
-    classifier = async (buffer) => {
-      const x = await pixels(buffer);
-      try {
-        const out = await model.classify(x, 5);
-        return Object.fromEntries(out.map((c) => [c.className, c.probability]));
-      } finally { x.dispose(); }
-    };
-    featurer = async (buffer) => {
-      const x = await pixels(buffer);
-      try {
-        const out = model.infer(x, FEATURE_LAYER);
-        try { return Float32Array.from(await out.data()); } finally { out.dispose(); }
-      } finally { x.dispose(); }
-    };
-    console.log('Nudity check: ready');
-    return classifier;
-  })().catch((err) => { loading = null; throw err; });
-  return loading;
-}
-
-// For tests: use a stand-in instead of the real model
-export function useClassifier(fn) { classifier = fn; }
-export function useFeaturer(fn) { featurer = fn; }
-
-// The photo's 1280 features (Float32Array), or null when the check is off or unavailable. Never blocks an upload.
-export async function features(buffer) {
-  if (usesRekognition() || !enabled || (testing && !featurer)) return null;
-  try {
-    if (!featurer) await load();
-    const out = await oneAtATime(() => featurer(buffer));
-    return out?.length === FEATURE_SIZE ? out : null;
-  } catch (err) {
-    console.error(`Photo features unavailable: ${err.message}`);
-    return null;
-  }
-}
-
-// One photo at a time
-let chain = Promise.resolve();
-const oneAtATime = (fn) => { const run = chain.then(fn, fn); chain = run.catch(() => {}); return run; };
-
-// The check is switched off (NSFW_CHECK=off), or this is a test with no stand-in model: every picture passes
-export const checkIsOff = () => !enabled || (testing && (usesRekognition() ? !rekognition.hasDetector() : !classifier));
+// The check is switched off (NSFW_CHECK=off), or this is a test with no stand-in: every picture passes
+export const checkIsOff = () => !enabled || (testing && !rekognition.hasDetector());
 
 // The scores for one photo, or null when the check is off or unavailable
 export async function scan(buffer) {
   if (checkIsOff()) return null;
   try {
-    if (usesRekognition()) return await rekognition.detect(buffer);
-    const classify = await load();
-    return await oneAtATime(() => classify(buffer));
+    return await rekognition.detect(buffer);
   } catch (err) {
     console.error(`Nudity check unavailable: ${err.message}`);
     return null;
   }
 }
 
-export function isExplicit(scores) {
-  if (scores?.engine === 'rekognition') return scores.level >= REFUSE_LEVEL;
-  return !!scores && ((scores.Porn || 0) + (scores.Hentai || 0)) >= THRESHOLD;
-}
+export const isExplicit = (scores) => scores?.engine === 'rekognition' && scores.level >= REFUSE_LEVEL;
 
 // ---- Automatic decisions are recorded (models/ModerationDecision.js) ----
-// Which model and threshold refused what, with its scores; the person can ask a human to review it,
+// Which model and level refused what, with its scores; the person can ask a human to review it,
 // and a file staff allowed passes next time.
-export const MODEL_NAME = usesRekognition() ? rekognition.MODEL_NAME : 'nsfwjs 4.4.0 / MobileNetV2';
-export const threshold = () => (usesRekognition() ? REFUSE_LEVEL : THRESHOLD);
 export async function isAllowedFile(hash) {
   const { ModerationDecision } = await import('../models/ModerationDecision.js');
   return Boolean(await ModerationDecision.exists({ hash, status: 'allowed' }));
 }
 /**
  * Checks one upload: { blocked: false } or { blocked: true, decisionId } (the refusal is recorded).
- * ctx: { user, album?, kind: 'photo' | 'cover' | 'avatar' }
+ * ctx: { user, album?, kind: 'photo' | 'cover' | 'avatar', hash? }
+ * ctx.hash: the uploaded file's fingerprint, when `buffer` is a smaller copy of it
  */
-// ctx.hash: the uploaded file's fingerprint, when `buffer` is a smaller copy of it (album photos are checked
-// on their thumbnail: the model only looks at 224×224 pixels anyway, and it's far quicker to read)
 export async function judge(buffer, ctx) {
   const scores = await scan(buffer);
   if (!isExplicit(scores)) return { blocked: false };
@@ -130,7 +50,7 @@ export async function judge(buffer, ctx) {
   if (await isAllowedFile(hash)) return { blocked: false };
   const { ModerationDecision } = await import('../models/ModerationDecision.js');
   const d = await ModerationDecision.create({ user: ctx.user, album: ctx.album, kind: ctx.kind, hash, model: MODEL_NAME, threshold: threshold(), scores,
-    ...(scores?.engine === 'rekognition' && { autoLevel: scores.level }) });
+    autoLevel: scores.level });
   return { blocked: true, decisionId: d.id };
 }
 
@@ -140,10 +60,4 @@ export async function assertAllowed(buffer, what = 'This photo', ctx = {}) {
   if (r.blocked) {
     throw new HttpError(422, `${what} can’t be added: it looks like it contains nudity, which isn’t allowed on Momento.`, 'nsfw', r.decisionId ? { decisionId: r.decisionId, review: `/api/auth/moderation/${r.decisionId}/review` } : {});
   }
-}
-
-// Loads the model in the background at start-up, so the first upload isn't slow
-export function warmUp() {
-  if (usesRekognition()) { rekognition.loadLearned().catch((err) => console.error(`Rekognition thresholds not loaded: ${err.message}`)); return; }
-  if (enabled && !testing && !classifier) load().catch((err) => console.error(`Nudity check unavailable: ${err.message}`));
 }

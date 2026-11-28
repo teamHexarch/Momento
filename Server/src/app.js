@@ -14,6 +14,8 @@ import { loadUser } from './middleware/authMiddleware.js';
 import { cors, sameOriginWrites } from './middleware/cors.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { HttpError } from './utils/httpError.js';
+import { storageName, saveFile } from './services/storageService.js';
+import { directUploadsOn } from './services/directUploads.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { albumRoutes } from './routes/albumRoutes.js';
 import { photoRoutes } from './routes/photoRoutes.js';
@@ -62,7 +64,9 @@ app.get('/api/config', (req, res) => {
     // The Terms version people agree to (sign-up, and the upload agreement: POST /api/albums/:id/consent)
     termsVersion: config.policies.tos,
     // Upload limits, so the page can say them and skip a too-big file before sending it
-    uploads: { maxPhotoMB: Math.round(config.maxUploadBytes / 1048576), maxRawMB: Math.round(config.maxRawUploadBytes / 1048576), rawTypes: Object.keys(RAW_TYPES) },
+    // direct: photos may go straight to storage (POST /api/albums/:id/uploads, services/directUploads.js)
+    uploads: { maxPhotoMB: Math.round(config.maxUploadBytes / 1048576), maxRawMB: Math.round(config.maxRawUploadBytes / 1048576), rawTypes: Object.keys(RAW_TYPES),
+      direct: directUploadsOn() },
   });
 });
 // For uptime alerts: 200 only when the server can really reach the database, otherwise 503
@@ -78,6 +82,26 @@ app.get('/api/health', async (req, res) => {
     res.status(503).json({ ok: false, error: 'The database can’t be reached.' });
   }
 });
+// Direct uploads on this computer (disk storage, never in production): the stand-in for S3's signed PUT links
+// (services/directUploads.js). The file is checked against the SHA-256 in the link, as S3 does.
+if (storageName === 'disk' && !config.isProduction) {
+  app.put('/api/uploads/local/:token', async (req, res, next) => {
+    try {
+      const { readLocalPut } = await import('./services/directUploads.js');
+      const t = readLocalPut(req.params.token);
+      if (!t) throw new HttpError(403, 'That upload link has expired.');
+      if (req.get('x-amz-checksum-sha256') !== t.sha256Base64) throw new HttpError(400, 'The checksum header is missing or different.');
+      const { createHash } = await import('node:crypto');
+      const chunks = [];
+      let size = 0;
+      for await (const c of req) { size += c.length; if (size > config.maxRawUploadBytes) throw new HttpError(413, 'Too large.'); chunks.push(c); }
+      const body = Buffer.concat(chunks);
+      if (createHash('sha256').update(body).digest('base64') !== t.sha256Base64) throw new HttpError(400, 'The file doesn’t match its checksum.', 'BadDigest');
+      await saveFile(t.key, body, 'application/octet-stream');
+      res.status(200).end();
+    } catch (err) { next(err); }
+  });
+}
 app.use('/api/auth', authRoutes);
 app.use('/api/albums', albumRoutes);
 app.use('/api/photos', photoRoutes);

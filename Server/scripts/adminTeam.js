@@ -4,11 +4,15 @@
 //   node scripts/adminTeam.js add <slot 1-6> <email> "<name>" [owner|moderator]   → prints the new code once
 //   node scripts/adminTeam.js rotate <slot>                                      → prints the new code once
 //   node scripts/adminTeam.js revoke <slot>
+//   node scripts/adminTeam.js totp <slot>          → sets up (or replaces) an authenticator app for that person; prints
+//                                                    the secret and an otpauth:// link once. Owners must then give its
+//                                                    6-digit code after their own code.
+//   node scripts/adminTeam.js totp-off <slot>      → removes it (a lost phone)
 // On the Lightsail server: sudo docker compose -f /opt/momento/Server/deploy/docker-compose.yml exec api node scripts/adminTeam.js list
 // The person also needs a Momento account with that email (email confirmed), to sign in before entering the code.
 import mongoose from 'mongoose';
 import { config } from '../src/config/env.js';
-import { listTeam, assignSlot, rotateCode, revokeSlot } from '../src/services/adminStaffService.js';
+import { listTeam, assignSlot, rotateCode, revokeSlot, setupTotp, removeTotp } from '../src/services/adminStaffService.js';
 import { logAdmin } from '../src/services/adminStaffService.js';
 
 const [cmd, a, b, c, d] = process.argv.slice(2);
@@ -30,8 +34,20 @@ try {
     const gone = await revokeSlot(a, 0);
     await logAdmin('team.revoked', { staff: { slot: 0, name: 'server command line' }, target: `slot:${gone.slot}`, meta: { email: gone.email } });
     console.log(`Slot ${gone.slot} (${gone.name}) removed.`);
+  } else if (cmd === 'totp') {
+    const { staff, secret, url } = await setupTotp(a);
+    await logAdmin('team.totp-set', { staff: { slot: 0, name: 'server command line' }, target: `slot:${staff.slot}` });
+    console.log(`Slot ${staff.slot} (${staff.name}): add this to an authenticator app (shown once).`);
+    console.log(`  Secret (type it in, "time-based"): ${secret}`);
+    console.log(`  Or turn this link into a QR code on this computer and scan it: ${url}`);
+    console.log(staff.role === 'owner' ? 'From now on their 6-digit code is asked for after their admin code.'
+      : 'They are a moderator: the code is only asked for owners.');
+  } else if (cmd === 'totp-off') {
+    const staff = await removeTotp(a);
+    await logAdmin('team.totp-removed', { staff: { slot: 0, name: 'server command line' }, target: `slot:${staff.slot}` });
+    console.log(`Slot ${staff.slot} (${staff.name}): authenticator app removed. Run "totp ${staff.slot}" to set up a new one.`);
   } else {
-    console.log('Use: list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot>');
+    console.log('Use: list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot> | totp <slot> | totp-off <slot>');
     process.exitCode = 1;
   }
 } catch (error) {

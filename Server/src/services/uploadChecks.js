@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { buffer } from 'node:stream/consumers';
 import { UploadCheck } from '../models/UploadCheck.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
@@ -9,118 +8,37 @@ import { User } from '../models/User.js';
 import { Membership } from '../models/Membership.js';
 import { GroupMember } from '../models/GroupMember.js';
 import { notifyPhotos } from './notifyService.js';
-import { scan, checkIsOff, isAllowedFile, features, FEATURE_LAYER, usesRekognition } from './nsfwService.js';
+import { scan, checkIsOff, isAllowedFile } from './nsfwService.js';
 import * as rekognition from './rekognitionService.js';
-import { TrainingSample, packFeatures, UNLABELLED_DAYS } from '../models/TrainingSample.js';
 import { isBanned } from './contentSafety.js';
 import { storePhoto, openPhoto, deletePhoto, removeFile } from './storageService.js';
 import { sanitizePhoto } from './imageService.js';
 
-// ---- The nudity check for album photos: one free model (NSFW.js, MobileNetV2) on this server ----
-// Every album upload is saved privately first (uploadIntake.js) and queued here. The API runs the queue itself:
-// no model service, no GPU and no separate worker. For each photo:
+// ---- The nudity check for album photos: AWS Rekognition (services/rekognitionService.js) ----
+// Every album upload is saved privately first (uploadIntake.js) and queued here. The API runs the queue itself.
+// For each photo:
 //   1. its location data is removed and its previews made (sanitizePhoto);
-//   2. the model scores its preview (not the small thumbnail); a score range the active table trusts publishes it at once;
-//   3. anything else is declined and stays private. The uploader sees "Declined" with a Request review button
+//   2. Rekognition scores its preview, and the level decides:
+//        0-75  published at once (from level 25, only if nobody in it may be under 18: the minors check below)
+//        85/95 private; the uploader can ask for a review (a level the check is very sure of has no review)
+//        100   private for good: no Request review, and staff can't publish it
+//   3. a declined photo stays private. The uploader sees "Declined" with a Request review button
 //      (privacyController.requestReview). Only then does it go to staff (review.html), who are emailed about it.
 //      A declined photo nobody asks about is deleted after 30 days (expireRefusals).
-// A photo is never published because the model failed: after 3 tries it's declined like an uncertain one.
+// A photo is never published because the check failed: it's tried again for about 3 hours, then declined.
 
-// ---- With AWS Rekognition (NSFW_ENGINE=rekognition, the default) the level decides (services/rekognitionService.js):
-//   0-75  published at once (75 since 2026-11-25; before that it was held for staff)
-//   85/95 private; the uploader can ask for a review
-//   100   private for good: no Request review, and staff can't publish it
-// The NSFW.js notes below apply only with NSFW_ENGINE=nsfwjs.
+export const MODEL_NAME = rekognition.MODEL_NAME;
 
-// The model's name, kept with each decision
-export const MODEL_NAME = usesRekognition() ? rekognition.MODEL_NAME : 'NSFW.js MobileNetV2';
-// How sure a score range must be before it publishes on its own (the agreed standard for one model)
-export const CONFIDENCE = 0.85;
-// The score definition (stageOneScores, below); every calibration table records the version it was built with
-export const SCORE_VERSION = 7;   // 7: Porn + Hentai + 0.77 x Sexy (6: Porn + Hentai on the preview; 5: on the thumbnail)
-
-// ---- The two thresholds that decide every album photo (change them with the env settings) ----
-// The photo's risk weighs NSFW.js's own classes: Porn + Hentai + SEXY_WEIGHT (0.77) × Sexy, from 0 to 1. Sexy counts
-// for a little less, so most swimwear and stage outfits stay under the line while a swimsuit worn in a sexual scene
-// (Sexy 95%) or see-through swimwear doesn't. Chosen 22 Nov from a labelled local test set (Desktop\Momento Model Lab):
-// against Porn + Hentai at 40%, it let fewer level 75/100 photos through and held back fewer everyday ones.
-//   risk below NSFW_RISK_BELOW (0.77)             → published at once
-//   Porn or Hentai at NSFW_HARD_DECLINE (0.85)+   → hard decline: no Request review, no staff email
-//   anything else (0.77 and up)                   → declined with Request review,
-//     unless what staff decided on earlier reviews shows that score range is fine (learning, below)
-const fraction = (value, fallback) => { const n = Number(value); return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback; };
-export const SEXY_WEIGHT = fraction(process.env.NSFW_SEXY_WEIGHT, 0.77);
-export const PUBLISH_BELOW = fraction(process.env.NSFW_RISK_BELOW, 0.77);
-export const riskOf = (porn, hentai, sexy) => porn + hentai + SEXY_WEIGHT * sexy;
-export const HARD_DECLINE_AT = fraction(process.env.NSFW_HARD_DECLINE, 0.85);
-
-// ---- Learning from staff decisions ----
-// Every NSFW_RELEARN_HOURS (24) the server rebuilds a table from staff reviews (services/stageOneLearning.js): a score
-// range staff approved at least CONFIDENCE (85%) of the time, on enough reviews in both halves, publishes at once too.
-// A table file (NSFW_CALIBRATION) can be pinned instead; if it can't be read, only the thresholds apply.
-export let calibrationError = null;
-const calibration = (() => {
-  if (!process.env.NSFW_CALIBRATION) return {};
-  try {
-    const table = JSON.parse(readFileSync(process.env.NSFW_CALIBRATION, 'utf8'));
-    if (!table || typeof table !== 'object' || Array.isArray(table)) throw new Error('not a calibration table');
-    if (table.scoreVersion !== SCORE_VERSION) throw new Error(`built with score version ${table.scoreVersion ?? 'none'}, not ${SCORE_VERSION}; rebuild it`);
-    return table;
-  } catch (error) {
-    calibrationError = error.message;
-    console.error(`Calibration table ${process.env.NSFW_CALIBRATION} unusable (${error.message}): only the thresholds apply until it's fixed.`);
-    return {};
-  }
-})();
-let learned = null;
-// The version must be given and match exactly: a table with no version is never trusted
-export function setLearnedTable(table, version) {
-  learned = version === SCORE_VERSION && table && typeof table === 'object' && !Array.isArray(table) ? table : null;
-}
-const binsOf = (table) => table?.[1]?.allow?.length || 0;
-export function activeTable() {
-  if (process.env.NSFW_CALIBRATION && !calibrationError) return { source: 'file', table: calibration };
-  if (binsOf(learned)) return { source: 'learned', table: learned };
-  return { source: 'thresholds', table: {} };
-}
-// How many score ranges may publish on their own
-export const calibratedBins = () => binsOf(activeTable().table);
-
-// MobileNetV2's own classes, against Momento's levels: Neutral and Drawing are everyday (0), Sexy covers swimwear to
-// clearly suggestive (15-50), Porn and Hentai are explicit (75-100). The "allow" score is 1 - risk (riskOf, above),
-// the score the learned table works on. The estimated level is kept for comparison with staff ratings.
-const CLASS_LEVEL = { Neutral: 0, Drawing: 0, Sexy: 25, Porn: 100, Hentai: 100 };
-export function stageOneScores(classes) {
-  const p = name => (Number.isFinite(classes?.[name]) ? classes[name] : 0);
-  const allow = Math.max(0, Math.min(1, 1 - riskOf(p('Porn'), p('Hentai'), p('Sexy'))));
-  const top = Object.keys(CLASS_LEVEL).reduce((a, b) => (p(b) > p(a) ? b : a), 'Neutral');
-  return { allow, level: CLASS_LEVEL[top], classes: Object.fromEntries(Object.keys(CLASS_LEVEL).map(k => [k, p(k)])), version: SCORE_VERSION };
-}
-
-// What happens to a photo: { action: 'allow' | 'decline', explicit?, risk?, learned? }
-export function routeScore(scores, table = activeTable().table) {
-  if (scores?.engine === 'rekognition') {
-    const level = Number(scores.level);
-    if (!rekognition.LEVELS.includes(level)) return { action: 'decline' };   // no usable answer: never publish
-    const action = rekognition.actionOf(level);
-    if (action === 'publish') return { action: 'allow', level };
-    if (action === 'staff') return { action: 'decline', staff: true, level };
-    // explicit: no review possible (level 100, or 85/95 when the check is very sure: rekognition.isSure)
-    const sure = action === 'private' && rekognition.isSure(scores);
-    return { action: 'decline', explicit: action === 'locked' || sure, level, ...(sure && { sure: true }) };
-  }
-  const c = scores?.classes;
-  const p = (name) => (Number.isFinite(c?.[name]) ? c[name] : NaN);
-  const porn = p('Porn'), hentai = p('Hentai'), sexy = p('Sexy');
-  if (![porn, hentai, sexy].every(Number.isFinite)) return { action: 'decline' };   // no usable scores: never publish
-  if (Math.max(porn, hentai) >= HARD_DECLINE_AT) return { action: 'decline', explicit: true };
-  const risk = riskOf(porn, hentai, sexy);
-  if (risk < PUBLISH_BELOW) return { action: 'allow', risk };
-  // Learned from staff decisions: a score range they approve 85%+ of the time publishes too
-  const allow = 1 - risk;
-  const bin = table[1]?.allow?.find(x => allow >= x.min && (allow < x.max || (allow === 1 && x.max === 1)));
-  if (bin && Number.isFinite(bin.confidence) && bin.confidence <= 1 && bin.confidence >= CONFIDENCE) return { action: 'allow', risk, learned: true, confidence: bin.confidence };
-  return { action: 'decline', risk };
+// What happens to a photo: { action: 'allow' | 'decline', explicit?, staff?, sure?, level }
+export function routeScore(scores) {
+  const level = Number(scores?.level);
+  if (scores?.engine !== 'rekognition' || !rekognition.LEVELS.includes(level)) return { action: 'decline' };   // no usable answer: never publish
+  const action = rekognition.actionOf(level);
+  if (action === 'publish') return { action: 'allow', level };
+  if (action === 'staff') return { action: 'decline', staff: true, level };
+  // explicit: no review possible (level 100, or 85/95 when the check is very sure: rekognition.isSure)
+  const sure = action === 'private' && rekognition.isSure(scores);
+  return { action: 'decline', explicit: action === 'locked' || sure, level, ...(sure && { sure: true }) };
 }
 
 export async function queueUpload(album, user, hash, originalName, file) {
@@ -158,13 +76,20 @@ export async function expireRefusals() {
   await discardChecks({ state: 'discarding' });
 }
 
-// The model's scores for one image (its thumbnail: the model only looks at 224×224 pixels)
+// Rekognition's scores for one image (the photo's preview)
 export async function classify(image) {
   // Check switched off: every photo passes, as it always has
-  if (checkIsOff()) return usesRekognition() ? { engine: 'rekognition', version: rekognition.SCORE_VERSION, labels: [], level: 0, drivers: [] } : stageOneScores({ Neutral: 1 });
+  if (checkIsOff()) return { engine: 'rekognition', version: rekognition.SCORE_VERSION, labels: [], level: 0, drivers: [] };
   const result = await scan(image);
   if (!result) throw new Error('The nudity check is unavailable');
-  return result.engine === 'rekognition' ? result : stageOneScores(result);
+  return result;
+}
+
+// The minors check: { minor, ages } for a photo that would publish at level 25 or more, null otherwise (or when the
+// check is off). Throws when Rekognition can't answer, so the photo is tried again rather than published.
+export async function minorsCheck(image, level) {
+  if (checkIsOff() || !(level >= rekognition.MINORS_CHECK_FROM)) return null;
+  return rekognition.checkAges(image);
 }
 
 async function publish(job) {
@@ -187,11 +112,11 @@ async function publish(job) {
 }
 
 // Declined: private, and recorded. If the check was unsure, the uploader can ask a person to look (status 'final'
-// until they do); a hard decline (Porn or Hentai at HARD_DECLINE_AT or more) has no review (explicit: true)
+// until they do); level 100, or a level the check is very sure of, has no review (explicit: true)
 async function decline(job, owns, { scores, reason, entry, explicit = false, staff = false }) {
   const level = scores?.engine === 'rekognition' ? scores.level : undefined;
   await ModerationDecision.updateOne({ _id: job._id }, { $setOnInsert: {
-    user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: MODEL_NAME, threshold: scores?.engine === 'rekognition' ? 75 : PUBLISH_BELOW,
+    user: job.user, album: job.album, hash: job.hash, kind: 'photo', model: MODEL_NAME, threshold: rekognition.PUBLISH_MAX,
     ...(scores && { scores }), ...(level !== undefined && { autoLevel: level }), status: 'final', reason,
   } }, { upsert: true });
   await UploadCheck.updateOne(owns, { $set: { state: staff ? 'review' : 'rejected', attempts: 0, explicit }, $unset: { claim: 1 },
@@ -199,8 +124,8 @@ async function decline(job, owns, { scores, reason, entry, explicit = false, sta
   if (staff) await holdForStaff(job);
 }
 
-// (Not used since level 75 publishes.) Level 75 used to go straight to staff, as if the uploader had asked (privacyController.requestReview): due 2 working days
-// after the upload, and staff are emailed with a link to it
+// Straight to staff, as if the uploader had asked (privacyController.requestReview): due 2 working days after the
+// upload, and staff are emailed with a link to it. Used by the minors check (someone in it may be under 18).
 async function holdForStaff(job) {
   const { dueDay } = await import('../utils/workingDays.js');
   const before = await ModerationDecision.findOneAndUpdate({ _id: job._id, status: 'final' },
@@ -212,29 +137,9 @@ async function holdForStaff(job) {
     .catch((err) => console.error(`Photo ${job.id} is held for staff, but the staff email failed: ${err.message}`));
 }
 
-// Keeps the photo's 1280 features (models/TrainingSample.js) for training later; staff's rating is added on review.
-// A failure here is logged and ignored: it never holds up or changes a photo's check.
-async function recordSample(job, image, scores, action, explicit) {
-  if (checkIsOff()) return;
-  try {
-    const floats = await features(image);
-    if (!floats) return;
-    // Never for an account being deleted, nor for an upload this check no longer owns
-    const live = async () => await User.exists({ _id: job.user, deletingAt: null }) && await UploadCheck.exists({ _id: job._id });
-    if (!await live()) return;
-    await TrainingSample.updateOne({ _id: job._id }, { $set: {
-      user: job.user, album: job.album, hash: job.hash, layer: FEATURE_LAYER, scoreVersion: SCORE_VERSION,
-      features: packFeatures(floats), classes: scores?.classes, auto: action, explicit,
-      expires: new Date(Date.now() + UNLABELLED_DAYS * 86400000), at: new Date(),
-    } }, { upsert: true });
-    // The account deletion may have run meanwhile: then this sample goes too
-    if (!await live()) await TrainingSample.deleteOne({ _id: job._id });
-  } catch (error) { console.error('Photo training sample not saved: %s', error.message); }
-}
-
 // One step of the queue. step 0: publish approved photos; step 1: check new ones. Returns whether it did anything.
 // only: this one job (checkNow), instead of the next one due
-export async function processCheck(step, infer = classify, table = activeTable().table, only) {
+export async function processCheck(step, infer = classify, only, ages = minorsCheck) {
   const claim = randomUUID();
   const job = await UploadCheck.findOneAndUpdate({
     ...(only && { _id: only }), state: step === 0 ? 'publish' : 'checking', due: { $lte: new Date() },
@@ -281,8 +186,7 @@ export async function processCheck(step, infer = classify, table = activeTable()
         $push: { history: { stage: 1, action: 'allow', rule: 'staff-approved', at: new Date() } } });
       return true;
     }
-    // Scored on the preview (up to 2500 px, JPEG 82): the 600 px WebP thumbnail is compressed enough to make the model
-    // read swimwear and stage outfits as Porn (a denim crop top: 30% on the preview, 64% on the thumbnail)
+    // Scored on the preview (up to 2560 px), not the small, heavily compressed thumbnail
     let t = Date.now();
     const image = preview || await buffer(await openPhoto(job.files.previewKey || job.files.thumbnailKey));
     const result = early ? await early : await infer(image).then((scores) => ({ scores }), (error) => ({ error }));
@@ -290,19 +194,23 @@ export async function processCheck(step, infer = classify, table = activeTable()
     const scores = result.scores;
     lap('check', t);
     console.log('Photo check %s: %s, %d ms in all', job.id, Object.entries(times).map(([k, v]) => `${k} ${v} ms`).join(', '), Date.now() - started);
-    const { action, explicit = false, staff = false, sure = false, level, risk, learned: byLearning, confidence } = routeScore(scores, table);
-    // Training data for Momento's own decision layer (never affects this photo)
-    await recordSample(job, image, scores, action, explicit);
-    const entry = scores?.engine === 'rekognition'
-      ? { stage: 1, model: MODEL_NAME, scores, action, level, ...(staff && { rule: 'staff' }) }
-      : { stage: 1, model: MODEL_NAME, scores, action, risk, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT,
-        ...(byLearning && { rule: 'learned', confidence }) };
+    let { action, explicit = false, staff = false, sure = false, level } = routeScore(scores);
+    // Minors check: a photo that would publish at level 25+ waits for staff if anyone in it may be under 18
+    let minors = null;
+    if (action === 'allow') {
+      minors = await ages(image, level);
+      if (minors?.minor) { action = 'decline'; staff = true; }
+    }
+    const entry = { stage: 1, model: MODEL_NAME, scores, action, level, ...(staff && { rule: minors?.minor ? 'minor' : 'staff' }),
+      ...(minors && { ages: minors.ages }) };
     if (action === 'allow') {
       await UploadCheck.updateOne(owns, { $set: { state: 'publish', attempts: 0, due: new Date() }, $unset: { claim: 1 }, $push: { history: entry } });
     } else {
-      const reason = scores?.engine === 'rekognition'
-        ? (explicit && sure ? `Level ${level}: kept private, the check is very sure (no review)` : explicit ? 'Level 100: nudity or explicit content' : staff ? 'Level 75: clearly suggestive, waiting for staff' : `Level ${level}: near-nude or nude, kept private`)
-        : explicit ? 'The automatic check is sure this photo contains nudity' : 'The automatic check wasn’t sure about this photo';
+      const reason = minors?.minor ? `Level ${level}: someone in it may be under 18, waiting for staff`
+        : explicit && sure ? `Level ${level}: kept private, the check is very sure (no review)`
+        : explicit ? 'Level 100: nudity or explicit content'
+        : staff ? `Level ${level}: waiting for staff`
+        : level !== undefined ? `Level ${level}: near-nude or nude, kept private` : 'The automatic check couldn’t read this photo';
       await decline(job, owns, { scores, entry, explicit, staff, reason });
       // Rekognition decides on its own: a level 85 or 95 it isn't very sure about gets the second, closer look at
       // once (no one has to ask), and is published if that comes out at 75 or below
@@ -351,19 +259,19 @@ export async function checkNow(ids, budgetMs = 8000) {
   await Promise.all([0, 1].map(async () => {
     while (next < ids.length && Date.now() <= until) {
       const id = ids[next++];
-      if (await processCheck(1, classify, activeTable().table, id)) await processCheck(0, classify, activeTable().table, id);
+      if (await processCheck(1, classify, id)) await processCheck(0, classify, id);
     }
   }));
 }
 
 // Publishes one approved photo now (instead of waiting for the queue loop)
-export const publishNow = (id) => processCheck(0, classify, activeTable().table, id);
+export const publishNow = (id) => processCheck(0, classify, id);
 
 // The second look, when someone asks for a review of a declined photo (privacyController.requestReview): the photo
-// again, bigger (up to 4096 px, not the 2560 px preview) and against the thresholds staff decisions have taught since
-// the upload. Returns Rekognition's scores, or null when there's nothing to look at (or the check isn't Rekognition).
+// again, bigger (up to 4096 px, not the 2560 px preview). Returns Rekognition's scores, or null when there's nothing
+// to look at.
 export async function secondLook(checkId) {
-  if (!usesRekognition() || checkIsOff()) return null;
+  if (checkIsOff()) return null;
   const job = await UploadCheck.findById(checkId).select('+files');
   if (!job?.files?.storageKey || job.state !== 'rejected' || job.explicit) return null;
   const { readableImage } = await import('./imageService.js');
@@ -375,17 +283,20 @@ export async function secondLook(checkId) {
     image = await sharp(picture, { limitInputPixels: false }).rotate().resize(edge, edge, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality }).toBuffer();
     if (image.length <= 5 * 1024 * 1024) break;
   }
-  return rekognition.detect(image);
+  const look = await rekognition.detect(image);
+  // Would publish at level 25+: the minors check too, on the same bigger picture
+  const minors = rekognition.actionOf(look.level) === 'publish' ? await minorsCheck(image, look.level) : null;
+  return { ...look, ...(minors && { minor: minors.minor, ages: minors.ages }) };
 }
 
 // The second look, deciding: at level 75 or below the photo is published (decision 'allowed' by 'Automatic second
-// look', which never teaches the thresholds); otherwise what it found is kept for staff. True when it published.
+// look'), unless someone in it may be under 18; otherwise what it found is kept for staff. True when it published.
 export async function secondLookDecides(checkId, { userId } = {}) {
   const look = await secondLook(checkId);
   if (!look) return false;
-  const record = { level: look.level, labels: look.labels, at: new Date() };
+  const record = { level: look.level, labels: look.labels, ...(look.ages && { ages: look.ages, minor: look.minor }), at: new Date() };
   const mine = userId ? { user: userId } : {};
-  if (rekognition.actionOf(look.level) === 'publish') {
+  if (rekognition.actionOf(look.level) === 'publish' && !look.minor) {
     const allowed = await ModerationDecision.findOneAndUpdate({ _id: checkId, ...mine, status: { $in: ['final', 'review-requested'] } },
       { $set: { status: 'allowed', reviewer: 'Automatic second look', reviewedAt: new Date(), secondLook: record } });
     if (allowed) {

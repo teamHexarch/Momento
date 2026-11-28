@@ -71,7 +71,6 @@ export async function remove(req, res) {
 }
 
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || 'Someone';
-// Like or unlike a photo. Body: { liked: true|false }. Counts change only when the state really does.
 // ---- POST /api/photos/:id/report  { reason, note } ----
 // The reporter stops seeing the photo at once. When REPORTS_TO_HIDE (3) different people report it, it's
 // hidden from everyone (into the host's bin, where the host can't restore it) until staff decide.
@@ -148,17 +147,6 @@ async function setBookmark(req, on) {
 export async function bookmark(req, res) {
   res.json({ bookmarked: await setBookmark(req, req.body?.bookmarked !== false) });
 }
-// The old address for the same thing ({ liked }), for pages from before bookmarks
-export async function like(req, res) {
-  res.json({ liked: await setBookmark(req, req.body?.liked !== false), likes: 0 });
-}
-// Who bookmarked it: private, so only ever you
-export async function likes(req, res) {
-  const { photo } = await photoFor(req, { react: true });
-  if (!photo.likes.some((id) => id.equals(req.user._id))) return res.json({ people: [] });
-  res.json({ people: [{ by: 'You', mine: true, avatarUrl: avatarOf(req.user) }] });
-}
-
 // The quick picks on the album page; any other single emoji is accepted too (isEmoji)
 export const REACTIONS = ['😍', '😂', '🔥', '👏', '🥹', '😮', '🎉', '🥳', '❤️', '🙌', '✨', '🤩'];
 export function reactionCounts(photo) {
@@ -194,9 +182,8 @@ export async function reactions(req, res) {
 }
 
 // ---- GET /api/photos/bookmarked  The photos you bookmarked (Bookmarked tab), newest first ----
-// (GET /api/photos/liked is the old address: the same list, with likedAt)
 // Only photos still in albums you can open, and not in the bin
-export async function liked(req, res) {
+export async function bookmarked(req, res) {
   const { albumIdsOf } = await import('./albumController.js');
   const ids = await albumIdsOf(req.user._id);
   const photos = await Photo.find({ 'likeLog.user': req.user._id, album: { $in: ids }, deletedAt: null }, 'album uploader likeLog miniKey')
@@ -208,7 +195,7 @@ export async function liked(req, res) {
     by: p.uploader?._id.equals(req.user._id) ? 'You' : firstName(p.uploader?.name),
     bookmarkedAt: p.likeLog.find((l) => l.user?.equals(req.user._id))?.at,
   })).sort((a, b) => (b.bookmarkedAt || 0) - (a.bookmarkedAt || 0));
-  res.json({ photos: req.path.endsWith('/liked') ? out.map(({ bookmarkedAt, ...p }) => ({ ...p, likedAt: bookmarkedAt })) : out });
+  res.json({ photos: out });
 }
 
 // ---- Comments: GET/POST /api/photos/:id/comments · DELETE /api/photos/:id/comments/:commentId ----

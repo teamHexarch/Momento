@@ -10,6 +10,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
 import { AdminStaff, MAX_ADMIN_STAFF } from '../models/AdminStaff.js';
 import { AdminAuditLog, ipPrefix } from '../models/AdminAuditLog.js';
+import * as totp from '../utils/totp.js';
 
 export { MAX_ADMIN_STAFF };
 export const ADMIN_COOKIE = 'momento_admin';
@@ -66,7 +67,7 @@ const checkPerson = ({ name, email, role }) => {
   return { name: n, email: e, role: r };
 };
 export const publicStaff = (s) => s && ({ slot: s.slot, name: s.name, email: s.email, role: s.role, isActive: s.isActive,
-  lastLoginAt: s.lastLoginAt || null, codeRotatedAt: s.codeRotatedAt || null });
+  lastLoginAt: s.lastLoginAt || null, codeRotatedAt: s.codeRotatedAt || null, totp: !!s.totpEnabledAt });
 
 export async function listTeam() {
   const staff = await AdminStaff.find().sort({ slot: 1 }).lean();
@@ -125,6 +126,39 @@ export async function revokeSlot(slot, bySlot) {
   }
   await AdminStaff.deleteOne({ _id: current._id });
   return current;
+}
+
+// ---- The second step for owners: an authenticator app (audit L3) ----
+// Sets up (or replaces) the slot's authenticator secret. Returns { staff, secret, url }: the secret is shown this once
+// (to type or scan into the app) and kept only encrypted. Every open pass for the slot ends (tokenVersion).
+export async function setupTotp(slot) {
+  const n = checkSlot(slot);
+  const current = await AdminStaff.findOne({ slot: n });
+  if (!current) throw new TeamError(404, `Slot ${n} is empty.`, 'ADMIN_SLOT_EMPTY');
+  const secret = totp.newSecret();
+  const staff = await AdminStaff.findOneAndUpdate({ _id: current._id }, { $set: { totpSecret: totp.sealSecret(secret), totpEnabledAt: new Date() },
+    $unset: { totpLastStep: 1 }, $inc: { tokenVersion: 1 } }, { returnDocument: 'after' });
+  return { staff, secret, url: totp.otpauthUrl(secret, staff.email) };
+}
+export async function removeTotp(slot) {
+  const n = checkSlot(slot);
+  const staff = await AdminStaff.findOneAndUpdate({ slot: n }, { $unset: { totpSecret: 1, totpEnabledAt: 1, totpLastStep: 1 }, $inc: { tokenVersion: 1 } },
+    { returnDocument: 'after' });
+  if (!staff) throw new TeamError(404, `Slot ${n} is empty.`, 'ADMIN_SLOT_EMPTY');
+  return staff;
+}
+// Whether this team member must give an authenticator code: every owner who has one set up
+export const needsTotp = (staff) => staff?.role === 'owner' && !!staff.totpEnabledAt;
+// Checks the authenticator code, and uses it up (the same code can't open a second pass)
+export async function totpMatches(staff, code) {
+  const row = await AdminStaff.findById(staff._id).select('+totpSecret +totpLastStep').lean();
+  const secret = totp.openSecret(row?.totpSecret);
+  if (!secret) return false;
+  const step = totp.verifyCode(secret, code, row.totpLastStep ?? -1);
+  if (step === null) return false;
+  const used = await AdminStaff.updateOne({ _id: staff._id, $or: [{ totpLastStep: { $exists: false } }, { totpLastStep: { $lt: step } }] },
+    { $set: { totpLastStep: step } });
+  return used.modifiedCount === 1;
 }
 
 // ---- Seeding from the env, at start-up: only empty slots are filled, so a changed code is never put back ----

@@ -6,8 +6,7 @@ import * as photos from '../controllers/photoController.js';
 export const photoRoutes = Router();
 photoRoutes.use(requireVerified);
 
-photoRoutes.get('/bookmarked', photos.liked);
-photoRoutes.get('/liked', photos.liked);
+photoRoutes.get('/bookmarked', photos.bookmarked);
 photoRoutes.get('/:id', photos.file);
 photoRoutes.get('/:id/download', photos.download);
 photoRoutes.delete('/:id', photos.remove);
@@ -22,8 +21,6 @@ const socialLimit = rateLimit({
   message: { error: 'That’s a lot at once. Wait a few minutes, then try again.' },
 });
 photoRoutes.post('/:id/bookmark', socialLimit, photos.bookmark);
-photoRoutes.post('/:id/like', socialLimit, photos.like);
-photoRoutes.get('/:id/likes', photos.likes);
 photoRoutes.post('/:id/reaction', socialLimit, photos.react);
 photoRoutes.get('/:id/reactions', photos.reactions);
 // Comments: 10 a minute per person, so a script can't flood a photo (each photo holds at most 50)

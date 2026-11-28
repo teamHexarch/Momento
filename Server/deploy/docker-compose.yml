@@ -22,8 +22,7 @@ services:
       TRUST_PROXY: '1'
     expose:
       - '8080'
-    # Read-only settings folder, e.g. NSFW_CALIBRATION=/config/calibration.json
-    # (put the file in /opt/momento-config/calibration.json on the server)
+    # Read-only settings folder (/opt/momento-config on the server)
     volumes:
       - /opt/momento-config:/config:ro
     logging:

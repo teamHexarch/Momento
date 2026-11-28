@@ -45,7 +45,6 @@ adminRoutes.delete('/comments/:id', admin.removeComment);
 adminRoutes.post('/users/:id/unsuspend', admin.unsuspend);
 adminRoutes.get('/moderation', admin.decisions);
 adminRoutes.get('/moderation-status', admin.moderationStatus);
-adminRoutes.post('/moderation-status/relearn', admin.relearnNow);
 adminRoutes.get('/moderation/:id/preview', admin.moderationPreview);
 adminRoutes.get('/moderation/:id', admin.decisionStatus);
 adminRoutes.post('/moderation/:id', admin.decide);

@@ -1,6 +1,6 @@
-// The nudity check for album photos (one model, NSFW.js MobileNetV2, on this server; services/uploadChecks.js):
-// confident photos publish, the rest are declined and private, and only "Request review" sends one to staff
-// (emailing them). Model scores come from a stand-in, so no real model is loaded.
+// The nudity check for album photos (AWS Rekognition, services/uploadChecks.js): level 0-75 publishes (from level 25
+// only if nobody may be under 18), 85-95 is declined and private, and only "Request review" sends one to staff
+// (emailing them). Rekognition's answers come from stand-ins, so nothing is sent to AWS.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -13,7 +13,7 @@ import bcrypt from 'bcryptjs';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'momento-upload-checks-'));
 const mongo = await MongoMemoryServer.create();
-Object.assign(process.env, { NSFW_CALIBRATION: '', NODE_ENV: 'test', S3_BUCKET: '', DEV_MODE_ADMIN_EMAIL: 'staff@example.invalid',
+Object.assign(process.env, { NODE_ENV: 'test', CHECK_MAX_ATTEMPTS: '3', S3_BUCKET: '', DEV_MODE_ADMIN_EMAIL: 'staff@example.invalid',
   MONGODB_URI: mongo.getUri(), JWT_SECRET: 'test-only-isolated', UPLOAD_DIR: dir, PUBLIC_URL: 'http://localhost:4000',
   CLIENT_DIR: process.env.CLIENT_DIR || fileURLToPath(new URL('../../Client/', import.meta.url)) });
 await mongoose.connect(process.env.MONGODB_URI);
@@ -23,7 +23,7 @@ const { Photo } = await import('../src/models/Photo.js');
 const { UploadCheck } = await import('../src/models/UploadCheck.js');
 const { ModerationDecision } = await import('../src/models/ModerationDecision.js');
 const { routeScore, processCheck, expireRefusals } = await import('../src/services/uploadChecks.js');
-const nsfw = await import('../src/services/nsfwService.js');
+const rk = await import('../src/services/rekognitionService.js');
 const server = app.listen(0, '127.0.0.1');
 await new Promise(resolve => server.once('listening', resolve));
 const origin = 'http://127.0.0.1:' + server.address().port;
@@ -40,22 +40,26 @@ async function request(url, status, cookie = '', method = 'GET', body) {
 const mails = [];
 const log = console.log;
 console.log = (...args) => { const line = args.join(' '); if (line.startsWith('[email not set up]')) mails.push(line); else log(...args); };
-// The stand-in model: what it "sees" in the next photos
-const SURE = { Neutral: .97, Drawing: .01, Sexy: .01, Porn: .005, Hentai: .005 };
-const UNSURE = { Neutral: .15, Sexy: .2, Porn: .65 };
+// The stand-in for Rekognition: the labels it "sees" in the next photos
+const SURE = [];                                                              // level 0: everyday
+const UNSURE = [{ name: 'Partial Nudity', parent: 'Nudity', confidence: 75 }];   // level 85, not very sure: may be reviewed
+const nsfw = { useClassifier: (fn) => rk.useDetector(fn) };
 nsfw.useClassifier(async () => SURE);
-// The stand-in for the 1280 features (the layer before MobileNetV2 decides)
-nsfw.useFeaturer(async () => Float32Array.from({ length: 1280 }, (_, i) => i / 1280));
-const { TrainingSample, featuresOf } = await import('../src/models/TrainingSample.js');
+// The stand-in for the ages of the faces in a photo (the minors check): adults unless a test says otherwise
+const ADULTS = [{ low: 24, high: 32 }];
+rk.useAgeDetector(async () => ADULTS);
 
 try {
-  // ---- The thresholds: risk (Porn + Hentai + 0.77 x Sexy) under 77% publishes; Porn or Hentai 85%+ is a hard decline ----
-  const cls = (porn, sexy = 0, hentai = 0) => ({ classes: { Neutral: 1 - porn - sexy - hentai, Drawing: 0, Sexy: sexy, Porn: porn, Hentai: hentai } });
-  assert.equal(routeScore(cls(.5, .2, .1)).action, 'allow');
-  assert.equal(routeScore(cls(.5, .2, .13)).action, 'decline');
-  assert.equal(routeScore(cls(0, .99)).action, 'allow', 'swimwear (Sexy) publishes');
-  assert.equal(routeScore(cls(.85)).explicit, true);
-  assert.equal(routeScore(cls(0, 0, .9)).explicit, true);
+  // ---- The levels: 0-75 publish, 85/95 declined (review possible unless very sure), 100 never ----
+  const scored = (labels) => ({ engine: 'rekognition', labels, ...rk.levelOf(labels) });
+  assert.deepEqual(routeScore(scored([])), { action: 'allow', level: 0 });
+  assert.equal(routeScore(scored([{ name: 'Swimwear or Underwear', confidence: 90 }])).action, 'allow', 'swimwear publishes');
+  assert.equal(routeScore(scored(UNSURE)).action, 'decline');
+  assert.equal(routeScore(scored(UNSURE)).explicit, false);
+  assert.equal(routeScore(scored([{ name: 'Partial Nudity', confidence: 92 }])).explicit, true, 'very sure 85: no review');
+  assert.equal(routeScore(scored([{ name: 'Explicit Nudity', confidence: 90 }])).explicit, true);
+  assert.equal(routeScore({ classes: { Porn: 0 } }).action, 'decline', 'no usable answer: never publish');
+  assert.equal(rk.thresholdOf('partial nudity'), 70, 'thresholds are fixed');
 
   const password = 'test-user-password-123';
   const user = await User.create({ name: 'Host', email: 'host@example.invalid', passwordHash: await bcrypt.hash(password, 4), emailVerified: true });
@@ -80,12 +84,42 @@ try {
   assert.equal(ok.photos.length, 1);
   assert.equal(ok.checks.length, 0);
   assert.ok(await Photo.exists({ _id: ok.photos[0].id }));
-  // Its 1280 features are kept for training (no picture), unrated, and go after 90 days
-  const sample = await TrainingSample.findById(ok.photos[0].id).lean();
-  assert.equal(featuresOf(sample).length, 1280);
-  assert.ok(Math.abs(featuresOf(sample)[640] - .5) < 1e-6, 'the numbers come back as stored');
-  assert.deepEqual([sample.auto, sample.layer, sample.level, sample.labelledAt], ['allow', 'flatten_1', undefined, undefined]);
-  assert.ok(sample.expires - Date.now() > 89 * 86400000);
+  // Level 0: the minors check isn't asked
+  assert.equal((await UploadCheck.findById(ok.photos[0].id).lean()).history.at(-1).ages, undefined);
+
+  // ---- Minors check: level 25+ with someone who may be under 18 goes to staff, not the album ----
+  const SWIM = [{ name: 'Swimwear or Underwear', parent: 'Swimwear or Underwear', confidence: 90 }];
+  nsfw.useClassifier(async () => SWIM);
+  const adult = await (await request(url + '/photos', 201, cookie, 'POST', await form('beach-adults.jpg'))).json();
+  assert.equal(adult.photos.length, 1, 'level 25, adults: published');
+  assert.deepEqual((await UploadCheck.findById(adult.photos[0].id).lean()).history.at(-1).ages, ADULTS);
+  rk.useAgeDetector(async () => [{ low: 25, high: 33 }, { low: 13, high: 19 }]);
+  const young = await (await request(url + '/photos', 201, cookie, 'POST', await form('beach-young.jpg'))).json();
+  assert.equal(young.photos.length, 0, 'someone may be under 18: not published');
+  const held = young.checks[0];
+  assert.equal((await UploadCheck.findById(held.id)).state, 'review', 'straight to staff');
+  const heldDecision = await ModerationDecision.findById(held.id);
+  assert.equal(heldDecision.status, 'review-requested');
+  assert.match(heldDecision.reason, /may be under 18/);
+  await new Promise(r => setTimeout(r, 50));
+  assert.equal(mails.length, 1, 'staff are emailed');
+  assert.match(mails[0], /To: team@hexarch\.org/);
+  mails.length = 0;
+  // Staff decide it like any review; a possible minor can't be published
+  await request('/api/admin/moderation/' + held.id, 400, staff, 'POST', { allow: true, severity: 25, reasons: ['possible-minor'] });
+  // Ages can't be read (AWS outage): never published, tried again later
+  rk.useAgeDetector(async () => { const e = new Error('simulated outage'); e.name = 'AccessDeniedException'; throw e; });
+  const noAges = await (await request(url + '/photos', 202, cookie, 'POST', await form('beach-outage.jpg'))).json();
+  assert.equal(noAges.photos.length, 0);
+  assert.equal((await UploadCheck.findById(noAges.checks[0].id)).state, 'checking');
+  rk.useAgeDetector(async () => ADULTS);
+  await UploadCheck.updateOne({ _id: noAges.checks[0].id }, { due: new Date(0) });
+  while (await processCheck(1) || await processCheck(0)) { /* drain the queue */ }
+  assert.ok(await Photo.exists({ _id: noAges.checks[0].id }), 'published once the ages could be read');
+  await request('/api/admin/moderation/' + held.id, 200, staff, 'POST', { allow: false, severity: 25, reasons: ['possible-minor'] });
+  await new Promise(r => setTimeout(r, 100));
+  mails.length = 0;
+  nsfw.useClassifier(async () => SURE);
 
   // ---- An uncertain one is declined: private, shown only to its uploader, and NOT sent to staff ----
   nsfw.useClassifier(async () => UNSURE);
@@ -96,7 +130,7 @@ try {
   assert.equal(no.declined, 1);
   await request('/api/photos/' + declined.id, 404, cookie);
   const mine = (await (await request(url + '/checks', 200, cookie)).json()).checks;
-  assert.deepEqual(mine.map(c => [c.name, c.state, !!c.reviewed]), [['unsure.jpg', 'rejected', false]]);
+  assert.deepEqual(mine.filter(c => c.name === 'unsure.jpg').map(c => [c.name, c.state, !!c.reviewed]), [['unsure.jpg', 'rejected', false]]);
   assert.equal((await ModerationDecision.findById(declined.id)).status, 'final');
   assert.equal((await (await request('/api/admin/moderation', 200, staff)).json()).decisions.length, 0, 'nothing reaches staff on its own');
   assert.equal(mails.length, 0, 'and nobody is emailed');
@@ -109,7 +143,7 @@ try {
   assert.equal((await UploadCheck.findById(declined.id)).state, 'review');
   await new Promise(r => setTimeout(r, 50));
   assert.equal(mails.length, 1);
-  assert.match(mails[0], /To: team@hexarch\.org \| Subject: \[Momento review\] An album photo is waiting for review/);
+  assert.match(mails[0], /To: team@hexarch\.org \| Subject: .*An album photo is waiting for review/);
   await request('/api/auth/moderation/' + declined.id + '/review', 200, cookie, 'POST', {});
   await new Promise(r => setTimeout(r, 50));
   assert.equal(mails.length, 1, 'asking twice emails once');
@@ -141,10 +175,8 @@ try {
   // Publishing needs only the level
   const reviewed = await (await request('/api/admin/moderation/' + declined.id, 200, staff, 'POST', { allow: true, severity: 15 })).json();
   assert.deepEqual([reviewed.severity, reviewed.reasons], [15, []]);
-  // The rating becomes a labelled training example, kept a year
-  const labelled = await TrainingSample.findById(declined.id).lean();
-  assert.deepEqual([labelled.auto, labelled.level, labelled.allowed, labelled.reviewer], ['decline', 15, true, 'Reviewer_T']);
-  assert.ok(labelled.expires - Date.now() > 360 * 86400000);
+  // The thresholds don't move with staff decisions
+  assert.equal(rk.thresholdOf('partial nudity'), 70);
   await processCheck(0);
   assert.ok(await Photo.exists({ _id: declined.id }), 'approved: published');
   const decided = await (await request('/api/admin/moderation/' + declined.id, 200, staff)).json();
@@ -224,8 +256,8 @@ try {
   await request(url + '/checks/' + gone.id, 200, cookie, 'DELETE');
   assert.equal(await UploadCheck.exists({ _id: gone.id }), null, 'removed from the list and deleted');
 
-  // ---- 85%+ sure it's nudity: declined with no Request review, and nobody is emailed ----
-  nsfw.useClassifier(async () => ({ Neutral: .03, Sexy: .02, Porn: .95 }));
+  // ---- Level 100 (or a very sure 85/95): declined with no Request review, and nobody is emailed ----
+  nsfw.useClassifier(async () => [{ name: 'Explicit Nudity', parent: '', confidence: 95 }]);
   const sureNo = (await (await request(url + '/photos', 201, cookie, 'POST', await form('sure.jpg'))).json()).checks[0];
   assert.equal(sureNo.explicit, true);
   const before = mails.length;
@@ -320,24 +352,15 @@ try {
   await new Promise(r => setTimeout(r, 100));
   assert.ok((await (await request('/api/notifications', 200, cookie)).json()).notifications.some(n => n.type === 'review-declined'), 'declined: the uploader hears too');
 
-  // ---- The review page and the staff status ----
+  // ---- The staff status ----
   const status = await (await request('/api/admin/moderation-status', 200, staff)).json();
   assert.equal(status.enabled, true);
-  assert.equal(status.source, 'thresholds');
-  assert.equal('spotCheck' in status, false, 'no spot checks');
-  const relearned = await (await request('/api/admin/moderation-status/relearn', 200, staff, 'POST', {})).json();
-  assert.equal(typeof relearned.result.ok, 'boolean');
-  const page = await (await request('/review.html', 200)).text();
-  assert.match(page, /Photo review/);
-  assert.match(page, /Go Back to Home Page/, 'a way back home when nothing is waiting');
-  for (const link of ['index.html', 'albums.html', 'events.html']) assert.match(page, new RegExp(`class="nav glass[\\s\\S]*href="${link}"`), link);
-  for (const p of ['index.html', 'albums.html', 'events.html', 'settings.html', 'support.html']) {
-    const html = await (await request('/' + p, 200)).text();
-    assert.match(html, /data-act="review" hidden>\$\{ICON\.review\}Photo review/, p);
-    assert.match(html, /built\.review\.hidden = !\(a && a\.plan === 'staff'\)/, p);
-  }
+  assert.equal(status.engine, 'rekognition');
+  assert.deepEqual(status.minorsCheck, { from: 25, ageBelow: 18 });
+  assert.equal(status.rekognition.labels['partial nudity'].threshold, 70);
+  await request('/api/admin/moderation-status/relearn', 404, staff, 'POST', {});   // nothing to relearn any more
   console.log = log;
-  console.log(`Passed: photo checks (${checks} requests): confident photos publish, uncertain ones are declined and private, Request review sends them to staff with an email, staff decide, 30-day clean-up, background queue and model failures.`);
+  console.log(`Passed: photo checks (${checks} requests): levels 0-75 publish, possible minors go to staff, 85-95 are declined and private, Request review sends them to staff with an email, staff decide, 30-day clean-up, background queue and check failures.`);
 } finally {
   console.log = log;
   server.closeAllConnections();

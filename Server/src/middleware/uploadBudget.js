@@ -49,26 +49,30 @@ export const uploadsInFlight = () => ({ bytes: inFlight, users: perUser.size });
 // an indexed query) at most once a minute per account, plus what has been sent since.
 const DAY_QUOTA = (Number(process.env.UPLOAD_DAY_GB) || 5) * 1024 ** 3;
 const dayUse = new Map();   // account → { bytes, at }
+// Counts `bytes` against the account's day (throws a 429 daily-quota when it would go over). Also used by direct
+// uploads (services/directUploads.js), which ask before any byte is sent.
+export async function chargeDailyQuota(req, bytes) {
+  const who = String(req.user?._id || '');
+  if (!who) return;
+  let use = dayUse.get(who);
+  if (!use || use.at < Date.now() - 60000) {
+    const { Photo } = await import('../models/Photo.js');
+    const [row] = await Photo.aggregate([
+      { $match: { uploader: req.user._id, createdAt: { $gt: new Date(Date.now() - 86400000) } } },
+      { $group: { _id: null, bytes: { $sum: '$size' } } },
+    ]);
+    use = { bytes: row?.bytes || 0, at: Date.now() };
+    dayUse.set(who, use);
+    if (dayUse.size > 20000) dayUse.clear();
+  }
+  if (use.bytes + bytes > DAY_QUOTA) {
+    throw new HttpError(429, `You’ve added a lot today (the limit is ${DAY_QUOTA / 1024 ** 3} GB a day). Try the rest tomorrow.`, 'daily-quota');
+  }
+  use.bytes += bytes;
+}
 export async function dailyQuota(req, res, next) {
   try {
-    const size = Number(req.get('content-length')) || 0;
-    const who = String(req.user?._id || '');
-    if (!who) return next();
-    let use = dayUse.get(who);
-    if (!use || use.at < Date.now() - 60000) {
-      const { Photo } = await import('../models/Photo.js');
-      const [row] = await Photo.aggregate([
-        { $match: { uploader: req.user._id, createdAt: { $gt: new Date(Date.now() - 86400000) } } },
-        { $group: { _id: null, bytes: { $sum: '$size' } } },
-      ]);
-      use = { bytes: row?.bytes || 0, at: Date.now() };
-      dayUse.set(who, use);
-      if (dayUse.size > 20000) dayUse.clear();
-    }
-    if (use.bytes + size > DAY_QUOTA) {
-      return next(new HttpError(429, `You’ve added a lot today (the limit is ${DAY_QUOTA / 1024 ** 3} GB a day). Try the rest tomorrow.`, 'daily-quota'));
-    }
-    use.bytes += size;
+    await chargeDailyQuota(req, Number(req.get('content-length')) || 0);
     next();
   } catch (err) { next(err); }
 }

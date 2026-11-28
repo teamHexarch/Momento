@@ -11,10 +11,8 @@ import { config } from '../config/env.js';
 //   85  Near-nude            covered only by hands/hair/objects; thong-bare buttocks  → private (uploader may ask for a review)
 //   95  Nude, key areas hid  nude, but nipples and genitals hidden                    → private (uploader may ask for a review)
 //  100  Nudity / explicit    visible nipples or genitals, any sexual activity, toys    → private for good (never published)
-// A label counts only when Rekognition is at least that label's threshold sure. The thresholds start at the defaults
-// below and move with staff decisions (learnFromReview): a little up when staff publish what a label held back, a
-// little down when staff keep private what it let through, always within the label's guardrails. Level 100 labels
-// never move: explicit content can't be learned into publishing.
+// A label counts only when Rekognition is at least that label's threshold sure. The thresholds are fixed (below);
+// they don't move with staff decisions any more.
 // Access: the same IAM user as S3 and SES (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) needs
 // rekognition:DetectModerationLabels. No model runs on this server.
 
@@ -23,16 +21,16 @@ export const PUBLISH_MAX = 75;
 export const SCORE_VERSION = 'rekognition-1';
 export const MODEL_NAME = 'AWS Rekognition DetectModerationLabels';
 
-// Label → level, starting threshold (%), and how far learning may move it. Rekognition's current labels (taxonomy 7)
-// and the older names (taxonomy 6) it may still answer with. Matched without regard to case.
-const L = (level, threshold, min = threshold - 20, max = Math.min(98, threshold + 25)) => ({ level, threshold, min, max });
+// Label → level and threshold (%). Rekognition's current labels (taxonomy 7) and the older names (taxonomy 6) it may
+// still answer with. Matched without regard to case.
+const L = (level, threshold) => ({ level, threshold });
 export const LABELS = {
   // 100: explicit (fixed)
-  'explicit': L(100, 60, 60, 60), 'explicit nudity': L(100, 60, 60, 60), 'explicit sexual activity': L(100, 60, 60, 60),
-  'exposed female genitalia': L(100, 60, 60, 60), 'exposed male genitalia': L(100, 60, 60, 60),
-  'exposed buttocks or anus': L(100, 60, 60, 60), 'exposed female nipple': L(100, 60, 60, 60), 'sex toys': L(100, 60, 60, 60),
-  'nudity': L(100, 60, 60, 60), 'graphic male nudity': L(100, 60, 60, 60), 'graphic female nudity': L(100, 60, 60, 60),
-  'sexual activity': L(100, 60, 60, 60), 'illustrated explicit nudity': L(100, 60, 60, 60), 'adult toys': L(100, 60, 60, 60),
+  'explicit': L(100, 60), 'explicit nudity': L(100, 60), 'explicit sexual activity': L(100, 60),
+  'exposed female genitalia': L(100, 60), 'exposed male genitalia': L(100, 60),
+  'exposed buttocks or anus': L(100, 60), 'exposed female nipple': L(100, 60), 'sex toys': L(100, 60),
+  'nudity': L(100, 60), 'graphic male nudity': L(100, 60), 'graphic female nudity': L(100, 60),
+  'sexual activity': L(100, 60), 'illustrated explicit nudity': L(100, 60), 'adult toys': L(100, 60),
   // 95: nude, key areas hidden
   'implied nudity': L(95, 70),
   // 85: near-nude
@@ -59,23 +57,10 @@ export function actionOf(level) {
   return 'private';
 }
 
-// ---- Thresholds: the defaults, with what staff decisions have taught (kept in the ModerationCalibration collection) ----
-let learned = {};
-export const thresholdOf = (name) => {
-  const rule = LABELS[key(name)];
-  if (!rule) return null;
-  const t = learned[key(name)];
-  return Number.isFinite(t) ? Math.min(rule.max, Math.max(rule.min, t)) : rule.threshold;
-};
+// ---- Thresholds ----
+export const thresholdOf = (name) => LABELS[key(name)]?.threshold ?? null;
 export function thresholds() {
-  return Object.fromEntries(Object.entries(LABELS).map(([k, r]) => [k, { level: r.level, threshold: thresholdOf(k), default: r.threshold, min: r.min, max: r.max }]));
-}
-export function setLearned(table) { learned = table && typeof table === 'object' && !Array.isArray(table) ? { ...table } : {}; }
-export async function loadLearned() {
-  const { ModerationCalibration } = await import('../models/ModerationCalibration.js');
-  const doc = await ModerationCalibration.findById('rekognition').lean();
-  setLearned(doc?.table);
-  return learned;
+  return Object.fromEntries(Object.entries(LABELS).map(([k, r]) => [k, { level: r.level, threshold: r.threshold }]));
 }
 
 // ---- Swimwear in context ----
@@ -110,35 +95,6 @@ export function levelOf(labels) {
     else if (ruleLevel === level && level > 0) drivers.push(key(l.name));
   }
   return { level, drivers, ...(swimwear && { swimwear: true }) };
-}
-
-// ---- Learning from staff ("learn from us") ----
-// staffLevel: the level staff chose on the review page; scores: what Rekognition said when the photo was checked.
-//   staff publish (level 0-75) what was held back (85+) → each label that held it back needs to be a little surer (+STEP)
-//   staff keep private (85+) what was let through (0-75) → each recognised label on it counts a little sooner (-STEP)
-// Level 100 labels never move. Returns the changes made: { label: [before, after] }.
-const STEP = 2;
-export async function learnFromReview(scores, staffLevel) {
-  if (scores?.engine !== 'rekognition' || !LEVELS.includes(staffLevel)) return {};
-  const auto = levelOf(scores.labels);
-  const staffPublishes = staffLevel <= PUBLISH_MAX, autoPublished = auto.level <= PUBLISH_MAX;
-  if (staffPublishes === autoPublished) return {};
-  const names = staffPublishes ? auto.drivers
-    : (scores.labels || []).map((l) => key(l.name)).filter((n) => LABELS[n] && LABELS[n].level < 100 && LABELS[n].level > PUBLISH_MAX);
-  const { ModerationCalibration } = await import('../models/ModerationCalibration.js');
-  await loadLearned();
-  const changes = {};
-  for (const n of new Set(names)) {
-    const rule = LABELS[n];
-    if (!rule || rule.level >= 100) continue;
-    const before = thresholdOf(n);
-    const after = Math.min(rule.max, Math.max(rule.min, before + (staffPublishes ? STEP : -STEP)));
-    if (after !== before) { learned[n] = after; changes[n] = [before, after]; }
-  }
-  if (Object.keys(changes).length) {
-    await ModerationCalibration.updateOne({ _id: 'rekognition' }, { $set: { table: learned, builtAt: new Date() } }, { upsert: true });
-  }
-  return changes;
 }
 
 // ---- Asking Rekognition ----
@@ -225,4 +181,42 @@ export async function describe(buffer) {
     faces: (f.FaceDetails || []).map((x) => ({ smile: !!x.Smile?.Value && x.Smile.Confidence > 70, eyesOpen: !!x.EyesOpen?.Value,
       sharpness: x.Quality?.Sharpness ?? null, brightness: x.Quality?.Brightness ?? null })),
   };
+}
+
+// ---- Minors check (audit H3) ----
+// A photo the level check would publish at level 25 or more (swimwear, bare skin, suggestive) is also asked about the
+// ages of the faces in it (DetectFaces with AGE_RANGE). If anyone in it may be under 18 (the low end of Rekognition's
+// age range for a face is under MINOR_AGE_BELOW, 18 by default), the photo goes to staff instead of being published.
+// Level 0 photos (everyday) aren't asked. Needs rekognition:DetectFaces on the server's IAM user (contests use it too).
+// Tests pass a stand-in with useAgeDetector (buffer → [{ low, high }]).
+export const MINORS_CHECK_FROM = 25;
+export const MINOR_AGE_BELOW = Number(process.env.MINOR_AGE_BELOW) || 18;
+let ageDetector = null;
+export function useAgeDetector(fn) { ageDetector = fn; }
+async function askAges(buffer) {
+  if (ageDetector) return ageDetector(buffer);
+  if (detector) return [];   // a test with a stand-in for the level check and none for ages: no faces
+  if (!client) {
+    const { RekognitionClient } = await import('@aws-sdk/client-rekognition');
+    client = new RekognitionClient({ region: process.env.REKOGNITION_REGION || config.aws.region, maxAttempts: 1,
+      requestHandler: { connectionTimeout: 5000, requestTimeout: 20000 } });
+  }
+  const { DetectFacesCommand } = await import('@aws-sdk/client-rekognition');
+  const out = await client.send(new DetectFacesCommand({ Image: { Bytes: await fit(buffer) }, Attributes: ['AGE_RANGE'] }));
+  return (out.FaceDetails || []).map((f) => ({ low: f.AgeRange?.Low ?? null, high: f.AgeRange?.High ?? null }));
+}
+// { ages: [{ low, high }], minor: boolean }. Retried like detect (throttling and AWS-side errors only).
+export async function checkAges(buffer, tries = 6) {
+  return limited(async () => {
+    for (let i = 0; ; i++) {
+      try {
+        const ages = await askAges(buffer);
+        return { ages, minor: ages.some((a) => Number.isFinite(a.low) && a.low < MINOR_AGE_BELOW) };
+      } catch (error) {
+        const retry = RETRYABLE.has(error.name) || error.$retryable || error.code === 'ECONNRESET';
+        if (!retry || i >= tries - 1) throw error;
+        await sleep(500 * 2 ** i * (0.75 + Math.random() / 2));
+      }
+    }
+  });
 }

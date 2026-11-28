@@ -7,10 +7,6 @@ import { Takedown } from '../models/Takedown.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { UploadCheck } from '../models/UploadCheck.js';
 import { Album } from '../models/Album.js';
-import { ModerationCalibration } from '../models/ModerationCalibration.js';
-import { TrainingSample, LABELLED_DAYS } from '../models/TrainingSample.js';
-import { activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from '../services/uploadChecks.js';
-import { relearn, relearnHours, relearnSoon } from '../services/stageOneLearning.js';
 import { SecuritySetting } from '../models/SecuritySetting.js';
 import { deletePhotos, openPhoto } from '../services/storageService.js';
 import { sha256 } from '../services/contentSafety.js';
@@ -111,7 +107,7 @@ export async function decisions(req, res) {
 // POST /api/admin/moderation/:id  { allow: true|false, severity: 0|25|50|75|85|95|100, reasons?: ['clothed', ...] }
 // Allowed: that exact file passes the check next time. The severity (Momento's content level) is always required.
 // Keeping a photo private also needs at least one reason (utils/reviewReasons.js: what is shown, what is happening,
-// the context); publishing needs none. The check learns from both (services/reviewCalibration.js). Staff may keep any
+// the context); publishing needs none. Staff may keep any
 // level private (a clothed photo of a sexual act, say), but level 100, or a possible minor, is never published.
 // The 7 levels (services/rekognitionService.js); 15 is still accepted from an older review page
 const SEVERITIES = [0, 15, 25, 50, 75, 85, 95, 100];
@@ -144,18 +140,6 @@ export async function decide(req, res) {
     ...(req.dev && { reviewer: req.dev.reviewerLabel, reviewerSession: req.dev.sessionId }) } }, { returnDocument: 'after' });
   if (!d) throw new HttpError(404, 'Not found.');
   await audit('moderation.reviewed', { req, target: d._id, meta: { allow, severity, reasons: why } });
-  // The automatic check learns from this rating: Rekognition's label thresholds at once (services/rekognitionService.js),
-  // the older NSFW.js table within a minute (services/stageOneLearning.js)
-  if (d.scores?.engine === 'rekognition') {
-    const { learnFromReview } = await import('../services/rekognitionService.js');
-    const changes = await learnFromReview(d.scores, severity).catch((error) => { console.error('Rekognition learning: %s', error.message); return {}; });
-    if (Object.keys(changes).length) await audit('moderation.thresholds-learned', { req, target: d._id, meta: { changes } });
-  } else if (d.kind === 'photo') relearnSoon();
-  // The rating becomes a labelled example for Momento's own decision layer (models/TrainingSample.js)
-  if (d.kind === 'photo') await TrainingSample.updateOne({ _id: d._id }, {
-    $set: { level: severity, allowed: allow, reasons: why, labelledAt: new Date(), reviewer: req.dev?.reviewerLabel,
-      expires: new Date(Date.now() + LABELLED_DAYS * 86400000) },
-  }).catch((error) => console.error('Training label not saved: %s', error.message));
   // The person who asked hears the answer: in their inbox and by email (only for album photos they sent for review)
   if (job && d.requestedAt) tellUploader(d, allow).catch((err) => console.error(`Review ${d.id} decided, but telling the uploader failed: ${err.message}`));
   res.json({ id: d.id, status: d.status, severity: d.severity ?? null, reasons: d.reasons || [] });
@@ -174,43 +158,18 @@ async function tellUploader(d, allow) {
   });
 }
 
-// ---- What publishes on its own (stage one), and what it has learned from staff reviews ----
-// GET /api/admin/moderation-status · POST /api/admin/moderation-status/relearn
-async function learningStatus() {
-  const { source, table } = activeTable();
-  const doc = await ModerationCalibration.findById('stage-one').lean();
+// ---- GET /api/admin/moderation-status  How the automatic check decides, and how many reviews are waiting ----
+// AWS Rekognition (services/rekognitionService.js): each label's level and its fixed threshold
+export async function moderationStatus(req, res) {
+  const rk = await import('../services/rekognitionService.js');
   const [waiting, reviewed, rated] = await Promise.all([
     ModerationDecision.countDocuments({ kind: 'photo', status: 'review-requested' }),
     ModerationDecision.countDocuments({ kind: 'photo', status: { $in: ['allowed', 'upheld'] }, reviewedBy: { $exists: true } }),
     ModerationDecision.countDocuments({ kind: 'photo', status: { $in: ['allowed', 'upheld'] }, severity: { $in: SEVERITIES } }),
   ]);
-  return {
-    enabled: true, source, publishBelow: PUBLISH_BELOW, hardDeclineAt: HARD_DECLINE_AT, relearnHours,
-    ranges: (table[1]?.allow || []).map((b) => ({ min: b.min, max: b.max, confidence: b.confidence })),
-    waiting, reviewed, rated,
-    learned: doc ? { builtAt: doc.builtAt || null, reviewed: doc.reviewed ?? null, publishable: doc.publishable ?? null, albums: doc.albums ?? null,
-      ranges: (doc.table?.[1]?.allow || []).length, lastAttemptAt: doc.lastAttemptAt || null, lastError: doc.lastError || null,
-      // Why staff keep photos private, and how often the model had thought those photos were safe
-      reasons: doc.reasons || {} } : null,
-    // AWS Rekognition (the default check): each label's level and threshold now, against its default and guardrails
-    ...(await rekognitionStatus()),
-  };
-}
-async function rekognitionStatus() {
-  const { usesRekognition } = await import('../services/nsfwService.js');
-  if (!usesRekognition()) return { engine: 'nsfwjs' };
-  const rk = await import('../services/rekognitionService.js');
-  await rk.loadLearned();
-  const doc = await ModerationCalibration.findById('rekognition', 'builtAt').lean();
-  return { engine: 'rekognition', levels: rk.LEVELS, rekognition: { learnedAt: doc?.builtAt || null, labels: rk.thresholds() } };
-}
-export async function moderationStatus(req, res) {
-  res.json(await learningStatus());
-}
-export async function relearnNow(req, res) {
-  const result = await relearn();
-  await audit('moderation.relearned', { req, meta: result });
-  res.json({ result, status: await learningStatus() });
+  res.json({ enabled: true, engine: 'rekognition', levels: rk.LEVELS, publishMax: rk.PUBLISH_MAX,
+    minorsCheck: { from: rk.MINORS_CHECK_FROM, ageBelow: rk.MINOR_AGE_BELOW },
+    rekognition: { labels: rk.thresholds() }, waiting, reviewed, rated });
 }
 
 // GET /api/admin/moderation/:id  One request: still waiting, or who reviewed it, when, and what they decided

@@ -66,7 +66,6 @@ export type AlbumList = {
 export type TrashPhoto = Pick<Photo, 'id' | 'url' | 'thumbnailUrl' | 'miniUrl' | 'downloadUrl'> & { albumId: string; albumName: string; deletedAt: string; purgeAt: string };
 /** A photo you hid from your own view */
 export type HiddenPhoto = Pick<Photo, 'id' | 'url' | 'thumbnailUrl' | 'miniUrl' | 'downloadUrl' | 'by'> & { albumId: string; albumName: string };
-export type LikedPhoto = Pick<Photo, 'id' | 'url' | 'thumbnailUrl' | 'miniUrl' | 'by'> & { albumId: string; albumName: string; likedAt: string };
 export type GroupMember = { id: string; name: string; avatarUrl?: string; role: 'owner' | 'member'; you: boolean; since: string };
 export type Group = { id: string; name: string; role: 'owner' | 'member'; members: GroupMember[]; inviteCode?: string; invites?: unknown[] };
 export type Config = { captcha?: { siteKey?: string }; googleClientId?: string | null; [k: string]: unknown };
@@ -184,7 +183,6 @@ export const api = {
   },
 
   photos: {
-    liked: () => request<{ photos: LikedPhoto[] }>('/api/photos/liked'),
     bookmarked: () => request<{ photos: Photo[] }>('/api/photos/bookmarked'),
   },
 

@@ -14,7 +14,8 @@ export function cors(req, res, next) {
       // Every method a route uses (PUT: the album cover). A missing one makes the browser block the
       // request before it's sent, and the page can only say it "can't reach Momento".
       res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
-      res.set('Access-Control-Allow-Headers', 'Content-Type, X-Momento-Location');
+      // (x-amz-checksum-sha256: the local stand-in for direct uploads, PUT /api/uploads/local/:token)
+      res.set('Access-Control-Allow-Headers', 'Content-Type, X-Momento-Location, x-amz-checksum-sha256');
       res.set('Access-Control-Max-Age', '86400');
       return res.sendStatus(204);
     }

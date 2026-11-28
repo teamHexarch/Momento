@@ -98,6 +98,11 @@ team) are for the **admin team: at most 6 people** (`admin_staff`, slots 1-6; a 
   browser for **4 hours** (httpOnly cookie). Without it every admin endpoint answers `403 ADMIN_CODE_REQUIRED`;
   accounts not on the team get a plain 404.
 - **5 wrong codes in 15 minutes** (per IP address and per email) lock code entry for the rest of those 15 minutes.
+- **Owners' second step** (an authenticator app): `npm run admin-team -- totp <slot>` prints a secret (and an
+  `otpauth://` link) once; add it to Google Authenticator, 1Password or similar. From then on that owner enters the
+  app's 6-digit code after their own code (each code works once). Lost phone: `npm run admin-team -- totp-off <slot>`,
+  then `totp <slot>` again. The secret is kept encrypted with `ADMIN_TOTP_KEY` (or `JWT_SECRET` when that isn't set),
+  so changing that key means setting the app up again.
 - Owners manage the slots: `GET /api/admin/team`, `PUT /api/admin/team/:slot` (assign; the new code is in the answer
   once), `POST /api/admin/team/:slot/rotate`, `DELETE /api/admin/team/:slot`, and the log at `GET /api/admin/audit`.
   Changing a code or removing someone ends their access at once. From the server:
@@ -187,8 +192,6 @@ CLOUDFRONT_PRIVATE_KEY=
 
 # ---- Nudity check (on by default; see "What the server does by itself") ----
 # NSFW_CHECK=off
-# How sure the model must be before a photo is refused (0 to 1)
-# NSFW_THRESHOLD=0.6
 
 # ---- Security and privacy (see "Security and privacy") ----
 # Where security alerts go: an email address and/or a Slack/Discord incoming webhook (both optional)
@@ -256,6 +259,21 @@ they're in the album, then sends their browser to a signed link straight to S3 t
 The server checks the bucket at startup and prints `Photos: Amazon S3 bucket "…"`, or stops with the reason.
 
 Without `S3_BUCKET`, photos are stored in `UPLOAD_DIR` on the machine, which is fine locally.
+
+**Direct uploads** (`DIRECT_UPLOADS=on`): phones send each photo straight to the bucket with a signed link, instead of
+through the server (`services/directUploads.js`); the old way stays as the fallback. Before turning it on:
+
+1. Bucket CORS (S3 → the photo bucket → Permissions → CORS), so the site may PUT to it:
+   ```json
+   [{ "AllowedOrigins": ["https://hexarch.org", "https://www.hexarch.org"], "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["content-type", "x-amz-checksum-sha256"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3000 }]
+   ```
+2. A lifecycle rule on the same bucket: prefix `quarantine/direct/`, expire current versions after **2 days**
+   (photos sent but never processed).
+3. `DIRECT_UPLOADS=on` in `server.env`, then `sudo momento-update`. `GET /api/config` then says `uploads.direct: true`.
+
+The server's key already has `s3:PutObject` on the bucket, which is what the links use. Locally (no S3) direct uploads
+work through a stand-in (`PUT /api/uploads/local/:token`), never in production.
 
 ## Album life cycle
 
@@ -354,13 +372,12 @@ Every hour (src/services/jobs.js), each job claiming its work first so nothing h
 Every 6 hours: photos more than 30 days in the Recently deleted bin are removed for good.
 
 Other things to know:
-- **Nudity check**: one free model (NSFW.js, MobileNetV2) runs on the server itself (about 160 MB of
-  memory, under a second per photo, one at a time); no GPU or other service. Album photos are saved
-  privately, checked in the background and published only when the check is confident. The rest are
-  declined: the uploader sees "Declined" with **Request review**, which puts the photo on `review.html` for
-  staff and emails `STAFF_REVIEW_EMAIL` (team@hexarch.org). Declined photos nobody asks about are deleted
+- **Nudity check**: AWS Rekognition (services/rekognitionService.js) gives each photo one of 7 levels, with fixed
+  label thresholds. Album photos are saved privately, checked in the background and published at level 0-75; from
+  level 25, only if nobody in it may be under 18 (otherwise staff look first). Level 85-95 is declined: the uploader
+  sees "Declined" with **Request review**, which puts the photo on `review.html` for staff and emails
+  `STAFF_REVIEW_EMAIL` (team@hexarch.org). Level 100 is never published. Declined photos nobody asks about are deleted
   after 30 days. Covers and profile pictures are checked as they're added (422, `code: "nsfw"` when explicit).
-  The check learns from staff ratings on the review page (services/stageOneLearning.js).
 - New photos skip duplicates (the same file twice in one album), and their originals are stored in S3
   Intelligent-Tiering (the same speed, cheaper once a photo hasn't been opened for a while).
 - 5 wrong passwords in a row lock that account for 15 minutes (resetting the password lifts it).

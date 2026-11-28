@@ -1,4 +1,4 @@
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getSignedUrl as cloudFrontUrl } from '@aws-sdk/cloudfront-signer';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -75,6 +75,26 @@ export function objectStorage({ name, label, client, bucket, keyHint, cdn }) {
     async folders(prefix) {
       const out = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, Delimiter: '/' }));
       return (out.CommonPrefixes || []).map((p) => p.Prefix);
+    },
+    // ---- Direct uploads (audit B3): the browser puts the file straight into the bucket ----
+    // A signed PUT link for one file, good for `seconds`. S3 itself checks the file's SHA-256 (the signed
+    // x-amz-checksum-sha256 header, which the browser must send as given), so what arrives is exactly the file the
+    // server was told about, and the server never has to read it to know its fingerprint.
+    async presignPut(key, { sha256Base64 }, seconds = 900) {
+      const headers = { 'Content-Type': 'application/octet-stream', 'x-amz-checksum-sha256': sha256Base64 };
+      const url = await getSignedUrl(client, new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: headers['Content-Type'], ChecksumSHA256: sha256Base64 }),
+        { expiresIn: seconds, unhoistableHeaders: new Set(['x-amz-checksum-sha256']), signableHeaders: new Set(['content-type', 'x-amz-checksum-sha256']) });
+      return { url, method: 'PUT', headers };
+    },
+    // What's stored under a key: { size, sha256Base64 } (the checksum S3 checked on upload), or null when it isn't there
+    async head(key) {
+      try {
+        const out = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key, ChecksumMode: 'ENABLED' }));
+        return { size: out.ContentLength, sha256Base64: out.ChecksumSHA256 || null };
+      } catch (err) {
+        if (err.$metadata?.httpStatusCode === 404 || err.name === 'NotFound') return null;
+        throw err;
+      }
     },
     // Deletes every file under a prefix
     async removePrefix(prefix) {

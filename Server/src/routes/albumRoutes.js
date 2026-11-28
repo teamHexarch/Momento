@@ -85,6 +85,10 @@ albumRoutes.post('/:id/photos/known', albums.knownHashes);
 // The upload agreement ("I took these photos or have permission to share them..."), once per album and Terms version
 albumRoutes.post('/:id/consent', perAccount(60, 120, 'That’s a lot of agreeing. Wait a while, then try again.'), albums.giveUploadConsent);
 albumRoutes.post('/:id/photos', uploadLimit, whenOpen('uploads'), dailyQuota, uploadBudget, albums.checkMember, upload.array('photos', 30), albums.addPhotos);
+// Direct uploads (audit B3): links to send each photo straight to S3, then "process" once they're there
+// (services/directUploads.js). Counted in the same 600 uploads an hour as POST /photos.
+albumRoutes.post('/:id/uploads', uploadLimit, whenOpen('uploads'), albums.checkMember, albums.presignUploads);
+albumRoutes.post('/:id/uploads/process', whenOpen('uploads'), albums.checkMember, albums.processUploads);
 albumRoutes.get('/:id/download', downloadLimit, albums.download);
 // The emailed link to a big album's zip (made in the background)
 albumRoutes.get('/:id/zip/:token', albums.zipFile);

@@ -16,4 +16,4 @@ const store = objectStorage({
   cdn: config.aws.cloudfront,
 });
 
-export const { name, init, save, saveStream, send, open, remove, removeMany, folders, removePrefix } = store;
+export const { name, init, save, saveStream, send, open, remove, removeMany, folders, removePrefix, presignPut, head } = store;

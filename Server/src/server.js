@@ -6,14 +6,13 @@ import { app } from './app.js';
 import { purgeExpired } from './controllers/trashController.js';
 import { runJobs } from './services/jobs.js';
 import { sweepTimedGames } from './services/gameService.js';
-import { warmUp, usesRekognition } from './services/nsfwService.js';
-import { startUploadChecks, calibratedBins, calibrationError, activeTable, PUBLISH_BELOW, HARD_DECLINE_AT } from './services/uploadChecks.js';
-import { loadLearned, startLearning, relearnHours } from './services/stageOneLearning.js';
+import { startUploadChecks } from './services/uploadChecks.js';
 import { startRefusalCleanup } from './services/albumAudit.js';
 import { moveStaffRoleToPlan } from './services/planMigration.js';
 import { seedFromEnv, listTeam, MAX_ADMIN_STAFF } from './services/adminStaffService.js';
 
 await connectDb();
+await dropRetiredCollections();
 await moveStaffRoleToPlan();
 await initStorage();
 console.log(storageName === 's3' ? `Photos: Amazon S3 bucket "${config.aws.s3Bucket}" (${config.aws.region})`
@@ -33,25 +32,11 @@ setTimeout(runJobs, 2 * 60000).unref();
 setInterval(runJobs, 3600000).unref();
 // Every 15 seconds: timed event games whose time is up end, and their winners hear about it (services/gameService.js)
 setInterval(sweepTimedGames, 15000).unref();
-// The nudity check's model loads in the background, so the first upload isn't slow
-setTimeout(warmUp, 5000).unref();
-// The nudity check for album photos runs its queue here, with the same in-process model (services/uploadChecks.js)
-await loadLearned().catch((error) => console.error('Photo check learning:', error.message));
+// The nudity check for album photos runs its queue here (services/uploadChecks.js), with AWS Rekognition
 startUploadChecks();
 startRefusalCleanup();
-if (usesRekognition()) {
-  console.log('Photo checks: AWS Rekognition (7 levels). 0-75 publish, 85-95 stay private (the uploader may '
-    + 'ask for a review), 100 is never published. Thresholds learn from staff decisions.');
-} else {
-  const { source } = activeTable(), bins = calibratedBins();
-  console.log(`Photo checks: NSFW.js MobileNetV2 on this server. Risk under ${Math.round(PUBLISH_BELOW * 100)}% publishes; `
-    + `Porn or Hentai ${Math.round(HARD_DECLINE_AT * 100)}%+ is declined for good; the rest waits for the uploader's Request review`
-    + (source === 'file' ? `, except ${bins} score range(s) from the table file ${process.env.NSFW_CALIBRATION}`
-      : source === 'learned' ? `, except ${bins} score range(s) learned from staff reviews` : '')
-    + `. Relearns from staff reviews every ${relearnHours} h.`);
-  if (calibrationError) console.error('The calibration table file could not be read: only the thresholds apply until it is fixed.');
-}
-startLearning();
+console.log('Photo checks: AWS Rekognition (7 levels). 0-75 publish (from 25, staff look first if someone may be under 18), '
+  + '85-95 stay private (the uploader may ask for a review), 100 is never published.');
 // The admin team (at most 6, each with their own code): empty slots filled from ADMIN_STAFF_JSON / ADMIN_OWNER_* at start-up
 try {
   const added = await seedFromEnv();
@@ -81,3 +66,17 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 // A promise nobody caught is logged (with the redaction in utils/logRedaction.js) instead of passing silently
 process.on('unhandledRejection', (err) => console.error(`Unhandled rejection: ${err?.stack || err}`));
+
+// What the old NSFW.js engine kept is no longer used: its training features (1280 numbers per photo) and the
+// thresholds it learned. Dropped once at start-up (nothing happens when they're already gone).
+async function dropRetiredCollections() {
+  const { default: mongoose } = await import('mongoose');
+  for (const name of ['trainingsamples', 'moderationcalibrations']) {
+    try {
+      if (await mongoose.connection.db.listCollections({ name }, { nameOnly: true }).hasNext()) {
+        await mongoose.connection.db.dropCollection(name);
+        console.log(`Removed the retired collection "${name}"`);
+      }
+    } catch (error) { console.error(`Removing "${name}": ${error.message}`); }
+  }
+}

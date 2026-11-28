@@ -44,6 +44,7 @@ test('signed out: every page loads with nothing blocked, sign-up loads reCAPTCHA
   await form.locator('[name="name"]').fill('Policy Check');
   await form.locator('[name="email"]').fill('policy-check@example.invalid');
   await form.locator('[name="password"]').fill('Policy-check-123');
+  await form.locator('[name="birthDate"]').fill('1990-01-01');
   await form.locator('[type="submit"]').click();
   await expect(page.locator('iframe[src*="/recaptcha/"]').first()).toBeAttached({ timeout: 20000 });
   await settle(page, 3000);

@@ -69,6 +69,9 @@ export const saveStream = (key, stream, mimeType) => driver.saveStream(key, stre
 
 // A readable stream of the photo (for zip downloads)
 export const openPhoto = (key) => driver.open(key);
+// Direct uploads (services/directUploads.js): a signed PUT link for one file, and what arrived under a key
+export const presignUpload = (key, opts, seconds) => driver.presignPut(key, opts, seconds);
+export const headFile = (key) => driver.head(key);
 
 // Deterministic keys let old uploads gain compressed thumbnails on first use.
 const thumbnailJobs = new Map();

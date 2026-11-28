@@ -310,19 +310,13 @@ export default function start() {
     // ---- Photo bookmarks: private, just for you (there are no likes any more; reactions do that job) ----
     //   POST /api/photos/:id/bookmark { bookmarked }  ->  { bookmarked }
     //   GET  /api/photos/bookmarked                   ->  { photos: [{ id, albumId, albumName, url, thumbnailUrl, by, bookmarkedAt }] }
-    // A server that doesn't have these yet (404) keeps working through the old like endpoints.
     const isBookmarked = (p) => !!(p && (p.bookmarked ?? p.liked));
     const bookmarks = {
       async set(id, on) {
-        const path = '/api/photos/' + encodeURIComponent(id);
-        try { return !!(await momentoApi(path + '/bookmark', momentoJson('POST', { bookmarked: on }))).bookmarked; }
-        catch (err) { if (err.status !== 404) throw err; }
-        return !!(await momentoApi(path + '/like', momentoJson('POST', { liked: on }))).liked;
+        return !!(await momentoApi('/api/photos/' + encodeURIComponent(id) + '/bookmark', momentoJson('POST', { bookmarked: on }))).bookmarked;
       },
       async list() {
-        try { return (await momentoApi('/api/photos/bookmarked')).photos || []; }
-        catch (err) { if (err.status !== 404) throw err; }
-        return (await momentoApi('/api/photos/liked')).photos || [];
+        return (await momentoApi('/api/photos/bookmarked')).photos || [];
       },
     };
     let likedPhotos = null;   // null until the list has loaded
@@ -982,6 +976,58 @@ export default function start() {
         xhr.send(body);
       });
     }
+    // ---- Direct uploads: each photo straight to Momento's photo storage, not through the server ----
+    //   POST /api/albums/:id/uploads { files: [{ name, size, sha256 }] } → a signed link per photo
+    //   PUT the photo to its link (the storage checks it against its SHA-256)
+    //   POST /api/albums/:id/uploads/process { tickets } → the same answer as POST /photos
+    // Used whenever the server offers it (/api/config uploads.direct). If the very first one can't reach the storage
+    // (its settings don't allow this site yet), or the server says it's off, photos go the old way for the rest of
+    // the visit. Camera RAW files (too big to fingerprint comfortably on a phone) always go the old way.
+    let direct = null;   // null: not known yet, true: worked at least once, false: the old way only
+    async function sha256Hex(file) {
+      const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+      return Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, '0')).join('');
+    }
+    function putWithProgress(link, file, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        let watch = 0, stalled = false;
+        const arm = (ms) => { clearTimeout(watch); watch = setTimeout(() => { stalled = true; xhr.abort(); }, ms); };
+        xhr.open(link.method || 'PUT', link.url);
+        for (const [k, v] of Object.entries(link.headers || {})) xhr.setRequestHeader(k, v);
+        xhr.upload.addEventListener('progress', (e) => { arm(STALL_MS); if (e.lengthComputable) onProgress(e.loaded / e.total); });
+        xhr.upload.addEventListener('load', () => { arm(UPLOAD_ANSWER_MS); onProgress(1); });
+        // Any failure here counts as a connection problem (no status), so the batch is tried again with fresh links
+        const fail = (message, storage = false) => { clearTimeout(watch); reject(Object.assign(new Error(message), { storage })); };
+        xhr.addEventListener('load', () => (xhr.status >= 200 && xhr.status < 300 ? (clearTimeout(watch), resolve()) : fail('The photo storage refused the upload.')));
+        xhr.addEventListener('error', () => fail('The connection dropped during the upload.', true));
+        xhr.addEventListener('abort', () => (stalled ? fail('The connection stopped responding during the upload.') : (clearTimeout(watch), reject(Object.assign(new Error('The upload was cancelled.'), { cancelled: true })))));
+        arm(STALL_MS);
+        xhr.send(file);
+      });
+    }
+    async function sendDirect(albumId, b, onProgress) {
+      const hashes = await Promise.all(b.map(sha256Hex));
+      const base = '/api/albums/' + encodeURIComponent(albumId) + '/uploads';
+      const asked = await momentoApi(base, momentoJson('POST', { files: b.map((f, i) => ({ name: f.name, size: f.size, sha256: hashes[i] })) }));
+      const total = b.reduce((t, f) => t + f.size, 0) || 1, loaded = b.map(() => 0);
+      for (const i of asked.skipped || []) loaded[i] = b[i].size;
+      try {
+        await Promise.all((asked.uploads || []).map((u) => putWithProgress(u, b[u.i], (p) => {
+          loaded[u.i] = b[u.i].size * p; onProgress(loaded.reduce((t, n) => t + n, 0) / total);
+        })));
+      } catch (err) {
+        // The very first direct upload couldn't reach the storage at all: most likely its settings don't allow this
+        // site yet, so this visit uses the old way (the caller sends this batch again that way)
+        if (err.storage && direct === null && navigator.onLine !== false) { direct = false; return null; }
+        throw err;
+      }
+      direct = true;
+      const extra = { skipped: (asked.skipped || []).length, tooBig: asked.tooBig || [] };
+      if (!(asked.uploads || []).length) return { photos: [], checks: [], ...extra };
+      const d = await momentoApi(base + '/process', momentoJson('POST', { tickets: asked.uploads.map((u) => u.ticket) }));
+      return { ...d, skipped: (d.skipped || 0) + extra.skipped, tooBig: [...(d.tooBig || []), ...extra.tooBig] };
+    }
     const uploadEl = document.getElementById('upload'), uploadLabel = document.getElementById('uploadLabel');
     const uploadPct = document.getElementById('uploadPct'), uploadTrack = document.getElementById('uploadTrack'), uploadFill = document.getElementById('uploadFill');
     let uploadHide = 0;
@@ -1044,6 +1090,7 @@ export default function start() {
     momentoApi('/api/config').then((c) => {
       const u = c?.uploads;
       if (u && Number(u.maxPhotoMB) > 0) LIMITS = { maxPhotoMB: Number(u.maxPhotoMB), maxRawMB: Number(u.maxRawMB) || LIMITS.maxRawMB };
+      if (u && u.direct !== true) direct = false;   // this server takes photos only the old way
     }, () => {});
     const isRawFile = (f) => RAW_EXTS.includes(String(f?.name || '').split('.').pop().toLowerCase());
     Momento.isRawFile = isRawFile;
@@ -1123,17 +1170,28 @@ export default function start() {
       };
       const setSent = (b, n) => { for (const f of b) sent.set(f, n === 'all' ? f.size : f.size * n); paint(); };
       // Worth trying again: the connection dropped or stalled, the server was briefly busy or erred
-      const passing = (err) => !err.status || err.status >= 500 || (err.status === 429 && (err.code === 'upload-busy' || err.code === 'busy'));
+      // (upload-missing: a direct upload's photos didn't reach the storage; sent again with fresh links)
+      const passing = (err) => !err.status || err.status >= 500 || (err.status === 429 && (err.code === 'upload-busy' || err.code === 'busy')) || err.code === 'upload-missing';
       let consentResent = null;   // the agreement sent again, once for this upload (see consent-required below)
       async function sendBatch(b) {
         let retried = false, consentRetried = false;
         for (let attempt = 0; !stop; attempt++) {
           await online();
           if (stop) break;
-          const form = new FormData();
-          b.forEach((file) => form.append('photos', file));
           try {
-            const d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => setSent(b, Math.min(1, p)), headers);
+            // Straight to storage when the server offers it (not for camera RAW files); otherwise, or when that turns
+            // out not to work here, through the server as before
+            const tryDirect = direct !== false && window.crypto?.subtle && !b.some(isRawFile);
+            let d = tryDirect ? await sendDirect(a.id, b, (p) => setSent(b, Math.min(1, p))).catch((err) => {
+              if (err.code === 'direct-upload-off' || (err.status === 404 && !err.code)) { direct = false; return null; }
+              throw err;
+            }) : null;
+            if (!d) {
+              setSent(b, 0);
+              const form = new FormData();
+              b.forEach((file) => form.append('photos', file));
+              d = await sendWithProgress('/api/albums/' + a.id + '/photos', form, (p) => setSent(b, Math.min(1, p)), headers);
+            }
             r.added += d.photos?.length || 0; r.blocked += d.blocked || 0; r.removed += d.banned || 0;
             // A photo sent again after a dropped connection may have arrived the first time: the server then skips it
             // as a copy, but for this guest it simply went up

@@ -13,8 +13,10 @@
 - **Auth:** an HttpOnly login cookie set by `POST /api/auth/login` (or signup / Google). Requests send it with
   `credentials: 'include'`; there is no Authorization header. Writes are checked as same-origin (`sameOriginWrites`).
 - **Admin** (`/api/admin/*`): only the admin team's accounts (at most 6) see these (404 for everyone else). Everything except
-  `GET /api/admin/session`, `POST /api/admin/verify-code` `{ email, code }` and `POST /api/admin/lock` also needs the
+  `GET /api/admin/session`, `POST /api/admin/verify-code` `{ email, code, totp? }` and `POST /api/admin/lock` also needs the
   4-hour pass that `verify-code` sets (an httpOnly cookie); without it: `403` with `code: "ADMIN_CODE_REQUIRED"`.
+  Owners with an authenticator app set up also send its 6-digit code as `totp` (`GET /api/admin/session` says
+  `totpRequired`); missing: `401 ADMIN_TOTP_REQUIRED`, wrong or already used: `401 ADMIN_TOTP_WRONG`.
   5 wrong codes in 15 minutes: `429` with `code: "ADMIN_CODE_LOCKED"`. Team management (`/api/admin/team*`,
   `/api/admin/audit`) is for owners (`403 ADMIN_OWNER_ONLY` otherwise).
 - **Errors:** `{ "error": "Message to show as written", "code"?: "machine-code" }` with a 4xx/5xx status. Rate limits
@@ -78,7 +80,12 @@ questions and prompts 160. (Server/src/utils/text.js `LIMITS`.)
 - **What's stored:** iPhone HEIC/HEIF photos work (kept as HEIC, shown from a JPEG preview). Camera RAW files
   (.NEF, .CR3, .ARW, …) are stored as a JPEG of up to 2560 px; the RAW itself is not kept, so Download gives the JPEG.
   Previews are up to 2560 px, with no EXIF or GPS. The capture date is kept (`takenAt` on each photo).
-- Direct uploads to S3 (presigned links) are planned; until then uploads go through `POST /api/albums/:id/photos`.
+- **Direct uploads** (when `GET /api/config` has `uploads.direct: true`): `POST /api/albums/:id/uploads`
+  `{ files: [{ name, size, sha256 (hex) }] }` (1-30) → `{ uploads: [{ i, ticket, url, method: "PUT", headers }],
+  skipped: [i], tooBig: [names], expiresIn }`. PUT each file to its `url` with exactly those `headers` (no cookie; the
+  storage checks the SHA-256), then `POST /api/albums/:id/uploads/process` `{ tickets: [...] }` → the same answer as
+  `POST /api/albums/:id/photos` (plus `missing: [names]`). `409 upload-missing` when none arrived (send again);
+  `404 direct-upload-off` when the server takes uploads only through `POST /api/albums/:id/photos`, which still works.
 
 ## Joining an event: the location check
 
@@ -203,7 +210,6 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/admin/users/:id/unsuspend |
 | GET | /api/admin/moderation |
 | GET | /api/admin/moderation-status |
-| POST | /api/admin/moderation-status/relearn |
 | GET | /api/admin/moderation/:id/preview |
 | GET | /api/admin/moderation/:id |
 | POST | /api/admin/moderation/:id |
@@ -228,6 +234,8 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | DELETE | /api/albums/:id/membership |
 | POST | /api/albums/:id/photos/known |
 | POST | /api/albums/:id/photos |
+| POST | /api/albums/:id/uploads |
+| POST | /api/albums/:id/uploads/process |
 | GET | /api/albums/:id/download |
 | GET | /api/albums/:id/zip/:token |
 | POST | /api/albums/:id/hidden |
@@ -301,13 +309,10 @@ Paths are full paths. Generated from the server's route files on 2026-11-25; reg
 | POST | /api/notifications/push |
 | DELETE | /api/notifications/push |
 | GET | /api/photos/bookmarked |
-| GET | /api/photos/liked |
 | GET | /api/photos/:id |
 | GET | /api/photos/:id/download |
 | DELETE | /api/photos/:id |
 | POST | /api/photos/:id/bookmark |
-| POST | /api/photos/:id/like |
-| GET | /api/photos/:id/likes |
 | POST | /api/photos/:id/reaction |
 | GET | /api/photos/:id/reactions |
 | GET | /api/photos/:id/comments |

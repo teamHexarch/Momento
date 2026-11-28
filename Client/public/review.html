@@ -472,6 +472,8 @@
       <!-- 6 letters and numbers; typing or pasting fills them, and a full code unlocks by itself -->
       <div class="code-boxes" id="codeBoxes" role="group" aria-label="Admin code, 6 characters"></div>
       <input id="gateCode" name="code" type="hidden">
+      <!-- Owners with an authenticator app set up: its 6-digit code too (asked for only then) -->
+      <input class="gate-email" id="gateTotp" name="totp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" placeholder="6-digit code from your authenticator app" aria-label="Authenticator code" hidden>
       <p class="gate-err" id="gateErr" role="alert" hidden></p>
       <p class="gate-slots" id="gateSlots" hidden></p>
       <button class="btn btn-dark" type="submit" id="gateGo">Unlock</button>
@@ -853,13 +855,18 @@
       let s = null;
       try { s = await momentoApi('/api/admin/session'); } catch { /* the form still works */ }
       if (s?.staff?.email && !$('gateEmail').value) $('gateEmail').value = s.staff.email;
+      $('gateTotp').hidden = !s?.totpRequired; $('gateTotp').value = '';
       $('gateErr').hidden = !message; $('gateErr').textContent = message || '';
       $('gateCode').value = ''; $('gateGo').disabled = false;
       clearBoxes();
       if (!$('gate').open) $('gate').showModal();
       ($('gateEmail').value ? boxes[0] : $('gateEmail')).focus();
     }
-    $('gate').addEventListener('cancel', (e) => e.preventDefault());   // the code, or Back to Home
+    $('gate').addEventListener('cancel', (e) => e.preventDefault());
+    $('gateTotp').addEventListener('input', () => {
+      $('gateTotp').value = $('gateTotp').value.replace(/\D/g, '').slice(0, 6); $('gateErr').hidden = true;
+      if ($('gateTotp').value.length === 6 && codeNow().length === CODE_LEN) $('gateForm').requestSubmit();
+    });   // the code, or Back to Home
     // ---- The code boxes: one character each, capitals only, from the codes' own alphabet; a full code unlocks ----
     const CODE_LEN = 6, OK = /[A-Z0-9]/;
     const boxes = [];
@@ -881,7 +888,10 @@
       for (const c of chars) { if (i >= CODE_LEN) break; boxes[i].value = c; boxes[i].classList.add('is-filled'); i++; }
       $('codeBoxes').classList.remove('is-wrong'); $('gateErr').hidden = true;
       boxes[Math.min(i, CODE_LEN - 1)].focus();
-      if (codeNow().length === CODE_LEN && $('gateEmail').value.trim()) $('gateForm').requestSubmit();
+      if (codeNow().length === CODE_LEN && $('gateEmail').value.trim()) {
+        if (!$('gateTotp').hidden && $('gateTotp').value.length < 6) $('gateTotp').focus();
+        else $('gateForm').requestSubmit();
+      }
     };
     boxes.forEach((b, i) => {
       b.addEventListener('input', () => { const v = b.value; b.value = ''; b.classList.remove('is-filled'); if (v) fillFrom(i, v); });
@@ -899,10 +909,13 @@
       if (!email) { $('gateEmail').focus(); return; }
       const code = codeNow();
       if (code.length < CODE_LEN) { boxes[code.length].focus(); return; }
+      const totp = $('gateTotp').value.replace(/\s/g, '');
+      if (!$('gateTotp').hidden && totp.length < 6) { $('gateTotp').focus(); return; }
       $('gateCode').value = code;
       $('gateGo').disabled = true; $('gateErr').hidden = true;
       try {
-        const { staff } = await momentoApi('/api/admin/verify-code', momentoJson('POST', { email, code }));
+        const { staff } = await momentoApi('/api/admin/verify-code', momentoJson('POST', { email, code, ...(totp && { totp }) }));
+        $('gateTotp').value = '';
         dev = { reviewer: staff.name };
         $('gateCode').value = '';
         $('gate').close();
@@ -914,6 +927,10 @@
         $('gateErr').hidden = false;
         $('gateErr').textContent = err.message;
         if (err.code === 'ADMIN_CODE_LOCKED') { clearBoxes(); return; }
+        // The admin code was right; the authenticator code is missing or wrong: keep the code, ask for the 6 digits
+        if (err.code === 'ADMIN_TOTP_REQUIRED' || err.code === 'ADMIN_TOTP_WRONG') {
+          $('gateTotp').hidden = false; $('gateTotp').value = ''; $('gateTotp').focus(); return;
+        }
         // A wrong code: the boxes shake and empty, ready for another go
         $('codeBoxes').classList.remove('is-wrong'); void $('codeBoxes').offsetWidth; $('codeBoxes').classList.add('is-wrong');
         setTimeout(() => { clearBoxes(); boxes[0].focus(); }, 450);

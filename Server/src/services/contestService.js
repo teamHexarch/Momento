@@ -46,8 +46,8 @@ export async function submit(album, user, roundId, file) {
   const clean = await sanitizePhoto(file.buffer, { name: file.originalname || '' });
   const nsfw = await import('./nsfwService.js');
   const scores = nsfw.checkIsOff() ? null : await nsfw.scan(clean.preview);
-  const level = scores?.engine === 'rekognition' ? scores.level : (nsfw.isExplicit(scores) ? 100 : 0);
-  if (level >= BLOCK_LEVEL || (!scores?.engine && nsfw.isExplicit(scores))) {
+  const level = scores?.level ?? 0;
+  if (level >= BLOCK_LEVEL) {
     throw new HttpError(422, 'This photo can’t be entered: it looks like it contains nudity, which isn’t allowed on Momento.', 'nsfw');
   }
   const id = crypto.randomUUID();

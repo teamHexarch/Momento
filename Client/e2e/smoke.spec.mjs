@@ -74,7 +74,11 @@ test('uploads that keep failing are kept, listed, and sent with "Retry the rest"
 
   // Every upload fails, as on a connection that keeps dropping
   let broken = true;
-  await page.route('**/api/albums/*/photos', (route) => (broken && route.request().method() === 'POST' ? route.abort('connectionfailed') : route.fallback()));
+  // (both ways in: through the server, POST /photos, and straight to storage, POST /uploads then a PUT)
+  const failing = (route) => (broken && ['POST', 'PUT'].includes(route.request().method()) ? route.abort('connectionfailed') : route.fallback());
+  await page.route('**/api/albums/*/photos', failing);
+  await page.route('**/api/albums/*/uploads', failing);
+  await page.route('**/api/uploads/local/**', failing);
   await chooseAndConfirm(album, files);
 
   // Nothing lost: the page says which photos didn't go up, offers to send them again, and never asks for a refresh

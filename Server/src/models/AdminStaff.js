@@ -16,6 +16,11 @@ const schema = new mongoose.Schema({
   // Goes up when the code changes or the slot is revoked: every 4-hour pass issued before then stops working
   tokenVersion: { type: Number, default: 1 },
   codeRotatedAt: { type: Date, default: Date.now },
+  // Second step (audit L3): an authenticator app's 6-digit code, after the 6-character code. Set up with
+  // node scripts/adminTeam.js totp <slot>; required for every owner who has it set up (utils/totp.js).
+  totpSecret: { type: String, select: false },   // encrypted (utils/totp.js sealSecret)
+  totpEnabledAt: Date,
+  totpLastStep: { type: Number, select: false },  // the last code used can't be used again
   lastLoginAt: Date,
 }, { collection: 'admin_staff', timestamps: true, versionKey: false });
 

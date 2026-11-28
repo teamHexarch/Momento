@@ -3,7 +3,7 @@ import { audit } from '../services/auditService.js';
 import { AdminStaff } from '../models/AdminStaff.js';
 import {
   ADMIN_COOKIE, PASS_HOURS, MAX_ADMIN_STAFF, cookieOptions, issuePass, readPass, verifyStaff, normaliseEmail, normaliseCode,
-  listTeam, assignSlot, rotateCode, revokeSlot, publicStaff, logAdmin, TeamError,
+  listTeam, assignSlot, rotateCode, revokeSlot, publicStaff, logAdmin, TeamError, needsTotp, totpMatches,
 } from '../services/adminStaffService.js';
 
 const teamError = (error) => { throw error instanceof TeamError ? new HttpError(error.status, error.message, error.code) : error; };
@@ -13,11 +13,12 @@ export async function session(req, res) {
   const pass = await readPass(req.cookies?.[ADMIN_COOKIE], req.user);
   const s = req.teamMember;
   res.json({ staff: { slot: s.slot, name: s.name, email: s.email, role: s.role }, verified: !!pass,
-    expiresAt: pass?.expiresAt || null, maxStaff: MAX_ADMIN_STAFF, codeLength: 6 });
+    expiresAt: pass?.expiresAt || null, maxStaff: MAX_ADMIN_STAFF, codeLength: 6, totpRequired: needsTotp(s) });
 }
 
-// POST /api/admin/verify-code  { email, code }: the signed-in account's own email and code. 5 wrong tries in 15 minutes
-// (per IP address, and per email) lock it for the rest of those 15 minutes (routes/adminRoutes.js).
+// POST /api/admin/verify-code  { email, code, totp? }: the signed-in account's own email and code, and for an owner with
+// an authenticator app set up, its 6-digit code too (totp). 5 wrong tries in 15 minutes (per IP address, and per
+// email) lock it for the rest of those 15 minutes (routes/adminRoutes.js).
 export async function verifyCode(req, res) {
   const email = normaliseEmail(req.body?.email), code = normaliseCode(req.body?.code);
   const staff = email === normaliseEmail(req.user.email) ? await verifyStaff(email, code) : (await verifyStaff('', code), null);
@@ -25,6 +26,17 @@ export async function verifyCode(req, res) {
     await logAdmin('code.failed', { req, staff: req.teamMember, meta: { emailMatchesAccount: email === normaliseEmail(req.user.email) } });
     await audit('admin.code-failed', { req, meta: { slot: req.teamMember.slot } });
     throw new HttpError(401, 'That email and code don’t match. Check them and try again.', 'ADMIN_CODE_WRONG');
+  }
+  // The second step: an owner's authenticator code (audit L3)
+  if (needsTotp(staff)) {
+    if (!String(req.body?.totp ?? '').trim()) {
+      throw new HttpError(401, 'Enter the 6-digit code from your authenticator app.', 'ADMIN_TOTP_REQUIRED');
+    }
+    if (!await totpMatches(staff, req.body.totp)) {
+      await logAdmin('totp.failed', { req, staff });
+      await audit('admin.totp-failed', { req, meta: { slot: staff.slot } });
+      throw new HttpError(401, 'That authenticator code isn’t right (or was already used). Wait for the next one and try again.', 'ADMIN_TOTP_WRONG');
+    }
   }
   const pass = issuePass(staff, req.user);
   await AdminStaff.updateOne({ _id: staff._id }, { $set: { lastLoginAt: new Date() } });

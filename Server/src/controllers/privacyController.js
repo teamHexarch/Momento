@@ -133,7 +133,7 @@ export async function requestReview(req, res) {
   }
   // A second, closer look first: if it now comes out at level 75 or below, the photo is published and no person
   // needs to look (uploadChecks.secondLook). Otherwise (or if the look fails) it goes to staff as before.
-  // (usually already done when the photo was declined; done again here in case the thresholds have learned since)
+  // (usually already done when the photo was declined; done again here in case it couldn’t run then)
   if (await UploadCheck.exists({ _id: req.params.id, user: req.user._id, state: 'rejected' })) {
     const { secondLookDecides } = await import('../services/uploadChecks.js');
     const published = await secondLookDecides(req.params.id, { userId: req.user._id }).catch((err) => { console.error('Second look failed: %s', err.message); return false; });

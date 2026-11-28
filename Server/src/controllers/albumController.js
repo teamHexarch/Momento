@@ -26,7 +26,9 @@ import { UploadCheck } from '../models/UploadCheck.js';
 import { UploadConsent } from '../models/UploadConsent.js';
 import { ModerationDecision } from '../models/ModerationDecision.js';
 import { isBanned, BANNED_MESSAGE } from '../services/contentSafety.js';
-import { sendPhoto, removeFile } from '../services/storageService.js';
+import { sendPhoto, removeFile, presignUpload, headFile } from '../services/storageService.js';
+import { directUploadsOn, issueTicket, readTicket, newKey, hexToBase64, LINK_SECONDS } from '../services/directUploads.js';
+import { chargeDailyQuota } from '../middleware/uploadBudget.js';
 
 const PREVIEW_PICS = 12;
 // Absolute, because the pages may be on another address (hexarch.org) than this API
@@ -900,6 +902,62 @@ async function queueBatch(req, files) {
   if (failure) throw failure.reason;
   return { checks, skipped, banned, tooBig, overLimit, caps, roomMine, roomAlbum };
 }
+// ---- Direct uploads (audit B3; services/directUploads.js) ----
+// POST /api/albums/:id/uploads  { files: [{ name, size, sha256 (hex) }] } (1-30; members of an open album who agreed)
+// → { uploads: [{ i, ticket, url, method, headers }], skipped: [i] (already in the album), tooBig: [names], expiresIn }
+// 404 direct-upload-off when this server takes uploads only the old way (POST /photos).
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+export async function presignUploads(req, res) {
+  if (!directUploadsOn()) throw new HttpError(404, 'Direct uploads aren’t on here: send the photos the usual way.', 'direct-upload-off');
+  const list = req.body?.files;
+  if (!Array.isArray(list) || !list.length || list.length > 30) throw new HttpError(400, 'Send 1 to 30 photos at a time.', 'BAD_UPLOAD_LIST');
+  const files = list.map((f, i) => ({ i, name: String(f?.name ?? '').slice(0, 200), size: Number(f?.size), sha256: String(f?.sha256 ?? '').toLowerCase() }));
+  if (files.some((f) => !f.name || !Number.isInteger(f.size) || f.size <= 0 || !SHA256_HEX.test(f.sha256))) {
+    throw new HttpError(400, 'Each photo needs its name, size and SHA-256.', 'BAD_UPLOAD_LIST');
+  }
+  const album = req.membership.album;
+  const tooBig = files.filter((f) => f.size > (isRawName(f.name) ? config.maxRawUploadBytes : config.maxUploadBytes));
+  const there = new Set((await Photo.find({ album: album._id, hash: { $in: files.map((f) => f.sha256) }, deletedAt: null }, 'hash')).map((p) => p.hash));
+  const send = files.filter((f) => !tooBig.includes(f) && !there.has(f.sha256));
+  // The day's quota is counted before anything is sent (audit M3)
+  await chargeDailyQuota(req, send.reduce((t, f) => t + f.size, 0));
+  const uploads = await Promise.all(send.map(async (f) => {
+    const key = newKey(req.user._id);
+    const link = await presignUpload(key, { sha256Base64: hexToBase64(f.sha256) }, LINK_SECONDS);
+    return { i: f.i, ticket: issueTicket({ key, userId: req.user._id, albumId: album._id, name: f.name, size: f.size, sha256: f.sha256 }), ...link };
+  }));
+  res.json({ uploads, skipped: files.filter((f) => there.has(f.sha256)).map((f) => f.i), tooBig: tooBig.map((f) => f.name), expiresIn: LINK_SECONDS });
+}
+
+// POST /api/albums/:id/uploads/process  { tickets: [...] } (1-30) → the same answer as POST /photos, plus
+// missing: [names] that didn't arrive (or not as described). 409 upload-missing when none of them did.
+export async function processUploads(req, res) {
+  if (!directUploadsOn()) throw new HttpError(404, 'Direct uploads aren’t on here: send the photos the usual way.', 'direct-upload-off');
+  const tickets = req.body?.tickets;
+  if (!Array.isArray(tickets) || !tickets.length || tickets.length > 30) throw new HttpError(400, 'Send 1 to 30 tickets at a time.', 'BAD_UPLOAD_LIST');
+  const album = req.membership.album;
+  const read = tickets.map((t) => readTicket(t, { userId: req.user._id, albumId: album._id }));
+  if (read.some((t) => !t)) throw new HttpError(400, 'That upload link has expired or isn’t yours. Upload the photos again.', 'BAD_TICKET');
+  const files = [], missing = [], wrong = [];
+  // Each one really arrived, as described: same size, and the SHA-256 S3 checked (one small request each, no download)
+  await Promise.all(read.map(async (t) => {
+    const got = await headFile(t.key);
+    if (!got) { missing.push(t.name); return; }
+    if (got.size !== t.size || got.sha256Base64 !== hexToBase64(t.sha256)) { missing.push(t.name); wrong.push(t.key); return; }
+    files.push({ rawKey: t.key, hash: t.sha256, size: got.size, originalname: t.name });
+  }));
+  await Promise.all(wrong.map((k) => removeFile(k).catch(() => {})));
+  if (!files.length) throw new HttpError(409, 'The photos didn’t arrive. Try again.', 'upload-missing', { missing });
+  res.locals.missing = missing;
+  try {
+    const batch = await inTurn(String(album._id), () => queueBatch(req, files));
+    return await answerBatch(req, res, batch);
+  } finally {
+    // Anything not queued (a copy already in the album, over a cap, taken down before) is removed from the bucket
+    await Promise.all(files.filter((f) => !f.queued).map((f) => removeFile(f.rawKey).catch(() => {})));
+  }
+}
+
 async function answerBatch(req, res, { checks, skipped, banned, tooBig, overLimit, caps, roomMine, roomAlbum }) {
   // Nothing could be added, only because of size: say why
   if (!checks.length && !skipped && !banned && tooBig.length) {
@@ -928,6 +986,7 @@ async function answerBatch(req, res, { checks, skipped, banned, tooBig, overLimi
     checks: waiting, skipped, banned, tooBig, overLimit, uploadLimits: caps,
     declined: waiting.filter(c => c.state === 'rejected').length, blocked: waiting.filter(c => c.state === 'rejected').length,
     decisionIds: waiting.filter(c => c.state === 'rejected').map(c => c.id), failed: waiting.filter(c => c.state === 'failed').map(c => c.name),
+    ...(res.locals.missing?.length && { missing: res.locals.missing }),
   });
 }
 
