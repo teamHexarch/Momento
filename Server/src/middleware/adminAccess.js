@@ -7,7 +7,8 @@ import { ADMIN_COOKIE, readPass, staffForUser } from '../services/adminStaffServ
 // 2. requireAdminCode: a valid 4-hour pass from entering their own code (POST /api/admin/verify-code), else
 //    403 ADMIN_CODE_REQUIRED. Puts the person on req.admin ({ slot, name, email, role }) so every action is logged
 //    against them (services/auditService.js, models/AdminAuditLog.js). Responses are never cached.
-// 3. requireOwner: owners only (managing the team).
+// 3. requireOwner: owners only (managing the team), and only with their authenticator app set up: adding someone
+//    emails them a link to choose a code, so it needs more than a code typed on the shared account.
 export async function requireTeamAccount(req, res, next) {
   res.set('Cache-Control', 'private, no-store');
   if (!req.user?.emailVerified) return next(new HttpError(404, 'Not found.'));
@@ -24,7 +25,8 @@ export async function requireAdminCode(req, res, next) {
     return next(new HttpError(403, 'Enter your 6-character admin code to continue.', 'ADMIN_CODE_REQUIRED'));
   }
   const { staff } = pass;
-  req.admin = { slot: staff.slot, name: staff.name, email: staff.email, role: staff.role, passId: pass.passId, expiresAt: pass.expiresAt };
+  req.admin = { slot: staff.slot, name: staff.name, email: staff.email, role: staff.role, passId: pass.passId, expiresAt: pass.expiresAt,
+    totp: !!staff.totpEnabledAt };
   // Older code reads the person from req.dev (the earlier Dev Mode): same person, same session id
   req.dev = { reviewerLabel: staff.name, sessionId: pass.passId, reviewerId: staff._id };
   next();
@@ -32,5 +34,6 @@ export async function requireAdminCode(req, res, next) {
 
 export function requireOwner(req, res, next) {
   if (req.admin?.role !== 'owner') return next(new HttpError(403, 'Only an owner can manage the admin team.', 'ADMIN_OWNER_ONLY'));
+  if (!req.admin.totp) return next(new HttpError(403, 'Set up your authenticator app first (npm run admin-team -- totp <slot> on the server).', 'ADMIN_TOTP_SETUP_NEEDED'));
   next();
 }
