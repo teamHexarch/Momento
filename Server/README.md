@@ -730,7 +730,7 @@ record, so nobody is cut off in between.
 ## Updating the server later
 
 `sudo momento-update` only deploys a commit whose **Server tests** passed (GitHub Actions,
-`.github/workflows/server-tests.yml`; the tests are in the private repo `teamHexarch/momento-tests`). It waits up to 20
+`.github/workflows/server-tests.yml`, running `Server/scripts/run-tests.sh`; add a new test script's name there). It waits up to 20
 minutes for the run. `sudo momento-update --force` deploys anyway.
 
 Push the code to GitHub, then on the Lightsail instance > **Connect using SSH**:

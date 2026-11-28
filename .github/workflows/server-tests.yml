@@ -1,7 +1,6 @@
-# The server's tests (audit B2), on every push to main and every pull request. The tests themselves live in the
-# private repo teamHexarch/momento-tests (the team rule: no tests in this public repo), read with the secret
-# MOMENTO_TESTS_TOKEN (a fine-grained token: Contents read-only, that repo only). They run on a throwaway in-memory
-# database (mongodb-memory-server) with stand-ins for AWS: nothing here touches production.
+# The server's tests (audit B2), on every push to main and every pull request: Server/scripts/run-tests.sh, which runs
+# the test scripts on a throwaway in-memory database (mongodb-memory-server) with stand-ins for AWS. Nothing here
+# touches production or needs any secret.
 # `sudo momento-update` on the server refuses to deploy a commit whose run didn't pass (Server/deploy/update.sh).
 name: Server tests
 
@@ -28,14 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Get the tests (private repo)
-        uses: actions/checkout@v7
-        with:
-          repository: teamHexarch/momento-tests
-          token: ${{ secrets.MOMENTO_TESTS_TOKEN }}
-          path: private-tests
-          persist-credentials: false
-
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -53,4 +44,4 @@ jobs:
 
       - name: Run the tests
         working-directory: Server
-        run: bash ../private-tests/run.sh
+        run: bash scripts/run-tests.sh

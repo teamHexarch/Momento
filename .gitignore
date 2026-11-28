@@ -9,8 +9,8 @@ Screenshot*.png
 .DS_Store
 Thumbs.db
 
-# Tests and dev-only tools stay on the developer's PC, not on GitHub
-Server/scripts/test*.js
+# Dev-only tools stay on the developer's PC, not on GitHub. (The server's test scripts, Server/scripts/test*.js, are
+# in the repo: the Server tests GitHub Action runs them, audit B2.)
 Server/scripts/sendTestEmail.js
 Server/scripts/devMemory.js
 Client/screenshot.mjs
