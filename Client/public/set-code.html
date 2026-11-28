@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en" data-page="set-code">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- The link's key is after the # (never sent to any server, nor in a Referer) -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Choose your staff code | Momento</title>
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <style>[hidden] { display: none !important; }</style>
+  <script>
+  // Momento's staff team: each person chooses their own 6-character staff code here, from the one-time link emailed to
+  // them (Server: services/adminStaffService.js inviteSlot / chooseCode). The link is set-code#<key>; the key never
+  // leaves this page except to the API. Nobody else ever sees the code.
+  (() => {
+    let pref = 'system';
+    try { pref = localStorage.getItem('momento-theme') || 'system'; } catch (e) {}
+    const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+  </script>
+  <script src="assets/api.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/glass.css">
+  <style>
+    :root {
+      --paper: #F8F7FA; --dusk: #2E2C3A; --slate: #5C596B; --stone: #6F6B7D; --line: #D6D2DE; --surface: #FFFFFF;
+      --safe: #2F7D4F; --stop: #B4503F; --focus-ring: #2E2C3A;
+      --font-main: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
+    }
+    :root[data-theme="dark"] { --paper: #121119; --dusk: #F2EFF8; --slate: #B4AFC8; --stone: #9A95AE; --line: #2C2A38; --surface: #1C1B25;
+      --safe: #7CC79A; --stop: #F0A3A3; --focus-ring: #F2EFF8; }
+    html { background: radial-gradient(120% 80% at 20% 10%, #FFF8EC, transparent 55%), linear-gradient(160deg, #EDECF2, #C9D0E4) fixed; }
+    :root[data-theme="dark"] { background: radial-gradient(120% 80% at 20% 10%, #241F33, transparent 55%), linear-gradient(160deg, #15141C, #0E0D14) fixed; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px;
+      font-family: var(--font-main); color: var(--dusk); -webkit-font-smoothing: antialiased; }
+    .card { width: min(27rem, 100%); padding: 2rem 1.6rem 1.6rem; border-radius: 28px; text-align: center; }
+    .brand { margin: 0 0 1.2rem; font-weight: 750; letter-spacing: -.02em; font-size: 1.05rem; }
+    h1 { margin: 0 0 .6rem; font-size: 1.45rem; letter-spacing: -.03em; line-height: 1.25; }
+    p { margin: 0 0 .9rem; font-size: .93rem; line-height: 1.6; color: var(--slate); }
+    form { display: grid; gap: .9rem; margin-top: 1.1rem; }
+    .label { font-size: .8rem; font-weight: 650; color: var(--slate); text-align: left; }
+    .boxes { display: flex; justify-content: center; gap: .45rem; }
+    .boxes input { width: 2.6rem; height: 3.2rem; padding: 0; border: 0; border-radius: 12px; text-align: center; text-transform: uppercase;
+      font: 700 1.3rem var(--font-main); color: var(--dusk); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line); }
+    .boxes input:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring); }
+    .boxes.is-wrong { animation: shake .4s ease; }
+    @keyframes shake { 25% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-3px); } }
+    @media (prefers-reduced-motion: reduce) { .boxes.is-wrong { animation: none; } }
+    .rules { margin: 0; font-size: .8rem; color: var(--stone); }
+    .err { margin: 0; padding: .6rem .8rem; border-radius: 12px; font-size: .86rem; font-weight: 600; color: var(--stop); background: rgba(180, 80, 63, .08); }
+    .ok { color: var(--safe); font-weight: 700; }
+    button { min-height: 3rem; border: 0; border-radius: 100px; font: 650 .95rem var(--font-main); color: var(--paper); background: var(--dusk); cursor: pointer;
+      transition: opacity .2s ease, transform .2s ease; }
+    button:hover { opacity: .9; }
+    button:active { transform: scale(.98); }
+    button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+    button:disabled { opacity: .5; cursor: default; }
+  </style>
+</head>
+<body>
+  <main class="card glass">
+    <p class="brand">Momento</p>
+    <!-- Loading, then one of: choose, done, or the link no longer works -->
+    <section id="loading"><p>Checking your link…</p></section>
+    <section id="choose" hidden>
+      <h1 id="hello">Choose your staff code</h1>
+      <p>You’ll enter this code on the review page after signing in to the staff account. It says who you are, so what you do there is recorded under your name. Nobody else will see it, not even the owners.</p>
+      <form id="form" autocomplete="off">
+        <span class="label" id="l1">Your code</span>
+        <div class="boxes" id="first" role="group" aria-labelledby="l1"></div>
+        <span class="label" id="l2">Type it again</span>
+        <div class="boxes" id="again" role="group" aria-labelledby="l2"></div>
+        <p class="rules">6 letters and numbers, with at least one of each (like H7X2M9). Pick something only you would know.</p>
+        <p class="err" id="err" role="alert" hidden></p>
+        <button type="submit" id="go">Save my code</button>
+      </form>
+    </section>
+    <section id="done" hidden>
+      <h1><span class="ok">✓</span> Your code is saved</h1>
+      <p>Sign in to the staff account on the review page and enter your code. Keep it to yourself; if you forget it, ask an owner to send you a new link.</p>
+      <p><a href="review">Open the review page</a></p>
+    </section>
+    <section id="gone" hidden>
+      <h1>This link no longer works</h1>
+      <p id="goneText">It has expired or was already used. Ask an owner to send you a new one.</p>
+    </section>
+  </main>
+  <script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const token = decodeURIComponent(location.hash.slice(1));
+    // The key out of the address bar (and the browser's history), now that it's been read
+    history.replaceState(null, '', location.pathname);
+    const show = (id) => { for (const s of ['loading', 'choose', 'done', 'gone']) $(s).hidden = s !== id; };
+    const gone = (text) => { if (text) $('goneText').textContent = text; show('gone'); };
+    const LEN = 6, OK = /[A-Z0-9]/;
+    function makeBoxes(group, label) {
+      const boxes = [];
+      for (let i = 0; i < LEN; i++) {
+        const b = document.createElement('input');
+        b.type = 'text'; b.maxLength = 1; b.autocomplete = 'off'; b.spellcheck = false;
+        b.setAttribute('autocapitalize', 'characters'); b.setAttribute('aria-label', `${label}, character ${i + 1} of ${LEN}`);
+        boxes.push(b); group.append(b);
+      }
+      const fill = (at, text) => {
+        let i = at;
+        for (const c of String(text).toUpperCase().split('').filter((x) => OK.test(x))) { if (i >= LEN) break; boxes[i++].value = c; }
+        $('err').hidden = true;
+        if (i < LEN) boxes[i].focus();
+        else if (group.id === 'first') boxesAgain[0].focus();
+        else $('go').focus();
+      };
+      boxes.forEach((b, i) => {
+        b.addEventListener('input', () => { const v = b.value; b.value = ''; if (v) fill(i, v); });
+        b.addEventListener('paste', (e) => { e.preventDefault(); fill(i, e.clipboardData.getData('text')); });
+        b.addEventListener('focus', () => b.select());
+        b.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && !b.value && i > 0) { e.preventDefault(); boxes[i - 1].value = ''; boxes[i - 1].focus(); }
+          else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); boxes[i - 1].focus(); }
+          else if (e.key === 'ArrowRight' && i < LEN - 1) { e.preventDefault(); boxes[i + 1].focus(); }
+        });
+      });
+      return boxes;
+    }
+    const boxesFirst = makeBoxes($('first'), 'Your code');
+    const boxesAgain = makeBoxes($('again'), 'Your code again');
+    const read = (boxes) => boxes.map((b) => b.value).join('');
+    const wrong = (message, group) => {
+      $('err').textContent = message; $('err').hidden = false;
+      group.classList.remove('is-wrong'); void group.offsetWidth; group.classList.add('is-wrong');
+    };
+    const api = (method, body) => momentoApi('/api/admin-setup/' + encodeURIComponent(token), body ? momentoJson(method, body) : { method });
+
+    if (!/^[A-Za-z0-9_-]{30,100}$/.test(token)) return gone('This link isn’t complete. Open it straight from the email.');
+    api('GET').then((info) => {
+      const first = String(info.name || '').trim().split(/\s+/)[0];
+      if (first) $('hello').textContent = `Hi ${first}, choose your staff code`;
+      show('choose');
+      boxesFirst[0].focus();
+    }, (err) => gone(err.code === 'ADMIN_SETUP_EXPIRED' ? '' : err.message));
+
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = read(boxesFirst), again = read(boxesAgain);
+      if (code.length < LEN) return boxesFirst[code.length].focus();
+      if (!/[A-Z]/.test(code) || !/[0-9]/.test(code)) return wrong('Use at least one letter and one number.', $('first'));
+      if (again !== code) return wrong('The two codes aren’t the same. Type it again.', $('again'));
+      $('go').disabled = true;
+      try {
+        await api('POST', { code });
+        for (const b of [...boxesFirst, ...boxesAgain]) b.value = '';
+        show('done');
+      } catch (err) {
+        $('go').disabled = false;
+        if (err.code === 'ADMIN_SETUP_EXPIRED') return gone(err.message);
+        wrong(err.message, $('first'));
+        for (const b of [...boxesFirst, ...boxesAgain]) b.value = '';
+        boxesFirst[0].focus();
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

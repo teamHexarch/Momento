@@ -3,7 +3,7 @@ import express from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { installLogRedaction } from './utils/logRedaction.js';
 import { requestId, securityHeaders, inputGuard } from './middleware/security.js';
-import { adminRoutes } from './routes/adminRoutes.js';
+import { adminRoutes, adminSetupRoutes } from './routes/adminRoutes.js';
 import { supportRoutes } from './routes/supportRoutes.js';
 import { reviewRoutes } from './routes/reviewRoutes.js';
 import mongoose from 'mongoose';
@@ -111,6 +111,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin-setup', adminSetupRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/reviews', reviewRoutes);
@@ -127,7 +128,7 @@ app.get('/s/:code/:tag.jpg', shareLimit, shareImage);
 // In production the site is hosted on its own (FRONTEND_URL) and this server is API only.
 // Only what the Pages workflow publishes is served: the pages and simple files in assets/ and
 // assets/vendor/, assets/i18n/, assets/globe/ and assets/photos/, and the web app manifest (plain names, so not the design screenshot). Everything else in Client/ stays private.
-const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/events.html', '/groups.html', '/privacy.html', '/terms.html', '/review.html', '/404.html', '/manifest.webmanifest', '/favicon.ico']);
+const PUBLIC_PAGES = new Set(['/', '/index.html', '/albums.html', '/settings.html', '/support.html', '/events.html', '/groups.html', '/privacy.html', '/terms.html', '/review.html', '/set-code.html', '/404.html', '/manifest.webmanifest', '/favicon.ico']);
 const PUBLIC_ASSET = /^\/assets\/((vendor|i18n|globe|photos)\/)?[\w-]+(\.[\w-]+)*\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i;
 if (!config.serveClient) {
   console.log(`API only: the site is served from ${config.frontendUrl}.`);

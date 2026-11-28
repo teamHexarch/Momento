@@ -466,11 +466,10 @@
   <dialog class="pop glass gate-pop" id="gate" aria-labelledby="gateTitle">
     <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg></div>
     <h2 id="gateTitle">Admin access</h2>
-    <p id="gateText">Enter your email and admin code.</p>
+    <p id="gateText">Enter your own 6-character staff code. It says who you are, so what you do here is recorded under your name.</p>
     <form id="gateForm" class="gate-form" autocomplete="off">
-      <input class="gate-email" id="gateEmail" name="email" type="email" autocomplete="username" spellcheck="false" placeholder="Your email" aria-label="Email" required>
       <!-- 6 letters and numbers; typing or pasting fills them, and a full code unlocks by itself -->
-      <div class="code-boxes" id="codeBoxes" role="group" aria-label="Admin code, 6 characters"></div>
+      <div class="code-boxes" id="codeBoxes" role="group" aria-label="Staff code, 6 characters"></div>
       <input id="gateCode" name="code" type="hidden">
       <!-- Owners with an authenticator app set up: its 6-digit code too (asked for only then) -->
       <input class="gate-email" id="gateTotp" name="totp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" placeholder="6-digit code from your authenticator app" aria-label="Authenticator code" hidden>
@@ -854,19 +853,18 @@
     async function openGate(message) {
       let s = null;
       try { s = await momentoApi('/api/admin/session'); } catch { /* the form still works */ }
-      if (s?.staff?.email && !$('gateEmail').value) $('gateEmail').value = s.staff.email;
       $('gateTotp').hidden = !s?.totpRequired; $('gateTotp').value = '';
       $('gateErr').hidden = !message; $('gateErr').textContent = message || '';
       $('gateCode').value = ''; $('gateGo').disabled = false;
       clearBoxes();
       if (!$('gate').open) $('gate').showModal();
-      ($('gateEmail').value ? boxes[0] : $('gateEmail')).focus();
+      boxes[0].focus();
     }
-    $('gate').addEventListener('cancel', (e) => e.preventDefault());
+    $('gate').addEventListener('cancel', (e) => e.preventDefault());   // the code, or Back to Home
     $('gateTotp').addEventListener('input', () => {
       $('gateTotp').value = $('gateTotp').value.replace(/\D/g, '').slice(0, 6); $('gateErr').hidden = true;
       if ($('gateTotp').value.length === 6 && codeNow().length === CODE_LEN) $('gateForm').requestSubmit();
-    });   // the code, or Back to Home
+    });
     // ---- The code boxes: one character each, capitals only, from the codes' own alphabet; a full code unlocks ----
     const CODE_LEN = 6, OK = /[A-Z0-9]/;
     const boxes = [];
@@ -888,7 +886,7 @@
       for (const c of chars) { if (i >= CODE_LEN) break; boxes[i].value = c; boxes[i].classList.add('is-filled'); i++; }
       $('codeBoxes').classList.remove('is-wrong'); $('gateErr').hidden = true;
       boxes[Math.min(i, CODE_LEN - 1)].focus();
-      if (codeNow().length === CODE_LEN && $('gateEmail').value.trim()) {
+      if (codeNow().length === CODE_LEN) {
         if (!$('gateTotp').hidden && $('gateTotp').value.length < 6) $('gateTotp').focus();
         else $('gateForm').requestSubmit();
       }
@@ -905,8 +903,6 @@
     });
     $('gateForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = $('gateEmail').value.trim();
-      if (!email) { $('gateEmail').focus(); return; }
       const code = codeNow();
       if (code.length < CODE_LEN) { boxes[code.length].focus(); return; }
       const totp = $('gateTotp').value.replace(/\s/g, '');
@@ -914,7 +910,7 @@
       $('gateCode').value = code;
       $('gateGo').disabled = true; $('gateErr').hidden = true;
       try {
-        const { staff } = await momentoApi('/api/admin/verify-code', momentoJson('POST', { email, code, ...(totp && { totp }) }));
+        const { staff } = await momentoApi('/api/admin/verify-code', momentoJson('POST', { code, ...(totp && { totp }) }));
         $('gateTotp').value = '';
         dev = { reviewer: staff.name };
         $('gateCode').value = '';

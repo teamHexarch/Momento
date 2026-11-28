@@ -1,7 +1,11 @@
 // The admin team (models/AdminStaff.js): 6 people at most, each with their own 6-character code.
-// To use /api/admin, a person signs in to their own Momento account (the email in their slot), then enters that
-// email and their code (POST /api/admin/verify-code). That gives a signed pass, an httpOnly cookie valid for 4 hours,
-// tied to their slot and account. Changing their code or revoking the slot ends every pass at once (tokenVersion).
+// To use /api/admin, a person signs in to the shared staff account (ADMIN_ACCOUNT_EMAIL; ADMIN_OWNER_EMAIL when that
+// isn't set), or to a Momento account with their slot's own email, then enters their code
+// (POST /api/admin/verify-code). The code alone says which of them it is (codes are different for each person), so
+// every action is logged under their name. That gives a signed pass, an httpOnly cookie valid for 4 hours, tied to
+// their slot and the account. Changing their code or revoking the slot ends every pass at once (tokenVersion).
+// Each person chooses their own code from a one-time link emailed to their slot's address (inviteSlot, chooseCode),
+// so nobody else ever sees it.
 // Codes: exactly 6 characters, A-Z and 0-9, at least one letter and one digit (H7X2M9); typed in any case, stored only
 // as a salted scrypt hash, compared in constant time, and different for each person.
 import crypto from 'node:crypto';
@@ -47,6 +51,9 @@ async function codeIsFree(code, exceptId) {
   for (const s of others) if (await codeMatches(code, s.codeHash)) return false;
   return true;
 }
+// The shared staff account everyone signs in to (the code then says who it is)
+export const sharedAccountEmail = () => normaliseEmail(process.env.ADMIN_ACCOUNT_EMAIL || process.env.ADMIN_OWNER_EMAIL || '');
+export const isSharedAccount = (user) => Boolean(sharedAccountEmail()) && normaliseEmail(user?.email) === sharedAccountEmail();
 export async function uniqueCode(exceptId) {
   for (;;) { const code = generateCode(); if (await codeIsFree(code, exceptId)) return code; }
 }
@@ -66,14 +73,16 @@ const checkPerson = ({ name, email, role }) => {
   const r = role === 'owner' ? 'owner' : 'moderator';
   return { name: n, email: e, role: r };
 };
-export const publicStaff = (s) => s && ({ slot: s.slot, name: s.name, email: s.email, role: s.role, isActive: s.isActive,
-  lastLoginAt: s.lastLoginAt || null, codeRotatedAt: s.codeRotatedAt || null, totp: !!s.totpEnabledAt });
+export const publicStaff = (s, { codeKnown = false } = {}) => s && ({ slot: s.slot, name: s.name, email: s.email, role: s.role, isActive: s.isActive,
+  lastLoginAt: s.lastLoginAt || null, codeRotatedAt: s.codeRotatedAt || null, totp: !!s.totpEnabledAt,
+  // codeChosen: they've set their code; waiting: a setup link is out and not used yet
+  ...(codeKnown && { codeChosen: !!s.codeHash }), waiting: !!s.setupExpires && new Date(s.setupExpires) > new Date() });
 
 export async function listTeam() {
-  const staff = await AdminStaff.find().sort({ slot: 1 }).lean();
+  const staff = await AdminStaff.find().select('+codeHash').sort({ slot: 1 }).lean();
   const bySlot = new Map(staff.map((s) => [s.slot, s]));
   return { max: MAX_ADMIN_STAFF, used: staff.length,
-    slots: Array.from({ length: MAX_ADMIN_STAFF }, (_, i) => publicStaff(bySlot.get(i + 1)) || { slot: i + 1, empty: true }) };
+    slots: Array.from({ length: MAX_ADMIN_STAFF }, (_, i) => publicStaff(bySlot.get(i + 1), { codeKnown: true }) || { slot: i + 1, empty: true }) };
 }
 
 // Puts a person in a slot (a new person, or replacing whoever was there) with a fresh code. Returns { staff, code }:
@@ -104,6 +113,79 @@ export async function assignSlot(slot, person, code) {
     }
   }
   return { staff, code: finalCode };
+}
+
+// ---- Each person chooses their own code (a one-time link to their slot's email) ----
+export const SETUP_HOURS = 24;
+const SETUP_TRIES = 5;
+const tokenHash = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+// Puts a person in a slot (or sends the same person a new link: their old code stops working) and emails them a link to
+// choose their code. Until they do, the slot has no code and can't be used. Returns { staff, token } (the token is
+// only in the email; it's returned for the tests and the server's own command line when email isn't set up).
+export async function inviteSlot(slot, person) {
+  const n = checkSlot(slot), p = checkPerson(person);
+  const current = await AdminStaff.findOne({ slot: n });
+  const clash = await AdminStaff.findOne({ email: p.email, slot: { $ne: n } });
+  if (clash) throw new TeamError(409, `${p.email} already has slot ${clash.slot}.`, 'ADMIN_EMAIL_TAKEN');
+  if (current?.role === 'owner' && p.role !== 'owner' && !(await AdminStaff.exists({ role: 'owner', slot: { $ne: n } }))) {
+    throw new TeamError(409, 'The team needs at least one owner.', 'ADMIN_LAST_OWNER');
+  }
+  const token = crypto.randomBytes(32).toString('base64url');
+  const set = { ...p, isActive: true, setupTokenHash: tokenHash(token), setupExpires: new Date(Date.now() + SETUP_HOURS * 3600000), setupTries: 0 };
+  // A different person in the slot doesn't inherit the last one's authenticator app
+  const samePerson = current?.email === p.email;
+  const unset = { codeHash: 1, lastLoginAt: 1, ...(!samePerson && { totpSecret: 1, totpEnabledAt: 1, totpLastStep: 1 }) };
+  let staff;
+  if (current) {
+    staff = await AdminStaff.findOneAndUpdate({ _id: current._id }, { $set: set, $unset: unset, $inc: { tokenVersion: 1 } }, { returnDocument: 'after', strict: false });
+  } else {
+    try { staff = await AdminStaff.create({ slot: n, ...set }); }
+    catch (error) {
+      if (error.code === 'ADMIN_TEAM_FULL') throw new TeamError(409, error.message, 'ADMIN_TEAM_FULL');
+      if (error.code === 11000) throw new TeamError(409, 'That slot or email was just taken. Reload and try again.', 'ADMIN_SLOT_TAKEN');
+      throw error;
+    }
+  }
+  await sendSetupEmail(staff, token);
+  return { staff, token };
+}
+export const setupLink = (token) => `${config.frontendUrl}/set-code#${token}`;
+async function sendSetupEmail(staff, token) {
+  const [{ sendEmail }, { staffCodeSetupHtml }] = await Promise.all([import('./emailService.js'), import('./emailTemplates.js')]);
+  await sendEmail({ to: staff.email, subject: 'Choose your Momento staff code', html: staffCodeSetupHtml(staff.name, setupLink(token), SETUP_HOURS) });
+}
+// Sends the person in this slot a new link (a forgotten code): their current code stops working at once
+export async function reinviteSlot(slot) {
+  const n = checkSlot(slot);
+  const current = await AdminStaff.findOne({ slot: n }).lean();
+  if (!current) throw new TeamError(404, `Slot ${n} is empty.`, 'ADMIN_SLOT_EMPTY');
+  return inviteSlot(n, current);
+}
+const bySetupToken = (token) => (typeof token === 'string' && /^[A-Za-z0-9_-]{30,100}$/.test(token)
+  ? AdminStaff.findOne({ setupTokenHash: tokenHash(token), setupExpires: { $gt: new Date() }, isActive: true }).select('+setupTokenHash')
+  : null);
+// Who a setup link is for: { name, slot, role, expiresAt }, or null when it's expired or used
+export async function peekSetup(token) {
+  const s = await bySetupToken(token);
+  return s ? { name: s.name, slot: s.slot, role: s.role, expiresAt: s.setupExpires } : null;
+}
+// Sets the person's own code from their link (once). 5 refused codes end the link.
+export async function chooseCode(token, code) {
+  const staff = await bySetupToken(token);
+  if (!staff) throw new TeamError(410, 'This link has expired or was already used. Ask an owner to send a new one.', 'ADMIN_SETUP_EXPIRED');
+  const c = normaliseCode(code);
+  const refuse = async (status, message, errorCode) => {
+    const tries = (staff.get('setupTries') || 0) + 1;
+    await AdminStaff.updateOne({ _id: staff._id }, tries >= SETUP_TRIES ? { $unset: { setupTokenHash: 1, setupExpires: 1, setupTries: 1 } } : { $set: { setupTries: tries } }, { strict: false });
+    throw new TeamError(status, tries >= SETUP_TRIES ? 'Too many tries: this link no longer works. Ask an owner to send a new one.' : message, tries >= SETUP_TRIES ? 'ADMIN_SETUP_EXPIRED' : errorCode);
+  };
+  if (!CODE_PATTERN.test(c)) await refuse(400, 'A code is 6 letters and numbers, with at least one of each.', 'ADMIN_CODE_INVALID');
+  if (!(await codeIsFree(c, staff._id))) await refuse(409, 'Choose a different code.', 'ADMIN_CODE_TAKEN');
+  const done = await AdminStaff.findOneAndUpdate({ _id: staff._id, setupTokenHash: staff.setupTokenHash },
+    { $set: { codeHash: await hashCode(c), codeRotatedAt: new Date() }, $unset: { setupTokenHash: 1, setupExpires: 1, setupTries: 1 }, $inc: { tokenVersion: 1 } },
+    { returnDocument: 'after', strict: false });
+  if (!done) throw new TeamError(410, 'This link has expired or was already used. Ask an owner to send a new one.', 'ADMIN_SETUP_EXPIRED');
+  return done;
 }
 
 export async function rotateCode(slot) {
@@ -185,6 +267,18 @@ export async function seedFromEnv(env = process.env, log = console.log) {
 
 // ---- Checking a code, and the 4-hour pass ----
 const DUMMY_HASH = 'scrypt$00$00';
+// The active team member whose code this is, or null. Always the same work (one scrypt per slot), whatever the code.
+export async function staffByCode(code) {
+  const c = normaliseCode(code);
+  const team = await AdminStaff.find({ isActive: true }).select('+codeHash');
+  let found = null;
+  for (let i = 0; i < MAX_ADMIN_STAFF; i++) {
+    const s = team[i];
+    const ok = await codeMatches(c, s?.codeHash || DUMMY_HASH);
+    if (ok && s?.codeHash && !found) found = s;
+  }
+  return found && CODE_PATTERN.test(c) ? found : null;
+}
 // The active team member with this email and code, or null. The same scrypt work is done whether or not the email
 // is on the team, so a wrong guess takes the same time either way.
 export async function verifyStaff(email, code) {
@@ -209,12 +303,17 @@ export async function readPass(token, user) {
   try { p = jwt.verify(token, passSecret(), { algorithms: ['HS256'] }); } catch { return null; }
   if (p.typ !== 'admin' || p.uid !== String(user._id)) return null;
   const staff = await AdminStaff.findOne({ _id: p.sid, isActive: true }).lean();
-  if (!staff || staff.tokenVersion !== p.v || staff.email !== normaliseEmail(user.email)) return null;
+  if (!staff || staff.tokenVersion !== p.v || (!isSharedAccount(user) && staff.email !== normaliseEmail(user.email))) return null;
   return { staff, passId: p.jti, expiresAt: new Date(p.exp * 1000) };
 }
 
-// The active team member for this signed-in account (by email), or null
-export const staffForUser = (user) => (user?.email ? AdminStaff.findOne({ email: normaliseEmail(user.email), isActive: true }).lean() : null);
+// Whether this signed-in account may open the staff tools: the shared staff account ({ shared: true }: the code then
+// says who it is), or the account with a slot's own email (that slot). null for everyone else.
+export async function staffForUser(user) {
+  if (!user?.email) return null;
+  if (isSharedAccount(user)) return { shared: true, slot: 0, name: 'Staff account', email: normaliseEmail(user.email), role: null };
+  return AdminStaff.findOne({ email: normaliseEmail(user.email), isActive: true }).lean();
+}
 
 // ---- The per-person log ----
 export async function logAdmin(action, { req, staff, target, meta } = {}) {

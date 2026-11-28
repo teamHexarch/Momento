@@ -13,10 +13,15 @@
 - **Auth:** an HttpOnly login cookie set by `POST /api/auth/login` (or signup / Google). Requests send it with
   `credentials: 'include'`; there is no Authorization header. Writes are checked as same-origin (`sameOriginWrites`).
 - **Admin** (`/api/admin/*`): only the admin team's accounts (at most 6) see these (404 for everyone else). Everything except
-  `GET /api/admin/session`, `POST /api/admin/verify-code` `{ email, code, totp? }` and `POST /api/admin/lock` also needs the
+  `GET /api/admin/session`, `POST /api/admin/verify-code` `{ code, totp? }` and `POST /api/admin/lock` also needs the
   4-hour pass that `verify-code` sets (an httpOnly cookie); without it: `403` with `code: "ADMIN_CODE_REQUIRED"`.
   Owners with an authenticator app set up also send its 6-digit code as `totp` (`GET /api/admin/session` says
   `totpRequired`); missing: `401 ADMIN_TOTP_REQUIRED`, wrong or already used: `401 ADMIN_TOTP_WRONG`.
+  Staff sign in to the one shared staff account; the code alone says who it is (`session` has `shared: true` and
+  `staff: null` until a code is entered). Each person chooses their code at `/set-code#<key>` (the emailed link):
+  `GET /api/admin-setup/:key` → `{ name, slot, role, expiresAt }`, `POST /api/admin-setup/:key` `{ code }` → `{ ok, name }`;
+  `410 ADMIN_SETUP_EXPIRED` once used, expired or after 5 refused codes; `409 ADMIN_CODE_TAKEN`, `400 ADMIN_CODE_INVALID`.
+  Team management answers never contain a code (`emailed: true`).
   5 wrong codes in 15 minutes: `429` with `code: "ADMIN_CODE_LOCKED"`. Team management (`/api/admin/team*`,
   `/api/admin/audit`) is for owners (`403 ADMIN_OWNER_ONLY` otherwise).
 - **Errors:** `{ "error": "Message to show as written", "code"?: "machine-code" }` with a 4xx/5xx status. Rate limits

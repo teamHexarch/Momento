@@ -93,18 +93,23 @@ To try everything before Atlas is set up, run `npm run dev:memory`. It uses a te
 Photo review (`review.html`) and every `/api/admin` endpoint (moderation, reports, takedowns, thresholds, switches, the
 team) are for the **admin team: at most 6 people** (`admin_staff`, slots 1-6; a 7th can't be added).
 
-- Each person signs in to **their own Momento account** (the slot's email, confirmed), then enters that email and their
-  **own 6-character code** (A-Z and 0-9, at least one of each; only a salted scrypt hash is kept). That unlocks the
-  browser for **4 hours** (httpOnly cookie). Without it every admin endpoint answers `403 ADMIN_CODE_REQUIRED`;
-  accounts not on the team get a plain 404.
+- Everyone signs in to **the one shared staff account** (`ADMIN_ACCOUNT_EMAIL`; `ADMIN_OWNER_EMAIL` when that isn't
+  set: team@hexarch.org), then enters **their own 6-character code** (A-Z and 0-9, at least one of each; only a salted
+  scrypt hash is kept). The code alone says which of them it is (no two people have the same code), so the review page
+  shows "reviewing as <name>" and every action is logged under that name. That unlocks the browser for **4 hours**
+  (httpOnly cookie). Without it every admin endpoint answers `403 ADMIN_CODE_REQUIRED`; accounts not on the team get a
+  plain 404. (A Momento account with a slot's own email also works, with that slot's code only.)
+- **Nobody hands out codes.** Putting someone in a slot emails them a one-time link (24 hours) to `/set-code`, where
+  they choose their own code; nobody else, not even the owners, ever sees it. A forgotten code: `rotate` sends a new
+  link and the old code stops at once. The slot's email is only used for that link.
 - **5 wrong codes in 15 minutes** (per IP address and per email) lock code entry for the rest of those 15 minutes.
 - **Owners' second step** (an authenticator app): `npm run admin-team -- totp <slot>` prints a secret (and an
   `otpauth://` link) once; add it to Google Authenticator, 1Password or similar. From then on that owner enters the
   app's 6-digit code after their own code (each code works once). Lost phone: `npm run admin-team -- totp-off <slot>`,
   then `totp <slot>` again. The secret is kept encrypted with `ADMIN_TOTP_KEY` (or `JWT_SECRET` when that isn't set),
   so changing that key means setting the app up again.
-- Owners manage the slots: `GET /api/admin/team`, `PUT /api/admin/team/:slot` (assign; the new code is in the answer
-  once), `POST /api/admin/team/:slot/rotate`, `DELETE /api/admin/team/:slot`, and the log at `GET /api/admin/audit`.
+- Owners manage the slots: `GET /api/admin/team`, `PUT /api/admin/team/:slot` (assign: emails the
+  setup link), `POST /api/admin/team/:slot/rotate` (a new link), `DELETE /api/admin/team/:slot`, and the log at `GET /api/admin/audit`.
   Changing a code or removing someone ends their access at once. From the server:
   `npm run admin-team -- list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot>`
   (on Lightsail inside the api container).

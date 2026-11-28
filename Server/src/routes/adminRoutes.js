@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { requireTeamAccount, requireAdminCode, requireOwner } from '../middleware/adminAccess.js';
-import { normaliseEmail, logAdmin } from '../services/adminStaffService.js';
+import { logAdmin } from '../services/adminStaffService.js';
 import * as admin from '../controllers/adminController.js';
 import * as access from '../controllers/adminAccessController.js';
 
@@ -21,10 +21,11 @@ const codeLock = (key) => rateLimit({
   },
 });
 const lockByIp = codeLock((req) => 'admin-code-ip:' + ipKeyGenerator(req.ip));
-const lockByEmail = codeLock((req) => 'admin-code-email:' + (normaliseEmail(req.body?.email) || req.user.id));
+// (per account: on the shared staff account the whole team shares this one)
+const lockByAccount = codeLock((req) => 'admin-code-account:' + req.user.id);
 
 adminRoutes.get('/session', access.session);
-adminRoutes.post('/verify-code', lockByIp, lockByEmail, access.verifyCode);
+adminRoutes.post('/verify-code', lockByIp, lockByAccount, access.verifyCode);
 adminRoutes.post('/lock', access.lock);
 
 adminRoutes.use(requireAdminCode);
@@ -57,3 +58,11 @@ adminRoutes.put('/team/:slot', requireOwner, access.assign);
 adminRoutes.post('/team/:slot/rotate', requireOwner, access.rotate);
 adminRoutes.delete('/team/:slot', requireOwner, access.revoke);
 adminRoutes.get('/audit', requireOwner, access.auditLog);
+
+// Choosing your own code from the emailed one-time link (no sign-in; mounted at /api/admin-setup in app.js).
+// 20 requests in 15 minutes per IP address, on top of the link's own 5 tries.
+export const adminSetupRoutes = Router();
+adminSetupRoutes.use(rateLimit({ windowMs: 15 * 60000, limit: 20, keyGenerator: (req) => 'admin-setup:' + ipKeyGenerator(req.ip), standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: 'Too many tries. Wait 15 minutes, then try again.' } }));
+adminSetupRoutes.get('/:token', access.setupInfo);
+adminSetupRoutes.post('/:token', access.setupChoose);

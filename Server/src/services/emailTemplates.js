@@ -210,3 +210,17 @@ export function deviceReplacedHtml(user, newDevice, signedOut) {
     footer: 'If it wasn’t you, use “Forgot your password?” on the Momento log in screen straight away: a new password signs out every device. Then reply to this email so we can help.',
   });
 }
+
+// The admin team: the one-time link to choose your own staff code (services/adminStaffService.js inviteSlot)
+export function staffCodeSetupHtml(name, link, hours = 24) {
+  const first = (name || '').trim().split(/\s+/)[0];
+  return layout({
+    heading: 'Choose your Momento staff code',
+    paragraphs: [
+      `${first ? `Hi ${first}, you` : 'You'}’re on Momento’s staff team. Choose your own 6-character staff code (letters and numbers): you’ll enter it on the review page after signing in to the staff account, and everything you do there is recorded under your name.`,
+      `Nobody else sees your code, not even the owners. Keep it to yourself. This link works once, for ${hours} hours.`,
+    ],
+    button: { href: link, label: 'Choose my code' },
+    footer: 'If you weren’t expecting this, ignore it: nothing happens until a code is chosen.',
+  });
+}

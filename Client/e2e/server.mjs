@@ -17,7 +17,7 @@ const server = (file) => import(pathToFileURL(path.join(serverDir, file)).href);
 
 // Nothing from a developer's own settings leaks in (a real database, AWS keys, email)
 for (const key of Object.keys(process.env)) {
-  if (/^(AWS_|S3_|RECAPTCHA_|CAPTCHA_|EMAIL_|MONGODB_|FRONTEND_|CORS_|PUBLIC_|GOOGLE_|NSFW_|DEV_MODE_|VAPID_|UPLOAD_)/.test(key)) delete process.env[key];
+  if (/^(AWS_|S3_|RECAPTCHA_|CAPTCHA_|EMAIL_|MONGODB_|FRONTEND_|CORS_|PUBLIC_|GOOGLE_|NSFW_|DEV_MODE_|VAPID_|UPLOAD_|ADMIN_)/.test(key)) delete process.env[key];
 }
 // The database program is downloaded once into the server's own cache, shared with its tests
 process.env.MONGOMS_DOWNLOAD_DIR ||= path.join(serverDir, 'node_modules', '.cache', 'mongodb-memory-server');
@@ -28,6 +28,8 @@ Object.assign(process.env, {
   NODE_ENV: 'test', NSFW_CHECK: 'off', JWT_SECRET: 'momento-e2e-only-secret-not-used-anywhere-else-000',
   MONGODB_URI: mongo.getUri(), PORT: '4000', PUBLIC_URL: 'http://localhost:4000', FRONTEND_URL: 'http://localhost:3000',
   UPLOAD_DIR: uploads,
+  // The shared staff account (e2e/staff-code.spec.mjs): everyone signs in to it, and their own code says who it is
+  ADMIN_ACCOUNT_EMAIL: 'staff@example.invalid',
   // Uploads need the upload agreement on record (the website records it when the box is ticked)
   UPLOAD_CONSENT: 'on',
   // Google's scripts load for real, so the Content-Security-Policy check (e2e/csp.spec.mjs) sees them: reCAPTCHA's
@@ -80,11 +82,22 @@ for (const [i, g] of GUESTS.entries()) {
   }
 }
 
+// The staff team: the shared account, and one person per browser with a fresh link to choose their own code
+// (the link's key is what the emailed link carries; email isn't set up here)
+await person('Staff account', 'staff@example.invalid');
+const { inviteSlot } = await server('src/services/adminStaffService.js');
+const staff = {};
+for (const [i, g] of ['desktop', 'phone'].entries()) {
+  const name = g === 'desktop' ? 'Desi Reviewer' : 'Phoebe Reviewer';
+  staff[g] = { name, token: (await inviteSlot(i + 1, { name, email: `reviewer-${g}@example.invalid`, role: 'moderator' })).token };
+}
+
 fs.mkdirSync(path.join(here, '.run'), { recursive: true });
 fs.writeFileSync(path.join(here, '.run', 'seed.json'), JSON.stringify({
   api: 'http://localhost:4000', site: 'http://localhost:3000', password,
   host: 'host@example.invalid', guests: Object.fromEntries(GUESTS.map((g) => [g, `guest-${g}@example.invalid`])),
   albumId: album.id, code: album.displayCode, photos,
+  staffAccount: 'staff@example.invalid', staff,
 }, null, 2));
 
 const listener = app.listen(4000, () => console.log('e2e API ready on http://localhost:4000'));

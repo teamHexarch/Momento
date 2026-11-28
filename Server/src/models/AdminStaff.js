@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
 
 // The admin team: at most 6 people (slots 1-6), each with their own 6-character code (letters and numbers, kept only
-// as a salted scrypt hash). They open /api/admin (photo moderation, reports, thresholds, the team itself) by signing in
-// to their own Momento account (the slot's email) and entering their code (services/adminStaffService.js).
+// as a salted scrypt hash). They all sign in to the one shared staff account (ADMIN_ACCOUNT_EMAIL, team@hexarch.org),
+// and the code they enter says which of them it is, so every action is logged under their name
+// (services/adminStaffService.js). Each person chooses their own code from a one-time link emailed to their own
+// address (`email`, used only for that); nobody else ever sees it. Signing in to a Momento account with the slot's
+// own email works too.
 // A 7th person can't be added: the slot must be 1-6 and each slot holds one person (unique index).
 export const MAX_ADMIN_STAFF = 6;
 
@@ -10,7 +13,11 @@ const schema = new mongoose.Schema({
   slot: { type: Number, required: true, min: 1, max: MAX_ADMIN_STAFF, validate: Number.isInteger },
   name: { type: String, required: true, trim: true, maxlength: 40 },
   email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
-  codeHash: { type: String, required: true, select: false },
+  codeHash: { type: String, select: false },      // unset until the person chooses their code
+  // The one-time link to choose (or change) the code: only its SHA-256 is kept, and it ends at setupExpires
+  setupTokenHash: { type: String, select: false },
+  setupExpires: Date,
+  setupTries: { type: Number, default: 0 },
   role: { type: String, enum: ['owner', 'moderator'], default: 'moderator' },
   isActive: { type: Boolean, default: true },
   // Goes up when the code changes or the slot is revoked: every 4-hour pass issued before then stops working
