@@ -9,6 +9,35 @@ if [ ! -s /opt/momento-config/server.env ]; then
   exit 1
 fi
 
+# ---- Only code whose server tests passed (audit B2) ----
+# The "Server tests" GitHub Action (.github/workflows/server-tests.yml) runs on every push to main. This waits for
+# its run on the commit being deployed (up to 20 minutes) and stops unless it passed.
+#   sudo momento-update --force    deploys anyway (an emergency fix, or GitHub being down)
+if [ "${1:-}" = "--force" ]; then
+  echo "--force: deploying without checking the server tests."
+else
+  SHA="$(git -C /opt/momento rev-parse HEAD)"
+  URL="https://api.github.com/repos/teamHexarch/Momento/actions/workflows/server-tests.yml/runs?head_sha=$SHA&per_page=1"
+  echo "Checking the server tests for ${SHA:0:7}..."
+  STATE=""
+  for _ in $(seq 1 80); do
+    STATE="$(curl -fsS --max-time 15 "$URL" 2>/dev/null | python3 -c 'import sys, json
+runs = json.load(sys.stdin).get("workflow_runs") or []
+print(runs[0]["status"] + ":" + str(runs[0]["conclusion"]) if runs else "none")' 2>/dev/null || echo "unreachable")"
+    case "$STATE" in
+      completed:success) echo "Server tests passed."; break ;;
+      completed:*) echo "The server tests for ${SHA:0:7} didn't pass ($STATE). Not deploying."
+        echo "See https://github.com/teamHexarch/Momento/actions/workflows/server-tests.yml (or: sudo momento-update --force)"
+        exit 1 ;;
+      *) sleep 15 ;;
+    esac
+  done
+  if [ "$STATE" != "completed:success" ]; then
+    echo "The server tests for ${SHA:0:7} haven't finished ($STATE). Not deploying; try again in a few minutes (or --force)."
+    exit 1
+  fi
+fi
+
 cd /opt/momento/Server/deploy
 
 # Which address(es) Caddy gets HTTPS certificates for, e.g. "api.hexarch.org" or

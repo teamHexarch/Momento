@@ -1,0 +1,56 @@
+# The server's tests (audit B2), on every push to main and every pull request. The tests themselves live in the
+# private repo teamHexarch/momento-tests (the team rule: no tests in this public repo), read with the secret
+# MOMENTO_TESTS_TOKEN (a fine-grained token: Contents read-only, that repo only). They run on a throwaway in-memory
+# database (mongodb-memory-server) with stand-ins for AWS: nothing here touches production.
+# `sudo momento-update` on the server refuses to deploy a commit whose run didn't pass (Server/deploy/update.sh).
+name: Server tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-tests-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The test database program, downloaded once and kept between runs
+      MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.mongodb-binaries
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Get the tests (private repo)
+        uses: actions/checkout@v7
+        with:
+          repository: teamHexarch/momento-tests
+          token: ${{ secrets.MOMENTO_TESTS_TOKEN }}
+          path: private-tests
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Server/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: .mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('Server/package-lock.json') }}
+
+      - name: Install the server
+        working-directory: Server
+        run: npm ci --no-audit --no-fund
+
+      - name: Run the tests
+        working-directory: Server
+        run: bash ../private-tests/run.sh
