@@ -94,9 +94,6 @@ export async function assignSlot(slot, person, code) {
   const current = await AdminStaff.findOne({ slot: n });
   const clash = await AdminStaff.findOne({ email: p.email, slot: { $ne: n } });
   if (clash) throw new TeamError(409, `${p.email} already has slot ${clash.slot}.`, 'ADMIN_EMAIL_TAKEN');
-  if (current?.role === 'owner' && p.role !== 'owner' && !(await AdminStaff.exists({ role: 'owner', slot: { $ne: n } }))) {
-    throw new TeamError(409, 'The team needs at least one owner.', 'ADMIN_LAST_OWNER');
-  }
   const finalCode = chosen ?? await uniqueCode(current?._id);
   if (chosen && !(await codeIsFree(chosen, current?._id))) throw new TeamError(409, 'Someone else on the team has that code.', 'ADMIN_CODE_TAKEN');
   const codeHash = await hashCode(finalCode);
@@ -115,6 +112,17 @@ export async function assignSlot(slot, person, code) {
   return { staff, code: finalCode };
 }
 
+// ---- Owner or moderator, without a new link (their code stays) ----
+// The team may have no owner at all: then nobody manages it from the web, only from the server's command line
+// (scripts/adminTeam.js), which needs no code.
+export async function setRole(slot, role) {
+  const n = checkSlot(slot);
+  if (!['owner', 'moderator'].includes(role)) throw new TeamError(400, 'The role is owner or moderator.', 'ADMIN_ROLE_INVALID');
+  const staff = await AdminStaff.findOneAndUpdate({ slot: n }, { $set: { role } }, { returnDocument: 'after' });
+  if (!staff) throw new TeamError(404, `Slot ${n} is empty.`, 'ADMIN_SLOT_EMPTY');
+  return staff;
+}
+
 // ---- Each person chooses their own code (a one-time link to their slot's email) ----
 export const SETUP_HOURS = 24;
 const SETUP_TRIES = 5;
@@ -127,9 +135,6 @@ export async function inviteSlot(slot, person) {
   const current = await AdminStaff.findOne({ slot: n });
   const clash = await AdminStaff.findOne({ email: p.email, slot: { $ne: n } });
   if (clash) throw new TeamError(409, `${p.email} already has slot ${clash.slot}.`, 'ADMIN_EMAIL_TAKEN');
-  if (current?.role === 'owner' && p.role !== 'owner' && !(await AdminStaff.exists({ role: 'owner', slot: { $ne: n } }))) {
-    throw new TeamError(409, 'The team needs at least one owner.', 'ADMIN_LAST_OWNER');
-  }
   const token = crypto.randomBytes(32).toString('base64url');
   const set = { ...p, isActive: true, setupTokenHash: tokenHash(token), setupExpires: new Date(Date.now() + SETUP_HOURS * 3600000), setupTries: 0 };
   // A different person in the slot doesn't inherit the last one's authenticator app
@@ -203,9 +208,6 @@ export async function revokeSlot(slot, bySlot) {
   if (n === bySlot) throw new TeamError(409, 'You can’t remove yourself. Ask another owner.', 'ADMIN_SELF_REVOKE');
   const current = await AdminStaff.findOne({ slot: n });
   if (!current) throw new TeamError(404, `Slot ${n} is empty.`, 'ADMIN_SLOT_EMPTY');
-  if (current.role === 'owner' && !(await AdminStaff.exists({ role: 'owner', slot: { $ne: n } }))) {
-    throw new TeamError(409, 'The team needs at least one owner.', 'ADMIN_LAST_OWNER');
-  }
   await AdminStaff.deleteOne({ _id: current._id });
   return current;
 }

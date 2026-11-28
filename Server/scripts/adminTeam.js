@@ -5,6 +5,7 @@
 //   node scripts/adminTeam.js add <slot 1-6> <email> "<name>" [owner|moderator]   → emails them a link to choose a code
 //   node scripts/adminTeam.js rotate <slot>                                      → a new link (forgotten code; the old one stops)
 //   node scripts/adminTeam.js revoke <slot>
+//   node scripts/adminTeam.js role <slot> owner|moderator   → changes the role only (their code stays)
 //   node scripts/adminTeam.js totp <slot>          → sets up (or replaces) an authenticator app for that person; prints
 //                                                    the secret and an otpauth:// link once. Owners must then give its
 //                                                    6-digit code after their own code.
@@ -13,7 +14,7 @@
 // The person also needs a Momento account with that email (email confirmed), to sign in before entering the code.
 import mongoose from 'mongoose';
 import { config } from '../src/config/env.js';
-import { listTeam, inviteSlot, reinviteSlot, revokeSlot, setupTotp, removeTotp, setupLink } from '../src/services/adminStaffService.js';
+import { listTeam, inviteSlot, reinviteSlot, revokeSlot, setupTotp, removeTotp, setupLink, setRole } from '../src/services/adminStaffService.js';
 import { isEmailConfigured } from '../src/services/emailService.js';
 import { logAdmin } from '../src/services/adminStaffService.js';
 
@@ -30,6 +31,10 @@ try {
     console.log(`Slot ${staff.slot}: ${staff.name} <${staff.email}> (${staff.role}). A link to choose their own code was emailed to them (works once, for 24 hours).`);
     // Only when this server can't send email (local work): the link itself, to pass on
     if (!isEmailConfigured()) console.log(`Email isn't set up here, so give them this link privately: ${setupLink(token)}`);
+  } else if (cmd === 'role') {
+    const staff = await setRole(a, b);
+    await logAdmin('team.role-changed', { staff: { slot: 0, name: 'server command line' }, target: `slot:${staff.slot}`, meta: { role: staff.role } });
+    console.log(`Slot ${staff.slot} (${staff.name}) is now ${staff.role}.`);
   } else if (cmd === 'revoke') {
     const gone = await revokeSlot(a, 0);
     await logAdmin('team.revoked', { staff: { slot: 0, name: 'server command line' }, target: `slot:${gone.slot}`, meta: { email: gone.email } });
@@ -47,7 +52,7 @@ try {
     await logAdmin('team.totp-removed', { staff: { slot: 0, name: 'server command line' }, target: `slot:${staff.slot}` });
     console.log(`Slot ${staff.slot} (${staff.name}): authenticator app removed. Run "totp ${staff.slot}" to set up a new one.`);
   } else {
-    console.log('Use: list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot> | totp <slot> | totp-off <slot>');
+    console.log('Use: list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot> | role <slot> owner|moderator | totp <slot> | totp-off <slot>');
     process.exitCode = 1;
   }
 } catch (error) {

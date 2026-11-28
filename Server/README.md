@@ -114,6 +114,8 @@ team) are for the **admin team: at most 6 people** (`admin_staff`, slots 1-6; a 
   `npm run admin-team -- list | add <slot> <email> "<name>" [owner|moderator] | rotate <slot> | revoke <slot>`
   (on Lightsail inside the api container).
 - First owner: `ADMIN_OWNER_EMAIL` + `ADMIN_OWNER_CODE` (or `ADMIN_STAFF_JSON`) fill empty slots at start-up.
+- The team may have **no owner**: then everyone is a moderator and the team is managed only from the server
+  (`npm run admin-team -- add | rotate | revoke | role <slot> owner|moderator`), which needs no code.
 - Every code entry, lock-out, decision, threshold change and team change is in `admin_audit_logs` with the person's
   slot, name and email and the start of their IP address (append-only, kept 2 years).
 - Try it locally: `node scripts/reviewPreview.js` (throwaway database; the test admin and code are in that file).
