@@ -300,3 +300,104 @@ export async function removeComment(req, res) {
   await audit('comment.removed', { req, target: c._id, meta: { photo: String(c.photo), author: String(c.author) } });
   res.json({ ok: true });
 }
+
+// ---- Legal hold: suspected child sexual abuse material, or a police request (docs/legal/csam-procedure.md) ----
+// POST /api/admin/moderation/:id/legal-hold   an upload in the review queue (or declined)
+// POST /api/admin/photos/:id/legal-hold       a published or reported photo
+// Body: { reason: 'csam' | 'police-request' | 'other', note }
+// The original file is copied to legal-hold/<hold id>/ (kept until the owner releases it), then the upload or photo is
+// removed everywhere, its fingerprint banned, its reports closed and the uploader quietly suspended ("account under
+// review": nobody tells them why, so they are not tipped off). The team gets a security alert. Nobody can preview the
+// held copy through Momento: it is only ever handed to the police.
+const HOLD_REASONS = ['csam', 'police-request', 'other'];
+async function holdFile(req, { kind, source, fileKey, mimeType, size, hash, albumId, uploaderId, uploadedAt, fileName }) {
+  const reason = HOLD_REASONS.includes(req.body?.reason) ? req.body.reason : null;
+  if (!reason) throw new HttpError(400, 'Say why: csam, police-request or other.', 'hold-reason');
+  const note = String(req.body?.note ?? '').trim().slice(0, 2000);
+  const { LegalHold } = await import('../models/LegalHold.js');
+  const { saveStream } = await import('../services/storageService.js');
+  const [album, uploader] = await Promise.all([
+    albumId ? Album.findById(albumId, 'name code').lean() : null,
+    uploaderId ? User.findById(uploaderId, 'name email').lean() : null,
+  ]);
+  const hold = new LegalHold({ kind, reason, note, source, album: albumId, albumName: album?.name, albumCode: album?.code,
+    uploader: uploaderId, uploaderName: uploader?.name, uploaderEmail: uploader?.email, uploadedAt, fileName, mimeType, size, hash,
+    by: req.user._id, fileKey: 'pending' });
+  // The evidence copy first: if it can't be made, nothing is removed
+  const ext = (/\.[a-z0-9]{2,5}$/i.exec(fileKey) || [''])[0];
+  hold.fileKey = `legal-hold/${hold._id}/original${ext}`;
+  await saveStream(hold.fileKey, await openPhoto(fileKey), mimeType || 'application/octet-stream');
+  await hold.save();
+  if (hash) await Takedown.create({ hash, photo: source, album: albumId, uploader: uploaderId, reason: 'abuse', notice: `Legal hold ${hold._id}`, by: req.user._id });
+  if (uploaderId) await User.updateOne({ _id: uploaderId, suspendedAt: null }, { $set: { suspendedAt: new Date(), suspendedReason: 'Account under review' } });
+  await audit('legal.hold', { req, target: hold._id, meta: { kind, reason, source: String(source), album: albumId ? String(albumId) : null } });
+  return hold;
+}
+
+export async function legalHoldUpload(req, res) {
+  const job = await UploadCheck.findById(id(req.params.id)).select('+files');
+  if (!job?.files?.storageKey) throw new HttpError(404, 'That upload is no longer here.');
+  const hold = await holdFile(req, { kind: 'upload', source: job._id, fileKey: job.files.storageKey, mimeType: job.files.mimeType,
+    size: job.files.size, hash: job.hash, albumId: job.album, uploaderId: job.user, uploadedAt: job.createdAt, fileName: fixFileName(job.originalName || '') });
+  // Out of the queue and storage (the held copy stays); its decision record closes as declined
+  const { discardChecks } = await import('../services/uploadChecks.js');
+  await discardChecks({ _id: job._id });
+  await ModerationDecision.updateOne({ _id: job._id }, { $set: { status: 'upheld', reviewedBy: req.user._id, reviewedAt: new Date() } }).catch(() => {});
+  res.status(201).json({ hold: String(hold._id) });
+}
+
+export async function legalHoldPhoto(req, res) {
+  const photo = await Photo.findById(id(req.params.id));
+  if (!photo) throw new HttpError(404, 'Photo not found.');
+  const hold = await holdFile(req, { kind: 'photo', source: photo._id, fileKey: photo.storageKey, mimeType: photo.mimeType,
+    size: photo.size, hash: photo.hash, albumId: photo.album, uploaderId: photo.uploader, uploadedAt: photo.createdAt, fileName: fixFileName(photo.originalName || '') });
+  // Every copy of the same file goes, like a takedown (the held copy stays)
+  const copies = photo.hash ? await Photo.find({ hash: photo.hash }, 'storageKey') : [photo];
+  await deletePhotos(copies.map((p) => p.storageKey));
+  await Photo.deleteMany({ _id: { $in: copies.map((p) => p._id) } });
+  await Report.updateMany({ photo: { $in: copies.map((p) => p._id) }, status: 'open' }, { status: 'removed', decidedBy: req.user._id, decidedAt: new Date() });
+  res.status(201).json({ hold: String(hold._id), removed: copies.length });
+}
+
+// GET /api/admin/legal-holds   every hold (details only: no files, no previews)
+export async function legalHolds(req, res) {
+  const { LegalHold } = await import('../models/LegalHold.js');
+  const rows = await LegalHold.find({}).sort({ at: -1 }).limit(200).lean();
+  res.json({ holds: rows.map((h) => ({ id: String(h._id), kind: h.kind, reason: h.reason, note: h.note, at: h.at, albumName: h.albumName,
+    albumCode: h.albumCode, uploaderName: h.uploaderName, uploaderEmail: h.uploaderEmail, uploadedAt: h.uploadedAt, fileName: h.fileName,
+    reported: h.report?.at ? { agency: h.report.agency, reference: h.report.reference, at: h.report.at } : null, releasedAt: h.releasedAt || null })) });
+}
+
+// POST /api/admin/legal-holds/:id/reported  { agency, reference }   records the report made to the authorities
+export async function legalHoldReported(req, res) {
+  const { LegalHold } = await import('../models/LegalHold.js');
+  const agency = String(req.body?.agency ?? '').trim().slice(0, 120);
+  const reference = String(req.body?.reference ?? '').trim().slice(0, 120);
+  if (!agency) throw new HttpError(400, 'Which agency was it reported to?', 'hold-agency');
+  const r = await LegalHold.updateOne({ _id: id(req.params.id), releasedAt: null }, { $set: { report: { agency, reference, at: new Date(), by: req.user._id } } });
+  if (!r.matchedCount) throw new HttpError(404, 'Not found.');
+  await audit('legal.reported', { req, target: req.params.id, meta: { agency, reference } });
+  res.json({ ok: true });
+}
+
+// POST /api/admin/legal-holds/:id/release  { note }   owner only, once the police no longer need it: the held file is deleted
+export async function legalHoldRelease(req, res) {
+  const { LegalHold } = await import('../models/LegalHold.js');
+  const note = String(req.body?.note ?? '').trim().slice(0, 2000);
+  if (!note) throw new HttpError(400, 'Say why it can be released (for example, the police reference and their reply).', 'hold-note');
+  const hold = await LegalHold.findOne({ _id: id(req.params.id), releasedAt: null });
+  if (!hold) throw new HttpError(404, 'Not found.');
+  const { removeFile } = await import('../services/storageService.js');
+  await removeFile(hold.fileKey);
+  hold.releasedAt = new Date(); hold.releasedBy = req.user._id; hold.releaseNote = note;
+  await hold.save();
+  await audit('legal.released', { req, target: hold._id, meta: { note } });
+  res.json({ ok: true });
+}
+
+// GET /api/admin/beta-numbers?days=7  The beta's numbers for the staff page: totals only (services/betaMetrics.js)
+export async function betaNumbersView(req, res) {
+  const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+  const { betaNumbers } = await import('../services/betaMetrics.js');
+  res.set('Cache-Control', 'private, no-store').json(await betaNumbers({ days }));
+}

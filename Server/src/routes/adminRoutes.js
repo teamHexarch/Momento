@@ -33,6 +33,14 @@ adminRoutes.get('/reports', admin.reports);
 adminRoutes.get('/reports/:id/preview', admin.reportPreview);
 adminRoutes.post('/reports/:id/dismiss', admin.dismissReport);
 adminRoutes.post('/photos/:id/takedown', admin.takedown);
+// Legal hold (suspected CSAM or a police request): docs/legal/csam-procedure.md
+adminRoutes.post('/photos/:id/legal-hold', admin.legalHoldPhoto);
+adminRoutes.post('/moderation/:id/legal-hold', admin.legalHoldUpload);
+adminRoutes.get('/legal-holds', admin.legalHolds);
+// The beta's numbers (totals only): GET /api/admin/beta-numbers?days=7
+adminRoutes.get('/beta-numbers', admin.betaNumbersView);
+adminRoutes.post('/legal-holds/:id/reported', admin.legalHoldReported);
+adminRoutes.post('/legal-holds/:id/release', requireOwner, admin.legalHoldRelease);
 adminRoutes.delete('/comments/:id', admin.removeComment);
 adminRoutes.post('/users/:id/unsuspend', admin.unsuspend);
 adminRoutes.get('/moderation', admin.decisions);

@@ -9,15 +9,15 @@ export default function Faq() {
           <div className="faq-list">
             <div className="qa">
               <button type="button" aria-expanded="false"><span>Do guests need an account?</span><i></i></button>
-              <div className="qa-a"><p>No. Guests scan the event’s QR code or type its six-letter code, and they can start sharing straight away.</p></div>
+              <div className="qa-a"><p>Just a quick one: name, email and date of birth, or Continue with Google. There’s no app to download, so guests scan the QR code or type the six-letter code and start sharing in about a minute.</p></div>
             </div>
             <div className="qa">
               <button type="button" aria-expanded="false"><span>Who owns the photos?</span><i></i></button>
               <div className="qa-a"><p>The host does. Photos are kept safe in Momento’s private cloud, and everyone in the album can download them all as a .zip in one click, to keep on a phone, computer or their own cloud.</p></div>
             </div>
             <div className="qa">
-              <button type="button" aria-expanded="false"><span>What if a guest is outside the sharing zone?</span><i></i></button>
-              <div className="qa-a"><p>Momento shows them how far away they are and can let them know once they’re close enough to join.</p></div>
+              <button type="button" aria-expanded="false"><span>What if the host turns on the venue check?</span><i></i></button>
+              <div className="qa-a"><p>Then guests can join only while they’re near the venue. Anyone too far away sees how far, and Momento can let them know once they’re close enough. Most events leave it off, so anyone with the code can join.</p></div>
             </div>
             <div className="qa">
               <button type="button" aria-expanded="false"><span>Does it work with real cameras?</span><i></i></button>

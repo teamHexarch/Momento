@@ -98,6 +98,29 @@ export function setUpAuth(): () => void {
   // (one version for the whole site, set in public/assets/api.js; the date here is only a fallback)
   const TERMS_VERSION: string = (window as unknown as { MOMENTO_TERMS_VERSION?: string }).MOMENTO_TERMS_VERSION || '2026-11-07';
   const consent = () => ({ acceptTerms: true, termsVersion: TERMS_VERSION });
+  // ---- The age check: date of birth on Sign up (and before a new Google account). Under 13 can't join; 13 to 17
+  // tick the parent/guardian box. The server checks the same and keeps only the result, never the date ----
+  const guardianRow = $('guardianRow');
+  const ageOf = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return null;
+    const now = new Date();
+    let age = now.getFullYear() - +m[1];
+    if (now.getMonth() + 1 < +m[2] || (now.getMonth() + 1 === +m[2] && now.getDate() < +m[3])) age--;
+    return age;
+  };
+  const showGuardian = () => { const a = ageOf(field('birthDate').value); guardianRow.hidden = !(a != null && a >= 13 && a < 18); };
+  on(field('birthDate'), 'change', showGuardian);
+  on(field('birthDate'), 'input', showGuardian);
+  // The age fields for the request, or an error shown on the form (null) when something is missing
+  function ageFields(): { birthDate: string; guardianOk: boolean } | null {
+    const birthDate = field('birthDate').value, age = ageOf(birthDate);
+    if (age == null || age > 120 || age < 0) { showError('Enter your date of birth.'); field('birthDate').focus(); return null; }
+    if (age < 13) { showError('You need to be at least 13 to use Momento.'); field('birthDate').focus(); return null; }
+    const guardianOk = field('guardianOk').checked;
+    if (age < 18 && !guardianOk) { showError('You’re under 18: ask a parent or guardian, then tick the box to say they agree.'); field('guardianOk').focus(); return null; }
+    return { birthDate, guardianOk };
+  }
   // An error the person can see: the dialog scrolls to it (on a phone it can sit below the fold)
   const showError = (msg: string) => { error.textContent = msg; if (msg) reveal(error); };
   const setLabel = (btn: Element, text: string) => btn.querySelectorAll('.roll > span').forEach((s) => { s.textContent = text; });
@@ -284,6 +307,9 @@ export function setUpAuth(): () => void {
   on(googleBtn, 'click', async () => {
     error.textContent = '';
     if (!googleId) { showError('Google sign-in isn’t switched on yet. Use your email for now.'); return; }
+    // A new account (Sign up) needs the date of birth first; Log in sends one only if it was filled in
+    const age = form.dataset.mode === 'signup' ? ageFields() : (field('birthDate').value ? ageFields() : {});
+    if (!age) return;
     try { await loadGsi(); } catch (err) { showError((err as Error).message); return; }
     const idle = () => (form.dataset.mode === 'signup' ? 'Create account' : 'Log in');
     W().google.accounts.oauth2.initCodeClient({
@@ -297,7 +323,7 @@ export function setUpAuth(): () => void {
         try {
           const newAccount = form.dataset.mode === 'signup';
           // Always sent: a new Google account can start from Log in too (the server ignores it for existing ones)
-          const { user } = await api.auth.google({ code: resp.code!, ...consent() });
+          const { user } = await api.auth.google({ code: resp.code!, ...consent(), ...age });
           M().account.set(user);
           // A new account picks its language before going in
           if (newAccount) await M().chooseLanguage?.();
@@ -306,6 +332,13 @@ export function setUpAuth(): () => void {
         } catch (err) {
           googleBtn.disabled = submit.disabled = false;
           setBusy(null, idle());
+          // A new Google account from Log in: switch to Sign up and ask for the date of birth
+          if ((err as Err).code === 'age-required') {
+            setMode('signup');
+            showError('New to Momento? Enter your date of birth, then press Continue with Google again.');
+            field('birthDate').focus();
+            return;
+          }
           loginError(err as Err);
         }
       },
@@ -321,6 +354,8 @@ export function setUpAuth(): () => void {
     if (signup && !name) { error.textContent = 'Enter your name so guests know who added each photo.'; field('name').focus(); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { error.textContent = 'Enter an email address like name@example.com.'; field('email').focus(); return; }
     if (pass.length < 8) { error.textContent = 'Use at least 8 characters for your password.'; field('password').focus(); return; }
+    const age = signup ? ageFields() : null;
+    if (signup && !age) return;
     // Fields are fine: the robot box appears above the button, and ticking it sends the form
     if (signup && !captchaToken) { error.textContent = ''; pendingSubmit = true; void showCaptcha(); return; }
     submit.disabled = true;
@@ -330,7 +365,7 @@ export function setUpAuth(): () => void {
     let leaving = false;
     try {
       const { user } = await (signup
-        ? api.auth.signup({ name, email, password: pass, captchaToken, joinCode: inviteCode(), ...consent() })
+        ? api.auth.signup({ name, email, password: pass, captchaToken, joinCode: inviteCode(), ...consent(), ...age! })
         : api.auth.login({ email, password: pass }));
       field('password').value = '';
       M().account.set(user);

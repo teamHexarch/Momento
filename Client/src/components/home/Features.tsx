@@ -6,7 +6,7 @@ export default function Features() {
         <div className="panel zone-panel rise-in">
           <div className="zone-copy">
             <h2 className="section-title ink" data-text="Only the people&#10;who were there">Only the people<br />who were there</h2>
-            <p className="section-lede">Every Momento album has a sharing zone. Guests can join only while they’re inside it, so a wedding album never fills with strangers’ photos.</p>
+            <p className="section-lede">Want it kept to the people at the venue? Turn on the venue check for an event, and guests can join only while they’re there, so a wedding album never fills with strangers’ photos.</p>
             <span className="grow"></span>
             <div className="zone-ctrl">
               <div className="zone-ctrl-top"><label htmlFor="zoneR">Sharing zone</label><output id="zoneOut" htmlFor="zoneR">150 m</output></div>

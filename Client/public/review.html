@@ -158,6 +158,45 @@
       transition: transform .3s var(--spring), opacity .2s ease; }
     .why-foot .btn:active:not(:disabled) { transform: scale(.97); }
     .why-foot .btn:disabled { opacity: .45; cursor: default; }
+    /* Hold for police: the button in the keep-private pop-up, and its own dialog */
+    .why-foot .hold-open { color: var(--hold); }
+    .pop.hold-pop { width: min(34rem, calc(100vw - 32px)); text-align: left; }
+    .hold-steps { margin: .4rem 0 1rem 1.1rem; padding: 0; display: grid; gap: .35rem; font-size: .9rem; line-height: 1.45; }
+    .hold-field { display: grid; gap: .3rem; margin-bottom: .75rem; font-size: .84rem; font-weight: 600; color: var(--slate); }
+    .hold-field select, .hold-field textarea { width: 100%; max-width: 100%; box-sizing: border-box; font: 500 .92rem var(--font-main); padding: .55rem .7rem; border-radius: 12px; border: 1px solid rgba(46, 44, 58, .2); background: rgba(255, 255, 255, .7); color: inherit; }
+    :root[data-theme="dark"] .hold-field select, :root[data-theme="dark"] .hold-field textarea { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .14); }
+    .hold-field select:focus-visible, .hold-field textarea:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .pop.hold-pop .hint { min-height: 1.2em; margin: 0 0 .6rem; font-size: .84rem; }
+    .pop.hold-pop .hint.is-warn { color: var(--hold); font-weight: 600; }
+    .pop.hold-pop .pop-acts { display: flex; flex-direction: row; gap: .5rem; justify-content: flex-end; margin-top: .4rem; }
+    .pop.hold-pop .back { background: transparent; color: var(--slate); cursor: pointer; }
+    .pop.hold-pop .confirm { color: #fff; background: #B4503F; box-shadow: 0 8px 20px -10px rgba(180, 80, 63, .8); cursor: pointer; }
+    .pop.hold-pop .btn:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .pop.hold-pop .btn:active:not(:disabled) { transform: scale(.97); }
+    .pop.hold-pop .btn:disabled { opacity: .45; cursor: default; }
+    /* Beta numbers */
+    .pop.beta-pop { width: min(32rem, calc(100vw - 32px)); text-align: left; }
+    .beta-range { display: flex; gap: .3rem; margin: .5rem 0 1rem; }
+    .beta-range button { padding: .35rem .8rem; border: 0; border-radius: 100px; background: rgba(46, 44, 58, .08); color: var(--slate); font: 600 .82rem var(--font-main); cursor: pointer; }
+    :root[data-theme="dark"] .beta-range button { background: rgba(255, 255, 255, .08); }
+    .beta-range button.is-on { background: var(--dusk); color: #fff; }
+    :root[data-theme="dark"] .beta-range button.is-on { background: #F8F7FA; color: #2E2C3A; }
+    .beta-range button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    .beta-main { display: grid; gap: .15rem; padding: 1rem 1.1rem; border-radius: 18px; background: rgba(46, 44, 58, .06); margin-bottom: 1rem; }
+    :root[data-theme="dark"] .beta-main { background: rgba(255, 255, 255, .06); }
+    .beta-main b { font-size: 2.2rem; letter-spacing: -.03em; line-height: 1.1; }
+    .beta-main.is-good b { color: #3F8A5A; }
+    .beta-main.is-low b { color: var(--hold); }
+    .beta-main span { font-weight: 600; }
+    .beta-main small { color: var(--slate); }
+    .beta-list { display: grid; grid-template-columns: 1fr auto; gap: .45rem 1rem; margin: 0 0 1rem; font-size: .9rem; }
+    .beta-list dt { color: var(--slate); }
+    .beta-list dd { margin: 0; font-weight: 650; text-align: right; }
+    .beta-sub { margin: 0 0 .3rem; font-weight: 650; }
+    .beta-albums { margin: 0 0 1rem 1.1rem; padding: 0; font-size: .88rem; display: grid; gap: .2rem; }
+    .pop.beta-pop .hint { font-size: .8rem; color: var(--slate); margin: 0 0 .5rem; }
+    .pop.beta-pop .pop-acts { display: flex; justify-content: flex-end; }
+    .pop.beta-pop .back { background: transparent; color: var(--slate); cursor: pointer; }
     /* Back: quiet. Confirm: the main action, solid red once a reason is ticked */
     .why-foot .back { background: transparent !important; box-shadow: none !important; color: var(--slate) !important; }
     .why-foot .back:hover { color: var(--dusk) !important; }
@@ -331,6 +370,7 @@
       <!-- Admin: who is reviewing (their own code), and the way out -->
       <div class="devbar glass" id="devbar" hidden>
         <span class="dev-who" title="Admin: you are reviewing as this person"><span class="dev-dot" aria-hidden="true"></span><span class="dev-tag">Admin</span><b id="devWho"></b></span>
+        <button class="dev-exit" type="button" id="betaOpen" aria-haspopup="dialog">Beta numbers</button>
         <button class="dev-exit" type="button" id="devExit">Lock</button>
       </div>
     </div>
@@ -384,8 +424,42 @@
       <div class="why-foot">
         <p class="hint" id="whyHint" aria-live="polite"></p>
         <button class="btn back" type="button" id="back">Back <kbd>Esc</kbd></button>
+        <button class="btn back hold-open" type="button" id="holdOpen" title="Suspected child abuse material or a police request">Hold for police</button>
         <button class="btn confirm" type="button" id="confirmKeep">Confirm keep private <kbd>D</kbd></button>
       </div>
+    </div>
+  </dialog>
+  <!-- The beta's numbers (GET /api/admin/beta-numbers): totals only, worked out from Momento's own records -->
+  <dialog class="pop glass beta-pop" id="betaPop" aria-labelledby="betaTitle">
+    <h2 id="betaTitle">Beta numbers</h2>
+    <div class="beta-range" role="group" aria-label="Period">
+      <button type="button" data-days="7" class="is-on">7 days</button><button type="button" data-days="30">30 days</button><button type="button" data-days="90">90 days</button>
+    </div>
+    <div id="betaBody"><p class="hint">Loading…</p></div>
+    <div class="pop-acts"><button class="btn back" type="button" id="betaClose">Close</button></div>
+  </dialog>
+  <!-- Legal hold (Server docs/legal/csam-procedure.md): the original is kept as evidence for the police, the upload is
+       removed everywhere, its fingerprint banned and the uploader quietly suspended. The team gets an alert. -->
+  <dialog class="pop glass hold-pop" id="holdPop" aria-labelledby="holdTitle">
+    <h2 id="holdTitle">Hold for police</h2>
+    <ol class="hold-steps">
+      <li>Don’t download, screenshot, copy or forward it. Don’t look at it again.</li>
+      <li>Don’t contact the uploader or tell anyone outside the Momento team.</li>
+      <li>Holding keeps the original as evidence, removes it everywhere and suspends the uploader.</li>
+      <li>Then report it the same day: suspected child abuse material to the ACCCE (accce.gov.au/report), which works with the AFP and state police. The team owner records the report here.</li>
+    </ol>
+    <label class="hold-field"><span>Why</span>
+      <select id="holdReason">
+        <option value="csam">Suspected child sexual abuse material</option>
+        <option value="police-request">Police or court request</option>
+        <option value="other">Other serious harm (explain below)</option>
+      </select>
+    </label>
+    <label class="hold-field"><span>Note for the team (no descriptions of the image)</span><textarea id="holdNote" rows="3" maxlength="2000"></textarea></label>
+    <p class="hint" id="holdHint" aria-live="polite"></p>
+    <div class="pop-acts">
+      <button class="btn back" type="button" id="holdCancel">Cancel</button>
+      <button class="btn confirm" type="button" id="holdConfirm">Hold and remove</button>
     </div>
   </dialog>
   <!-- Admin gate: each team member's own email and 6-character code (Server/src/services/adminStaffService.js) -->
@@ -893,6 +967,61 @@
     $('publish').addEventListener('click', () => decide(true));
     $('keep').addEventListener('click', startKeep);
     $('confirmKeep').addEventListener('click', () => decide(false));
+    // ---- Hold for police (suspected CSAM or a police request): POST /api/admin/moderation/:id/legal-hold ----
+    $('holdOpen').addEventListener('click', () => {
+      if (busy || !items[index]) return;
+      $('holdReason').value = 'csam';
+      $('holdNote').value = ''; $('holdHint').textContent = ''; $('holdHint').className = 'hint';
+      $('holdPop').showModal();
+    });
+    $('holdCancel').addEventListener('click', () => $('holdPop').close());
+    // ---- Beta numbers: the main number (guest upload rate, target 30%) and three more ----
+    async function loadBeta(days) {
+      const body = $('betaBody');
+      document.querySelectorAll('.beta-range button').forEach((b) => b.classList.toggle('is-on', b.dataset.days === String(days)));
+      body.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'Loading…' }));
+      let n;
+      try { n = await momentoApi('/api/admin/beta-numbers?days=' + days); }
+      catch (err) { if (isDevEnd(err)) { $('betaPop').close(); return lockOut(err.message); } body.firstChild.textContent = err.message; return; }
+      const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls || '', textContent: text ?? '' });
+      const g = n.guestUploadRate;
+      const main = el('div', 'beta-main' + (g.met === true ? ' is-good' : g.met === false ? ' is-low' : ''));
+      main.append(el('b', '', g.value == null ? '–' : g.value + '%'), el('span', '', 'of guests added a photo within 48 hours'),
+        el('small', '', g.guests ? `${g.uploaded} of ${g.guests} guests · target ${g.target}%${g.waiting ? ` · ${g.waiting} still within their 48 hours` : ''}` : `No guests joined in these ${days} days yet · target ${g.target}%`));
+      const list = el('dl', 'beta-list');
+      const add = (k, v) => list.append(el('dt', '', k), el('dd', '', v));
+      add('Minutes from joining to first photo (median)', n.minutesToFirstPhoto.median ?? '–');
+      add('Hosts coming back within 60 days', n.hostsReturning.value == null ? 'Not enough history yet' : `${n.hostsReturning.value}% (${n.hostsReturning.returned} of ${n.hostsReturning.hosts})`);
+      add('Uploads that failed', n.uploads.failedRate == null ? 'No uploads yet' : `${n.uploads.failedRate}% (${n.uploads.failed} of ${n.uploads.total})`);
+      add('New albums and events', String(n.albumsCreated));
+      const parts = [main, list];
+      if (n.albums.length) {
+        const ul = el('ul', 'beta-albums');
+        n.albums.slice(0, 10).forEach((a) => ul.append(el('li', '', `${a.name}: ${a.uploaded} of ${a.guests} guests (${a.rate}%)`)));
+        parts.push(el('p', 'beta-sub', 'Busiest albums'), ul);
+      }
+      parts.push(el('p', 'hint', 'Totals only, from Momento’s own records (no tracking). The same numbers are emailed to the team every Monday.'));
+      body.replaceChildren(...parts);
+    }
+    $('betaOpen').addEventListener('click', () => { $('betaPop').showModal(); loadBeta(7); });
+    $('betaClose').addEventListener('click', () => $('betaPop').close());
+    document.querySelectorAll('.beta-range button').forEach((b) => b.addEventListener('click', () => loadBeta(Number(b.dataset.days))));
+    $('holdConfirm').addEventListener('click', async () => {
+      const it = items[index];
+      if (!it || busy) return;
+      busy = true; $('holdConfirm').disabled = true;
+      try {
+        await momentoApi('/api/admin/moderation/' + encodeURIComponent(it.id) + '/legal-hold', momentoJson('POST', { reason: $('holdReason').value, note: $('holdNote').value.trim() }));
+        busy = false; $('holdConfirm').disabled = false;
+        $('holdPop').close();
+        if ($('whyPop').open) $('whyPop').close();
+        afterDecision(it, 'Held for police and removed. The team has been alerted: report it today (see the procedure).');
+      } catch (err) {
+        busy = false; $('holdConfirm').disabled = false;
+        if (isDevEnd(err)) { $('holdPop').close(); return lockOut(err.message); }
+        $('holdHint').className = 'hint is-warn'; $('holdHint').textContent = err.message;
+      }
+    });
     $('openStandard').addEventListener('click', () => $('stdPop').showModal());
     $('closeStandard').addEventListener('click', () => $('stdPop').close());
     $('back').addEventListener('click', back);

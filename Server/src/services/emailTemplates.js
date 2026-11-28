@@ -120,6 +120,23 @@ export function zipReadyHtml(user, albumName, count, link) {
   });
 }
 
+// The day after an event: two questions to its host; a reply goes straight to the team inbox
+export function hostFeedbackHtml(user, album, { guests, uploaders }, unsubscribe) {
+  const first = firstName(user);
+  const tally = guests ? `${uploaders} of your ${guests} guest${guests === 1 ? '' : 's'} added photos.` : 'Your album is ready to download.';
+  return layout({
+    heading: `How did ${album.name} go?`,
+    paragraphs: [
+      `${first ? `Hi ${first}, ` : ''}thanks for using Momento. ${tally} We're a small team testing Momento with real events, and two quick answers would help us a lot. Just reply to this email:`,
+      '1. Did your guests use it? What made it easy or hard for them?',
+      '2. What was missing, or what would make you use Momento again?',
+    ],
+    button: { href: album.link, label: 'Open the album' },
+    footer: 'Your reply goes to the Momento team, and nobody else.',
+    unsubscribe,
+  });
+}
+
 export function closingHtml(user, album, hoursLeft, link, unsubscribe) {
   const first = firstName(user);
   return layout({

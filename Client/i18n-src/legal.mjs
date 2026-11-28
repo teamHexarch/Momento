@@ -1,0 +1,21 @@
+// The age check at sign-up (28 Nov 2026): date of birth, under 13s turned away, 13 to 17 with a parent or guardian's OK.
+// Order: zh, hi, es, ar, fr, bn, pt, ru, ur, yue, id
+export default {
+  "Date of birth": ["出生日期", "जन्म तिथि", "Fecha de nacimiento", "تاريخ الميلاد", "Date de naissance", "জন্ম তারিখ", "Data de nascimento", "Дата рождения", "تاریخِ پیدائش", "出生日期", "Tanggal lahir"],
+  "I’m under 18, and a parent or guardian knows I’m using Momento and agrees to the Terms.": [
+    "我未满 18 岁，我的父母或监护人知道我在使用 Momento，并同意其条款。",
+    "मेरी उम्र 18 से कम है, और मेरे माता-पिता या अभिभावक जानते हैं कि मैं Momento इस्तेमाल कर रहा/रही हूँ और शर्तों से सहमत हैं।",
+    "Tengo menos de 18 años, y mi madre, padre o tutor sabe que uso Momento y acepta los Términos.",
+    "عمري أقل من 18 عامًا، ويعلم أحد والديّ أو وليّ أمري أنني أستخدم Momento ويوافق على الشروط.",
+    "J’ai moins de 18 ans, et un parent ou tuteur sait que j’utilise Momento et accepte les Conditions.",
+    "আমার বয়স ১৮-র কম, এবং আমার বাবা-মা বা অভিভাবক জানেন যে আমি Momento ব্যবহার করছি এবং শর্তাবলিতে সম্মত।",
+    "Tenho menos de 18 anos, e um pai, mãe ou responsável sabe que uso o Momento e concorda com os Termos.",
+    "Мне меньше 18 лет, и родитель или опекун знает, что я пользуюсь Momento, и согласен с Условиями.",
+    "میری عمر 18 سال سے کم ہے، اور میرے والدین یا سرپرست جانتے ہیں کہ میں Momento استعمال کر رہا/رہی ہوں اور شرائط سے متفق ہیں۔",
+    "我未滿 18 歲，我嘅父母或監護人知道我用緊 Momento，並同意條款。",
+    "Saya berusia di bawah 18 tahun, dan orang tua atau wali saya tahu saya menggunakan Momento serta menyetujui Ketentuannya.",
+  ],
+  "You need to be at least 13 to use Momento.": ["你需要年满 13 岁才能使用 Momento。", "Momento इस्तेमाल करने के लिए आपकी उम्र कम से कम 13 साल होनी चाहिए।", "Necesitas tener al menos 13 años para usar Momento.", "يجب أن يكون عمرك 13 عامًا على الأقل لاستخدام Momento.", "Vous devez avoir au moins 13 ans pour utiliser Momento.", "Momento ব্যবহার করতে আপনার বয়স অন্তত ১৩ বছর হতে হবে।", "Você precisa ter pelo menos 13 anos para usar o Momento.", "Чтобы пользоваться Momento, вам должно быть не меньше 13 лет.", "Momento استعمال کرنے کے لیے آپ کی عمر کم از کم 13 سال ہونی چاہیے۔", "你要滿 13 歲先可以用 Momento。", "Anda harus berusia minimal 13 tahun untuk menggunakan Momento."],
+  "You’re under 18: ask a parent or guardian, then tick the box to say they agree.": ["你未满 18 岁：请先询问父母或监护人，然后勾选方框表示他们同意。", "आपकी उम्र 18 से कम है: माता-पिता या अभिभावक से पूछें, फिर बॉक्स पर टिक करें कि वे सहमत हैं।", "Tienes menos de 18 años: pregunta a tu madre, padre o tutor y marca la casilla para indicar que está de acuerdo.", "عمرك أقل من 18 عامًا: اسأل أحد والديك أو وليّ أمرك، ثم ضع علامة في المربع لتأكيد موافقته.", "Vous avez moins de 18 ans : demandez à un parent ou tuteur, puis cochez la case pour indiquer son accord.", "আপনার বয়স ১৮-র কম: বাবা-মা বা অভিভাবককে জিজ্ঞেস করুন, তারপর তাঁরা সম্মত বোঝাতে বাক্সে টিক দিন।", "Você tem menos de 18 anos: pergunte a um pai, mãe ou responsável e marque a caixa para dizer que concordam.", "Вам меньше 18 лет: спросите родителя или опекуна, затем отметьте поле, что он согласен.", "آپ کی عمر 18 سال سے کم ہے: والدین یا سرپرست سے پوچھیں، پھر باکس پر نشان لگائیں کہ وہ متفق ہیں۔", "你未滿 18 歲：先問吓父母或監護人，再剔個格表示佢哋同意。", "Usia Anda di bawah 18 tahun: tanyakan kepada orang tua atau wali, lalu centang kotak bahwa mereka setuju."],
+  "New to Momento? Enter your date of birth, then press Continue with Google again.": ["第一次使用 Momento？请先输入出生日期，然后再次点按“使用 Google 继续”。", "Momento पर नए हैं? अपनी जन्म तिथि दर्ज करें, फिर “Google के साथ जारी रखें” दोबारा दबाएँ।", "¿Nuevo en Momento? Escribe tu fecha de nacimiento y pulsa de nuevo «Continuar con Google».", "جديد على Momento؟ أدخل تاريخ ميلادك، ثم اضغط «المتابعة باستخدام Google» مرة أخرى.", "Nouveau sur Momento ? Saisissez votre date de naissance, puis appuyez à nouveau sur « Continuer avec Google ».", "Momento-তে নতুন? জন্ম তারিখ লিখুন, তারপর আবার “Google দিয়ে চালিয়ে যান” চাপুন।", "Novo no Momento? Digite sua data de nascimento e toque de novo em “Continuar com o Google”.", "Впервые в Momento? Укажите дату рождения и снова нажмите «Продолжить с Google».", "Momento پر نئے ہیں؟ اپنی تاریخِ پیدائش درج کریں، پھر دوبارہ “Google کے ساتھ جاری رکھیں” دبائیں۔", "第一次用 Momento？先入出生日期，再撳多次「用 Google 繼續」。", "Baru di Momento? Masukkan tanggal lahir Anda, lalu tekan Lanjutkan dengan Google lagi."],
+};

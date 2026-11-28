@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema({
   isMinor: { type: Boolean, default: false },
   // When they confirmed their age at sign-up (the birth date itself is never stored)
   ageConfirmedAt: Date,
+  // 13 to 17: when they confirmed at sign-up that a parent or guardian knows and agrees
+  guardianConfirmedAt: Date,
   // The latest Terms and Privacy Policy versions they accepted (the proof is in the Consent collection)
   accepted: { type: new mongoose.Schema({ tos: String, privacy: String }, { _id: false }), select: false },
   // Set while the account is being deleted: no login works, and a job finishes it if it stops halfway
@@ -76,6 +78,7 @@ const userSchema = new mongoose.Schema({
     closing: { type: Boolean, default: true },   // an album is about to close
     recap: { type: Boolean, default: false },    // weekly recap
     activity: { type: Boolean, default: true },  // inbox: joins and new photos in my public albums
+    feedback: { type: Boolean, default: true },  // the day after my event: "How did it go?" (one email per event)
   },
 }, { timestamps: true });
 

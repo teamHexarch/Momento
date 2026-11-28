@@ -25,7 +25,7 @@ export default function HowItWorks() {
                 <span className="art-tag">150 m zone</span>
               </span>
               <span className="hiw-top"><span className="hiw-no">01</span><b className="hiw-title">Create the event</b></span>
-              <span className="hiw-desc">Name it, drag a sharing zone around the venue, and choose where the photos are saved.</span>
+              <span className="hiw-desc">Name it, pick the date, and choose where the photos are saved. Add a venue check if only the people there should join.</span>
               <span className="step-timer" aria-hidden="true"></span>
             </button>
           </li>
@@ -55,7 +55,7 @@ export default function HowItWorks() {
                 <span className="art-chip">1 album in range</span>
               </span>
               <span className="hiw-top"><span className="hiw-no">03</span><b className="hiw-title">Guests scan and join</b></span>
-              <span className="hiw-desc">One scan, no sign-up. Only guests inside the zone can join.</span>
+              <span className="hiw-desc">One scan and no app to download. A quick sign-up, or Continue with Google, and they’re in.</span>
               <span className="step-timer" aria-hidden="true"></span>
             </button>
           </li>

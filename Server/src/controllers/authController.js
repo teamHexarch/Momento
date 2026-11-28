@@ -21,7 +21,7 @@ import { ADMIN_COOKIE, cookieOptions as adminCookieOptions } from '../services/a
 // birthDate 'YYYY-MM-DD'. Under 13: refused, and nothing is kept (not the email, not the IP). 13 to 17:
 // the account is marked as a minor. Only that and the time of the check are stored, never the date.
 // The date is required when REQUIRE_AGE is on; otherwise it's checked when the form sends one.
-function checkAge(body) {
+export function checkAge(body) {
   const raw = body?.birthDate;
   if (raw == null || raw === '') {
     if (config.age.required) throw new HttpError(400, 'Enter your date of birth.', 'age-required');
@@ -34,7 +34,11 @@ function checkAge(body) {
   let age = now.getUTCFullYear() - born.getUTCFullYear();
   if (now.getUTCMonth() < born.getUTCMonth() || (now.getUTCMonth() === born.getUTCMonth() && now.getUTCDate() < born.getUTCDate())) age--;
   if (age < config.age.minimum) throw new HttpError(403, `You need to be at least ${config.age.minimum} to use Momento.`, 'too-young');
-  return { isMinor: age < config.age.adult, ageConfirmedAt: now };
+  // 13 to 17: a parent or guardian must know and agree (the box on the sign-up form); when they confirmed is kept
+  if (age < config.age.adult && body?.guardianOk !== true) {
+    throw new HttpError(400, 'You’re under 18: ask a parent or guardian, then tick the box to say they agree.', 'guardian-required');
+  }
+  return { isMinor: age < config.age.adult, ageConfirmedAt: now, ...(age < config.age.adult && { guardianConfirmedAt: now }) };
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

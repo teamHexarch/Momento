@@ -111,9 +111,10 @@ export const config = {
     // (POST /api/albums/:id/consent). Off until the website sends it; the agreement is recorded either way.
     uploadConsent: env.UPLOAD_CONSENT === 'on',
   },
-  // The age check at sign-up: under 13s are refused. REQUIRE_AGE=on makes the birth date required
-  // (otherwise it's checked when the sign-up form sends one).
-  age: { required: env.REQUIRE_AGE === 'on', minimum: 13, adult: 18 },
+  // The age check at sign-up (email and Google): under 13s are refused, 13 to 17 need a parent or guardian's OK.
+  // The birth date is required for every new account since 28 Nov 2026 (REQUIRE_AGE=off turns that off; the test
+  // scripts run with NODE_ENV=test, where it's off unless REQUIRE_AGE=on)
+  age: { required: env.REQUIRE_AGE ? env.REQUIRE_AGE === 'on' : env.NODE_ENV !== 'test', minimum: 13, adult: 18 },
   // Where security alerts go (both optional; they're always in the server log too)
   security: { alertEmail: env.SECURITY_ALERT_EMAIL || '', alertWebhook: env.SECURITY_ALERT_WEBHOOK || '' },
   // The admin team (photo moderation, reports, thresholds): at most 6 people, each signing in to their own account and

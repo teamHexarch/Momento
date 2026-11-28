@@ -269,6 +269,8 @@ export async function runJobs() {
   await step('competitions', async () => (await import('./contestService.js')).sweepContests());
   await step('weekly recaps', () => weeklyRecap());
   await step('tidy', () => tidy());
+  await step('host feedback', async () => (await import('./betaMetrics.js')).hostFeedback());
+  await step('beta numbers', async () => (await import('./betaMetrics.js')).weeklyBetaEmail());
   await step('orphans', () => orphans());
   await step('backup', () => backup());
 }

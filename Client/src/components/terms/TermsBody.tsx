@@ -8,10 +8,12 @@ export default function TermsBody() {
 
       <main>
         <h1>Terms of Service</h1>
-        <p className="updated">Last updated 26 November 2026</p>
-        {/* LEGAL REVIEW: these terms were rewritten for Australian law on 26 November 2026 and have not yet been
-            checked by a lawyer (in particular the consumer-law wording, liability, governing law and the takedown
-            process). Remove the draft note below once they have been reviewed and approved. */}
+        <p className="updated">Last updated 28 November 2026</p>
+        {/* LEGAL REVIEW: these terms were rewritten for Australian law on 26 November 2026 (child safety, age check
+            and photo details updated 28 November) and have not yet been checked by a lawyer (in particular the
+            consumer-law wording, liability, governing law, the takedown process, the age rules and whether the
+            social media minimum age law applies). Remove the draft note below once they have been reviewed and
+            approved, and raise the terms version in public/assets/api.js and the server. */}
         <p className="draft-note" role="note"><strong>Draft:</strong> these updated terms are waiting for a legal review and may still change.</p>
 
         <p className="lede">These terms are the agreement between you and HexArch Limited, which runs Momento (momento.hexarch.org) from Victoria, Australia. By creating an account or using Momento you agree to them, and to our <a href="privacy">Privacy policy</a>. They&apos;re written to be short and plain. Nothing in them takes away rights you have under the Australian Consumer Law or the consumer laws where you live.</p>
@@ -20,7 +22,7 @@ export default function TermsBody() {
         <p>Momento gives each event one shared photo album: the host creates it, guests join with a code, link or QR code, and everyone adds, comments on and reacts to photos. Events can also have games (polls, quizzes, photo battles, scavenger bingo, mystery crop and photo competitions) with a leaderboard. Momento is free to use. We may change or stop features, and we&apos;ll tell you in good time before anything that affects your photos.</p>
 
         <h2>Who can use Momento</h2>
-        <p>You must be <strong>at least 13 years old</strong> to create an account. If you&apos;re under 18 (or the age of adulthood where you live), you need your parent or guardian&apos;s permission. You confirm this when you sign up. If we learn an account belongs to someone under 13, we delete it.</p>
+        <p>You must be <strong>at least 13 years old</strong> to create an account. When you sign up (with your email or with Google) we ask for your date of birth; we keep only the result of the check, not the date. If you&apos;re 13 to 17 (or under the age of adulthood where you live), a parent or guardian must know you&apos;re using Momento and agree to these terms, and you confirm that when you sign up. If we learn an account belongs to someone under 13, we delete it.</p>
 
         <h2>Your account</h2>
         <ul>
@@ -34,7 +36,7 @@ export default function TermsBody() {
         <ul>
           <li><strong>Your photos stay yours.</strong> You keep all the rights you have in them.</li>
           <li>When you add a photo (or a comment) to an album, you give HexArch Limited permission to store it, make smaller copies of it, check it automatically, and show it to the people in that album (and, for a public event or one shared with a group, to the people it&apos;s shared with), only to run Momento. This permission ends when it&apos;s deleted, except for copies in backups, which are gone within 12 months.</li>
-          <li>Camera RAW files are kept as full-size, high-quality JPEGs; other photos are kept as you uploaded them, without their location data.</li>
+          <li>Camera RAW files are kept as full-size, high-quality JPEGs; other photos are kept at full quality as you uploaded them, except that we remove where they were taken (GPS) and details that identify a person or camera (such as the owner&apos;s name, author, copyright notes and serial numbers). The camera make and model and the date taken stay.</li>
           <li>Everyone in an album can see and download its photos. Only add photos you&apos;re happy for them to have.</li>
           <li><strong>You confirm that you took each photo or have permission to share it</strong>, and that sharing it doesn&apos;t break anyone&apos;s copyright or privacy. Ask before adding photos of people who wouldn&apos;t want them shared.</li>
           <li>In a photo competition, only the top 10 entries are kept when it ends; every other entry is deleted.</li>
@@ -62,6 +64,9 @@ export default function TermsBody() {
 
         <h2>Reporting a photo, and takedowns</h2>
         <p>If you see a photo or comment that breaks these terms, or a photo of you that you didn&apos;t agree to, open it and choose <strong>Report</strong>, or email <a href="mailto:team@hexarch.org?subject=Report">team@hexarch.org</a>. You won&apos;t see a photo you reported again, and a photo reported by three people is hidden from everyone until our team decides. We act on reports as quickly as we can, and on any removal notice from the eSafety Commissioner within 24 hours. You can also report serious online harm to the eSafety Commissioner at <a href="https://www.esafety.gov.au" rel="noopener">esafety.gov.au</a>.</p>
+
+        <h2>Child safety and the police</h2>
+        <p>Momento has zero tolerance for child sexual abuse material. If we find or are told about it, we keep a secure copy as evidence, remove it from Momento straight away, block the same file from being uploaded again, suspend the account that added it, and report it to the Australian Centre to Counter Child Exploitation (part of the Australian Federal Police), as Australian law requires. We may give the police the account&apos;s details and the evidence. We also preserve information when the police or a court lawfully ask us to. If a child is in immediate danger, call 000 (or your local emergency number). You can report child sexual abuse material directly at <a href="https://www.accce.gov.au/report" rel="noopener">accce.gov.au/report</a>.</p>
 
         <h2>Copyright complaints</h2>
         <p>If you believe a photo on Momento infringes your copyright, email <a href="mailto:team@hexarch.org?subject=Copyright%20complaint">team@hexarch.org</a> with the subject “Copyright complaint”, and include:</p>

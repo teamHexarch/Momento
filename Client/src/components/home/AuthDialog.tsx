@@ -29,6 +29,11 @@ export default function AuthDialog() {
             <p className="auth-legal">By continuing with Google, you confirm you’re 13 or older and agree to Momento’s <a href="terms" target="_blank" rel="noopener">Terms</a> and <a href="privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
             <div className="auth-or">or use your email</div>
             <label className="auth-field" data-only="signup"><span>Your name</span><input name="name" autoComplete="name" /></label>
+            {/* The age check (also asked before Continue with Google on Sign up): under 13s can't join; 13 to 17 need a
+                parent or guardian's OK. Only the result is kept, never the date. data-mp: the phone's own date
+                picker, not Momento's (assets/pickers.js steps month by month, too slow for a birth year) */}
+            <label className="auth-field" data-only="signup"><span>Date of birth</span><input name="birthDate" type="date" autoComplete="bday" data-mp="native" /></label>
+            <label className="auth-guardian" data-only="signup" id="guardianRow" hidden><input type="checkbox" name="guardianOk" /><span>I’m under 18, and a parent or guardian knows I’m using Momento and agrees to the Terms.</span></label>
             <label className="auth-field"><span>Email</span><input name="email" type="email" autoComplete="email" inputMode="email" /></label>
             <label className="auth-field"><span>Password</span><input name="password" type="password" autoComplete="new-password" /></label>
             <a className="auth-forgot" data-only="login" href="#">Forgot your password?</a>

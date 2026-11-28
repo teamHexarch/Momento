@@ -102,11 +102,11 @@ export async function acceptPolicies(req, res) {
 // ---- One-click unsubscribe (link in every email that isn't about the account itself) ----
 // GET or POST /api/auth/unsubscribe?u=<user id>&k=<closing|recap|photos>&s=<signature>
 // The signature proves the link came from us, so nobody can switch off someone else's emails.
-const UNSUB_KINDS = new Set(['closing', 'recap', 'photos']);
+const UNSUB_KINDS = new Set(['closing', 'recap', 'photos', 'feedback']);
 const unsubKey = crypto.createHmac('sha256', config.jwtSecret).update('momento-unsubscribe').digest();
 const signUnsub = (userId, kind) => crypto.createHmac('sha256', unsubKey).update(`${userId}:${kind}`).digest('base64url').slice(0, 32);
 export const unsubscribeUrl = (user, kind) => `${config.publicUrl}/api/auth/unsubscribe?u=${user._id || user.id}&k=${kind}&s=${signUnsub(String(user._id || user.id), kind)}`;
-const KIND_NAME = { closing: '“An album is about to close”', recap: 'weekly recap', photos: '“New photos in your albums”' };
+const KIND_NAME = { closing: '“An album is about to close”', recap: 'weekly recap', photos: '“New photos in your albums”', feedback: '“How did your event go?”' };
 
 export async function unsubscribe(req, res) {
   const q = { ...req.query, ...(typeof req.body === 'object' && req.body) };

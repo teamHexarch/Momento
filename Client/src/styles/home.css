@@ -1126,6 +1126,12 @@
     @keyframes auth-captcha-in { from { opacity: 0; translate: 0 6px; } }
     @media (prefers-reduced-motion: reduce) { .auth-captcha { animation: none; } }
     .auth-note { margin: .9rem 0 0; color: var(--stone); font-size: .75rem; text-align: center; line-height: 1.45; }
+    /* The age check: 13 to 17 tick that a parent or guardian agrees */
+    .auth-guardian { display: flex; gap: .55rem; align-items: flex-start; margin: -.2rem 0 .8rem; color: var(--slate); font-size: .8rem; line-height: 1.45; cursor: pointer; }
+    .auth-guardian[hidden] { display: none; }
+    .auth-guardian input { flex: none; width: 1.05rem; height: 1.05rem; margin: .12rem 0 0; accent-color: var(--dusk); }
+    .auth-guardian input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+    :root[data-theme="dark"] .auth-field input[type="date"] { color-scheme: dark; }
     .auth-body[hidden], .auth-done[hidden], .auth-scan[hidden], .auth-skip[hidden] { display: none; }
     .auth-card { max-height: calc(100dvh - 32px); overflow-y: auto; }
     .auth-done { display: grid; justify-items: center; gap: .6rem; padding: 1.4rem 0 1rem; text-align: center; }
