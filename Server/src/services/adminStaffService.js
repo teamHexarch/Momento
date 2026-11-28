@@ -118,7 +118,8 @@ export async function assignSlot(slot, person, code) {
 export async function setRole(slot, role) {
   const n = checkSlot(slot);
   if (!['owner', 'moderator'].includes(role)) throw new TeamError(400, 'The role is owner or moderator.', 'ADMIN_ROLE_INVALID');
-  const staff = await AdminStaff.findOneAndUpdate({ slot: n }, { $set: { role } }, { returnDocument: 'after' });
+  // (open passes end: the person signs in again under the new role, with their authenticator if they're now an owner)
+  const staff = await AdminStaff.findOneAndUpdate({ slot: n }, { $set: { role }, $inc: { tokenVersion: 1 } }, { returnDocument: 'after' });
   if (!staff) throw new TeamError(404, `Slot ${n} is empty.`, 'ADMIN_SLOT_EMPTY');
   return staff;
 }
@@ -290,9 +291,10 @@ export async function verifyStaff(email, code) {
 }
 
 const passSecret = () => crypto.createHmac('sha256', config.jwtSecret).update('momento-admin-pass').digest();
-export function issuePass(staff, user) {
+// mfa: their authenticator code was given for this pass (team management needs it: middleware/adminAccess.js)
+export function issuePass(staff, user, { mfa = false } = {}) {
   const id = crypto.randomUUID();
-  const token = jwt.sign({ typ: 'admin', sid: String(staff._id), slot: staff.slot, uid: String(user._id), v: staff.tokenVersion, jti: id },
+  const token = jwt.sign({ typ: 'admin', sid: String(staff._id), slot: staff.slot, uid: String(user._id), v: staff.tokenVersion, jti: id, ...(mfa && { m: 1 }) },
     passSecret(), { expiresIn: `${PASS_HOURS}h`, algorithm: 'HS256' });
   return { token, id, expiresAt: new Date(Date.now() + PASS_HOURS * 3600000) };
 }
@@ -306,7 +308,7 @@ export async function readPass(token, user) {
   if (p.typ !== 'admin' || p.uid !== String(user._id)) return null;
   const staff = await AdminStaff.findOne({ _id: p.sid, isActive: true }).lean();
   if (!staff || staff.tokenVersion !== p.v || (!isSharedAccount(user) && staff.email !== normaliseEmail(user.email))) return null;
-  return { staff, passId: p.jti, expiresAt: new Date(p.exp * 1000) };
+  return { staff, passId: p.jti, expiresAt: new Date(p.exp * 1000), mfa: p.m === 1 };
 }
 
 // Whether this signed-in account may open the staff tools: the shared staff account ({ shared: true }: the code then

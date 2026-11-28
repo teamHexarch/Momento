@@ -26,7 +26,7 @@ export async function requireAdminCode(req, res, next) {
   }
   const { staff } = pass;
   req.admin = { slot: staff.slot, name: staff.name, email: staff.email, role: staff.role, passId: pass.passId, expiresAt: pass.expiresAt,
-    totp: !!staff.totpEnabledAt };
+    totp: pass.mfa };
   // Older code reads the person from req.dev (the earlier Dev Mode): same person, same session id
   req.dev = { reviewerLabel: staff.name, sessionId: pass.passId, reviewerId: staff._id };
   next();

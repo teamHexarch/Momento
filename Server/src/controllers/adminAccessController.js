@@ -42,7 +42,7 @@ export async function verifyCode(req, res) {
       throw new HttpError(401, 'That authenticator code isn’t right (or was already used). Wait for the next one and try again.', 'ADMIN_TOTP_WRONG');
     }
   }
-  const pass = issuePass(staff, req.user);
+  const pass = issuePass(staff, req.user, { mfa: needsTotp(staff) });
   await AdminStaff.updateOne({ _id: staff._id }, { $set: { lastLoginAt: new Date() } });
   res.cookie(ADMIN_COOKIE, pass.token, cookieOptions());
   await logAdmin('code.verified', { req, staff, meta: { passId: pass.id, hours: PASS_HOURS } });
