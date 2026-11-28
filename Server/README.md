@@ -374,7 +374,10 @@ Every hour (src/services/jobs.js), each job claiming its work first so nothing h
   unanswered for 30 days, background zips older than 3 days.
 - **A daily backup** of every collection into the photo storage (S3): `backups/day-YYYY-MM-DD` for each of the
   last 14 days, and `backups/month-YYYY-MM` (one per month, kept 12 months). Restore with
-  `node --env-file=.env scripts/restoreBackup.js day-2026-11-25` (add `--apply` to really restore).
+  `node scripts/restoreBackup.js day-2026-11-25` (shows what's in it). It reads `BACKUP_BUCKET` with its own
+  read-only key (`BACKUP_READ_ACCESS_KEY_ID` / `BACKUP_READ_SECRET_ACCESS_KEY`). The restore test:
+  `--apply --into momento-restore-test --check --drop` (a spare database, counts checked, then deleted);
+  `--apply --into-live` replaces the live data.
 
 Every 6 hours: photos more than 30 days in the Recently deleted bin are removed for good.
 

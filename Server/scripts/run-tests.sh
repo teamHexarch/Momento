@@ -8,7 +8,7 @@
 set -uo pipefail
 [ -f package.json ] && [ -d src ] || { echo "Run this from Momento/Server"; exit 2; }
 
-TESTS=(testUploadChecks testPaging testUploadConsent testAdminTotp testDirectUploads testStaffCodes)
+TESTS=(testUploadChecks testPaging testUploadConsent testAdminTotp testDirectUploads testStaffCodes testRestoreBackup)
 failed=()
 for t in "${TESTS[@]}"; do
   echo "::group::$t"
