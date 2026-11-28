@@ -70,10 +70,10 @@ export async function removeMany(keys) {
 // ---- Direct uploads on this computer (local development and tests only; the live server uses S3) ----
 // The same shape as S3's: a signed link the browser PUTs the file to (PUT /api/uploads/local/:token, app.js), which
 // checks the SHA-256 like S3 does.
-export async function presignPut(key, { sha256Base64 }, seconds = 900) {
+export async function presignPut(key, { sha256Base64, size }, seconds = 900) {
   const { signLocalPut } = await import('../directUploads.js');
   const headers = { 'Content-Type': 'application/octet-stream', 'x-amz-checksum-sha256': sha256Base64 };
-  return { url: `${config.publicUrl}/api/uploads/local/${signLocalPut(key, sha256Base64, seconds)}`, method: 'PUT', headers };
+  return { url: `${config.publicUrl}/api/uploads/local/${signLocalPut(key, sha256Base64, size, seconds)}`, method: 'PUT', headers };
 }
 export async function head(key) {
   const { createHash } = await import('node:crypto');

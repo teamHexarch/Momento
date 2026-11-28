@@ -923,7 +923,7 @@ export async function presignUploads(req, res) {
   await chargeDailyQuota(req, send.reduce((t, f) => t + f.size, 0));
   const uploads = await Promise.all(send.map(async (f) => {
     const key = newKey(req.user._id);
-    const link = await presignUpload(key, { sha256Base64: hexToBase64(f.sha256) }, LINK_SECONDS);
+    const link = await presignUpload(key, { sha256Base64: hexToBase64(f.sha256), size: f.size }, LINK_SECONDS);
     return { i: f.i, ticket: issueTicket({ key, userId: req.user._id, albumId: album._id, name: f.name, size: f.size, sha256: f.sha256 }), ...link };
   }));
   res.json({ uploads, skipped: files.filter((f) => there.has(f.sha256)).map((f) => f.i), tooBig: tooBig.map((f) => f.name), expiresIn: LINK_SECONDS });

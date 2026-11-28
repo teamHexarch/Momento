@@ -91,10 +91,12 @@ if (storageName === 'disk' && !config.isProduction) {
       const t = readLocalPut(req.params.token);
       if (!t) throw new HttpError(403, 'That upload link has expired.');
       if (req.get('x-amz-checksum-sha256') !== t.sha256Base64) throw new HttpError(400, 'The checksum header is missing or different.');
+      // The size is part of the link, as with S3's signed Content-Length
+      if (Number(req.get('content-length')) !== t.size) throw new HttpError(403, 'The file isn’t the size this link was made for.');
       const { createHash } = await import('node:crypto');
       const chunks = [];
       let size = 0;
-      for await (const c of req) { size += c.length; if (size > config.maxRawUploadBytes) throw new HttpError(413, 'Too large.'); chunks.push(c); }
+      for await (const c of req) { size += c.length; if (size > t.size) throw new HttpError(403, 'Too large for this link.'); chunks.push(c); }
       const body = Buffer.concat(chunks);
       if (createHash('sha256').update(body).digest('base64') !== t.sha256Base64) throw new HttpError(400, 'The file doesn’t match its checksum.', 'BadDigest');
       await saveFile(t.key, body, 'application/octet-stream');

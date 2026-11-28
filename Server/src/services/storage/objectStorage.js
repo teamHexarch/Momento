@@ -79,11 +79,13 @@ export function objectStorage({ name, label, client, bucket, keyHint, cdn }) {
     // ---- Direct uploads (audit B3): the browser puts the file straight into the bucket ----
     // A signed PUT link for one file, good for `seconds`. S3 itself checks the file's SHA-256 (the signed
     // x-amz-checksum-sha256 header, which the browser must send as given), so what arrives is exactly the file the
-    // server was told about, and the server never has to read it to know its fingerprint.
-    async presignPut(key, { sha256Base64 }, seconds = 900) {
+    // server was told about, and the server never has to read it to know its fingerprint. The exact size is signed
+    // too (Content-Length, which the browser sets from the file), so a link can't be used to store anything bigger.
+    async presignPut(key, { sha256Base64, size }, seconds = 900) {
+      if (!Number.isInteger(size) || size <= 0) throw new Error('presignPut needs the file size');
       const headers = { 'Content-Type': 'application/octet-stream', 'x-amz-checksum-sha256': sha256Base64 };
-      const url = await getSignedUrl(client, new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: headers['Content-Type'], ChecksumSHA256: sha256Base64 }),
-        { expiresIn: seconds, unhoistableHeaders: new Set(['x-amz-checksum-sha256']), signableHeaders: new Set(['content-type', 'x-amz-checksum-sha256']) });
+      const url = await getSignedUrl(client, new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: headers['Content-Type'], ContentLength: size, ChecksumSHA256: sha256Base64 }),
+        { expiresIn: seconds, unhoistableHeaders: new Set(['x-amz-checksum-sha256']), signableHeaders: new Set(['content-type', 'content-length', 'x-amz-checksum-sha256']) });
       return { url, method: 'PUT', headers };
     },
     // What's stored under a key: { size, sha256Base64 } (the checksum S3 checked on upload), or null when it isn't there

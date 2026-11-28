@@ -40,10 +40,10 @@ export function readTicket(token, { userId, albumId }) {
 export const newKey = (userId) => `${DIRECT_PREFIX}${userId}/${crypto.randomUUID()}`;
 
 // ---- The local stand-in for S3 (disk storage only, never in production) ----
-export function signLocalPut(key, sha256Base64, seconds) {
-  return jwt.sign({ k: key, h: sha256Base64 }, secret('local-put'), { expiresIn: seconds, algorithm: 'HS256' });
+export function signLocalPut(key, sha256Base64, size, seconds) {
+  return jwt.sign({ k: key, h: sha256Base64, s: size }, secret('local-put'), { expiresIn: seconds, algorithm: 'HS256' });
 }
 export function readLocalPut(token) {
-  try { const t = jwt.verify(String(token), secret('local-put'), { algorithms: ['HS256'] }); return { key: t.k, sha256Base64: t.h }; }
+  try { const t = jwt.verify(String(token), secret('local-put'), { algorithms: ['HS256'] }); return { key: t.k, sha256Base64: t.h, size: t.s }; }
   catch { return null; }
 }
